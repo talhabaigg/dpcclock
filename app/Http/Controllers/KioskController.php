@@ -147,12 +147,14 @@ class KioskController extends Controller
 
         // If employee is clocked in, redirect to the clock-out page
         if ($clockedIn) {
+            $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
             return Inertia::render('kiosks/clocking/out', [
                 'kioskId' => $kioskId,
                 'employeeId' => $employeeId,
                 'employee' => $employee,
                 'kiosk' => $kiosk,
                 'employees' => $kiosk->employees,
+                'locations' => $locations,
             ]);
         }
 

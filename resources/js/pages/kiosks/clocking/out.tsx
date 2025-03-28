@@ -67,7 +67,7 @@ export default function Clockout() {
     return (
         <KioskLayout employees={employees} kiosk={kiosk}>
             <div className="flex h-screen flex-col items-center justify-center space-y-4">
-                <h2 className="text-2xl font-bold">Clock In for {employee.name}</h2>
+                <h2 className="text-2xl font-bold">Clock Out for {employee.name}</h2>
 
                 <form onSubmit={handleSubmit}>
                     <Label>Select level</Label>
