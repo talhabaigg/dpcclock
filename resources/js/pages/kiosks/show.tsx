@@ -1,5 +1,5 @@
-import KioskLayout from "./partials/layout";
-import { usePage } from "@inertiajs/react";
+import { usePage } from '@inertiajs/react';
+import KioskLayout from './partials/layout';
 
 // Static Employee Data
 interface Employee {
@@ -11,9 +11,10 @@ interface Employee {
 
 export default function Kiosk() {
     const { employees } = usePage<{ employees: Employee[] }>().props;
+    const { kiosk } = usePage<{ kiosk: Kiosk }>().props;
     console.log(employees);
     return (
-        <KioskLayout employees={employees}>
+        <KioskLayout employees={employees} kiosk={kiosk}>
             <div>
                 <h1 className="text-2xl">Welcome to Another Page</h1>
                 <p>This content will be displayed inside the layout with the sidebar.</p>

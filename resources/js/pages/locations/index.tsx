@@ -1,24 +1,13 @@
-import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
 
-// Define the Employee type
-interface Employee {
-    id: number;
-    name: string;
-    email: string;
-    pin: string;
-    external_id?: string; // Optional, assuming it's not part of the schema yet
-    eh_employee_id?: string; // Optional, assuming it's not part of the schema yet
-}
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Employees',
-        href: '/employees',
+        title: 'Locations',
+        href: '/locations',
     },
 ];
 
@@ -32,16 +21,14 @@ const syncEmployees = async () => {
     }
 };
 
-export default function EmployeesList() {
-    const { employees } = usePage<{ employees: Employee[] }>().props;
-    console.log(employees); // Make sure the data structure is correct
+export default function LocationsList() {
+    const { locations } = usePage<{ locations: Employee[] }>().props;
+    console.log(locations); // Make sure the data structure is correct
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
-            <Button variant="outline" className="m-2 w-32" onClick={() => syncEmployees()}>
-                Sync Employees
-            </Button>
+
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <Table>
                     <TableHeader>
@@ -49,16 +36,14 @@ export default function EmployeesList() {
                             <TableHead>ID</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>External ID</TableHead>
-                            <TableHead>EH Employee ID</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {employees.map((employee) => (
-                            <TableRow key={employee.id}>
-                                <TableCell>{employee.id}</TableCell>
-                                <TableCell>{employee.name}</TableCell>
-                                <TableCell>{employee.external_id || 'N/A'}</TableCell> {/* Show N/A if no position */}
-                                <TableCell>{employee.eh_employee_id || 'N/A'}</TableCell> {/* Show N/A if no department */}
+                        {locations.map((location) => (
+                            <TableRow key={location.id}>
+                                <TableCell>{location.eh_location_id}</TableCell>
+                                <TableCell>{location.name}</TableCell>
+                                <TableCell>{location.external_id || 'N/A'}</TableCell> {/* Show N/A if no position */}
                             </TableRow>
                         ))}
                     </TableBody>

@@ -1,9 +1,13 @@
 <?php
 
+use App\Http\Controllers\ClockController;
+use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\KioskController;
+
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -17,6 +21,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 
+    Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
+    Route::resource('locations', LocationController::class)->names('locations');
+
+    Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync');
+    Route::resource('kiosks', KioskController::class)->names('kiosks');
+    Route::get('/kiosks/{kioskId}/employees/sync', [KioskController::class, 'syncEmployees'])->name('kiosks.employees.sync');
+
+
+    Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskController::class, 'showPinPage'])->name('kiosk.pin');
+    Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskController::class, 'validatePin'])->name('kiosk.validate-pin');
+
+    Route::resource('clocks', ClockController::class)->names('clocks');
 });
 
 Route::get('/kiosk', function () {
@@ -28,5 +44,5 @@ Route::get('/kiosk', function () {
 })->name('kiosk');
 
 
-require __DIR__.'/settings.php';
-require __DIR__.'/auth.php';
+require __DIR__ . '/settings.php';
+require __DIR__ . '/auth.php';
