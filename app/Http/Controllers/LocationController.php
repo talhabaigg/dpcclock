@@ -8,6 +8,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use App\Models\Worktype;
 
 
 class LocationController extends Controller
@@ -18,7 +19,7 @@ class LocationController extends Controller
     public function index()
     {
         return Inertia::render('locations/index', [
-            'locations' => Location::all(),
+            'locations' => Location::with('worktypes')->get(),
         ]);
     }
 
@@ -76,20 +77,27 @@ class LocationController extends Controller
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
+  
         $locationData = $response->json();
+        // dd($locationData);
         // $locationData = array_slice($locationData, 0, length: 1);
 
 
         foreach ($locationData as $location) {
-            Location::updateOrCreate([
+            $locationModel = Location::updateOrCreate([
                 'eh_location_id' => $location['id'],
             ], [
                 'name' => $location['name'],
                 'eh_parent_id' => $location['parentId'] ?? null,
                 'external_id' => $location['externalId'] ?? Str::uuid(),
             ]);
+             // Sync worktypes using shiftConditionIds
+            if (!empty($location['defaultShiftConditionIds'])) {
+                $worktypeIds = Worktype::whereIn('eh_worktype_id', $location['defaultShiftConditionIds'])->pluck('id')->toArray();
+                $locationModel->worktypes()->sync($worktypeIds);
+            }
         }
-        dd('Synced');
+        return redirect()->back()->with('success', 'Locations synced successfully from Employment Hero.');
 
     }
 }

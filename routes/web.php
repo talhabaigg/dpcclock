@@ -7,6 +7,8 @@ use Inertia\Inertia;
 use App\Models\Employee;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\KioskController;
+use App\Http\Controllers\WorktypeController;
+
 
 
 Route::get('/', function () {
@@ -33,6 +35,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskController::class, 'validatePin'])->name('kiosk.validate-pin');
 
     Route::resource('clocks', ClockController::class)->names('clocks');
+    Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
+    
+    Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
+    Route::resource('worktypes', WorktypeController::class)->names('worktypes');
+    
 });
 
 Route::get('/kiosk', function () {

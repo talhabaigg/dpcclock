@@ -45,13 +45,16 @@ class KioskController extends Controller
      * Display the specified resource.
      */
     public function show(Kiosk $kiosk)
-    {
-        $kiosk->load('employees');
-        return Inertia::render('kiosks/show', [
-            'kiosk' => $kiosk,
-            'employees' => $kiosk->employees,
-        ]);
-    }
+{
+    // Load the employees related to the kiosk, no need for employee's kiosks
+    $kiosk->load('employees');
+
+    // Return Inertia view with employees appended with clocked_in
+    return Inertia::render('kiosks/show', [
+        'kiosk' => $kiosk,
+        'employees' => $kiosk->employees->append('clocked_in'), // Append clocked_in state
+    ]);
+}
 
     /**
      * Show the form for editing the specified resource.
@@ -95,7 +98,8 @@ class KioskController extends Controller
                 'eh_location_id' => $kiosk['locationId'] ?? null,
             ]);
         }
-        dd('Synced');
+        return redirect()->back()->with('success', 'Kiosks synced successfully from Employment Hero.');
+
     }
 
     public function syncEmployees($kioskId)
@@ -114,6 +118,8 @@ class KioskController extends Controller
 
         // Now attach the new employee list
         $kiosk->employees()->attach($employeeIds);
+
+        return redirect()->route('kiosks.show', $kiosk->id)->with('success', 'Kiosk employees synced successfully from Employment Hero.');
     }
 
     public function showPinPage($kioskId, $employeeId): Response
@@ -126,7 +132,7 @@ class KioskController extends Controller
             'employeeId' => $employeeId,
             'employee' => $user,
             'kiosk' => $kiosk,
-            'employees' => $kiosk->employees,
+            'employees' => $kiosk->employees->append('clocked_in'),
         ]);
     }
 
@@ -137,14 +143,14 @@ class KioskController extends Controller
 
         // Check if the PIN entered is correct
         if ($request->pin !== $employee->pin) {
-            return response()->json(['pin' => 'Incorrect PIN'], 422);
+            return redirect()->back()->with('error', 'Invalid PIN. Please try again.');
         }
 
         // Check if the employee is already clocked in
-        $clockedIn = Clock::where('eh_employee_id', $employeeId)
+        $clockedIn = Clock::where('eh_employee_id', $employee->eh_employee_id)
             ->whereNull('clock_out')  // If clock_out is null, the employee is clocked in
-            ->exists();
-
+            ->first();
+        // dd($clockedIn);
         // If employee is clocked in, redirect to the clock-out page
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
@@ -153,8 +159,9 @@ class KioskController extends Controller
                 'employeeId' => $employeeId,
                 'employee' => $employee,
                 'kiosk' => $kiosk,
-                'employees' => $kiosk->employees,
+                'employees' => $kiosk->employees->append('clocked_in'),
                 'locations' => $locations,
+                'clockedIn' => $clockedIn,
             ]);
         }
 
@@ -167,7 +174,7 @@ class KioskController extends Controller
             'employeeId' => $employeeId,
             'employee' => $employee,
             'kiosk' => $kiosk,
-            'employees' => $kiosk->employees,
+            'employees' => $kiosk->employees->append('clocked_in'),
             'locations' => $locations,
         ]);
     }

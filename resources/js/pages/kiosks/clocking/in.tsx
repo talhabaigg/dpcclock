@@ -21,7 +21,7 @@ export default function ClockIn() {
         employeeId: employee.id,
     });
     const [clocked_in, setClockedIn] = useState(false);
-
+    console.log(employees);
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
         form.post(route('clocks.store'), {

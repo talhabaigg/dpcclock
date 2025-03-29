@@ -7,13 +7,16 @@ use Inertia\Inertia;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use App\Models\Worktype;
 
 class EmployeeController extends Controller
 {
     public function index()
     {
+        $employees = Employee::with('worktypes')->get();
+   
         return Inertia::render('employees/index', [
-            'employees' => Employee::all(),
+            'employees' => $employees, 
         ]);
     }
 
@@ -22,12 +25,16 @@ class EmployeeController extends Controller
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/details");
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured");
         $employeeData = $response->json();
-        $employeeData = array_slice($employeeData, 0, 300);
         // dd($employeeData);
+        $workTypeId = Worktype::where('name',$employeeData[12]['workTypes'])->first();
+      
+        // dd($employeeData[12]['workTypes']);
         foreach ($employeeData as $employee) {
-            Employee::updateOrCreate([
+            $workTypeId = Worktype::where('name', $employee['workTypes'])->first();
+            
+            $employee = Employee::updateOrCreate([
                 'eh_employee_id' => $employee['id'],
             ], [
                 'name' => $employee['firstName'] . ' ' . $employee['surname'],
@@ -35,11 +42,18 @@ class EmployeeController extends Controller
                 'email' => $employee['emailAddress'],
                 'pin' => 1234,
             ]);
+            if ($workTypeId) {
+                $employee->worktypes()->sync($workTypeId->id);
+            } else {
+                // Handle the case where the work type is not found
+                // You can choose to skip syncing or create a new work type
+                // For now, we'll just skip syncing
+                continue;
+            }           
            
         }
-        dd('Synced');
-        return Inertia::render('kiosks/show', [
-            'employees' => $employees,
-        ]);
+        $employees = Employee::all();
+        // dd('Synced');
+       return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment hero.');
     }
 }

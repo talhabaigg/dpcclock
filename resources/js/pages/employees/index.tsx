@@ -4,6 +4,9 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
+import { Link } from '@inertiajs/react';
+import { Label } from '@/components/ui/label';
+import { Badge } from "@/components/ui/badge"
 
 // Define the Employee type
 interface Employee {
@@ -13,6 +16,7 @@ interface Employee {
     pin: string;
     external_id?: string; // Optional, assuming it's not part of the schema yet
     eh_employee_id?: string; // Optional, assuming it's not part of the schema yet
+    worktypes?: string; // Optional, added to fix the error
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -22,26 +26,28 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const syncEmployees = async () => {
-    try {
-        const response = await axios.get('/employees/sync');
-        console.log('Sync successful:', response.data);
-        // Optionally, you can handle the response data here
-    } catch (error) {
-        console.error('Error syncing employees:', error);
-    }
-};
+let isLoading = false;
+
 
 export default function EmployeesList() {
-    const { employees } = usePage<{ employees: Employee[] }>().props;
-    console.log(employees); // Make sure the data structure is correct
+    const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
-            <Button variant="outline" className="m-2 w-32" onClick={() => syncEmployees()}>
-                Sync Employees
-            </Button>
+            <div className="flex items-center gap-2 m-2">
+            <Link href="/employees/sync" method="get">
+                <Button variant="outline" className="w-32" >
+                    {isLoading ? 'Syncing...' : 'Sync Employees'}
+                </Button>
+            </Link>
+            {flash.success && (
+                    <div className="m-2 text-green-500">
+                        {flash.success}
+                    </div>
+                )}
+            </div> 
+
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <Table>
                     <TableHeader>
@@ -54,12 +60,21 @@ export default function EmployeesList() {
                     </TableHeader>
                     <TableBody>
                         {employees.map((employee) => (
-                            <TableRow key={employee.id}>
-                                <TableCell>{employee.id}</TableCell>
-                                <TableCell>{employee.name}</TableCell>
-                                <TableCell>{employee.external_id || 'N/A'}</TableCell> {/* Show N/A if no position */}
-                                <TableCell>{employee.eh_employee_id || 'N/A'}</TableCell> {/* Show N/A if no department */}
-                            </TableRow>
+                        <TableRow key={employee.id}>
+                            <TableCell>{employee.id}</TableCell>
+                            <TableCell>{employee.name.trim()}</TableCell>
+                            <TableCell>{employee.external_id?.trim() || 'N/A'}</TableCell>
+                            <TableCell>{employee.eh_employee_id?.trim() || 'N/A'}</TableCell>
+                           
+                            <TableCell>
+                                {employee.worktypes && employee.worktypes.length > 0 
+                                    ? employee.worktypes.map((worktype) => (
+                                        <Badge key={worktype.eh_worktype_id} className="mr-2 ">{worktype.name}</Badge>
+                                    ))
+                                    : 'N/A'
+                                }
+                                </TableCell>
+                        </TableRow>
                         ))}
                     </TableBody>
                 </Table>

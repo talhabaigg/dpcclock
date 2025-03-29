@@ -14,8 +14,8 @@ interface Kiosk {
 }
 
 export default function ShowPin() {
-    const { employees, kiosk, employee } = usePage<{ employees: Employee[]; kiosk: Kiosk; employee: Employee }>().props;
-
+    const { employees, kiosk, employee, flash } = usePage<{ employees: Employee[]; kiosk: Kiosk; employee: Employee }>().props;
+    const flashMessage = flash.success || flash.error ? flash : null;
     // Use Inertia form state
     const form = useForm({ pin: '' });
 
@@ -37,7 +37,23 @@ export default function ShowPin() {
 
     return (
         <KioskLayout employees={employees} kiosk={kiosk}>
+           
+
             <div className="flex h-screen flex-col items-center justify-center space-y-4">
+            {flash.error && (
+                <div className="alert alert-error"> 
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-2xl text-red-700">{flash.error}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
                 <h2 className="text-2xl font-bold">Enter PIN for {employee.name}</h2>
                 <form onSubmit={handleSubmit} className="flex flex-col items-center">
                     {/* Bind input value to form.data.pin */}

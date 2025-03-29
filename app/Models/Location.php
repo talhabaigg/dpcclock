@@ -13,5 +13,7 @@ class Location extends Model
         'external_id',
     ];
 
-
+    public function worktypes() {
+        return $this->belongsToMany(Worktype::class);
+    }
 }

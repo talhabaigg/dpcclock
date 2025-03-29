@@ -16,6 +16,8 @@ return new class extends Migration {
             $table->unsignedBigInteger('eh_employee_id')->index();
             $table->timestamp('clock_in')->nullable();
             $table->timestamp('clock_out')->nullable();
+            $table->string('eh_location_id')->nullable(); // Optional
+            
             $table->decimal('hours_worked', 8, 2)->nullable(); // Optional
             $table->timestamps();
         });
