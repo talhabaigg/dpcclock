@@ -25,12 +25,12 @@ class Employee extends Model
         return $this->hasMany(Clock::class, 'eh_employee_id', 'eh_employee_id');
     }
 
-    public function clockedIn(): Attribute
-    {
-        return Attribute::get(fn () => $this->hasOne(Clock::class, 'eh_employee_id', 'eh_employee_id')
-            ->whereNull('clock_out')
-            ->exists());
-    }
+    // public function clockedIn(): Attribute
+    // {
+    //     return Attribute::get(fn () => $this->hasOne(Clock::class, 'eh_employee_id', 'eh_employee_id')
+    //         ->whereNull('clock_out')
+    //         ->exists());
+    // }
 
     public function worktypes()
     {
