@@ -21,8 +21,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
+    
     Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
-
+    Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
+ 
     Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
     Route::resource('locations', LocationController::class)->names('locations');
 
@@ -36,9 +38,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('clocks', ClockController::class)->names('clocks');
     Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
-    
+    Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
+
     Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
     Route::resource('worktypes', WorktypeController::class)->names('worktypes');
+    
     
 });
 

@@ -8,6 +8,8 @@ use Inertia\Inertia;
 use App\Models\Kiosk;
 use App\Models\Employee;
 use App\Models\Location;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Response;
 
 class ClockController extends Controller
 {
@@ -16,7 +18,12 @@ class ClockController extends Controller
      */
     public function index()
     {
-        //
+        // Get all clocks
+        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])->get();
+        // dd($clocks);
+        return Inertia::render('kiosks/clocking/index', [
+            'timesheets' => $clocks,
+        ]);
     }
 
     /**
@@ -164,8 +171,48 @@ class ClockController extends Controller
     
         // Redirect back with success message
         return redirect(route('kiosks.show', $validated['kioskId']))->with('success', 'Clocked out successfully.');
-    
-    
-       
     }
+
+
+
+    public function syncEhTimesheets()
+    {
+        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])->get();
+    
+        $timesheets = [];
+    
+        foreach ($clocks as $clock) {
+            // Skip if there's no endTime (clock_out)
+            if (!$clock->clock_out) {
+                continue;
+            }
+    
+            $employeeId = $clock->eh_employee_id;
+    
+            $timesheetData = [
+                "employeeId" => $employeeId,
+                "startTime" => $clock->clock_in,
+                "endTime" => $clock->clock_out,
+                "locationId" => $clock->location->eh_location_id ?? null,
+                "shiftConditionIds" => $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [],
+                "workTypeId" => optional($clock->employee->worktypes->first())->eh_worktype_id,
+            ];
+    
+            // Store multiple timesheets under each employee ID
+            $timesheets[$employeeId][] = $timesheetData;
+        }
+    
+        // Generate the JSON file content
+        $jsonContent = json_encode(["timesheets" => $timesheets], JSON_PRETTY_PRINT);
+    
+        // Define the file path to the public storage directory
+        $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
+    
+        // Store the JSON in the public disk (storage/app/public)
+        Storage::disk('public')->put($filePath, $jsonContent);
+    
+        // Send the file to the browser for download
+        return response()->download(storage_path('app/public/' . $filePath), 'timesheets.json')->deleteFileAfterSend(true);;
+    }
+
 }

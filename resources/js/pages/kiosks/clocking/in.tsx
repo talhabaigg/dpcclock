@@ -35,7 +35,7 @@ export default function ClockIn() {
     };
 
     return (
-        <KioskLayout employees={employees} kiosk={kiosk}>
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
             <div className="flex h-screen flex-col items-center justify-center space-y-4">
                 <h2 className="text-2xl font-bold">Clock In for {employee.name}</h2>
                 <h3> {new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</h3>

@@ -31,38 +31,45 @@ export default function ShowPin() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
         form.post(route('kiosk.validate-pin', { kioskId: kiosk.id, employeeId: employee.id }), {});
     };
 
     return (
-        <KioskLayout employees={employees} kiosk={kiosk}>
-           
-
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
             <div className="flex h-screen flex-col items-center justify-center space-y-4">
-            {flash.error && (
-                <div className="alert alert-error"> 
-                    <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                            <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </div>
-                        <div className="ml-3">
-                            <p className="text-2xl text-red-700">{flash.error}</p>
+                {flash.error && (
+                    <div className="alert alert-error">
+                        <div className="flex items-center">
+                            <div className="flex-shrink-0">
+                                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-2xl text-red-700">{flash.error}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
                 <h2 className="text-2xl font-bold">Enter PIN for {employee.name}</h2>
                 <form onSubmit={handleSubmit} className="flex flex-col items-center">
-                    {/* Bind input value to form.data.pin */}
-                    <input
-                        type="password"
-                        value={form.data.pin}
-                        readOnly
-                        className="mb-4 h-12 w-full rounded-lg border border-gray-300 text-center text-2xl"
-                    />
+                    {/* 4 individual input fields for PIN */}
+                    <div className="flex space-x-2 mb-4">
+                        {Array(4)
+                            .fill('')
+                            .map((_, index) => (
+                                <input
+                                    key={index}
+                                    type="password"
+                                    value={form.data.pin[index] || ''}
+                                    readOnly
+                                    className="h-12 w-12 text-center text-2xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    maxLength={1}
+                                    autoFocus={index === form.data.pin.length}
+                                />
+                            ))}
+                    </div>
+
                     {form.errors.pin && <p className="text-red-500">{form.errors.pin}</p>}
 
                     <div className="grid grid-cols-3 gap-2">

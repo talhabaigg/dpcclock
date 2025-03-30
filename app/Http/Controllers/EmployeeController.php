@@ -25,14 +25,14 @@ class EmployeeController extends Controller
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured");
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/details");
         $employeeData = $response->json();
         // dd($employeeData);
-        $workTypeId = Worktype::where('name',$employeeData[12]['workTypes'])->first();
+        // $workTypeId = Worktype::where('name',$employeeData[12]['workTypes'])->first();
       
         // dd($employeeData[12]['workTypes']);
         foreach ($employeeData as $employee) {
-            $workTypeId = Worktype::where('name', $employee['workTypes'])->first();
+            $workTypeId = isset($employee['workTypes']) ? Worktype::where('name', $employee['workTypes'])->first() : null;
             
             $employee = Employee::updateOrCreate([
                 'eh_employee_id' => $employee['id'],
@@ -56,4 +56,52 @@ class EmployeeController extends Controller
         // dd('Synced');
        return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment hero.');
     }
+
+    public function syncEmployeeWorktypes()
+{
+    ini_set('max_execution_time', 300);
+    $apiKey = env('PAYROLL_API_KEY');
+
+    $employees = Employee::all();
+    $missingWorkTypes = []; // Array to track missing work types
+
+    foreach ($employees as $employee) {
+        $employeeId = $employee->eh_employee_id;
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
+
+        $employeeData = $response->json();
+        $workTypeName = $employeeData['workTypes'] ?? ''; // Get workType name or default to empty string
+
+        // Skip lookup if workType is an empty string
+        if ($workTypeName === '') {
+            continue;
+        }
+
+        // Lookup workType ID
+        $workTypeId = WorkType::where('name', $workTypeName)->pluck('id')->first();
+
+        if (!empty($workTypeId)) {
+            $employee->worktypes()->sync($workTypeId);
+            $employee->load('workTypes'); // Reload relationships
+        } else {
+            // Store missing workTypes for debugging
+            $missingWorkTypes[] = [
+                'employee_id' => $employeeId,
+                'searched_workType' => $workTypeName
+            ];
+        }
+    }
+
+    // Dump all missing work types if any
+    if (!empty($missingWorkTypes)) {
+        dd($missingWorkTypes);
+    }
+
+    return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
 }
+
+       
+    }

@@ -16,11 +16,16 @@ class Clock extends Model
 
     public function employee()
     {
-        return $this->belongsTo(Employee::class, 'eh_employee_id');
+        return $this->belongsTo(Employee::class,  'eh_employee_id', 'eh_employee_id');
     }
 
     public function kiosk()
     {
-        return $this->belongsTo(Kiosk::class, 'eh_kiosk_id');
+        return $this->belongsTo(Kiosk::class, 'eh_kiosk_id', 'eh_kiosk_id');
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class, 'eh_location_id', 'eh_location_id');
     }
 }
