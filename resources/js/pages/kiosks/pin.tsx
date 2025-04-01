@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { useForm, usePage } from '@inertiajs/react';
+import { Loader2 } from 'lucide-react';
 import KioskLayout from './partials/layout';
-
 interface Employee {
     id: number;
     name: string;
@@ -41,7 +41,7 @@ export default function ShowPin() {
                     <div className="alert alert-error">
                         <div className="flex items-center">
                             <div className="flex-shrink-0">
-                                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </div>
@@ -51,10 +51,11 @@ export default function ShowPin() {
                         </div>
                     </div>
                 )}
-                <h2 className="text-2xl font-bold">Enter PIN for {employee.name}</h2>
+                <h2 className="text-2xl font-bold">Hi {employee.name}!</h2>
+                <p>Please enter your PIN</p>
                 <form onSubmit={handleSubmit} className="flex flex-col items-center">
                     {/* 4 individual input fields for PIN */}
-                    <div className="flex space-x-2 mb-4">
+                    <div className="mb-4 flex space-x-2">
                         {Array(4)
                             .fill('')
                             .map((_, index) => (
@@ -63,7 +64,7 @@ export default function ShowPin() {
                                     type="password"
                                     value={form.data.pin[index] || ''}
                                     readOnly
-                                    className="h-12 w-12 text-center text-2xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="h-12 w-12 rounded-lg border border-gray-300 text-center text-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                     maxLength={1}
                                     autoFocus={index === form.data.pin.length}
                                 />
@@ -77,7 +78,8 @@ export default function ShowPin() {
                             <Button
                                 key={key}
                                 type="button"
-                                className="h-24 w-24 rounded-lg bg-gray-200 text-xl hover:bg-gray-300"
+                                variant="secondary"
+                                className="h-24 w-24 rounded-full border-2 border-gray-400 text-3xl"
                                 onClick={() => {
                                     if (key === 'C') form.setData('pin', '');
                                     else if (key === '⌫') handleDelete();
@@ -92,9 +94,17 @@ export default function ShowPin() {
                     <Button
                         type="submit"
                         className="mt-4 h-12 w-full rounded-lg"
+                        variant="secondary"
                         disabled={form.data.pin.length !== 4 || form.processing} // Disable while processing
                     >
-                        {form.processing ? 'Processing...' : 'Submit'}
+                        {form.processing ? (
+                            <>
+                                <Loader2 className="mr-2 animate-spin" /> {/* Add a margin to space out the loader from the text */}
+                                Processing...
+                            </>
+                        ) : (
+                            'Submit'
+                        )}
                     </Button>
                 </form>
             </div>
