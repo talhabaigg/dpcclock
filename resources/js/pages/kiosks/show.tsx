@@ -16,14 +16,13 @@ interface Kiosk {
 }
 
 export default function Kiosk() {
-    const { employees, flash, kiosk } = usePage<{ 
-        employees: Employee[], 
-        flash: { success?: string, error?: string }, 
-        kiosk: Kiosk 
+    const { employees, flash, kiosk } = usePage<{
+        employees: Employee[];
+        flash: { success?: string; error?: string };
+        kiosk: Kiosk;
     }>().props;
 
     const [flashMessage, setFlashMessage] = useState(flash);
-    console.log(employees);
     useEffect(() => {
         if (flash.success || flash.error) {
             const timer = setTimeout(() => {
@@ -40,7 +39,7 @@ export default function Kiosk() {
                     <div className="alert alert-success">
                         <div className="flex items-center">
                             <div className="flex-shrink-0">
-                                <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
@@ -54,7 +53,7 @@ export default function Kiosk() {
                     <div className="alert alert-error">
                         <div className="flex items-center">
                             <div className="flex-shrink-0">
-                                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </div>

@@ -75,7 +75,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             {/* Layout container */}
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar - Scrollable */}
-                <div className="flex w-1/4 flex-col overflow-hidden border-r border-gray-300">
+                <div className="flex w-1/2 flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
                     <div className="m-2 flex items-center justify-between p-2">
                         <h2 className="text-xl font-bold">{kiosk.name} </h2>
                         <span>
@@ -113,7 +113,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                                                 <Button
                                                     variant={isSelected ? 'secondary' : 'ghost'}
                                                     className={`h-14 w-full justify-start text-left ${
-                                                        isSelected ? 'bg-blue-500 hover:bg-blue-400' : 'hover:bg-blue-400'
+                                                        isSelected ? 'bg-blue-500 text-white hover:bg-blue-400' : 'hover:bg-blue-400'
                                                     }`}
                                                     onClick={() => handleNavigation(`/kiosk/${kiosk.eh_kiosk_id}/employee/${emp.eh_employee_id}/pin`)}
                                                 >
@@ -136,7 +136,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 </div>
 
                 {/* Main content */}
-                <div className="flex flex-1 items-center justify-center">{children}</div>
+                <div className="flex h-full w-full flex-1 items-center justify-center">{children}</div>
             </div>
         </div>
     );
