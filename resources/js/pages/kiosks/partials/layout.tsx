@@ -1,4 +1,3 @@
-import AppLogoIcon from '@/components/app-logo-icon';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,35 +67,33 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     return (
         <div className="flex h-screen flex-col">
             {/* Top Bar */}
-            <div className="flex h-16 w-full items-center bg-black px-4 shadow-md">
-                <AppLogoIcon className="h-8 w-8 text-white" />
+            <div className="flex h-16 w-full items-center justify-between bg-black px-4 shadow-md">
+                <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
+                <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
             </div>
 
             {/* Layout container */}
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar - Scrollable */}
                 <div className="flex w-1/2 flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
-                    <div className="m-2 flex items-center justify-between p-2">
-                        <h2 className="text-xl font-bold">{kiosk.name} </h2>
-                        <span>
-                            <Button variant="secondary" onClick={handleSyncClick} disabled={loading}>
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="mr-2 animate-spin" />
-                                        Syncing...
-                                    </>
-                                ) : (
-                                    'Sync'
-                                )}
-                            </Button>
-                        </span>
+                    <div className="m-2 flex items-center justify-end space-x-2 p-2">
+                        <div className="relative w-full">
+                            <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
+                            <Input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+                        </div>
+                        <Button variant="secondary" onClick={handleSyncClick} disabled={loading}>
+                            {loading ? (
+                                <>
+                                    <Loader2 className="mr-2 animate-spin" />
+                                    Syncing...
+                                </>
+                            ) : (
+                                'Sync'
+                            )}
+                        </Button>
                     </div>
 
                     {/* Search Input */}
-                    <div className="relative mx-2 mb-4">
-                        <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
-                        <Input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-                    </div>
 
                     {/* Employee List - Scrollable */}
                     <div ref={listRef} className="flex-1 overflow-y-auto">

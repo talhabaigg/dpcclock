@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useForm, usePage } from '@inertiajs/react';
-import KioskLayout from '../partials/layout';
-import dayjs from 'dayjs';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useForm, usePage } from '@inertiajs/react';
+import dayjs from 'dayjs';
+import { useEffect, useState } from 'react';
+import KioskLayout from '../partials/layout';
 
 interface Employee {
     id: number;
@@ -25,12 +24,18 @@ interface TaskAllocation {
 }
 
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn } = usePage<{ employees: Employee[]; kiosk: Kiosk; employee: Employee; locations: any[], clockedIn: { clock_in: string } }>().props;
+    const { employees, kiosk, employee, locations, clockedIn } = usePage<{
+        employees: Employee[];
+        kiosk: Kiosk;
+        employee: Employee;
+        locations: any[];
+        clockedIn: { clock_in: string };
+    }>().props;
 
     const form = useForm<{
         kioskId: number;
         employeeId: number;
-        entries: { level: string; activity: string; clockIn: string; clockOut: string; duration: number }[]; 
+        entries: { level: string; activity: string; clockIn: string; clockOut: string; duration: number }[];
     }>({
         kioskId: kiosk.id,
         employeeId: employee.id,
@@ -38,9 +43,7 @@ export default function Clockout() {
     });
 
     const [hoursWorked, setHoursWorked] = useState(0);
-    const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([
-        { level: '', activity: '', hours: 0 },
-    ]);
+    const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([{ level: '', activity: '', hours: 0 }]);
 
     useEffect(() => {
         if (clockedIn.clock_in) {
@@ -48,7 +51,7 @@ export default function Clockout() {
             let clockOutTime = dayjs();
             const minutes = clockOutTime.minute();
             const roundedMinutes = Math.round(minutes / 30) * 30;
-            clockOutTime = clockOutTime.minute(roundedMinutes).second(0); 
+            clockOutTime = clockOutTime.minute(roundedMinutes).second(0);
             const duration = clockOutTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
         }
@@ -91,7 +94,7 @@ export default function Clockout() {
                 activity,
                 clockIn: clockInTime.format('HH:mm'),
                 clockOut: clockOutTime.format('HH:mm'),
-                duration: hours
+                duration: hours,
             };
             clockInTime = clockOutTime;
             return entry;
@@ -134,75 +137,114 @@ export default function Clockout() {
                 <p>Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 <p className="text-lg font-semibold">Hours Worked: {hoursWorked}h</p>
 
-                <form onSubmit={handleSubmit} className="w-full w-['700px'] ">
+                <form onSubmit={handleSubmit} className="w-['700px']">
                     {taskAllocations.map((task, index) => (
-                        <div key={index} className="flex flex-row space-x-2 items-center mb-2">
-                            <div>
-                                <Label>Select Level</Label>
-                                <Select value={task.level} onValueChange={(value) => updateTaskAllocation(index, 'level', value)}>
-                                    <SelectTrigger className=" h-15 w-[300px]">
-                                        <SelectValue placeholder="Select Level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
+                        <div key={index} className="mb-2 flex flex-row items-center space-x-2">
+                            {task.hours > 0 ? (
+                                <div>
+                                    <Label>Level</Label>
+                                    <div className="h-['300px'] w-[700px] rounded border bg-gray-100 p-1">
+                                        {' '}
+                                        <p className="h-13 font-semibold">
+                                            {task.level.slice(7)}
+                                            <span>-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
+                                        </p>
+                                        <p></p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <Label>Select level</Label>
+                                    <ul className="h-[200px] w-[350px] overflow-y-auto rounded border p-2">
                                         {Object.keys(groupedLocations).map((level) => (
-                                            <SelectItem key={level} value={level} className='h-15'>
+                                            <li
+                                                key={level}
+                                                className={`h-12 cursor-pointer rounded-sm p-3 ${task.level === level ? 'bg-gray-200' : ''}`}
+                                                onClick={() => updateTaskAllocation(index, 'level', level)}
+                                            >
                                                 {level.slice(7)}
-                                            </SelectItem>
+                                            </li>
                                         ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                                    </ul>
+                                </div>
+                            )}
+
+                            {task.hours > 0 ? null : (
+                                <div>
+                                    <Label>SelectActivity</Label>
+                                    <ul className="h-[200px] w-[350px] overflow-y-auto rounded border p-2">
+                                        {!task.level && <li className="p-2">Select a level to see activities</li>}
+                                        {task.level &&
+                                            groupedLocations[task.level].map((activity) => (
+                                                <li
+                                                    key={activity}
+                                                    className={`h-12 cursor-pointer rounded-sm p-3 ${task.activity === activity ? 'bg-gray-200' : ''}`}
+                                                    onClick={() => updateTaskAllocation(index, 'activity', activity)}
+                                                >
+                                                    {activity.slice(4)}
+                                                </li>
+                                            ))}
+                                    </ul>
+                                </div>
+                            )}
 
                             <div>
-                                <Label>Select Activity</Label>
-                                <Select value={task.activity} onValueChange={(value) => updateTaskAllocation(index, 'activity', value)}>
-                                    <SelectTrigger className=" h-15 w-[300px]">
-                                        <SelectValue placeholder="Select Activity" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {task.level && groupedLocations[task.level]?.map((activity) => (
-                                            <SelectItem key={activity} value={activity} className='h-15'>
-                                                {activity.slice(4)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div>
-                                <Label>Hours</Label>
-                                <Input
-                                    type="number"
-                                    value={task.hours}
-                                    onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                                    className=" w-[100px] h-15"
-                                    min="0"
-                                    step="0.5"
-                                />
+                                {task.hours > 0 ? (
+                                    <>
+                                        <Label>Hours</Label>
+                                        <Input
+                                            type="number"
+                                            value={task.hours}
+                                            onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
+                                            className="h-15 w-[100px]"
+                                            min="0"
+                                            step="0.5"
+                                        />
+                                    </>
+                                ) : (
+                                    <div>
+                                        <Label>Select Hours</Label>
+                                        <ul className="h-[200px] w-[100px] overflow-y-auto rounded border p-2">
+                                            {[...Array(20)].map((_, i) => {
+                                                const hourValue = (i + 1) * 0.5;
+                                                return (
+                                                    <li
+                                                        key={hourValue}
+                                                        className={`h-12 cursor-pointer rounded-sm p-3 text-center ${
+                                                            task.hours === hourValue ? 'bg-gray-200' : ''
+                                                        }`}
+                                                        onClick={() => updateTaskAllocation(index, 'hours', hourValue)}
+                                                    >
+                                                        {hourValue}
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
 
-                    <div className="flex justify-between items-center mb-2 space-x-2">
+                    <div className="mb-2 flex items-center justify-between space-x-2">
                         <Button type="button" onClick={addTaskAllocation} className="h-15">
                             + Add Activity
                         </Button>
-                        <Button 
-                            type="button" 
-                            variant="destructive" 
-                            onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))} 
-                            className="h-15" 
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
+                            className="h-15"
                             disabled={taskAllocations.length <= 1}
                         >
                             - Remove Last Activity
                         </Button>
                     </div>
-                    <div className="flex flex-col items-center"> 
-                    <Button type="submit" className="h-24 w-48" disabled={isClockOutDisabled}>
-                        Clock Out
-                    </Button>
+                    <div className="flex flex-col items-center">
+                        <Button type="submit" className="h-24 w-48" disabled={isClockOutDisabled}>
+                            Clock Out
+                        </Button>
                     </div>
-                   
                 </form>
             </div>
         </KioskLayout>
