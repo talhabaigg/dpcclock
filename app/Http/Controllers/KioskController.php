@@ -12,6 +12,8 @@ use App\Models\Employee;
 use App\Models\Location;
 use App\Models\Clock;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Cookie;
 class KioskController extends Controller
 {
     /**
@@ -46,30 +48,49 @@ class KioskController extends Controller
      */
     public function show(Kiosk $kiosk)
     {
+        // Check if the user is authenticated or if they have a valid kiosk token cookie
+        if ($this->isValidKioskToken()) {
+            // Redirect to login page if not authenticated and token is invalid
+            return redirect()->route('login');
+        }
+    
         // Load employees related to the kiosk
         $kiosk->load('employees');
-
+    
         // Append clocked_in status to each employee based on the kiosk
         $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
                 ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
                 ->whereNull('clock_out');
-
+    
             // Log the exact query for debugging
             Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
                 'query' => $clockedInQuery->toSql(),
                 'bindings' => $clockedInQuery->getBindings()
             ]);
-
+    
             $employee->clocked_in = $clockedInQuery->exists();
             return $employee;
         });
-
+    
         return Inertia::render('kiosks/show', [
             'kiosk' => $kiosk,
             'employees' => $employees, // Use modified employee list with clocked_in
         ]);
     }
+    
+
+    // Helper function to check if the token is valid in the cookie
+    private function isValidKioskToken()
+    {
+        $token = request()->cookie('kiosk_token_validated');  // Get the token from the cookie
+    
+        // Retrieve the cached token for the specific kiosk
+        $cachedToken = cache()->get("kiosk_token");
+    
+        return $token === $cachedToken;  // Compare cookie token with cached token
+    }
+    
 
     /**
      * Show the form for editing the specified resource.
@@ -220,6 +241,22 @@ class KioskController extends Controller
             'employees' => $employees,
             'locations' => $locations,
         ]);
+    }
+
+    public function validateToken($kioskId, Request $request)
+    {
+        $token = $request->get('token');
+        $cachedToken = cache()->get('kiosk_token');
+        // dd($cachedToken);
+        if ($token === $cachedToken['token']) {
+            // Mark the token as validated by setting it in the session or a cookie
+            Cookie::queue('kiosk_token_validated', true, 60); // For cookie-based tracking
+    
+            // Redirect to the kiosk resource page after successful validation
+            return redirect()->route('kiosks.show', ['kiosk' => $kioskId]);
+        }
+    
+        return response()->json(['valid' => false], 401);
     }
 
 

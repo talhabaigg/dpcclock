@@ -5,6 +5,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { router } from '@inertiajs/react';
 import { Loader2, Search } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import KioskTokenDialog from './qrcode';
 interface Employee {
     id: number;
     name: string;
@@ -70,6 +71,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             <div className="flex h-16 w-full items-center justify-between bg-black px-4 shadow-md">
                 <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
                 <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
+                <KioskTokenDialog kioskId={kiosk.id}/>
             </div>
 
             {/* Layout container */}

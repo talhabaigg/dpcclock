@@ -10,7 +10,8 @@ use App\Models\Employee;
 use App\Models\Location;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
-
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 class ClockController extends Controller
 {
     /**
@@ -258,7 +259,30 @@ class ClockController extends Controller
 
         return redirect()->back()->with('success', 'File converted successfully.');
     }
+    public function generateKioskToken()
+    {
+        $token = Str::random(32); // Generate a random 32-character token
+        // Save the token in cache with the key 'kiosk_token', which will expire in 30 minutes
+        Cache::put('kiosk_token', [
+            'token' => $token,
+        ], now()->addMinutes(15)); // Cache expires in 30 minutes
 
+        return response()->json(['token' => $token]);
+    }
 
+    public function retrieveKioskToken()
+    {
+        // Retrieve the token from cache
+        $cachedToken = Cache::get('kiosk_token');
+    
+        if ($cachedToken) {
+            // Return the cached token
+            return response()->json(['token' => $cachedToken['token']]);
+        } else {
+            // If token does not exist in cache, generate a new one and return it
+            return $this->generateKioskToken(); // Return the response from generateKioskToken()
+        }
+    }
+    
 
 }
