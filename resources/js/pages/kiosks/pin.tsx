@@ -25,7 +25,6 @@ export default function ShowPin() {
         employee: Employee;
         flash: { success?: string; error?: string };
     }>().props;
-    const flashMessage = flash.success || flash.error ? flash : null;
     // Use Inertia form state
     const form = useForm({ pin: '' });
     const [showProcessing, setShowProcessing] = useState(false);
@@ -114,8 +113,6 @@ export default function ShowPin() {
                             ⌫
                         </Button>
                     </div>
-                    <div></div>
-
                     {form.errors.pin && <p className="text-red-500">{form.errors.pin}</p>}
                     {showProcessing ? (
                         <Dialog open={true}>
@@ -140,7 +137,7 @@ export default function ShowPin() {
                             <Button
                                 key={key}
                                 type="button"
-                                variant="secondary"
+                                variant="outline"
                                 className="h-24 w-24 rounded-full border-2 border-gray-400 text-3xl"
                                 onClick={() => {
                                     if (key === 'C') form.setData('pin', '');

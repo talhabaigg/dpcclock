@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,18 +45,28 @@ export default function Clockout() {
 
     const [hoursWorked, setHoursWorked] = useState(0);
     const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([{ level: '', activity: '', hours: 0 }]);
+    const [hoursAllocated, setHoursAllocated] = useState(0);
 
     useEffect(() => {
-        if (clockedIn.clock_in) {
-            const clockInTime = dayjs(clockedIn.clock_in);
-            let clockOutTime = dayjs();
-            const minutes = clockOutTime.minute();
-            const roundedMinutes = Math.round(minutes / 30) * 30;
-            clockOutTime = clockOutTime.minute(roundedMinutes).second(0);
-            const duration = clockOutTime.diff(clockInTime, 'hours', true);
-            setHoursWorked(parseFloat(duration.toFixed(2)));
-        }
+        if (!clockedIn.clock_in) return; // Early exit if no clock-in time
+
+        const clockInTime = dayjs(clockedIn.clock_in);
+        const now = dayjs();
+
+        // Round minutes to the nearest 30 minutes
+        const roundedMinutes = Math.floor(now.minute() / 30) * 30;
+        const clockOutTime = now.minute(roundedMinutes).second(0);
+
+        // Calculate duration in hours (with decimals)
+        const duration = clockOutTime.diff(clockInTime, 'hours', true);
+
+        setHoursWorked(parseFloat(duration.toFixed(2)));
     }, [clockedIn.clock_in]);
+
+    useEffect(() => {
+        const totalHours = taskAllocations.reduce((sum, task) => sum + task.hours, 0);
+        setHoursAllocated(totalHours);
+    }, [taskAllocations]);
 
     const splitLocation = (location: string) => {
         if (typeof location === 'string') {
@@ -65,7 +76,7 @@ export default function Clockout() {
         return { level: '', activity: '' };
     };
 
-    const groupedLocations = locations.reduce((acc: any, location) => {
+    const groupedLocations: Record<string, string[]> = locations.reduce((acc: Record<string, string[]>, location) => {
         const { level, activity } = splitLocation(location);
         if (!level) return acc;
         if (!acc[level]) acc[level] = [];
@@ -109,33 +120,23 @@ export default function Clockout() {
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        const totalAllocatedHours = taskAllocations.reduce((sum, task) => sum + task.hours, 0);
-
-        if (totalAllocatedHours !== hoursWorked) {
-            alert(`Total allocated hours (${totalAllocatedHours}h) must match worked hours (${hoursWorked}h)!`);
-            return;
-        }
-
-        form.post(route('clocks.out'), {
-            onSuccess: () => {
-                console.log('Clock out successful');
-            },
-            onError: (errors) => {
-                console.error('Error:', errors);
-            },
-        });
+        form.post(route('clocks.out'));
     };
 
     const isClockOutDisabled = taskAllocations.some((task) => {
-        return !task.level || (groupedLocations[task.level] && groupedLocations[task.level].length > 0 && !task.activity);
+        return (
+            !task.level ||
+            (groupedLocations[task.level] && groupedLocations[task.level].length > 0 && !task.activity) ||
+            task.hours <= 0 ||
+            hoursAllocated !== hoursWorked
+        );
     });
 
     return (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
-            <div className="flex h-screen flex-col items-center justify-center space-y-4">
+            <div className="mx-2 my-4 flex h-screen flex-col items-center justify-center space-y-4">
                 <h2 className="text-2xl font-bold">Clock Out for {employee.name}</h2>
                 <p>Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                <p className="text-lg font-semibold">Hours Worked: {hoursWorked}h</p>
 
                 <form onSubmit={handleSubmit} className="w-['700px']">
                     {taskAllocations.map((task, index) => (
@@ -143,7 +144,7 @@ export default function Clockout() {
                             {task.hours > 0 ? (
                                 <div>
                                     <Label>Level</Label>
-                                    <div className="h-['300px'] w-[700px] rounded border bg-gray-100 p-1">
+                                    <div className="h-['300px'] w-[700px] rounded border bg-gray-100 p-1 text-black">
                                         {' '}
                                         <p className="h-13 font-semibold">
                                             {task.level.slice(7)}
@@ -159,7 +160,7 @@ export default function Clockout() {
                                         {Object.keys(groupedLocations).map((level) => (
                                             <li
                                                 key={level}
-                                                className={`h-12 cursor-pointer rounded-sm p-3 ${task.level === level ? 'bg-gray-200' : ''}`}
+                                                className={`h-12 cursor-pointer rounded-sm p-3 ${task.level === level ? 'bg-gray-200 text-black' : ''}`}
                                                 onClick={() => updateTaskAllocation(index, 'level', level)}
                                             >
                                                 {level.slice(7)}
@@ -178,7 +179,7 @@ export default function Clockout() {
                                             groupedLocations[task.level].map((activity) => (
                                                 <li
                                                     key={activity}
-                                                    className={`h-12 cursor-pointer rounded-sm p-3 ${task.activity === activity ? 'bg-gray-200' : ''}`}
+                                                    className={`h-12 cursor-pointer rounded-sm p-3 ${task.activity === activity ? 'bg-gray-200 text-black' : ''}`}
                                                     onClick={() => updateTaskAllocation(index, 'activity', activity)}
                                                 >
                                                     {activity.slice(4)}
@@ -225,7 +226,15 @@ export default function Clockout() {
                             </div>
                         </div>
                     ))}
+                    <div className="mb-2 flex justify-end">
+                        {hoursAllocated > hoursWorked && (
+                            <span className="mx-2 text-sm font-black text-red-500">Hours allocated cannot be higher than worked hours.</span>
+                        )}
 
+                        <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
+                            {hoursAllocated}/{hoursWorked}
+                        </Badge>
+                    </div>
                     <div className="mb-2 flex items-center justify-between space-x-2">
                         <Button type="button" onClick={addTaskAllocation} className="h-15">
                             + Add Activity

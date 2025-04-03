@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { Building , UsersRound , LayoutGrid, Clock, Hammer,Hourglass    } from 'lucide-react';
+import { Building, Clock, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -37,7 +37,12 @@ const mainNavItems: NavItem[] = [
         title: 'Timesheets',
         href: '/clocks',
         icon: Hourglass,
-    }
+    },
+    {
+        title: 'Timesheet Converter',
+        href: '/timesheets-converter',
+        icon: FoldHorizontal,
+    },
 ];
 
 const footerNavItems: NavItem[] = [

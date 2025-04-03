@@ -21,15 +21,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
-    
+
     Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
     Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
- 
+
     Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
     Route::resource('locations', LocationController::class)->names('locations');
 
     Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync');
-    Route::resource('kiosks', KioskController::class)->names('kiosks');
+    // Route::resource('kiosks', KioskController::class)->names('kiosks');
     Route::get('/kiosks/{kioskId}/employees/sync', [KioskController::class, 'syncEmployees'])->name('kiosks.employees.sync');
 
 
@@ -42,10 +42,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
     Route::resource('worktypes', WorktypeController::class)->names('worktypes');
-    
-    
-});
 
+    Route::get('/timesheets-converter', [ClockController::class, 'showTimesheetsConverter'])->name('timesheets.converter');
+    Route::post('/timesheets-converter/upload', [ClockController::class, 'convertTimesheets'])->name('timesheets.converter.convert');
+});
+Route::resource('kiosks', KioskController::class)->names('kiosks');
 Route::get('/kiosk', function () {
     $employees = Employee::all();
 
