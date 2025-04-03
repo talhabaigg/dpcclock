@@ -41,14 +41,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/generate-kiosk-token', [ClockController::class, 'generateKioskToken'])->name('clocks.generateKioskToken');
     Route::get('/retrieve-kiosk-token', [ClockController::class, 'retrieveKioskToken'])->name('clocks.retrieveKioskToken');
-   
-});
-Route::resource('kiosks', KioskController::class)->names('kiosks');
-Route::resource('clocks', ClockController::class)->names('clocks');
-Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
-Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validateToken'])->name('kiosks.validateToken');
- Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskController::class, 'showPinPage'])->name('kiosk.pin');
+
+    Route::resource('kiosks', KioskController::class)->names('kiosks');
+    Route::resource('clocks', ClockController::class)->names('clocks');
+    Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
+    // Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validateToken'])->name('kiosks.validateToken');
+    Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskController::class, 'showPinPage'])->name('kiosk.pin');
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskController::class, 'validatePin'])->name('kiosk.validate-pin');
+});
+
+Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validateToken'])->name('kiosk.validateToken');
+
 Route::get('/kiosk', function () {
     $employees = Employee::all();
 
