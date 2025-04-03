@@ -265,7 +265,7 @@ class ClockController extends Controller
         // Save the token in cache with the key 'kiosk_token', which will expire in 30 minutes
         Cache::put('kiosk_token', [
             'token' => $token,
-        ], now()->addMinutes(15)); // Cache expires in 30 minutes
+        ], now()->addSeconds(15)); // Cache expires in 30 minutes
 
         return response()->json(['token' => $token]);
     }
@@ -274,7 +274,7 @@ class ClockController extends Controller
     {
         // Retrieve the token from cache
         $cachedToken = Cache::get('kiosk_token');
-    
+
         if ($cachedToken) {
             // Return the cached token
             return response()->json(['token' => $cachedToken['token']]);
@@ -283,6 +283,6 @@ class ClockController extends Controller
             return $this->generateKioskToken(); // Return the response from generateKioskToken()
         }
     }
-    
+
 
 }
