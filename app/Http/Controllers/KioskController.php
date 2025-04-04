@@ -259,7 +259,9 @@ class KioskController extends Controller
             return redirect()->route('kiosks.show', ['kiosk' => $kioskId]);
         }
 
-        return response()->json(['valid' => false, 'message' => 'Invalid token'], 401);
+        return Inertia::render('kiosks/error/invalid-qr', [
+            'error' => 'Unable to read expired QR. Please scan again from the Kiosk.',
+        ]);
     }
 
 

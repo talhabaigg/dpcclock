@@ -1,63 +1,87 @@
-import React, { useState } from 'react';
-import axios from 'axios'; // Import axios for API calls
-import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
-import { Button } from '@/components/ui/button'; // Import button component
+import React, { useEffect, useState } from 'react';
+
 interface KioskTokenDialogProps {
-    kioskId: number; // Define the prop for kioskId
+    kioskId: number;
 }
 
 const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
+    const [open, setOpen] = useState<boolean>(false); // track dialog open state
 
-    // Function to fetch the token from the server using Axios
     const fetchToken = async () => {
-        setLoading(true);
         try {
-            // Make a GET request to retrieve the token from the server
-            const response = await axios.get('/retrieve-kiosk-token'); // Replace with your API endpoint
-            setToken(response.data.token);
+            setLoading(true);
+            const response = await axios.get('/retrieve-kiosk-token');
+            const newToken = response.data.token;
+
+            // Only update if token has changed
+            if (newToken !== token) {
+                setToken(newToken);
+            }
         } catch (error) {
             console.error('Error fetching token:', error);
-            setToken(null); // Handle error and reset token to null
+            setToken(null);
         } finally {
-            setLoading(false); // Stop loading state once the request is done
+            setLoading(false);
         }
     };
 
-    // Trigger fetching token when the dialog is opened
-    const handleDialogOpen = () => {
-        setToken(null); // Clear the existing token before fetching a new one
-        fetchToken(); // Fetch the token each time the dialog opens
-    };
-
-    // Generate the URL with token and kiosk ID as query parameter
     const generateKioskUrl = (token: string | null, kioskId: number) => {
         if (!token) return '';
-        return `${window.location.origin}/kiosks/${kioskId}/validate-token?token=${token}`; // Embed the token and kiosk ID in the URL
+        return `${window.location.origin}/kiosks/${kioskId}/validate-token?token=${token}`;
     };
 
+    // Handle polling when dialog is open
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+
+        if (open) {
+            fetchToken(); // fetch immediately on open
+            interval = setInterval(() => {
+                fetchToken();
+            }, 5000); // every 10 seconds
+        }
+
+        return () => clearInterval(interval); // cleanup when closed
+    }, [open]);
+
     return (
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="btn btn-primary" onClick={handleDialogOpen}>Show QR</Button>
+                <Button className="btn btn-primary">Show QR</Button>
             </DialogTrigger>
 
-            <DialogContent className="dialog-content">
-                <DialogTitle>QR CODE</DialogTitle>
+            <DialogContent className="dialog-content flex flex-col items-center justify-center">
+                <DialogTitle>SCAN QR CODE TO LOGIN</DialogTitle>
                 <DialogDescription>
                     {loading ? (
-                        <p>Loading token...</p> // Show loading text while fetching the token
+                        <p>Updating...</p>
                     ) : token ? (
-                        <div className="qr-code-container flex justify-center items-center">
-                            <QRCodeSVG value={generateKioskUrl(token, kioskId)} size={256} /> {/* Display the QR code with the URL containing the token and kiosk ID */}
-                            <a href={generateKioskUrl(token, kioskId)}>Link</a>
+                        <div className="qr-code-container flex items-center justify-center">
+                            <QRCodeSVG value={generateKioskUrl(token, kioskId)} size={256} />
                         </div>
                     ) : (
-                        <p>Failed to retrieve token. Please try again.</p> // Show error message if fetching fails
+                        <p>You don't have permission to retrieve the QR code.</p>
                     )}
                 </DialogDescription>
+
+                <div className="mt-4 flex w-full justify-center">
+                    {token && (
+                        <a
+                            className="text-center text-xs break-all text-blue-600 underline"
+                            href={generateKioskUrl(token, kioskId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {generateKioskUrl(token, kioskId)}
+                        </a>
+                    )}
+                </div>
             </DialogContent>
         </Dialog>
     );
