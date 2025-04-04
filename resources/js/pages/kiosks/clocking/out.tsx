@@ -48,16 +48,14 @@ export default function Clockout() {
     const [hoursAllocated, setHoursAllocated] = useState(0);
 
     useEffect(() => {
-        if (!clockedIn.clock_in) return; // Early exit if no clock-in time
+        if (!clockedIn.clock_in) return;
 
         const clockInTime = dayjs(clockedIn.clock_in);
         const now = dayjs();
 
-        // Round minutes to the nearest 30 minutes
         const roundedMinutes = Math.floor(now.minute() / 30) * 30;
         const clockOutTime = now.minute(roundedMinutes).second(0);
 
-        // Calculate duration in hours (with decimals)
         const duration = clockOutTime.diff(clockInTime, 'hours', true);
 
         setHoursWorked(parseFloat(duration.toFixed(2)));
@@ -132,130 +130,152 @@ export default function Clockout() {
         );
     });
 
-    return (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
-            <div className="mx-2 my-4 flex h-screen flex-col items-center justify-center space-y-4">
-                <h2 className="text-2xl font-bold">Clock Out for {employee.name}</h2>
-                <p>Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+    const [isMobile, setIsMobile] = useState(false);
 
-                <form onSubmit={handleSubmit} className="w-['700px']">
-                    {taskAllocations.map((task, index) => (
-                        <div key={index} className="mb-2 flex flex-row items-center space-x-2">
-                            {task.hours > 0 ? (
-                                <div>
-                                    <Label>Level</Label>
-                                    <div className="h-['300px'] w-[700px] rounded border bg-gray-100 p-1 text-black">
-                                        {' '}
-                                        <p className="h-13 font-semibold">
-                                            {task.level.slice(7)}
-                                            <span>-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
-                                        </p>
-                                        <p></p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div>
-                                    <Label>Select level</Label>
-                                    <ul className="h-[200px] w-[350px] overflow-y-auto rounded border p-2">
-                                        {Object.keys(groupedLocations).map((level) => (
-                                            <li
-                                                key={level}
-                                                className={`h-12 cursor-pointer rounded-sm p-3 ${task.level === level ? 'bg-gray-200 text-black' : ''}`}
-                                                onClick={() => updateTaskAllocation(index, 'level', level)}
-                                            >
-                                                {level.slice(7)}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
 
-                            {task.hours > 0 ? null : (
-                                <div>
-                                    <Label>SelectActivity</Label>
-                                    <ul className="h-[200px] w-[350px] overflow-y-auto rounded border p-2">
-                                        {!task.level && <li className="p-2">Select a level to see activities</li>}
-                                        {task.level &&
-                                            groupedLocations[task.level].map((activity) => (
-                                                <li
-                                                    key={activity}
-                                                    className={`h-12 cursor-pointer rounded-sm p-3 ${task.activity === activity ? 'bg-gray-200 text-black' : ''}`}
-                                                    onClick={() => updateTaskAllocation(index, 'activity', activity)}
-                                                >
-                                                    {activity.slice(4)}
-                                                </li>
-                                            ))}
-                                    </ul>
-                                </div>
-                            )}
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial check on mount
 
-                            <div>
-                                {task.hours > 0 ? (
-                                    <>
-                                        <Label>Hours</Label>
-                                        <Input
-                                            type="number"
-                                            value={task.hours}
-                                            onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                                            className="h-15 w-[100px]"
-                                            min="0"
-                                            step="0.5"
-                                        />
-                                    </>
-                                ) : (
-                                    <div>
-                                        <Label>Select Hours</Label>
-                                        <ul className="h-[200px] w-[100px] overflow-y-auto rounded border p-2">
-                                            {[...Array(20)].map((_, i) => {
-                                                const hourValue = (i + 1) * 0.5;
-                                                return (
-                                                    <li
-                                                        key={hourValue}
-                                                        className={`h-12 cursor-pointer rounded-sm p-3 text-center ${
-                                                            task.hours === hourValue ? 'bg-gray-200' : ''
-                                                        }`}
-                                                        onClick={() => updateTaskAllocation(index, 'hours', hourValue)}
-                                                    >
-                                                        {hourValue}
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    </div>
-                                )}
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
+
+    const content = (
+        <div className="my-4 flex w-full flex-col items-center justify-center space-y-4">
+            <h2 className="text-center text-xl font-bold sm:text-2xl">Clock Out for {employee.name}</h2>
+            <p className="text-center text-sm sm:text-base">
+                Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+
+            <form onSubmit={handleSubmit} className="w-full px-4">
+                {taskAllocations.map((task, index) => (
+                    <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4">
+                        {task.hours > 0 ? (
+                            <div className="flex-3">
+                                <Label>Level</Label>
+                                <div className="rounded border p-1 text-black sm:w-full">
+                                    <p className="">
+                                        {task.level.slice(7)}
+                                        <span>-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                    <div className="mb-2 flex justify-end">
-                        {hoursAllocated > hoursWorked && (
-                            <span className="mx-2 text-sm font-black text-red-500">Hours allocated cannot be higher than worked hours.</span>
+                        ) : (
+                            <div className="flex-1">
+                                <Label>Select level</Label>
+                                <ul className="max-h-[200px] overflow-y-auto rounded border p-1">
+                                    {Object.keys(groupedLocations).map((level) => (
+                                        <li
+                                            key={level}
+                                            className={`cursor-pointer rounded-none border-b p-2 ${task.level === level ? 'bg-gray-200 text-black' : ''}`}
+                                            onClick={() => updateTaskAllocation(index, 'level', level)}
+                                        >
+                                            {level.slice(7)}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         )}
 
-                        <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
-                            {hoursAllocated}/{hoursWorked}
-                        </Badge>
+                        {task.hours > 0 ? null : (
+                            <div className="flex-1">
+                                <Label>Select Activity</Label>
+                                <ul className="max-h-[200px] overflow-y-auto rounded border">
+                                    {!task.level && <li className="h-48 p-2">Select a level to see activities</li>}
+                                    {task.level &&
+                                        groupedLocations[task.level].map((activity) => (
+                                            <li
+                                                key={activity}
+                                                className={`cursor-pointer rounded-none border-b p-2 ${task.activity === activity ? 'bg-gray-200 text-black' : ''}`}
+                                                onClick={() => updateTaskAllocation(index, 'activity', activity)}
+                                            >
+                                                {activity.slice(4)}
+                                            </li>
+                                        ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        <div className="flex-0">
+                            {task.hours > 0 ? (
+                                <>
+                                    <Label>Hours</Label>
+                                    <Input
+                                        type="number"
+                                        value={task.hours}
+                                        onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
+                                        className="w-full sm:w-48"
+                                        min="0"
+                                        step="0.5"
+                                    />
+                                </>
+                            ) : (
+                                <div>
+                                    <Label>Select Hours</Label>
+                                    <ul className="max-h-[200px] w-full overflow-y-auto rounded border p-2 sm:w-32">
+                                        {[...Array(20)].map((_, i) => {
+                                            const hourValue = (i + 1) * 0.5;
+                                            return (
+                                                <li
+                                                    key={hourValue}
+                                                    className={`cursor-pointer rounded-none border-b p-2 text-center ${task.hours === hourValue ? 'bg-gray-200' : ''}`}
+                                                    onClick={() => updateTaskAllocation(index, 'hours', hourValue)}
+                                                >
+                                                    {hourValue}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="mb-2 flex items-center justify-between space-x-2">
-                        <Button type="button" onClick={addTaskAllocation} className="h-15">
-                            + Add Activity
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
-                            className="h-15"
-                            disabled={taskAllocations.length <= 1}
-                        >
-                            - Remove Last Activity
-                        </Button>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <Button type="submit" className="h-24 w-48" disabled={isClockOutDisabled}>
-                            Clock Out
-                        </Button>
-                    </div>
-                </form>
-            </div>
+                ))}
+
+                <div className="mb-2 flex justify-end">
+                    {hoursAllocated > hoursWorked && (
+                        <span className="text-xs font-black text-red-500 sm:text-sm">Hours allocated cannot be higher than worked hours.</span>
+                    )}
+
+                    <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
+                        {hoursAllocated}/{hoursWorked}
+                    </Badge>
+                </div>
+
+                <div className="mb-4 flex items-center justify-between space-x-2">
+                    <Button type="button" onClick={addTaskAllocation} className="w-full sm:w-32">
+                        + Add Activity
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
+                        className="w-full sm:w-32"
+                        disabled={taskAllocations.length <= 1}
+                    >
+                        - Remove Activity
+                    </Button>
+                </div>
+
+                <div className="flex justify-center">
+                    <Button type="submit" className="w-full sm:w-48" disabled={isClockOutDisabled}>
+                        Clock Out
+                    </Button>
+                </div>
+            </form>
+        </div>
+    );
+
+    return isMobile ? (
+        content
+    ) : (
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
+            {content}
         </KioskLayout>
     );
 }

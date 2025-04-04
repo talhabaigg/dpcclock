@@ -6,6 +6,7 @@ import { router } from '@inertiajs/react';
 import { Loader2, Search } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import KioskTokenDialog from './qrcode';
+
 interface Employee {
     id: number;
     name: string;
@@ -25,8 +26,10 @@ interface KioskLayoutProps {
 export default function KioskLayout({ children, employees, kiosk, selectedEmployee }: KioskLayoutProps) {
     const [search, setSearch] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}); // Tracks collapsibility of each group
     const getInitials = useInitials();
     const listRef = useRef<HTMLDivElement>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     useLayoutEffect(() => {
         const savedScroll = sessionStorage.getItem('scrollPosition');
@@ -70,14 +73,15 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             {/* Top Bar */}
             <div className="flex h-16 w-full items-center justify-between bg-black px-4 shadow-md">
                 <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
+
                 <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
-                <KioskTokenDialog kioskId={kiosk.id}/>
+                <KioskTokenDialog kioskId={kiosk.id} />
             </div>
 
             {/* Layout container */}
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar - Scrollable */}
-                <div className="flex w-1/2 flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
+                <div className="sm:w=1/2 flex w-full flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
                     <div className="m-2 flex items-center justify-end space-x-2 p-2">
                         <div className="relative w-full">
                             <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
@@ -95,39 +99,52 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                         </Button>
                     </div>
 
-                    {/* Search Input */}
-
                     {/* Employee List - Scrollable */}
                     <div ref={listRef} className="flex-1 overflow-y-auto">
                         <ul className="w-full">
                             {Object.entries(groupedEmployees).map(([letter, employees]) => (
                                 <div key={letter}>
                                     <h3 className="my-1 bg-gray-200 text-sm font-bold text-black dark:bg-gray-900 dark:text-gray-200">
-                                        <p className="ml-5">{letter}</p>
+                                        <div className="ml-5 flex items-center justify-between">
+                                            <p>{letter}</p>
+                                            {/* Toggle button for collapsibility */}
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleCollapseToggle(letter)}
+                                                className="p-1 text-gray-500 dark:text-gray-200"
+                                            >
+                                                {collapsed[letter] ? '+' : '-'}
+                                            </Button>
+                                        </div>
                                     </h3>
-                                    {employees.map((emp) => {
-                                        const isSelected = selectedEmployee?.eh_employee_id === emp.eh_employee_id;
-                                        return (
-                                            <li key={emp.id} className="vertical-scrollbar px-2 py-1">
-                                                <Button
-                                                    variant={isSelected ? 'secondary' : 'ghost'}
-                                                    className={`h-14 w-full justify-start text-left ${
-                                                        isSelected ? 'bg-blue-500 text-white hover:bg-blue-400' : 'hover:bg-blue-400'
-                                                    }`}
-                                                    onClick={() => handleNavigation(`/kiosk/${kiosk.eh_kiosk_id}/employee/${emp.eh_employee_id}/pin`)}
-                                                >
-                                                    <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                                                        <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                                            {getInitials(emp.name)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex flex-col">
-                                                        {emp.name} {emp.clocked_in && <span className="text-green-500">Clocked In</span>}
-                                                    </div>
-                                                </Button>
-                                            </li>
-                                        );
-                                    })}
+
+                                    {/* Display employee list if not collapsed */}
+                                    <div className={`${collapsed[letter] ? 'hidden' : 'block'}`}>
+                                        {employees.map((emp) => {
+                                            const isSelected = selectedEmployee?.eh_employee_id === emp.eh_employee_id;
+                                            return (
+                                                <li key={emp.id} className="vertical-scrollbar px-2 py-1">
+                                                    <Button
+                                                        variant={isSelected ? 'secondary' : 'ghost'}
+                                                        className={`h-14 w-full justify-start text-left ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-400' : 'hover:bg-blue-400'}`}
+                                                        onClick={() =>
+                                                            handleNavigation(`/kiosk/${kiosk.eh_kiosk_id}/employee/${emp.eh_employee_id}/pin`)
+                                                        }
+                                                    >
+                                                        <Avatar className="h-8 w-8 overflow-hidden rounded-full">
+                                                            <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+                                                                {getInitials(emp.name)}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex flex-col">
+                                                            {emp.name} {emp.clocked_in && <span className="text-green-500">Clocked In</span>}
+                                                        </div>
+                                                    </Button>
+                                                </li>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             ))}
                         </ul>
