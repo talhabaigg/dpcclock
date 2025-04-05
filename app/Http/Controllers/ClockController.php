@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
+use Carbon\Carbon;
+use App\Models\Worktype;
+use Illuminate\Support\Facades\Http;
 class ClockController extends Controller
 {
     /**
@@ -224,65 +227,316 @@ class ClockController extends Controller
     }
 
     public function convertTimesheets(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|file|mimes:csv,txt',
-        ]);
+{
+    // Validate the uploaded file
+    $validated = $request->validate([
+        'file' => 'required|file|mimes:csv,txt',
+    ]);
 
-        // Get the uploaded file
-        $file = $request->file('file');
-
-        // Open the file for reading
-        $handle = fopen($file->getRealPath(), 'r');
-
-        if ($handle === false) {
-            return redirect()->back()->with('error', 'Failed to read the file.');
-        }
-
-        $data = [];
-        $header = fgetcsv($handle); // Read the first row as headers
-
-        // Remove BOM (Byte Order Mark) if it exists in the header
-        $header = array_map(function ($item) {
-            return trim($item, "\xEF\xBB\xBF"); // Removes BOM from the start of each header
-        }, $header);
-
-        // Parse the rows
-        while (($row = fgetcsv($handle)) !== false) {
-            // Trim each row's values
-            $data[] = array_combine($header, array_map('trim', $row)); // Trim all values and map to header
-        }
-
-        fclose($handle);
-
-        dd($data); // Debugging: Shows parsed and trimmed CSV data
-
-        return redirect()->back()->with('success', 'File converted successfully.');
+    // Open the file for reading
+    $handle = fopen($validated['file']->getRealPath(), 'r');
+    if ($handle === false) {
+        return redirect()->back()->with('error', 'Failed to read the file.');
     }
+
+    $data = [];
+    $header = fgetcsv($handle); // Read header row
+
+    // Remove BOM (Byte Order Mark) if it exists in the header
+    $header = array_map(fn($item) => trim($item, "\xEF\xBB\xBF"), $header);
+    $index = 0; // Initialize index
+    // Process rows
+    while (($row = fgetcsv($handle)) !== false) {
+        $rowData = array_combine($header, array_map('trim', $row)); // Map row data to headers
+    
+        // Map location data with row index
+        $this->mapLocationData($rowData, $index + 1); // Index is 1-based (if you want to start from 1)
+        $this->mapEmployee($rowData);
+        $this->mapCostCode($rowData);
+        $this->mapTimes($rowData);
+        $excludeCostCodes = ['2471109', '2516504', '2527509']; 
+        if (!in_array($rowData['COST CODE'], $excludeCostCodes)) {
+            $this->mapShiftConditions($rowData);
+        }
+    
+        $data[] = $rowData; // Add processed row to data
+    
+        $index++; // Increment index for next row
+    }
+    // $hoursByCostCode = [];
+
+// foreach ($data as $index => $row) {
+//     $costCode = $row['COST CODE'] ?? null;
+//     $hours = isset($row['HOURS']) && is_numeric($row['HOURS']) ? (float) $row['HOURS'] : 0;
+
+//     if ($costCode === null) {
+//         dd("Missing COST CODE on row index: $index");
+//     }
+
+//     if (!isset($hoursByCostCode[$costCode])) {
+//         $hoursByCostCode[$costCode] = 0;
+//     }
+
+//     $hoursByCostCode[$costCode] += $hours;
+// }
+
+// dd($hoursByCostCode);
+
+    fclose($handle);
+    $filteredData = array_map(function($item) {
+        return [
+            'employeeId' => $item['EMPLOYEE CODE'] ?? null,
+            'locationId' => $item['locationId'] ?? null,
+            'workTypeId' => $item['COST CODE'] ?? null,
+            'startTime' => $item['START_TIME'] ?? null,
+            'endTime' => $item['END_TIME'] ?? null,
+            'shiftConditionIds' => $item['shiftConditionIds'] ?? [],
+        ];
+    }, $data);
+
+    // Group by 'employeeId' using array_reduce
+    $groupedByEmployeeId = array_reduce($filteredData, function($result, $item) {
+        $employeeId = $item['employeeId'];
+    
+        // If the employee already exists in the result, append the item, else create a new array for that employee
+        if (!isset($result['timesheets'][$employeeId])) {
+            $result['timesheets'][$employeeId] = [];
+        }
+        $result['timesheets'][$employeeId][] = $item;
+    
+        return $result;
+    }, ['timesheets' => []]);
+    // dd($hoursByCostCode);
+    // Debugging: Shows the grouped data as pretty-printed JSON
+    // dd(json_encode($groupedByEmployeeId, JSON_PRETTY_PRINT));
+    // $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
+
+    // // Convert the array to JSON string
+    // $jsonData = json_encode($groupedByEmployeeId, JSON_PRETTY_PRINT);
+    
+    // // Store the JSON in the public disk (storage/app/public)
+    // Storage::disk('public')->put($filePath, $jsonData);
+    
+    // Download the file
+    // return response()->download(storage_path('app/public/' . $filePath), 'timesheets.json')->deleteFileAfterSend(true);
+    
+    // After file is downloaded, handle sync and redirect (this part will be unreachable unless you adjust the flow)
+   // Divide the timesheets into chunks of 100
+   $timesheetChunks = array_chunk($groupedByEmployeeId['timesheets'], 100, true);
+    
+   // Sync each chunk of timesheets with the API
+   foreach ($timesheetChunks as $chunk) {
+       $chunkData = ['timesheets' => $chunk];
+
+       // You need to modify this to sync each chunk with the API
+       $syncResult = $this->sync($chunkData);
+
+       if (!$syncResult) {
+           return redirect()->route('timesheets.converter')->with([
+               'error' => 'Failed to sync data with the API.',
+           ]);
+       }
+   }
+
+   return redirect()->route('timesheets.converter')->with([
+       'message' => 'Data converted from old timesheet and synced successfully with Employment Hero.',
+   ]);
+
+}
+private function sync($chunkData)
+{
+    $apiKey = env('PAYROLL_API_KEY');   
+    // Send POST request to the API with correct headers and JSON data
+    $response = Http::withHeaders([
+        'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+        'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
+    ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+    
+    // Check the status code
+    if ($response->successful()) {
+        // Request was successful (200 or 201)
+        return true;
+    } else {
+        return false; // Request failed
+    }
+}
+
+private function mapLocationData(&$rowData, $index)
+{
+    if (!isset($rowData['JOB NUMBER'])) {
+        dd("JOB NUMBER not found in row $index: " . json_encode($rowData));
+    }
+
+    $locations = [
+        '06-21-0115' => 'NPAV00',
+        '06-22-0116' => 'DGC00',
+        '06-23-0127' => 'ANU00',
+        '06-24-0134' => 'COA00',
+        '06-99-TAFE' => 'zzTAFE',
+    ];
+    $locationExternalId = $locations[$rowData['JOB NUMBER']] ?? null;
+    if (!$locationExternalId) {
+        dd("Invalid JOB NUMBER '{$rowData['JOB NUMBER']}' in row $index: " . json_encode($rowData));
+    }
+    $rowData['JOB NUMBER'] = $locationExternalId;
+    $location = Location::where('external_id', $locationExternalId)->first();
+
+    if (!$location) {
+        dd("Location not found for JOB NUMBER: {$rowData['JOB NUMBER']} in row $index");
+    }
+
+    $rowData['DEFAULT SHIFT CONDITIONS'] = implode(', ', $location->workTypes()->pluck('eh_worktype_id')->toArray());
+    $rowData['locationId'] = $location->eh_location_id;
+}
+
+private function mapEmployee(&$rowData)
+{
+    if (!isset($rowData['EMPLOYEE CODE']) || empty($rowData['EMPLOYEE CODE'])) {
+        dd("EMPLOYEE CODE is missing in row: " . json_encode($rowData));
+    }
+
+    $employeeId = Employee::where('external_id', $rowData['EMPLOYEE CODE'])->value('eh_employee_id');
+
+    if (!$employeeId) {
+        dd("Employee not found for EMPLOYEE CODE: {$rowData['EMPLOYEE CODE']}");
+    }
+
+    $rowData['EMPLOYEE CODE'] = $employeeId;
+}
+private function mapCostCode(&$rowData)
+{
+    $costCodes = [
+        '01-020' => '2490634',
+        '01-030' => '2490635',
+        '01-040' => '2490636',
+        '01-050' => '2490637',
+        '01-060' => '2490638',
+        "Personal/Carer's Leave Taken" => '2471109',
+        'RDO Taken' => '2516504',
+        'Annual Leave Taken' => '2527509',
+    ];
+
+    if (empty($rowData['COST CODE'])) {
+        dd("COST CODE is missing in row: " . json_encode($rowData));
+    }
+
+    if (!isset($costCodes[$rowData['COST CODE']])) {
+        dd("Invalid COST CODE '{$rowData['COST CODE']}' in row: " . json_encode($rowData));
+    }
+
+    $rowData['COST CODE'] = $costCodes[$rowData['COST CODE']];
+}
+
+
+private function mapTimes(&$rowData)
+{
+    if (!isset($rowData['DATE'], $rowData['HOURS'], $rowData['PAY'])) {
+        dd("Missing one or more required fields (DATE, HOURS, PAY) in row: " . json_encode($rowData));
+    }
+
+    if (!is_numeric($rowData['HOURS']) || (float)$rowData['HOURS'] <= 0) {
+        dd("Invalid HOURS value '{$rowData['HOURS']}' in row: " . json_encode($rowData));
+    }
+
+    try {
+        $startTime = new \Carbon\Carbon(
+            $rowData['DATE'] . ($rowData['PAY'] == 131 ? ' 15:30:00' : ' 06:30:00'),
+            'Australia/Brisbane'
+        );
+    } catch (\Exception $e) {
+        dd("Invalid DATE format or value: {$rowData['DATE']} in row: " . json_encode($rowData));
+    }
+
+    $rowData['START_TIME'] = $startTime->format('Y-m-d\TH:i:s');
+    $rowData['END_TIME'] = $startTime->copy()->addHours((float) $rowData['HOURS'])->format('Y-m-d\TH:i:s');
+}
+
+
+private function mapShiftConditions(&$rowData)
+{
+    // Travel: optional, but must be valid if set
+    if (!empty($rowData['Travel'])) {
+        $travel = Worktype::where('name', $rowData['Travel'])->value('eh_worktype_id');
+        if (!$travel) {
+            dd("Invalid Travel worktype '{$rowData['Travel']}' in row: " . json_encode($rowData));
+        }
+        $rowData['Travel'] = $travel;
+    } else {
+        $rowData['Travel'] = null;
+    }
+
+    // Allowance: optional, but must be valid if set
+    if (!empty($rowData['Allowance'])) {
+        $allowance = Worktype::where('name', $rowData['Allowance'])->value('eh_worktype_id');
+        if (!$allowance) {
+            dd("Invalid Allowance worktype '{$rowData['Allowance']}' in row: " . json_encode($rowData));
+        }
+        $rowData['Allowance'] = $allowance;
+    } else {
+        $rowData['Allowance'] = null;
+    }
+
+    // Merge into final shiftConditionIds array
+    $shiftConditionIds = array_filter([
+        $rowData['DEFAULT SHIFT CONDITIONS'] ?? null,
+        $rowData['Travel'],
+        $rowData['Allowance'],
+    ]);
+
+    $rowData['shiftConditionIds'] = explode(', ', implode(', ', $shiftConditionIds));
+}
+
     public function generateKioskToken()
-    {
-        $token = Str::random(32); // Generate a random 32-character token
-        // Save the token in cache with the key 'kiosk_token', which will expire in 30 minutes
-        Cache::put('kiosk_token', [
-            'token' => $token,
-        ], now()->addSeconds(5)); // Cache expires in 30 minutes
+{
+    $token = Str::random(32); // Generate a random 32-character token
+    $expiresAt = now('Australia/Brisbane')->addMinutes(30); // Set expiration time to 30 minutes from now
 
-        return response()->json(['token' => $token]);
-    }
+    // Save the token in cache with the key 'kiosk_token:{token}', which will expire in 30 minutes
+    Cache::put("kiosk_token:$token", [
+        'token' => $token,
+        'expires_at' => $expiresAt,
+    ], $expiresAt); // Cache expires in 30 minutes (considering the timezone)
 
-    public function retrieveKioskToken()
-    {
-        // Retrieve the token from cache
-        $cachedToken = Cache::get('kiosk_token');
+    // Save the latest token in cache to track which token to use
+    Cache::put('kiosk_token_latest', $token, $expiresAt); // Cache the latest token
+
+    return response()->json(['token' => $token]);
+}
+
+    
+public function retrieveKioskToken()
+{
+    // Retrieve the latest token from the cache
+    $latestToken = Cache::get('kiosk_token_latest');
+
+    if ($latestToken) {
+        // Retrieve the cached token using the latest token as the key
+        $cachedToken = Cache::get("kiosk_token:$latestToken");
 
         if ($cachedToken) {
-            // Return the cached token
+            // Convert expiration time to a Carbon instance with timezone support
+            $expiresAt = \Carbon\Carbon::parse($cachedToken['expires_at'])->setTimezone('Australia/Brisbane');
+            $now = now('Australia/Brisbane'); // Ensure we're comparing time in the same timezone
+
+            // Check if the token will expire in less than 1 minute (60 seconds)
+            $diffInSeconds = $expiresAt->diffInSeconds($now);
+
+            // If the token will expire in less than 1 minute, generate a new one
+            if ($diffInSeconds <= 60 && $diffInSeconds >= 0) {
+                return $this->generateKioskToken();
+            }
+
+            // Return the cached token if it's still valid
             return response()->json(['token' => $cachedToken['token']]);
-        } else {
-            // If token does not exist in cache, generate a new one and return it
-            return $this->generateKioskToken(); // Return the response from generateKioskToken()
         }
     }
+
+    // If no token exists or it's expired, generate a new one
+    return $this->generateKioskToken();
+}
+
+
+
 
 
 }

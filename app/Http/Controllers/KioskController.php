@@ -245,7 +245,7 @@ class KioskController extends Controller
     {
         $token = $request->get('token');
         // dd($token);
-        $cachedToken = cache()->get('kiosk_token');
+        $cachedToken = cache()->get("kiosk_token:$token");
         // dd($cachedToken);
         if ($token === ($cachedToken['token'] ?? null)) {
             // Mark the token as validated by setting it in the session or a cookie
