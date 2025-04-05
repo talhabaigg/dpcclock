@@ -12,6 +12,7 @@ class Clock extends Model
         'clock_in',
         'clock_out',
         'hours_worked',
+        'status',
     ];
 
     public function employee()

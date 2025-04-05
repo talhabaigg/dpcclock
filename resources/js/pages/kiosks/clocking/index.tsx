@@ -14,9 +14,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function TimesheetList() {
-    const { timesheets, flash } = usePage<{ timesheets: Employee[] }>().props;
+    const { timesheets, flash } = usePage<{ timesheets: Employee[], flash: { success?: string } }>().props;
     let isLoading = false;
-    console.log('timesheets', timesheets);
+   
     const handleSync = () => {
         setIsLoading(true);
 
@@ -42,6 +42,7 @@ export default function TimesheetList() {
                 <Table >
                     <TableHeader>
                         <TableRow>
+                        <TableHead>Sync Status</TableHead>
                             <TableHead>Employee Id</TableHead>
                             <TableHead>Employee Name</TableHead>
                             <TableHead>Start time</TableHead>
@@ -54,6 +55,9 @@ export default function TimesheetList() {
                     <TableBody>
                         {timesheets.map((timesheets) => (
                             <TableRow key={timesheets.id}>
+                                 <TableCell className='text-green-500'>
+                                        {timesheets.status === 'synced' && <Badge variant="outline" className='text-green-red'>Synced</Badge>}
+                                        </TableCell>
                               <TableCell>{timesheets.eh_employee_id}</TableCell>
                                 <TableCell>{timesheets.employee.name}</TableCell>
                                 <TableCell>{new Date(timesheets.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</TableCell>
@@ -71,6 +75,7 @@ export default function TimesheetList() {
                                     <TableCell>
                                         {timesheets.location?.external_id || 'N/A'}
                                         </TableCell>
+                                       
                             </TableRow>
                         ))}
                     </TableBody>

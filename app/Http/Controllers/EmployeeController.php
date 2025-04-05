@@ -58,50 +58,72 @@ class EmployeeController extends Controller
     }
 
     public function syncEmployeeWorktypes()
-{
-    ini_set('max_execution_time', 300);
-    $apiKey = env('PAYROLL_API_KEY');
-
-    $employees = Employee::all();
-    $missingWorkTypes = []; // Array to track missing work types
-
-    foreach ($employees as $employee) {
-        $employeeId = $employee->eh_employee_id;
-
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
-
-        $employeeData = $response->json();
-        $workTypeName = $employeeData['workTypes'] ?? ''; // Get workType name or default to empty string
-
-        // Skip lookup if workType is an empty string
-        if ($workTypeName === '') {
-            continue;
+    {
+        ini_set('max_execution_time', 300);
+        $apiKey = env('PAYROLL_API_KEY');
+    
+        $employees = Employee::all();
+        $missingWorkTypes = []; // Array to track missing work types
+        $allowedCodes = ['01-01', '03-01', '05-01', '07-01', '11-01'];
+    
+        foreach ($employees as $employee) {
+            $employeeId = $employee->eh_employee_id;
+    
+            $response = Http::withHeaders([
+                'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
+            ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
+    
+            $employeeData = $response->json();
+            $workTypeString = $employeeData['workTypes'] ?? ''; // May contain pipe-separated values
+    
+            // Skip if empty
+            if ($workTypeString === '') {
+                continue;
+            }
+    
+            $workTypes = explode('|', $workTypeString);
+    
+            // Filter only work types that contain allowed codes
+            $filteredWorkType = collect($workTypes)->first(function ($wt) use ($allowedCodes) {
+                foreach ($allowedCodes as $code) {
+                    if (Str::contains($wt, $code)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+    
+            if (!$filteredWorkType) {
+                // Store all unmatchable workTypes
+                $missingWorkTypes[] = [
+                    'employee_id' => $employeeId,
+                    'searched_workTypes' => $workTypeString,
+                    'reason' => 'No allowed code matched',
+                ];
+                continue;
+            }
+    
+            // Lookup workType ID
+            $workTypeId = WorkType::where('name', trim($filteredWorkType))->pluck('id')->first();
+    
+            if (!empty($workTypeId)) {
+                $employee->worktypes()->sync($workTypeId);
+                $employee->load('workTypes'); // Reload relationships
+            } else {
+                $missingWorkTypes[] = [
+                    'employee_id' => $employeeId,
+                    'searched_workType' => $filteredWorkType,
+                    'reason' => 'WorkType not found in DB',
+                ];
+            }
         }
-
-        // Lookup workType ID
-        $workTypeId = WorkType::where('name', $workTypeName)->pluck('id')->first();
-
-        if (!empty($workTypeId)) {
-            $employee->worktypes()->sync($workTypeId);
-            $employee->load('workTypes'); // Reload relationships
-        } else {
-            // Store missing workTypes for debugging
-            $missingWorkTypes[] = [
-                'employee_id' => $employeeId,
-                'searched_workType' => $workTypeName
-            ];
+    
+        if (!empty($missingWorkTypes)) {
+            dd($missingWorkTypes);
         }
+    
+        return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
     }
-
-    // Dump all missing work types if any
-    if (!empty($missingWorkTypes)) {
-        dd($missingWorkTypes);
-    }
-
-    return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
-}
 
        
     }

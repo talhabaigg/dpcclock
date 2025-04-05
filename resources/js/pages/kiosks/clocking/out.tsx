@@ -6,6 +6,7 @@ import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import KioskLayout from '../partials/layout';
+import {Checkbox} from '@/components/ui/checkbox';
 
 interface Employee {
     id: number;
@@ -53,9 +54,11 @@ export default function Clockout() {
         const clockInTime = dayjs(clockedIn.clock_in);
         const now = dayjs();
 
-        const roundedMinutes = Math.floor(now.minute() / 30) * 30;
-        const clockOutTime = now.minute(roundedMinutes).second(0);
-
+        const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
+        const clockOut = now.minute(roundedMinutes % 60).second(0);
+        const clockOutTime = roundedMinutes === 60
+        ? clockOut.add(1, 'hour').minute(0)
+        : clockOut;
         const duration = clockOutTime.diff(clockInTime, 'hours', true);
 
         setHoursWorked(parseFloat(duration.toFixed(2)));
@@ -186,7 +189,7 @@ export default function Clockout() {
                             <div className="flex-1">
                                 <Label>Select Activity</Label>
                                 <ul className="max-h-[200px] overflow-y-auto rounded border">
-                                    {!task.level && <li className="h-48 p-2">Select a level to see activities</li>}
+                                    {!task.level && <li className="h-50 p-2">Select a level to see activities</li>}
                                     {task.level &&
                                         groupedLocations[task.level].map((activity) => (
                                             <li
@@ -201,7 +204,7 @@ export default function Clockout() {
                             </div>
                         )}
 
-                        <div className="flex-0">
+                        <div className="flex-1 sm:flex-2">
                             {task.hours > 0 ? (
                                 <>
                                     <Label>Hours</Label>
@@ -209,15 +212,16 @@ export default function Clockout() {
                                         type="number"
                                         value={task.hours}
                                         onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                                        className="w-full sm:w-48"
+                                        className="w-full "
                                         min="0"
                                         step="0.5"
                                     />
                                 </>
                             ) : (
-                                <div>
+                                <div className="flex flex-row flex-wrap items-start w-full">
+                                <div className="w-1/2 ">
                                     <Label>Select Hours</Label>
-                                    <ul className="max-h-[200px] w-full overflow-y-auto rounded border p-2 sm:w-32">
+                                    <ul className="max-h-[200px]  sm:w-full overflow-y-auto rounded border p-2">
                                         {[...Array(20)].map((_, i) => {
                                             const hourValue = (i + 1) * 0.5;
                                             return (
@@ -232,6 +236,20 @@ export default function Clockout() {
                                         })}
                                     </ul>
                                 </div>
+                            
+                                <div className="w-1/2  p-2 flex flex-col  items-start  space-y-2">
+                                    <Label className="font-semibold">Allowances</Label>
+                                    <div className="flex flex-row items-center space-x-2">
+                                        <Checkbox id="terms1" className="h-8 w-8" />
+                                        <span className="text-sm">Insulation</span>
+                                    </div>
+                                    <div className="flex flex-row items-center space-x-2">
+                                        <Checkbox id="terms1" className="h-8 w-8" />
+                                        <span className="text-sm">SetOut</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             )}
                         </div>
                     </div>

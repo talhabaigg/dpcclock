@@ -164,7 +164,7 @@ class ClockController extends Controller
             } else {
                 // For subsequent entries, create a new clock entry
                 $clock = new Clock();
-                $clock->eh_kiosk_id = $validated['kioskId'];
+                $clock->eh_kiosk_id = $location->eh_kiosk_id;
                 $clock->eh_location_id = $location;
                 $clock->eh_employee_id = $eh_employee_id->eh_employee_id;
                 $clock->clock_in = \Carbon\Carbon::parse($entry['clockIn'], 'Australia/Brisbane');
@@ -182,18 +182,29 @@ class ClockController extends Controller
 
     public function syncEhTimesheets()
     {
-        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])->get();
-
+        // Get clocks that are not synced or have null status
+        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])
+            ->where(function ($query) {
+                $query->whereNull('status')  // Include rows where the status is null
+                      ->orWhere('status', '!=', 'synced');  // Include rows where status is not 'synced'
+            })
+            ->get();
+    
+        // Check if there are no clocks to sync (i.e., all are already synced)
+        if ($clocks->isEmpty()) {
+            dd("All timesheets are synced.");
+        }
+    
         $timesheets = [];
-
+        $clockMap = []; // To map employee ID to Clock IDs
+    
         foreach ($clocks as $clock) {
-            // Skip if there's no endTime (clock_out)
             if (!$clock->clock_out) {
                 continue;
             }
-
+    
             $employeeId = $clock->eh_employee_id;
-
+    
             $timesheetData = [
                 "employeeId" => $employeeId,
                 "startTime" => $clock->clock_in,
@@ -202,24 +213,42 @@ class ClockController extends Controller
                 "shiftConditionIds" => $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [],
                 "workTypeId" => optional($clock->employee->worktypes->first())->eh_worktype_id,
             ];
-
-            // Store multiple timesheets under each employee ID
+    
             $timesheets[$employeeId][] = $timesheetData;
+            $clockMap[$employeeId][] = $clock->id; // Track clock IDs by employee
         }
-
-        // Generate the JSON file content
-        $jsonContent = json_encode(["timesheets" => $timesheets], JSON_PRETTY_PRINT);
-
-        // Define the file path to the public storage directory
+    
+        $jsonContent = json_encode(["timesheets" => $timesheets]);
         $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
-
-        // Store the JSON in the public disk (storage/app/public)
-        Storage::disk('public')->put($filePath, $jsonContent);
-
-        // Send the file to the browser for download
-        return response()->download(storage_path('app/public/' . $filePath), 'timesheets.json')->deleteFileAfterSend(true);
-        ;
+    
+        // Split the raw timesheets array into chunks of 100
+        $timesheetChunks = array_chunk($timesheets, 100, true);
+    
+        foreach ($timesheetChunks as $chunk) {
+            $chunkData = ['timesheets' => $chunk];
+            $syncResult = $this->sync($chunkData);
+    
+            if (!$syncResult) {
+                return redirect()->route('timesheets.converter')->with([
+                    'error' => 'Failed to sync data with the API.',
+                ]);
+            }
+    
+            // ✅ Mark related clocks as "synced"
+            foreach (array_keys($chunk) as $employeeId) {
+                $clockIds = $clockMap[$employeeId] ?? [];
+                Clock::whereIn('id', $clockIds)->update(['status' => 'synced']);
+            }
+        }
+    
+        // Storage::disk('public')->put($filePath, $jsonContent);
+    
+        return redirect()->back()->with([
+            'success' => 'Data synced successfully with Employment Hero.',
+        ]);
     }
+    
+
 
     public function showTimesheetsConverter()
     {
