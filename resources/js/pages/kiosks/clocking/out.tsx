@@ -23,6 +23,8 @@ interface TaskAllocation {
     level: string;
     activity: string;
     hours: number;
+    insulation_allowance?: boolean;
+    setout_allowance?: boolean;
 }
 
 export default function Clockout() {
@@ -37,7 +39,7 @@ export default function Clockout() {
     const form = useForm<{
         kioskId: number;
         employeeId: number;
-        entries: { level: string; activity: string; clockIn: string; clockOut: string; duration: number }[];
+        entries: { level: string; activity: string; clockIn: string; clockOut: string; duration: number; insulation_allowance: boolean; setout_allowance: boolean }[];
     }>({
         kioskId: kiosk.id,
         employeeId: employee.id,
@@ -45,8 +47,15 @@ export default function Clockout() {
     });
 
     const [hoursWorked, setHoursWorked] = useState(0);
-    const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([{ level: '', activity: '', hours: 0 }]);
+    const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([{
+        level: '',
+        activity: '',
+        hours: 0,
+        insulation_allowance: false,
+        setout_allowance: false
+    }]);
     const [hoursAllocated, setHoursAllocated] = useState(0);
+    const [laserAllowance, setLaserAllowance] = useState(false);
 
     useEffect(() => {
         if (!clockedIn.clock_in) return;
@@ -88,7 +97,10 @@ export default function Clockout() {
     }, {});
 
     const addTaskAllocation = () => {
-        setTaskAllocations([...taskAllocations, { level: '', activity: '', hours: 0 }]);
+        setTaskAllocations([
+            ...taskAllocations,
+            { level: '', activity: '', hours: 0, insulation_allowance: false, setout_allowance: false }
+        ]);
     };
 
     const updateTaskAllocation = (index: number, field: keyof TaskAllocation, value: string | number) => {
@@ -99,7 +111,7 @@ export default function Clockout() {
 
     const generateClockEntries = () => {
         let clockInTime = dayjs(clockedIn.clock_in);
-        const entries = taskAllocations.map(({ level, activity, hours }) => {
+        const entries = taskAllocations.map(({ level, activity, hours, insulation_allowance = false, setout_allowance = false }, index) => {
             const clockOutTime = clockInTime.add(hours, 'hours');
             const entry = {
                 level,
@@ -107,6 +119,9 @@ export default function Clockout() {
                 clockIn: clockInTime.format('HH:mm'),
                 clockOut: clockOutTime.format('HH:mm'),
                 duration: hours,
+                insulation_allowance,
+                setout_allowance,
+                laser_allowance: index === 0 ? laserAllowance : false,
             };
             clockInTime = clockOutTime;
             return entry;
@@ -132,7 +147,18 @@ export default function Clockout() {
             hoursAllocated !== hoursWorked
         );
     });
-
+    const toggleAllowance = (index: number, type: 'insulation' | 'setout') => {
+        setTaskAllocations((prev) => {
+            return prev.map((task, i) => {
+                if (i !== index) return task;
+                return {
+                    ...task,
+                    insulation_allowance: type === 'insulation' ? !task.insulation_allowance : false,
+                    setout_allowance: type === 'setout' ? !task.setout_allowance : false,
+                };
+            });
+        });
+    };
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -157,15 +183,15 @@ export default function Clockout() {
 
             <form onSubmit={handleSubmit} className="w-full px-4">
                 {taskAllocations.map((task, index) => (
-                    <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4">
+                    <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4" >
                         {task.hours > 0 ? (
-                            <div className="flex-3">
-                                <Label>Level</Label>
-                                <div className="rounded border p-1 text-black sm:w-full">
-                                    <p className="">
+                            <div className="flex-3" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
+                                <Label>Level</Label> 
+                                <div className="rounded border p-1 text-black sm:w-full" >
+                                    <Label className='dark:text-white'>
                                         {task.level.slice(7)}
-                                        <span>-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
-                                    </p>
+                                        <span className='dark:text-white'>-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
+                                    </Label>
                                 </div>
                             </div>
                         ) : (
@@ -206,17 +232,48 @@ export default function Clockout() {
 
                         <div className="flex-1 sm:flex-2">
                             {task.hours > 0 ? (
-                                <>
-                                    <Label>Hours</Label>
-                                    <Input
-                                        type="number"
-                                        value={task.hours}
-                                        onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                                        className="w-full "
-                                        min="0"
-                                        step="0.5"
-                                    />
-                                </>
+                             <div className="flex flex-row items-center justify-between">
+                                <div className="flex-1 ">
+                                <Label>Hours</Label>
+                                <Input
+                                    type="number"
+                                    value={task.hours}
+                                    onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
+                                    className="sm:w-full w-3/4 "
+                                    min="0"
+                                    step="0.5"
+                                />
+                            </div>
+                            <div>
+                                {(task.insulation_allowance || task.setout_allowance) && ( <Label>Allowances</Label>)}
+                           
+                                <div className="flex flex-row items-center space-x-2">
+                                    {(task.insulation_allowance || task.setout_allowance) && (
+                                        <>
+                                        
+                                            {task.insulation_allowance && (
+                                                <>
+                                                <span role="img" aria-label="checked" className="text-green-500">✔️</span>
+                                                    <Label>Insulation</Label>
+                                                
+                                                </>
+                                            )}
+
+                                            {task.setout_allowance && (
+                                                <>
+                                                <span role="img" aria-label="checked" className="text-green-500">✔️</span>
+                                                    <Label>SetOut</Label>
+                                                    
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
+                            </div>
+                           
+                            </div>
+                         
                             ) : (
                                 <div className="flex flex-row flex-wrap items-start w-full">
                                 <div className="w-1/2 ">
@@ -237,14 +294,24 @@ export default function Clockout() {
                                     </ul>
                                 </div>
                             
-                                <div className="w-1/2  p-2 flex flex-col  items-start  space-y-2">
+                                <div className="w-1/2 p-2 flex flex-col items-start space-y-2">
                                     <Label className="font-semibold">Allowances</Label>
                                     <div className="flex flex-row items-center space-x-2">
-                                        <Checkbox id="terms1" className="h-8 w-8" />
+                                        <Checkbox
+                                            id={`insulation-${index}`}
+                                            className="h-8 w-8"
+                                            checked={task.insulation_allowance}
+                                            onCheckedChange={() => toggleAllowance(index, 'insulation')}
+                                        />
                                         <span className="text-sm">Insulation</span>
                                     </div>
                                     <div className="flex flex-row items-center space-x-2">
-                                        <Checkbox id="terms1" className="h-8 w-8" />
+                                        <Checkbox
+                                            id={`setout-${index}`}
+                                            className="h-8 w-8"
+                                            checked={task.setout_allowance}
+                                            onCheckedChange={() => toggleAllowance(index, 'setout')}
+                                        />
                                         <span className="text-sm">SetOut</span>
                                     </div>
                                 </div>
@@ -255,14 +322,27 @@ export default function Clockout() {
                     </div>
                 ))}
 
-                <div className="mb-2 flex justify-end">
-                    {hoursAllocated > hoursWorked && (
-                        <span className="text-xs font-black text-red-500 sm:text-sm">Hours allocated cannot be higher than worked hours.</span>
-                    )}
+                <div className="mb-2 flex justify-between">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="laser-allowance"
+                            className="h-8 w-8"
+                            checked={laserAllowance}
+                            onCheckedChange={(val) => setLaserAllowance(!!val)}
+                        />
+                        <Label htmlFor="laser-allowance" className="text-sm ml-2">Laser Allowance</Label>
+                    </div>
+                   
+                    <div className="flex items-center space-x-2">
+                        {hoursAllocated > hoursWorked && (
+                            <span className="text-xs font-black text-red-500 sm:text-sm text-right">Hours allocated cannot be higher than worked hours.</span>
+                        )}
 
-                    <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
-                        {hoursAllocated}/{hoursWorked}
-                    </Badge>
+                        <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
+                            {hoursAllocated}/{hoursWorked}
+                        </Badge>
+                    </div>
+                    
                 </div>
 
                 <div className="mb-4 flex items-center justify-between space-x-2">

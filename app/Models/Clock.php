@@ -12,6 +12,9 @@ class Clock extends Model
         'clock_in',
         'clock_out',
         'hours_worked',
+        'insulation_allowance',
+        'laser_allowance',
+        'setout_allowance',
         'status',
     ];
 

@@ -123,7 +123,7 @@ class ClockController extends Controller
             'kioskId' => 'required',
             'entries' => 'required|array',
         ]);
-
+        // dd($validated);
         // Get employee details
         $eh_employee_id = Employee::find($validated['employeeId']);
 
@@ -137,10 +137,10 @@ class ClockController extends Controller
         foreach ($validated['entries'] as $entry) {
             // Concatenate level and activity to create locationExternalId
             $locationExternalId = $entry['activity'] ? $entry['level'] . '-' . $entry['activity'] : $entry['level'];
-
+            $eh_kiosk_id = Kiosk::findorfail($validated['kioskId'])->pluck('eh_kiosk_id')->first();
             // Find location based on external_id
             $location = Location::where('external_id', $locationExternalId)->pluck('eh_location_id')->first();
-
+           
             if (!$location) {
                 return response()->json(['error' => 'Location not found'], 404);
             }
@@ -156,6 +156,9 @@ class ClockController extends Controller
                     $clock->eh_location_id = $location;
                     $clock->clock_out = \Carbon\Carbon::parse($entry['clockOut'], 'Australia/Brisbane');
                     $clock->hours_worked = $entry['duration'];
+                    $clock->insulation_allowance = $entry['insulation_allowance'] ?? false;
+                    $clock->setout_allowance = $entry['setout_allowance'] ?? false;
+                    $clock->laser_allowance = $entry['laser_allowance'] ?? false;
                     $clock->save();
                 }
 
@@ -164,9 +167,11 @@ class ClockController extends Controller
             } else {
                 // For subsequent entries, create a new clock entry
                 $clock = new Clock();
-                $clock->eh_kiosk_id = $location->eh_kiosk_id;
+                $clock->eh_kiosk_id = $eh_kiosk_id;
                 $clock->eh_location_id = $location;
                 $clock->eh_employee_id = $eh_employee_id->eh_employee_id;
+                $clock->insulation_allowance = $entry['insulation_allowance'] ?? false;
+                $clock->setout_allowance = $entry['setout_allowance'] ?? false;
                 $clock->clock_in = \Carbon\Carbon::parse($entry['clockIn'], 'Australia/Brisbane');
                 $clock->clock_out = \Carbon\Carbon::parse($entry['clockOut'], 'Australia/Brisbane');
                 $clock->hours_worked = $entry['duration'];
@@ -204,21 +209,35 @@ class ClockController extends Controller
             }
     
             $employeeId = $clock->eh_employee_id;
-    
+            $shiftConditionIds = $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [];
+            $allowances = [
+                'insulation_allowance' => '2518038',
+                'laser_allowance' => '2518041',
+                'setout_allowance' => '2518045', // Example, if you add more
+            ];
+            foreach ($allowances as $field => $ehAllowanceId) {
+                if ($clock->$field === true || $clock->$field === 1) {
+                    $shiftConditionIds[] = $ehAllowanceId;
+                }
+            }
+            $shiftConditionIds = array_unique($shiftConditionIds);
+            
             $timesheetData = [
                 "employeeId" => $employeeId,
                 "startTime" => $clock->clock_in,
                 "endTime" => $clock->clock_out,
                 "locationId" => $clock->location->eh_location_id ?? null,
-                "shiftConditionIds" => $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [],
+                "shiftConditionIds" =>  $shiftConditionIds,
                 "workTypeId" => optional($clock->employee->worktypes->first())->eh_worktype_id,
             ];
     
             $timesheets[$employeeId][] = $timesheetData;
             $clockMap[$employeeId][] = $clock->id; // Track clock IDs by employee
         }
+        // dd($shiftConditionIds);
     
         $jsonContent = json_encode(["timesheets" => $timesheets]);
+        // dd($timesheets);
         $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
     
         // Split the raw timesheets array into chunks of 100
