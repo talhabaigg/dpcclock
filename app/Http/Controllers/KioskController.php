@@ -157,89 +157,9 @@ class KioskController extends Controller
     }
 
 
-    public function showPinPage($kioskId, $employeeId): Response
-    {
-        $user = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
-        $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
-
-        // Append clocked_in status to each employee based on the kiosk
-        $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out');
-
-            // Log the exact query for debugging
-            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kioskId}", [
-                'query' => $clockedInQuery->toSql(),
-                'bindings' => $clockedInQuery->getBindings()
-            ]);
-
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
-        // dd($employees);
-        return Inertia::render('kiosks/pin', [
-            'kioskId' => $kioskId,
-            'employeeId' => $employeeId,
-            'employee' => $user,
-            'kiosk' => $kiosk,
-            'employees' => $employees,
-        ]);
-    }
-
-    public function validatePin($kioskId, $employeeId, Request $request)
-    {
-        $employee = Employee::findOrFail($employeeId);
-        $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
-
-        // Check if the PIN entered is correct
-        if ($request->pin !== $employee->pin) {
-            return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
-        }
-        $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
-            // dd($kiosk->eh_kiosk_id);
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out');
 
 
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
-        // Check if the employee is already clocked in
-        $clockedIn = Clock::where('eh_employee_id', $employee->eh_employee_id)->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure filtering by kiosk ID
-            ->whereNull('clock_out')  // If clock_out is null, the employee is clocked in
-            ->first();
-        // dd($clockedIn);
-        // If employee is clocked in, redirect to the clock-out page
-        if ($clockedIn) {
-            $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
-            return Inertia::render('kiosks/clocking/out', [
-                'kioskId' => $kioskId,
-                'employeeId' => $employeeId,
-                'employee' => $employee,
-                'kiosk' => $kiosk,
-                'employees' => $employees,
-                'locations' => $locations,
-                'clockedIn' => $clockedIn,
-            ]);
-        }
 
-        // If employee is not clocked in, show the clock-in page
-        $location = $kiosk->location;
-        $locations = Location::where('eh_parent_id', $location->eh_location_id)->pluck('external_id')->toArray();
-        // Append clocked_in status to each employee based on the kiosk
-
-        // dd($employees);
-        return Inertia::render('kiosks/clocking/in', [
-            'kioskId' => $kioskId,
-            'employeeId' => $employeeId,
-            'employee' => $employee,
-            'kiosk' => $kiosk,
-            'employees' => $employees,
-            'locations' => $locations,
-        ]);
-    }
 
     public function validateToken($kioskId, Request $request)
     {

@@ -16,11 +16,17 @@ interface Employee {
     clocked_in: boolean;
 }
 
+interface Kiosk {
+    id: number;
+    name: string;
+    eh_kiosk_id: string;
+}
+
 interface KioskLayoutProps {
     children: React.ReactNode;
-    employees: Employee[];
+    employees: Array<any>;
     kiosk: Kiosk;
-    selectedEmployee?: Employee;
+    selectedEmployee?: any;
 }
 
 export default function KioskLayout({ children, employees, kiosk, selectedEmployee }: KioskLayoutProps) {
@@ -29,7 +35,6 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}); // Tracks collapsibility of each group
     const getInitials = useInitials();
     const listRef = useRef<HTMLDivElement>(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     useLayoutEffect(() => {
         const savedScroll = sessionStorage.getItem('scrollPosition');
@@ -108,14 +113,6 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                                         <div className="ml-5 flex items-center justify-between">
                                             <p>{letter}</p>
                                             {/* Toggle button for collapsibility */}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleCollapseToggle(letter)}
-                                                className="p-1 text-gray-500 dark:text-gray-200"
-                                            >
-                                                {collapsed[letter] ? '+' : '-'}
-                                            </Button>
                                         </div>
                                     </h3>
 

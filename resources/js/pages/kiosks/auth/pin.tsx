@@ -2,20 +2,24 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import { DialogTitle } from '@radix-ui/react-dialog';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { ChevronLeft, Delete, Loader2 } from 'lucide-react';
 
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useEffect, useState } from 'react';
-import KioskLayout from './partials/layout';
+import KioskLayout from '../partials/layout';
 interface Employee {
     id: number;
     name: string;
     email: string;
+    eh_employee_id: number;
+    pin?: string;
+    clocked_in?: boolean;
 }
 
 interface Kiosk {
     id: number;
     name: string;
+    eh_kiosk_id: string;
 }
 
 export default function ShowPin() {
@@ -122,8 +126,8 @@ export default function ShowPin() {
                                 autoFocus={index === form.data.pin.length}
                             />
                         ))}
-                    <Button className="h-16 w-16 rounded-full text-3xl" variant="ghost" onClick={handleDelete}>
-                        ⌫
+                    <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon" onClick={handleDelete}>
+                        <Delete />
                     </Button>
                 </div>
                 {form.errors.pin && <p className="text-red-500">{form.errors.pin}</p>}
@@ -161,6 +165,23 @@ export default function ShowPin() {
                         </Button>
                     ))}
                 </div>
+                <Link
+                    className="mt-10"
+                    href="#"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        if (confirm('Are you sure you want to reset your PIN?')) {
+                            window.location.href = route('kiosk.auth.reset-pin', {
+                                employeeId: employee.eh_employee_id,
+                                kiosk: kiosk.eh_kiosk_id,
+                            });
+                        }
+                    }}
+                >
+                    <Button className="mt-10" variant="link">
+                        I forgot my PIN
+                    </Button>
+                </Link>
             </form>
         </div>
     );
