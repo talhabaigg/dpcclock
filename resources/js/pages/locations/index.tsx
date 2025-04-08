@@ -1,11 +1,9 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
-import { Button } from '@/components/ui/button';
-import { Link } from '@inertiajs/react';
-import { Label } from '@/components/ui/label';
-import { Badge } from "@/components/ui/badge"
+import { Head, Link, usePage } from '@inertiajs/react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -19,20 +17,16 @@ export default function LocationsList() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
-            <div className="flex items-center gap-2 m-2">
-            <Link href="/locations/sync" method="get">
-                <Button variant="outline" className="w-32" >
-                    {isLoading ? 'Syncing...' : 'Sync Locations'}
-                </Button>
-            </Link>
-            {flash.success && (
-                    <div className="m-2 text-green-500">
-                        {flash.success}
-                    </div>
-                )}
+            <div className="m-2 flex items-center gap-2">
+                <Link href="/locations/sync" method="get">
+                    <Button variant="outline" className="w-32">
+                        {isLoading ? 'Syncing...' : 'Sync Locations'}
+                    </Button>
+                </Link>
+                {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
             </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <Table >
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+                <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>ID</TableHead>
@@ -44,16 +38,17 @@ export default function LocationsList() {
                     <TableBody>
                         {locations.map((location) => (
                             <TableRow key={location.id}>
-                              <TableCell>{location.eh_location_id}</TableCell>
+                                <TableCell>{location.eh_location_id}</TableCell>
                                 <TableCell>{location.name}</TableCell>
-                                <TableCell>{location.external_id|| 'N/A'}</TableCell>
+                                <TableCell>{location.external_id || 'N/A'}</TableCell>
                                 <TableCell>
-                                {location.worktypes && location.worktypes.length > 0 
-                                    ? location.worktypes.map((worktype) => (
-                                        <Badge key={worktype.eh_worktype_id} className="mr-2 ">{worktype.name}</Badge>
-                                    ))
-                                    : 'N/A'
-                                }
+                                    {location.worktypes && location.worktypes.length > 0
+                                        ? location.worktypes.map((worktype) => (
+                                              <Badge key={worktype.eh_worktype_id} className="mr-2">
+                                                  {worktype.name}
+                                              </Badge>
+                                          ))
+                                        : 'N/A'}
                                 </TableCell>
                             </TableRow>
                         ))}

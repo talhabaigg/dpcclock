@@ -1,85 +1,131 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
-import { Button } from '@/components/ui/button';
-import { Link } from '@inertiajs/react';
-import { Label } from '@/components/ui/label';
-import { Badge } from "@/components/ui/badge"
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Timesheets',
-        href: '/clocks',
-    },
-];
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useState } from 'react';
+
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Timesheets', href: '/clocks' }];
+
+type Worktype = { name: string };
+type Employee = {
+    id: number;
+    name: string;
+    eh_employee_id: number;
+    worktypes?: Worktype[];
+};
+type Location = {
+    external_id: string;
+    worktypes?: Worktype[];
+};
+type Clock = {
+    id: number;
+    eh_kiosk_id: number;
+    eh_employee_id: number;
+    clock_in: string;
+    clock_out: string | null;
+    eh_location_id: number;
+    status?: string;
+    employee: Employee;
+    location?: Location;
+};
+
+type TimesheetsGroupedByDate = {
+    [date: string]: {
+        [employeeId: string]: Clock[];
+    };
+};
 
 export default function TimesheetList() {
-    const { timesheets, flash } = usePage<{ timesheets: Employee[], flash: { success?: string } }>().props;
-    let isLoading = false;
-   
+    const { timesheets, flash } = usePage<{
+        timesheets: TimesheetsGroupedByDate;
+        flash: { success?: string };
+    }>().props;
+
+    const [isLoading, setIsLoading] = useState(false);
+
     const handleSync = () => {
         setIsLoading(true);
-
-        // Trigger the download action
-        window.location.href = '/clocks/eh/sync';  // Redirect to the route that triggers the download
+        window.location.href = '/clocks/eh/sync';
     };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Employees" />
-            <div className="flex items-center gap-2 m-2">
-            <Link  onClick={handleSync} href="/clocks/eh/sync" className="flex items-center gap-2">
-                <Button variant="outline" className="" >
-                    {isLoading ? 'Syncing...' : 'Send timesheets to Employment Hero'}
-                </Button>
-            </Link>
-            {flash.success && (
-                    <div className="m-2 text-green-500">
-                        {flash.success}
-                    </div>
-                )}
+            <Head title="Timesheets" />
+            <div className="m-2 flex items-center gap-2">
+                <Link onClick={handleSync} href="/clocks/eh/sync" className="flex items-center gap-2">
+                    <Button variant="outline">{isLoading ? 'Syncing...' : 'Send timesheets to Employment Hero'}</Button>
+                </Link>
+                {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
             </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
-                <Table >
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Sync Status</TableHead>
-                            <TableHead>Employee Id</TableHead>
-                            <TableHead>Employee Name</TableHead>
-                            <TableHead>Start time</TableHead>
-                            <TableHead>End time</TableHead>
-                            <TableHead>Worktype</TableHead>
-                            <TableHead>Location Default Shift Conditions</TableHead>
-                            <TableHead>Location External ID</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {timesheets.map((timesheets) => (
-                            <TableRow key={timesheets.id}>
-                                 <TableCell className='text-green-500'>
-                                        {timesheets.status === 'synced' && <Badge variant="outline" className='text-green-red'>Synced</Badge>}
-                                        </TableCell>
-                              <TableCell>{timesheets.eh_employee_id}</TableCell>
-                                <TableCell>{timesheets.employee.name}</TableCell>
-                                <TableCell>{new Date(timesheets.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</TableCell>
-                                <TableCell>{timesheets.clock_out ? new Date(timesheets.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Still clocked in'}</TableCell>
-                                <TableCell>
-                                    {timesheets.employee?.worktypes?.length > 0
-                                        ? timesheets.employee.worktypes.map(wt => wt.name).join(', ')
-                                        : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                    {timesheets.location?.worktypes?.length > 0
-                                        ? timesheets.location.worktypes.map(wt => wt.name).join(', ')
-                                        : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                        {timesheets.location?.external_id || 'N/A'}
-                                        </TableCell>
-                                       
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+
+            <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
+                {Object.entries(timesheets).map(([date, employeeGroup]) => (
+                    <div key={date} className="border-b pb-4">
+                        <h2 className="mb-4 text-xl font-bold text-gray-800">📅 {date}</h2>
+
+                        {Object.entries(employeeGroup).map(([employeeId, clocks]) => {
+                            const employee = clocks[0]?.employee;
+
+                            return (
+                                <div key={employeeId} className="mb-4">
+                                    <h3 className="mb-2 text-lg font-semibold text-gray-700">👤 {employee?.name || 'Unknown Employee'}</h3>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Employee ID</TableHead>
+                                                <TableHead>Clock In</TableHead>
+                                                <TableHead>Clock Out</TableHead>
+                                                <TableHead>Worktype</TableHead>
+                                                <TableHead>Location Conditions</TableHead>
+                                                <TableHead>Location ID</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {clocks.map((clock) => (
+                                                <TableRow key={clock.id}>
+                                                    <TableCell>
+                                                        {clock.status === 'synced' && (
+                                                            <Badge variant="outline" className="text-green-500">
+                                                                Synced
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{clock.eh_employee_id}</TableCell>
+                                                    <TableCell>
+                                                        {new Date(clock.clock_in).toLocaleTimeString([], {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {clock.clock_out
+                                                            ? new Date(clock.clock_out).toLocaleTimeString([], {
+                                                                  hour: '2-digit',
+                                                                  minute: '2-digit',
+                                                              })
+                                                            : 'Still clocked in'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {employee?.worktypes?.length ? employee.worktypes.map((wt) => wt.name).join(', ') : 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {clock.location?.worktypes?.length
+                                                            ? clock.location.worktypes.map((wt) => wt.name).join(', ')
+                                                            : 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell>{clock.location?.external_id || 'N/A'}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
             </div>
         </AppLayout>
     );

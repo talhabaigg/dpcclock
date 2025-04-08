@@ -1,11 +1,8 @@
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Link, useForm, usePage } from '@inertiajs/react';
-import { DialogTitle } from '@radix-ui/react-dialog';
 import { ChevronLeft, Delete, Loader2 } from 'lucide-react';
-
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useEffect, useState } from 'react';
+import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
 interface Employee {
     id: number;
@@ -83,26 +80,13 @@ export default function ShowPin() {
     }, []);
     const content = (
         <div className="flex h-full w-full flex-col items-center justify-center space-y-4">
-            <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <VisuallyHidden>
-                    <DialogTitle>Login Failed</DialogTitle>
-                </VisuallyHidden>
-
-                <DialogContent className="flex flex-col items-center p-0">
-                    <VisuallyHidden>
-                        <DialogDescription className="mx-auto text-xl">{flash.error}</DialogDescription>{' '}
-                    </VisuallyHidden>
-                    <p className="mx-auto mt-4 p-2 text-2xl font-bold">Error</p>
-                    {flash.error?.split('.').map((line, index) => (
-                        <p key={index} className="-m-2 text-lg">
-                            {line.trim()}
-                        </p>
-                    ))}
-                    <button onClick={() => setShowDialog(false)} className="mx-auto mt-2 w-full border-t-2 py-4 text-2xl font-extrabold">
-                        OK
-                    </button>
-                </DialogContent>
-            </Dialog>
+            <KioskDialogBox isOpen={showDialog} onClose={() => setShowDialog(false)} title="Login Failed" description={flash.error}>
+                {flash.error?.split('.').map((line, index) => (
+                    <p key={index} className="-m-2 text-lg">
+                        {line.trim()}
+                    </p>
+                ))}
+            </KioskDialogBox>
             <Link className="mt-10 mr-auto ml-8 sm:mt-0" href={route('kiosks.show', { kiosk: kiosk.id })}>
                 <Button className="h-16 w-16 rounded-full text-3xl" variant="outline">
                     <ChevronLeft />
@@ -132,20 +116,12 @@ export default function ShowPin() {
                 </div>
                 {form.errors.pin && <p className="text-red-500">{form.errors.pin}</p>}
                 {showProcessing ? (
-                    <Dialog open={true}>
-                        <VisuallyHidden>
-                            <DialogTitle>Login Failed</DialogTitle>
-                        </VisuallyHidden>
-                        <DialogContent>
-                            <VisuallyHidden>
-                                <DialogDescription className="mx-auto text-xl">Logging in</DialogDescription>{' '}
-                            </VisuallyHidden>
-                            <Button variant="ghost" disabled>
-                                <Loader2 className="mr-2 animate-spin" />
-                                Logging in
-                            </Button>
-                        </DialogContent>
-                    </Dialog>
+                    <KioskDialogBox isOpen={showProcessing} onClose={() => setShowProcessing(false)} title="Please wait" description="Please wait...">
+                        <div className="flex items-center justify-center space-x-2">
+                            <Loader2 className="animate-spin" />
+                            <span>Logging in</span>
+                        </div>
+                    </KioskDialogBox>
                 ) : (
                     flash?.success && <p className="text-green-500">{flash.success}</p>
                 )}

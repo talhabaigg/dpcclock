@@ -62,8 +62,6 @@ class KioskAuthController extends Controller
         if ($request->pin !== $employee->pin) {
             return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         }
-
-
         $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
             // dd($kiosk->eh_kiosk_id);
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)

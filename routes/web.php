@@ -14,7 +14,7 @@ use App\Http\Controllers\WorktypeController;
 
 
 Route::get('/', function () {
-    return Inertia::render('welcome');
+    return redirect()->route('dashboard');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {

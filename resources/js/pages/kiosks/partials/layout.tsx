@@ -5,6 +5,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { router } from '@inertiajs/react';
 import { Loader2, Search } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import KioskDialogBox from '../components/kiosk-dialog';
 import KioskTokenDialog from './qrcode';
 
 interface Employee {
@@ -54,10 +55,14 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
 
     const handleSyncClick = () => {
         setLoading(true);
-        router.get(route('kiosks.employees.sync', kiosk.eh_kiosk_id), undefined, {
-            onSuccess: () => setLoading(false),
-            onError: () => setLoading(false),
-        });
+
+        // Delay the sync operation by 3 seconds
+        setTimeout(() => {
+            router.get(route('kiosks.employees.sync', kiosk.eh_kiosk_id), undefined, {
+                onSuccess: () => setLoading(false),
+                onError: () => setLoading(false),
+            });
+        }, 3000); // 3000 milliseconds = 3 seconds
     };
 
     // Filter and sort employees
@@ -92,6 +97,12 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                             <Input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
                         </div>
+                        <KioskDialogBox isOpen={loading} onClose={() => setLoading(false)} title="Please wait" description="Please wait...">
+                            <div className="flex items-center justify-center space-x-2">
+                                <Loader2 className="animate-spin" />
+                                <span>Loading from Employment Hero</span>
+                            </div>
+                        </KioskDialogBox>
                         <Button variant="secondary" onClick={handleSyncClick} disabled={loading}>
                             {loading ? (
                                 <>
