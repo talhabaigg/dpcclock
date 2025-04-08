@@ -11,12 +11,24 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+type Location = {
+    id: number;
+    name: string;
+    eh_location_id: string;
+    external_id: string;
+    worktypes: Array<{
+        id: number;
+        name: string;
+        eh_worktype_id: string;
+    }>;
+};
+
 export default function LocationsList() {
-    const { locations, flash } = usePage<{ locations: Employee[] }>().props;
+    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
     let isLoading = false;
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Employees" />
+            <Head title="Locations" />
             <div className="m-2 flex items-center gap-2">
                 <Link href="/locations/sync" method="get">
                     <Button variant="outline" className="w-32">

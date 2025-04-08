@@ -40,11 +40,6 @@ export default function ShowPin() {
             setShowDialog(true); // Show the dialog when there's an error
         }
     }, [flash.error]);
-    useEffect(() => {
-        if (form.data.pin.length === 4) {
-            handleSubmit();
-        }
-    }, [form.data.pin]);
 
     const handleDelete = () => {
         form.setData('pin', form.data.pin.slice(0, -1));
@@ -63,6 +58,11 @@ export default function ShowPin() {
             }, 500); // Delay submission by 2 seconds
         }
     };
+    useEffect(() => {
+        if (form.data.pin.length === 4) {
+            handleSubmit();
+        }
+    }, [form.data.pin]);
     const [isMobile, setIsMobile] = useState(false);
 
     // Update isMobile state based on window width

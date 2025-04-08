@@ -45,10 +45,6 @@ export default function ShowPin() {
         }
     }, [flash.success, flash.error]);
 
-    const handleDelete = () => {
-        form.setData('email_pin', form.data.email_pin.slice(0, -1));
-    };
-
     // Create refs for each input
     const emailPinRefs = useRef<HTMLInputElement[]>([]);
     const newPinRefs = useRef<HTMLInputElement[]>([]);
@@ -160,6 +156,11 @@ export default function ShowPin() {
                     </button>
                 </DialogContent>
             </Dialog>
+            {showProcessing && (
+                <div className="loading-spinner">
+                    <span>Processing...</span>
+                </div>
+            )}
             <Link className="mt-10 mr-auto ml-8 sm:mt-0" href={route('kiosks.show', { kiosk: kiosk.id })}>
                 <Button className="h-16 w-16 rounded-full text-3xl" variant="outline">
                     <ChevronLeft />
