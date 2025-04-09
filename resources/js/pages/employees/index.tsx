@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -60,7 +61,6 @@ export default function EmployeesList() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>ID</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>External ID</TableHead>
                             <TableHead>EH Employee ID</TableHead>
@@ -70,8 +70,10 @@ export default function EmployeesList() {
                     <TableBody>
                         {filteredEmployees.map((employee) => (
                             <TableRow key={employee.id}>
-                                <TableCell>{employee.id}</TableCell>
-                                <TableCell>{employee.name.trim()}</TableCell>
+                                <TableCell className="flex items-center gap-2 font-medium">
+                                    <UserInfo user={{ ...employee, email_verified_at: '', created_at: '', updated_at: '' }}></UserInfo>
+                                </TableCell>
+
                                 <TableCell>{employee.external_id?.trim() || 'N/A'}</TableCell>
                                 <TableCell>{employee.eh_employee_id?.trim() || 'N/A'}</TableCell>
 
