@@ -96,7 +96,7 @@ export default function ShowPin() {
             <h2 className="text-2xl font-bold">Hi {employee.name}!</h2>
             <p>Please enter your PIN</p>
             <form onSubmit={handleSubmit} className="flex flex-col items-center">
-                <div className="mb-4 flex items-center space-x-2">
+                <div className="mb-2 flex items-center space-x-2">
                     {Array(4)
                         .fill('')
                         .map((_, index) => (
@@ -125,13 +125,13 @@ export default function ShowPin() {
                 ) : (
                     flash?.success && <p className="text-green-500">{flash.success}</p>
                 )}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((key) => (
                         <Button
                             key={key}
                             type="button"
                             variant="outline"
-                            className="h-24 w-24 rounded-full border-2 border-gray-400 text-3xl"
+                            className="h-22 w-22 rounded-full border-2 border-gray-400 text-2xl"
                             onClick={() => {
                                 if (key === 'C') form.setData('pin', '');
                                 else handleNumClick(String(key));
@@ -142,7 +142,7 @@ export default function ShowPin() {
                     ))}
                 </div>
                 <Link
-                    className="mt-10"
+                    className="mt-2"
                     href="#"
                     onClick={(e) => {
                         e.preventDefault();
@@ -154,7 +154,7 @@ export default function ShowPin() {
                         }
                     }}
                 >
-                    <Button className="mt-10" variant="link">
+                    <Button className="mt-4" variant="link">
                         I forgot my PIN
                     </Button>
                 </Link>

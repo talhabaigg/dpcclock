@@ -160,7 +160,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 </div>
 
                 {/* Main content */}
-                <div className="m-10 flex h-full w-full flex-1 items-center justify-center overflow-y-auto">{children}</div>
+                <div className="flex h-full w-full flex-1 items-center justify-center overflow-y-auto">{children}</div>
             </div>
         </div>
     );
