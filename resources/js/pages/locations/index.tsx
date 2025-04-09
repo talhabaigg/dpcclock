@@ -1,9 +1,12 @@
+import PaginationComponent from '@/components/index-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
+import SublocationDialog from './components/SublocationDialog';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -16,6 +19,12 @@ type Location = {
     name: string;
     eh_location_id: string;
     external_id: string;
+    subLocations: Array<{
+        id: number;
+        name: string;
+        eh_location_id: string;
+        external_id: string;
+    }>;
     worktypes: Array<{
         id: number;
         name: string;
@@ -23,8 +32,17 @@ type Location = {
     }>;
 };
 
+type PaginatedLocations = {
+    data: Location[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    next_page_url: string | null;
+    prev_page_url: string | null;
+};
 export default function LocationsList() {
-    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
+    const { locations, flash } = usePage<{ locations: PaginatedLocations; flash: { success?: string } }>().props;
     let isLoading = false;
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -44,28 +62,58 @@ export default function LocationsList() {
                             <TableHead>ID</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>External ID</TableHead>
-                            <TableHead>Default Shift Conditions</TableHead>
+                            <TableHead className="hidden sm:flex">Default Shift Conditions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {locations.map((location) => (
+                        {locations.data.map((location) => (
                             <TableRow key={location.id}>
                                 <TableCell>{location.eh_location_id}</TableCell>
+
                                 <TableCell>{location.name}</TableCell>
-                                <TableCell>{location.external_id || 'N/A'}</TableCell>
+                                <TableCell>{location.external_id || 'Not Set'}</TableCell>
+                                <TableCell className="hidden sm:flex">
+                                    <div className="flex flex-wrap gap-2">
+                                        {location.worktypes?.length > 0 ? (
+                                            <>
+                                                {location.worktypes.slice(0, 3).map((worktype) => (
+                                                    <Badge key={worktype.eh_worktype_id}>{worktype.name}</Badge>
+                                                ))}
+
+                                                {location.worktypes.length > 3 && (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Badge variant="outline" className="text-muted-foreground cursor-pointer">
+                                                                    +{location.worktypes.length - 3} more
+                                                                </Badge>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="max-w-sm p-2">
+                                                                <div className="flex max-w-sm flex-wrap gap-1">
+                                                                    {location.worktypes.slice(3).map((worktype) => (
+                                                                        <Badge key={worktype.eh_worktype_id} variant="secondary">
+                                                                            {worktype.name}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                            </>
+                                        ) : (
+                                            'No default shift conditions'
+                                        )}
+                                    </div>
+                                </TableCell>
                                 <TableCell>
-                                    {location.worktypes && location.worktypes.length > 0
-                                        ? location.worktypes.map((worktype) => (
-                                              <Badge key={worktype.eh_worktype_id} className="mr-2">
-                                                  {worktype.name}
-                                              </Badge>
-                                          ))
-                                        : 'N/A'}
+                                    <SublocationDialog subLocations={location.subLocations} locationName={location.name}></SublocationDialog>
                                 </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
+                <PaginationComponent pagination={locations} />
             </div>
         </AppLayout>
     );

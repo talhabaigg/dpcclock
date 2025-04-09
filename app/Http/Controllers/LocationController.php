@@ -18,8 +18,16 @@ class LocationController extends Controller
      */
     public function index()
     {
+        // Fetch primary locations
+        $locations = Location::with('worktypes')->where('eh_parent_id', 1149031)->paginate(15);
+
+        // Fetch sub-locations for each primary location
+        foreach ($locations as $location) {
+            $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
+        }
+
         return Inertia::render('locations/index', [
-            'locations' => Location::with('worktypes')->get(),
+            'locations' => $locations,
         ]);
     }
 
@@ -77,7 +85,7 @@ class LocationController extends Controller
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
-  
+
         $locationData = $response->json();
         // dd($locationData);
         // $locationData = array_slice($locationData, 0, length: 1);
@@ -89,9 +97,9 @@ class LocationController extends Controller
             ], [
                 'name' => $location['name'],
                 'eh_parent_id' => $location['parentId'] ?? null,
-                'external_id' => $location['externalId'] ?? Str::uuid(),
+                'external_id' => $location['externalId'] ?? null,
             ]);
-             // Sync worktypes using shiftConditionIds
+            // Sync worktypes using shiftConditionIds
             if (!empty($location['defaultShiftConditionIds'])) {
                 $worktypeIds = Worktype::whereIn('eh_worktype_id', $location['defaultShiftConditionIds'])->pluck('id')->toArray();
                 $locationModel->worktypes()->sync($worktypeIds);
