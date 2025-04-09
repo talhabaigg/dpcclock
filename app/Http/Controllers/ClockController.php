@@ -25,7 +25,7 @@ class ClockController extends Controller
         $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])->get();
 
         $grouped = $clocks->groupBy(function ($clock) {
-            return \Carbon\Carbon::parse($clock->clock_in)->format('Y-m-d');
+            return Carbon::parse($clock->clock_in)->format('Y-m-d');
         })->map(function ($dateGroup) {
             return $dateGroup->groupBy('eh_employee_id');
         });
@@ -305,11 +305,11 @@ class ClockController extends Controller
             $rowData = array_combine($header, array_map('trim', $row)); // Map row data to headers
 
             // Map location data with row index
-            $this->mapLocationData($rowData, $index + 1); // Index is 1-based (if you want to start from 1)
+            $this->mapLocationData($rowData, $index + 1);
             $this->mapEmployee($rowData);
             $this->mapCostCode($rowData);
             $this->mapTimes($rowData);
-            $excludeCostCodes = ['2471109', '2516504', '2527509'];
+            $excludeCostCodes = ['2471109', '2516504', '2527509']; //the excluded cost codes are leaves and need to skip the default shift conditions
             if (!in_array($rowData['COST CODE'], $excludeCostCodes)) {
                 $this->mapShiftConditions($rowData);
             }
@@ -318,24 +318,6 @@ class ClockController extends Controller
 
             $index++; // Increment index for next row
         }
-        // $hoursByCostCode = [];
-
-        // foreach ($data as $index => $row) {
-//     $costCode = $row['COST CODE'] ?? null;
-//     $hours = isset($row['HOURS']) && is_numeric($row['HOURS']) ? (float) $row['HOURS'] : 0;
-
-        //     if ($costCode === null) {
-//         dd("Missing COST CODE on row index: $index");
-//     }
-
-        //     if (!isset($hoursByCostCode[$costCode])) {
-//         $hoursByCostCode[$costCode] = 0;
-//     }
-
-        //     $hoursByCostCode[$costCode] += $hours;
-// }
-
-        // dd($hoursByCostCode);
 
         fclose($handle);
         $filteredData = array_map(function ($item) {
@@ -361,22 +343,7 @@ class ClockController extends Controller
 
             return $result;
         }, ['timesheets' => []]);
-        // dd($hoursByCostCode);
-        // Debugging: Shows the grouped data as pretty-printed JSON
-        // dd(json_encode($groupedByEmployeeId, JSON_PRETTY_PRINT));
-        // $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
 
-        // // Convert the array to JSON string
-        // $jsonData = json_encode($groupedByEmployeeId, JSON_PRETTY_PRINT);
-
-        // // Store the JSON in the public disk (storage/app/public)
-        // Storage::disk('public')->put($filePath, $jsonData);
-
-        // Download the file
-        // return response()->download(storage_path('app/public/' . $filePath), 'timesheets.json')->deleteFileAfterSend(true);
-
-        // After file is downloaded, handle sync and redirect (this part will be unreachable unless you adjust the flow)
-        // Divide the timesheets into chunks of 100
         $timesheetChunks = array_chunk($groupedByEmployeeId['timesheets'], 100, true);
 
         // Sync each chunk of timesheets with the API
@@ -468,7 +435,7 @@ class ClockController extends Controller
             '01-060' => '2490634',
             "Personal/Carer's Leave Taken" => '2471109',
             'RDO Taken' => '2516504',
-            'Annual Leave Taken' => '2527509',
+            'Annual Leave Taken' => '2471108',
         ];
 
         if (empty($rowData['COST CODE'])) {
@@ -494,7 +461,7 @@ class ClockController extends Controller
         }
 
         try {
-            $startTime = \Carbon\Carbon::createFromFormat(
+            $startTime = Carbon::createFromFormat(
                 'd/m/Y H:i:s',
                 $rowData['DATE'] . ($rowData['PAY'] == 131 ? ' 15:30:00' : ' 06:30:00'),
                 'Australia/Brisbane'
@@ -580,7 +547,7 @@ class ClockController extends Controller
 
             if ($cachedToken) {
                 // Convert expiration time to a Carbon instance with timezone support
-                $expiresAt = \Carbon\Carbon::parse($cachedToken['expires_at'])->setTimezone('Australia/Brisbane');
+                $expiresAt = Carbon::parse($cachedToken['expires_at'])->setTimezone('Australia/Brisbane');
                 $now = now('Australia/Brisbane'); // Ensure we're comparing time in the same timezone
 
                 // Check if the token will expire in less than 1 minute (60 seconds)
@@ -599,9 +566,5 @@ class ClockController extends Controller
         // If no token exists or it's expired, generate a new one
         return $this->generateKioskToken();
     }
-
-
-
-
 
 }

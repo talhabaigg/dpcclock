@@ -106,6 +106,5 @@ class LocationController extends Controller
             }
         }
         return redirect()->back()->with('success', 'Locations synced successfully from Employment Hero.');
-
     }
 }
