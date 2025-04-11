@@ -125,5 +125,10 @@ class EmployeeController extends Controller
         return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
     }
 
+    public function retrieveEmployees()
+    {
+        $employees = Employee::select('eh_employee_id as id', 'name')->get();
+        return response()->json($employees);
+    }
 
 }

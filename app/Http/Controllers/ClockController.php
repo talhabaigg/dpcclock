@@ -566,5 +566,24 @@ class ClockController extends Controller
         // If no token exists or it's expired, generate a new one
         return $this->generateKioskToken();
     }
-
+    public function viewTimesheet(Request $request)
+    {
+        $employeeId = $request->query('employeeId');
+        $weekEnding = $request->query('weekEnding');
+        // dd($weekEnding);
+        $endDate = Carbon::createFromFormat('d-m-Y', $weekEnding)->endOfDay();
+        $startDate = $endDate->copy()->subDays(6)->startOfDay();
+        $employeeName = Employee::where('eh_employee_id', $employeeId)->value('name');
+        $timesheets = Clock::where('eh_employee_id', $employeeId)
+            ->with('location')
+            ->whereBetween('clock_in', [$startDate, $endDate])
+            ->get();
+        // dd($timesheets);
+        return Inertia::render('timesheets/show', [
+            'timesheets' => $timesheets,
+            'selectedEmployeeId' => $employeeId,
+            'selectedWeekEnding' => $weekEnding,
+            'employeeName' => $employeeName,
+        ]);
+    }
 }

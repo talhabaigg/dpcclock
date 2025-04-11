@@ -44,6 +44,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/generate-kiosk-token', [ClockController::class, 'generateKioskToken'])->name('clocks.generateKioskToken');
         Route::get('/retrieve-kiosk-token', [ClockController::class, 'retrieveKioskToken'])->name('clocks.retrieveKioskToken');
 
+        Route::get('/timesheets', [ClockController::class, 'viewTimesheet'])->name('timesheets.view');
+        Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
+
+
     });
 
     Route::middleware('permission:view kiosk')->group(function () {
