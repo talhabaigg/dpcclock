@@ -54,14 +54,14 @@ class KioskAuthController extends Controller
         $employee = Employee::findOrFail($employeeId);
         $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
         $pin = $request->input('pin');
-        $response = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-        if (!$response) {
-            return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
-        }
-        // //Check if the PIN entered is correct
-        // if ($request->pin !== $employee->pin) {
+        // $response = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        // if (!$response) {
         //     return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         // }
+        // //Check if the PIN entered is correct
+        if ($request->pin !== $employee->pin) {
+            return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+        }
         $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
             // dd($kiosk->eh_kiosk_id);
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)

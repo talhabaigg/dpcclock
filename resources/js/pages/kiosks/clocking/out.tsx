@@ -29,14 +29,19 @@ interface TaskAllocation {
 }
 
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn } = usePage<{
+    const { employees, kiosk, employee, locations, clockedIn, auth } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
         locations: any[];
         clockedIn: { clock_in: string };
+        auth: {
+            isAdmin: boolean | Date | null; id: number; name: string; email: string 
+};
     }>().props;
 
+
+    console.log('isAdmin:', auth.isAdmin);
     const form = useForm<{
         kioskId: number;
         employeeId: number;
@@ -67,6 +72,8 @@ export default function Clockout() {
     ]);
     const [hoursAllocated, setHoursAllocated] = useState(0);
     const [laserAllowance, setLaserAllowance] = useState(false);
+    const [manualClockOut, setManualClockOut] = useState(false);
+    const [manualClockOutTime, setManualClockOutTime] = useState<Date | null>(null);
 
     useEffect(() => {
         if (!clockedIn.clock_in) return;
@@ -74,13 +81,30 @@ export default function Clockout() {
         const clockInTime = dayjs(clockedIn.clock_in);
         const now = dayjs();
 
-        const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
-        const clockOut = now.minute(roundedMinutes % 60).second(0);
-        const clockOutTime = roundedMinutes === 60 ? clockOut.add(1, 'hour').minute(0) : clockOut;
-        const duration = clockOutTime.diff(clockInTime, 'hours', true);
+        if (now.diff(clockInTime, 'hours') > 8 && manualClockOutTime || auth.isAdmin) {
+            setManualClockOut(true);
+            
+            const duration = manualClockOutTime ? dayjs(manualClockOutTime).diff(clockInTime, 'hours', true) : 0;
+            console.log('Duration:', duration);
+            setHoursWorked(parseFloat(duration.toFixed(2)));
+        }
+        else {
+            setManualClockOut(false);
+            const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
+            const clockOut = now.minute(roundedMinutes % 60).second(0);
+            const clockOutTime = roundedMinutes === 60 ? clockOut.add(1, 'hour').minute(0) : clockOut;
+            const duration = clockOutTime.diff(clockInTime, 'hours', true);
+            setHoursWorked(parseFloat(duration.toFixed(2)));
+        }
+       
+    }, [clockedIn.clock_in, manualClockOutTime]);
 
-        setHoursWorked(parseFloat(duration.toFixed(2)));
-    }, [clockedIn.clock_in]);
+    const isManualClockOutNeeded = () => {
+        const clockInTime = dayjs(clockedIn.clock_in);
+        const now = dayjs();
+        const duration = now.diff(clockInTime, 'hours', true);
+        return duration > 10;
+    };
 
     useEffect(() => {
         const totalHours = taskAllocations.reduce((sum, task) => sum + task.hours, 0);
@@ -186,6 +210,58 @@ export default function Clockout() {
             <p className="text-center text-sm sm:text-base">
                 Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
+            {(isManualClockOutNeeded() || auth.isAdmin) && (
+    <div className="flex flex-col items-center">
+        <Label className="text-sm font-semibold">
+            Select Manual Clock Out Time
+        </Label>
+        <div className="flex space-x-2">
+            {/* Hour Dropdown */}
+            <select
+                value={manualClockOutTime ? dayjs(manualClockOutTime).hour().toString().padStart(2, '0') : ''}
+                onChange={(e) => {
+                    const hour = parseInt(e.target.value, 10);
+                    const current = manualClockOutTime
+                        ? dayjs(manualClockOutTime)
+                        : dayjs(clockedIn.clock_in);
+                    const updated = current.hour(hour).toDate();
+                    setManualClockOutTime(updated);
+                }}
+                className="border rounded p-2"
+            >
+                <option value="">HH</option>
+                {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i.toString().padStart(2, '0')}>
+                        {i.toString().padStart(2, '0')}
+                    </option>
+                ))}
+            </select>
+
+            {/* Minute Dropdown */}
+            <select
+                value={manualClockOutTime ? dayjs(manualClockOutTime).minute().toString().padStart(2, '0') : ''}
+                onChange={(e) => {
+                    let minute = parseInt(e.target.value, 10);
+                    if (minute === 60) minute = 0;
+
+                    const current = manualClockOutTime
+                        ? dayjs(manualClockOutTime)
+                        : dayjs(clockedIn.clock_in);
+                    const updated = current.minute(minute).toDate();
+                    setManualClockOutTime(updated);
+                }}
+                className="border rounded p-2"
+            >
+                <option value="">MM</option>
+                {[15, 30, 45, 60].map((m) => (
+                    <option key={m} value={m}>
+                        {m === 60 ? '00' : m.toString().padStart(2, '0')}
+                    </option>
+                ))}
+            </select>
+        </div>
+    </div>
+)}
 
             <form onSubmit={handleSubmit} className="w-full px-4">
                 {taskAllocations.map((task, index) => (

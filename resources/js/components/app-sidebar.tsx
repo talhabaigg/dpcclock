@@ -35,7 +35,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Timesheets',
-        href: '/clocks',
+        href: '/timesheets',
         icon: Hourglass,
     },
     {

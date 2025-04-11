@@ -576,8 +576,8 @@ class ClockController extends Controller
     }
     public function viewTimesheet(Request $request)
     {
-        $employeeId = $request->query('employeeId');
-        $weekEnding = $request->query('weekEnding');
+        $employeeId = $request->query('employeeId', null);
+        $weekEnding = $request->query('weekEnding', Carbon::now('Australia/Brisbane')->endOfWeek(Carbon::FRIDAY)->format('d-m-Y'));
         // dd($weekEnding);
         $endDate = Carbon::createFromFormat('d-m-Y', $weekEnding)->endOfDay();
         $startDate = $endDate->copy()->subDays(6)->startOfDay();
