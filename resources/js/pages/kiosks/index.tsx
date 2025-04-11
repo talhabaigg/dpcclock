@@ -14,9 +14,7 @@ interface Kiosk {
     };
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Locations', href: '/locations' },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
@@ -24,15 +22,13 @@ export default function KiosksList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
 
-            <div className="flex items-center gap-2 m-2">
+            <div className="m-2 flex items-center gap-2">
                 <Link href="/kiosks/sync" method="get">
                     <Button variant="outline" className="w-32">
                         Sync Kiosk
                     </Button>
                 </Link>
-                {flash?.success && (
-                    <div className="text-green-500">{flash.success}</div>
-                )}
+                {flash?.success && <div className="text-green-500">{flash.success}</div>}
             </div>
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
@@ -42,6 +38,9 @@ export default function KiosksList() {
                             <TableHead>Kiosk ID</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>Location Name</TableHead>
+                            <TableHead>Default Start Time</TableHead>
+                            <TableHead>Default End Time</TableHead>
+                            {/* <TableHead>Actions</TableHead> */}
                             <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -51,6 +50,9 @@ export default function KiosksList() {
                                 <TableCell>{kiosk.eh_location_id}</TableCell>
                                 <TableCell>{kiosk.name}</TableCell>
                                 <TableCell>{kiosk.location?.name?.trim() || 'N/A'}</TableCell>
+                                <TableCell>{kiosk.default_start_time}</TableCell>
+                                <TableCell>{kiosk.default_end_time}</TableCell>
+
                                 <TableCell>
                                     <Link href={`/kiosks/${kiosk.id}`}>
                                         <Button>Open</Button>

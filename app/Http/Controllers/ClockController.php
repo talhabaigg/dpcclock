@@ -67,10 +67,18 @@ class ClockController extends Controller
 
         // Get the current time in Australia/Brisbane
         $now = now('Australia/Brisbane');
+        $defaultStartTime = Carbon::createFromFormat('H:i:s', $kiosk->default_start_time, 'Australia/Brisbane')
+            ->setDate($now->year, $now->month, $now->day);
 
-        // Round to nearest 30 minutes
-        $roundedMinutes = round($now->minute / 30) * 30;
-        $clockIn = $now->copy()->setMinute($roundedMinutes)->setSecond(0);
+
+        // Determine clock in time
+        if ($now->lessThan($defaultStartTime)) {
+            $clockIn = $defaultStartTime->copy();
+        } else {
+            // Round to nearest 30 minutes
+            $roundedMinutes = round($now->minute / 30) * 30;
+            $clockIn = $now->copy()->setMinute($roundedMinutes)->setSecond(0);
+        }
 
         $clock = Clock::create([
             'eh_kiosk_id' => $kiosk->eh_kiosk_id,
@@ -575,7 +583,7 @@ class ClockController extends Controller
         $startDate = $endDate->copy()->subDays(6)->startOfDay();
         $employeeName = Employee::where('eh_employee_id', $employeeId)->value('name');
         $timesheets = Clock::where('eh_employee_id', $employeeId)
-            ->with('location')
+            ->with('location', 'kiosk')
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
         // dd($timesheets);

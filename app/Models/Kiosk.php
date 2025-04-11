@@ -11,6 +11,8 @@ class Kiosk extends Model
         'eh_kiosk_id',
         'eh_location_id',
         'name',
+        'default_start_time',
+        'default_end_time',
     ];
 
     public function employees()

@@ -5,11 +5,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ChevronDown, ChevronUp } from 'lucide-react'; // Optional for toggle icon
+import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'; // Optional for toggle icon
 import { useEffect, useRef, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import { SearchEmployee } from './components/searchEmployee';
-
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Timesheet Management', href: '/clocks' }];
 
 export default function TimesheetManagement() {
@@ -102,11 +101,20 @@ export default function TimesheetManagement() {
 
         return Object.entries(grouped).map(([date, entries]) => {
             const startTimes = entries.map((ts) => new Date(ts.clock_in));
-            const endTimes = entries.map((ts) => new Date(ts.clock_out));
-            const totalHours = entries.reduce((sum, ts) => sum + parseFloat(ts.hours_worked), 0);
+
+            const endTimes = entries.filter((ts) => ts.clock_out !== null).map((ts) => new Date(ts.clock_out));
+
+            const totalHours = entries.reduce((sum, ts) => {
+                const hasClockOut = ts.clock_out !== null;
+                const hours = hasClockOut ? parseFloat(ts.hours_worked) : 0;
+                return sum + (isNaN(hours) ? 0 : hours);
+            }, 0);
 
             const earliestStart = new Date(Math.min(...startTimes.map((d) => d.getTime())));
-            const latestEnd = new Date(Math.max(...endTimes.map((d) => d.getTime())));
+            const latestEnd = endTimes.length > 0 ? new Date(Math.max(...endTimes.map((d) => d.getTime()))) : null;
+
+            // Clean up null/undefined locations, optional: fallback to 'N/A'
+            const location = entries.map((e) => e.eh_location_id ?? 'N/A').join(', ');
 
             return {
                 date,
@@ -114,11 +122,12 @@ export default function TimesheetManagement() {
                 clock_in: earliestStart,
                 clock_out: latestEnd,
                 hours_worked: totalHours.toFixed(2),
-                location: entries.map((e) => e.eh_location_id).join(', '),
+                location,
                 status: entries.map((e) => e.status).join(', '),
             };
         });
     };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Timesheets" />
@@ -200,17 +209,20 @@ export default function TimesheetManagement() {
                                                                 <Table className="border border-gray-200">
                                                                     <TableHeader className="border border-gray-200 bg-gray-50">
                                                                         <TableRow className="border-b">
+                                                                            <TableHead className="border border-gray-200">ID</TableHead>
                                                                             <TableHead className="border border-gray-200">Status</TableHead>
                                                                             <TableHead className="border border-gray-200">Start Time</TableHead>
                                                                             <TableHead className="border border-gray-200">End Time</TableHead>
                                                                             <TableHead className="border border-gray-200">Level/Activity</TableHead>
                                                                             <TableHead className="border border-gray-200">Hours</TableHead>
+                                                                            <TableHead className="border border-gray-200">Actions</TableHead>
                                                                         </TableRow>
                                                                     </TableHeader>
 
                                                                     <TableBody>
                                                                         {groupedTimesheets[dateKey].map((entry, subIndex) => (
                                                                             <TableRow key={subIndex} className="border-b">
+                                                                                <TableCell className="border border-gray-200">{entry.id}</TableCell>
                                                                                 <TableCell className="border border-gray-200">
                                                                                     {entry.status === 'synced' && (
                                                                                         <span className="text-green-500">Synced</span>
@@ -223,14 +235,26 @@ export default function TimesheetManagement() {
                                                                                     })}
                                                                                 </TableCell>
                                                                                 <TableCell className="border border-gray-200">
-                                                                                    {new Date(entry.clock_out).toLocaleTimeString([], {
-                                                                                        hour: '2-digit',
-                                                                                        minute: '2-digit',
-                                                                                    })}
+                                                                                    {entry.clock_out
+                                                                                        ? new Date(entry.clock_out).toLocaleTimeString([], {
+                                                                                              hour: '2-digit',
+                                                                                              minute: '2-digit',
+                                                                                          })
+                                                                                        : `Still clocked in to Kiosk - ${entry.kiosk.name}`}
                                                                                 </TableCell>
-                                                                                <TableCell>{entry.location.external_id}</TableCell>
+                                                                                <TableCell>{entry.location?.external_id}</TableCell>
                                                                                 <TableCell className="border border-gray-200">
                                                                                     {entry.hours_worked}
+                                                                                </TableCell>
+                                                                                <TableCell className="flex justify-start">
+                                                                                    {' '}
+                                                                                    <Button
+                                                                                        variant="ghost"
+                                                                                        size="icon"
+                                                                                        className="text-gray-500 hover:text-gray-700"
+                                                                                    >
+                                                                                        <Pencil />
+                                                                                    </Button>
                                                                                 </TableCell>
                                                                             </TableRow>
                                                                         ))}
