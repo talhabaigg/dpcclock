@@ -27,7 +27,8 @@ class KioskAuthController extends Controller
         $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
                 ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out');
+                ->whereNull('clock_out')
+                ->whereDate('clock_in', today()); // Only consider clock-ins from today
 
             // Log the exact query for debugging
             Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kioskId}", [
@@ -75,6 +76,7 @@ class KioskAuthController extends Controller
         // Check if the employee is already clocked in
         $clockedIn = Clock::where('eh_employee_id', $employee->eh_employee_id)->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure filtering by kiosk ID
             ->whereNull('clock_out')  // If clock_out is null, the employee is clocked in
+            ->whereDate('clock_in', today()) // Only consider clock-ins from today
             ->first();
         // dd($clockedIn);
         // If employee is clocked in, redirect to the clock-out page

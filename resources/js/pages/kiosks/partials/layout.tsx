@@ -103,7 +103,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                                 <span>Loading from Employment Hero</span>
                             </div>
                         </KioskDialogBox>
-                        <Button variant="secondary" onClick={handleSyncClick} disabled={loading}>
+                        {/* <Button variant="secondary" onClick={handleSyncClick} disabled={loading}>
                             {loading ? (
                                 <>
                                     <Loader2 className="mr-2 animate-spin" />
@@ -112,7 +112,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             ) : (
                                 'Sync'
                             )}
-                        </Button>
+                        </Button> */}
                     </div>
 
                     {/* Employee List - Scrollable */}

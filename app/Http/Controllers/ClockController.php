@@ -72,7 +72,7 @@ class ClockController extends Controller
 
 
         // Determine clock in time
-        if ($now->lessThan($defaultStartTime)) {
+        if ($now->greaterThan($defaultStartTime)) {
             $clockIn = $defaultStartTime->copy();
         } else {
             // Round to nearest 30 minutes
@@ -105,7 +105,18 @@ class ClockController extends Controller
      */
     public function edit(Clock $clock)
     {
-        //
+        $locations = Location::where('eh_parent_id', $clock->kiosk->location->eh_location_id)
+            ->get();
+
+            // dd($locations);
+        $clock = Clock::with(['kiosk.location'])
+            ->where('id', $clock->id)
+            ->first();
+     
+        return Inertia::render('timesheets/edit', [
+            'clock' => $clock,
+            'locations' => $locations,
+        ]);
     }
 
     /**
@@ -113,7 +124,30 @@ class ClockController extends Controller
      */
     public function update(Request $request, Clock $clock)
     {
-        //
+        // dd($request->all());
+        $validated = $request->validate([
+            'clock_in' => ['required', 'date'],
+            'clock_out' => ['required', 'date', 'after:clock_in'],
+            'location_id' => ['required', 'exists:locations,external_id'],
+            'status' => ['nullable', 'string'],
+        ]);
+
+        
+    
+        $start = new \DateTime($validated['clock_in']);
+        $end = new \DateTime($validated['clock_out']);
+        $hoursWorked = $start->diff($end)->h + ($start->diff($end)->i / 60);
+       
+        $location = Location::where('external_id', $validated['location_id'])->pluck('eh_location_id')->first();
+
+        $clock->clock_in = $validated['clock_in'];
+        $clock->clock_out = $validated['clock_out'];
+        $clock->hours_worked = round($hoursWorked, 2);
+        $clock->eh_location_id = $location;
+        $clock->save();
+
+    
+        return redirect()->back()->with('success', 'Timesheet updated successfully.');
     }
 
     /**

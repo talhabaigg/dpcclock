@@ -49,33 +49,33 @@ class KioskController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Kiosk $kiosk)
-    {
+   public function show(Kiosk $kiosk)
+{
+    // Load employees related to the kiosk
+    $kiosk->load('employees');
 
-        // Load employees related to the kiosk
-        $kiosk->load('employees');
+    // Append clocked_in status to each employee based on the kiosk
+    $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
+        $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
+            ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
+            ->whereNull('clock_out')
+            ->whereDate('clock_in', today()); // Only consider clock-ins from today
 
-        // Append clocked_in status to each employee based on the kiosk
-        $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
-                ->whereNull('clock_out');
-
-            // Log the exact query for debugging
-            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
-                'query' => $clockedInQuery->toSql(),
-                'bindings' => $clockedInQuery->getBindings()
-            ]);
-
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
-
-        return Inertia::render('kiosks/show', [
-            'kiosk' => $kiosk,
-            'employees' => $employees, // Use modified employee list with clocked_in
+        // Log the exact query for debugging
+        Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
+            'query' => $clockedInQuery->toSql(),
+            'bindings' => $clockedInQuery->getBindings()
         ]);
-    }
+
+        $employee->clocked_in = $clockedInQuery->exists();
+        return $employee;
+    });
+
+    return Inertia::render('kiosks/show', [
+        'kiosk' => $kiosk,
+        'employees' => $employees, // Use modified employee list with clocked_in
+    ]);
+}
 
 
     // Helper function to check if the token is valid in the cookie
