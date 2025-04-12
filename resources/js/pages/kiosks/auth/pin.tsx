@@ -4,6 +4,9 @@ import { ChevronLeft, Delete, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
+import PinNumpad from './components/numpad';
+import PinInputBox from './components/pinInputBox';
+import ForgotPinLink from './components/forgotPin';
 interface Employee {
     id: number;
     name: string;
@@ -41,7 +44,7 @@ export default function ShowPin() {
         }
     }, [flash.error]);
 
-    const handleDelete = () => {
+    const handleDeletePin = () => {
         form.setData('pin', form.data.pin.slice(0, -1));
     };
 
@@ -97,20 +100,8 @@ export default function ShowPin() {
             <p>Please enter your PIN</p>
             <form onSubmit={handleSubmit} className="flex flex-col items-center">
                 <div className="mb-2 flex items-center space-x-2">
-                    {Array(4)
-                        .fill('')
-                        .map((_, index) => (
-                            <input
-                                key={index}
-                                type="password"
-                                value={form.data.pin[index] || ''}
-                                readOnly
-                                className="h-12 w-12 rounded-lg border border-gray-300 text-center text-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                maxLength={1}
-                                autoFocus={index === form.data.pin.length}
-                            />
-                        ))}
-                    <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon" onClick={handleDelete}>
+                    <PinInputBox pin={form.data.pin} />
+                    <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon" onClick={handleDeletePin}>
                         <Delete />
                     </Button>
                 </div>
@@ -125,39 +116,20 @@ export default function ShowPin() {
                 ) : (
                     flash?.success && <p className="text-green-500">{flash.success}</p>
                 )}
-                <div className="grid grid-cols-3 gap-1">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((key) => (
-                        <Button
-                            key={key}
-                            type="button"
-                            variant="outline"
-                            className="h-22 w-22 rounded-full border-2 border-gray-400 text-2xl"
-                            onClick={() => {
-                                if (key === 'C') form.setData('pin', '');
-                                else handleNumClick(String(key));
-                            }}
-                        >
-                            {key}
-                        </Button>
-                    ))}
-                </div>
-                <Link
-                    className="mt-2"
-                    href="#"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        if (confirm('Are you sure you want to reset your PIN?')) {
-                            window.location.href = route('kiosk.auth.reset-pin', {
-                                employeeId: employee.eh_employee_id,
-                                kiosk: kiosk.eh_kiosk_id,
-                            });
+                <PinNumpad
+                    onClick={(key) => {
+                        if (key === 'C') {
+                            form.setData('pin', '');
+                        } else {
+                            handleNumClick(key);
                         }
                     }}
-                >
-                    <Button className="mt-4" variant="link">
-                        I forgot my PIN
-                    </Button>
-                </Link>
+                />
+                <ForgotPinLink
+                    eh_employee_id={employee.eh_employee_id}
+                    eh_kiosk_id={kiosk.eh_kiosk_id}
+                />
+                
             </form>
         </div>
     );

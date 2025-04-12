@@ -26,7 +26,7 @@ const KioskDialogBox: React.FC<DialogBoxProps> = ({ isOpen, onClose, title, desc
                         <DialogDescription className="mx-auto text-xl">{description}</DialogDescription>
                     </VisuallyHidden>
                 )}
-                <p className="mx-auto mt-4 p-2 text-2xl font-bold">{title}</p>
+                <div className="mx-auto mt-4 p-2 text-2xl font-bold">{title}</div>
                 {children}
                 <button onClick={handleClose} className="mx-auto mt-2 w-full border-t-2 py-4 text-2xl font-extrabold">
                     OK

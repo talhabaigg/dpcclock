@@ -57,32 +57,33 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
             </DialogTrigger>
 
             <DialogContent className="dialog-content flex flex-col items-center justify-center">
-                <DialogTitle>SCAN QR CODE TO LOGIN</DialogTitle>
-                <DialogDescription>
-                    {loading ? (
-                        <p>Updating...</p>
-                    ) : token ? (
-                        <div className="qr-code-container flex items-center justify-center">
-                            <QRCodeSVG value={generateKioskUrl(token, kioskId)} size={256} />
-                        </div>
-                    ) : (
-                        <p>You don't have permission to retrieve the QR code.</p>
-                    )}
-                </DialogDescription>
+    <DialogTitle>SCAN QR CODE TO LOGIN</DialogTitle>
 
-                <div className="mt-4 flex w-full justify-center">
-                    {token && (
-                        <a
-                            className="text-center text-xs break-all text-blue-600 underline"
-                            href={generateKioskUrl(token, kioskId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {generateKioskUrl(token, kioskId)}
-                        </a>
-                    )}
-                </div>
-            </DialogContent>
+    {loading ? (
+        <DialogDescription>Updating...</DialogDescription>
+    ) : token ? (
+        <div className="qr-code-container flex items-center justify-center">
+            <QRCodeSVG value={generateKioskUrl(token, kioskId)} size={256} />
+        </div>
+    ) : (
+        <DialogDescription>
+            You don't have permission to retrieve the QR code.
+        </DialogDescription>
+    )}
+
+    <div className="mt-4 flex w-full justify-center">
+        {token && (
+            <a
+                className="text-center text-xs break-all text-blue-600 underline"
+                href={generateKioskUrl(token, kioskId)}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {generateKioskUrl(token, kioskId)}
+            </a>
+        )}
+    </div>
+</DialogContent>
         </Dialog>
     );
 };
