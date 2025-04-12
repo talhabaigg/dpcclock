@@ -6,7 +6,7 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
     return (
         <div className="flex flex-col gap-2 p-2">
             <Table className="border border-gray-200">
-                <TableHeader className="bg-gray-50">
+                <TableHeader className="bg-gray-50 dark:bg-black">
                     <TableRow className="border-b">
                         <TableHead className="border">Status</TableHead>
                         <TableHead className="border">Start Time</TableHead>

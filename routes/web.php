@@ -27,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
+        Route::get('/employees/kiosks/update', [EmployeeController::class, 'updateKioskEmployees'])->name('employees.kiosks.update');
 
         Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
         Route::resource('locations', LocationController::class)->names('locations');

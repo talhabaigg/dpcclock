@@ -59,7 +59,7 @@ export default function TimesheetTable({
     return (
         <Table className="max-w-2xl border border-gray-200">
             <TableHeader>
-                <TableRow className="border border-gray-200 bg-gray-100">
+                <TableRow className="border border-gray-200 bg-gray-100 dark:bg-black">
                     <TableHead className="w-[100px]"></TableHead>
                     <TableHead className="border border-gray-200">Start Time</TableHead>
                     <TableHead className="border border-gray-200">End Time</TableHead>

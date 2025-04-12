@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+
 class Location extends Model
 {
     protected $fillable = [
@@ -16,4 +17,9 @@ class Location extends Model
     public function worktypes() {
         return $this->belongsToMany(Worktype::class);
     }
+
+    public function kiosk() {
+        return $this->hasOne(Kiosk::class, 'eh_location_id', 'eh_location_id');
+    }
+
 }

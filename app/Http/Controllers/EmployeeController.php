@@ -8,6 +8,8 @@ use App\Models\Employee;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use App\Models\Worktype;
+use App\Models\Location;
+use App\Jobs\SyncKioskEmployees;
 
 class EmployeeController extends Controller
 {
@@ -131,4 +133,13 @@ class EmployeeController extends Controller
         return response()->json($employees);
     }
 
+    public function updateKioskEmployees()
+    {
+        
+            SyncKioskEmployees::dispatch();
+   
+
+        return response()->json(['status' => 'Sync queued.']);
+    }
+   
 }
