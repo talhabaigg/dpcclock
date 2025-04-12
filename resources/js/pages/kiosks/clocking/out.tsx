@@ -41,7 +41,7 @@ export default function Clockout() {
     }>().props;
 
 
-    console.log('isAdmin:', auth.isAdmin);
+    console.log(locations);
     const form = useForm<{
         kioskId: number;
         employeeId: number;

@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { type BreadcrumbItem } from "@/types";
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage } from "@inertiajs/react";
 import { FormEvent } from "react";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Timesheets', href: '/timesheets' },
-    { title: 'Edit Timesheet', href: '/timesheets/edit' },
+    { title: "Timesheets", href: "/timesheets" },
+    { title: "Edit Timesheet", href: "/timesheets/edit" },
 ];
 
 type Location = {
@@ -32,19 +33,47 @@ export default function EditTimesheet() {
         locations: Location[];
     }>().props;
 
+    const fixedDate = new Date(clock.clock_in).toISOString().split("T")[0]; // YYYY-MM-DD
+
     const { data, setData, put, processing, errors } = useForm({
-        clock_in: clock.clock_in,
-        clock_out: clock.clock_out,
-        status: clock.status,
-        location_id: clock.location?.external_id,
+        clocks: [
+            {
+                clock_in: clock.clock_in,
+                clock_out: clock.clock_out,
+                status: clock.status,
+                location_id: clock.location?.external_id,
+            },
+        ],
     });
-    const computedHours = (() => {
-        if (!data.clock_in || !data.clock_out) return 0;
-        const start = new Date(data.clock_in);
-        const end = new Date(data.clock_out);
-        const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-        return diff > 0 ? diff.toFixed(2) : '0.00';
-    })();
+
+    const addLine = () => {
+        setData("clocks", [
+            ...data.clocks,
+            {
+                clock_in: `${fixedDate}T08:00`,
+                clock_out: `${fixedDate}T16:00`,
+                status: "Present",
+                location_id: locations[0]?.external_id ?? "",
+            },
+        ]);
+    };
+
+    const removeLine = (index: number) => {
+        const newClocks = data.clocks.filter((_, i) => i !== index);
+        setData("clocks", newClocks);
+    };
+
+    const handleTimeChange = (index: number, field: "clock_in" | "clock_out", time: string) => {
+        const updated = [...data.clocks];
+        updated[index][field] = `${fixedDate}T${time}`;
+        setData("clocks", updated);
+    };
+
+    const handleChange = (index: number, field: string, value: string) => {
+        const updated = [...data.clocks];
+        updated[index][field] = value;
+        setData("clocks", updated);
+    };
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
@@ -57,57 +86,100 @@ export default function EditTimesheet() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Timesheet" />
 
-            <div className="max-w-xl mx-auto mt-6 space-y-4">
-                {flash.success && <div className="p-4 bg-green-100 text-green-700 rounded">{flash.success}</div>}
-                {flash.error && <div className="p-4 bg-red-100 text-red-700 rounded">{flash.error}</div>}
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <Label>Clock In</Label>
-                        <input
-                            type="datetime-local"
-                            value={data.clock_in}
-                            onChange={(e) => setData('clock_in', e.target.value)}
-                            className="mt-1 block w-full border rounded p-2"
-                        />
-                        {errors.clock_in && <p className="text-sm text-red-500">{errors.clock_in}</p>}
+            <div className="w-full mx-auto mt-6 space-y-4">
+                {flash.success && (
+                    <div className="p-4 bg-green-100 text-green-700 rounded">
+                        {flash.success}
                     </div>
+                )}
+                {flash.error && (
+                    <div className="p-4 bg-red-100 text-red-700 rounded">{flash.error}</div>
+                )}
+                <Label className="p-10">Edit Timesheet - {new Date(fixedDate).toLocaleDateString('en-AU')}</Label>
+                <form onSubmit={handleSubmit} className="space-y-6 px-10">
+                    {data.clocks.map((entry, index) => {
+                        const computedHours = (() => {
+                            if (!entry.clock_in || !entry.clock_out) return "0.00";
+                            const start = new Date(entry.clock_in);
+                            const end = new Date(entry.clock_out);
+                            const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+                            return diff > 0 ? diff.toFixed(2) : "0.00";
+                        })();
 
-                    <div>
-                        <Label>Clock Out</Label>
-                        <input
-                            type="datetime-local"
-                            value={data.clock_out}
-                            onChange={(e) => setData('clock_out', e.target.value)}
-                            className="mt-1 block w-full border rounded p-2"
-                        />
-                        {errors.clock_out && <p className="text-sm text-red-500">{errors.clock_out}</p>}
+                        return (
+                            <div key={index} className="flex flex-row items-end space-x-4 border-b pb-4">
+                                <div className="flex-1">
+                                    <Label>Clock In Time</Label>
+                                    <Input type="time"value={entry.clock_in?.split("T")[1]?.slice(0, 5) ?? ""}
+                                        onChange={(e) =>
+                                            handleTimeChange(index, "clock_in", e.target.value)
+                                        } >
+
+                                        </Input>
+                                   
+                                </div>
+
+                                <div className="flex-1">
+                                    <Label>Clock Out Time</Label>
+                                    <Input type="time" value={entry.clock_out?.split("T")[1]?.slice(0, 5) ?? ""}
+                                        onChange={(e) =>
+                                            handleTimeChange(index, "clock_out", e.target.value)
+                                        } >
+
+                                        </Input>
+                                  
+                                </div>
+
+                                <div className="flex-1">
+                                    <Label>Location</Label>
+                                    <select
+                                        value={entry.location_id}
+                                        onChange={(e) =>
+                                            handleChange(index, "location_id", e.target.value)
+                                        }
+                                        className="mt-1 block w-full border rounded p-2"
+                                    >
+                                        {locations.map((loc) => (
+                                            <option key={loc.id} value={loc.external_id}>
+                                                {loc.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="w-[120px]">
+                                    <Label>Hours</Label>
+                                    <input
+                                        type="number"
+                                        readOnly
+                                        value={computedHours}
+                                        className="mt-1 block w-full border rounded p-2"
+                                    />
+                                </div>
+
+                                <div>
+                                    {data.clocks.length > 1 && (
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            onClick={() => removeLine(index)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <div className="flex justify-between items-center pt-4">
+                        <Button type="button" variant="secondary" onClick={addLine}>
+                            + Add Another Entry
+                        </Button>
+                        <Button type="submit" disabled={processing}>
+                            {processing ? "Saving..." : "Save Changes"}
+                        </Button>
                     </div>
-
-                    <div>
-                        <Label>Location</Label>
-                        <select
-                            value={data.location_id}
-                            onChange={(e) => setData('location_id', e.target.value)}
-                            className="mt-1 block w-full border rounded p-2"
-                        >
-                            {locations.map((loc) => (
-                                <option key={loc.id} value={loc.external_id}>
-                                    {loc.name}
-                                </option>
-                            ))}
-                        </select>
-                        {errors.location_id && <p className="text-sm text-red-500">{errors.location_id}</p>}
-                    </div>
-
-                    <div>
-                        <Label>Computed Hours</Label>
-                        <p className="mt-1 text-gray-700">{computedHours} hours</p>
-                    </div>
-
-                    <Button type="submit" disabled={processing}>
-                        {processing ? 'Saving...' : 'Save Changes'}
-                    </Button>
                 </form>
             </div>
         </AppLayout>

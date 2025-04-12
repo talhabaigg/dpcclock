@@ -22,24 +22,7 @@ class KioskAuthController extends Controller
     {
         $user = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
-
-        // Append clocked_in status to each employee based on the kiosk
-        $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out')
-                ->whereDate('clock_in', today()); // Only consider clock-ins from today
-
-            // Log the exact query for debugging
-            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kioskId}", [
-                'query' => $clockedInQuery->toSql(),
-                'bindings' => $clockedInQuery->getBindings()
-            ]);
-
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
-        // dd($employees);
+        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
         return Inertia::render('kiosks/auth/pin', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
@@ -55,31 +38,20 @@ class KioskAuthController extends Controller
         $employee = Employee::findOrFail($employeeId);
         $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
         $pin = $request->input('pin');
-        // $response = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-        // if (!$response) {
-        //     return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+  
+        // $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        // if (!$ehPinCheck) {
+        //         return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+        //     }
         // }
-        // //Check if the PIN entered is correct
-        if ($request->pin !== $employee->pin) {
+
+        $localPinCheck =  $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        if (!$localPinCheck) {
             return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         }
-        $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
-            // dd($kiosk->eh_kiosk_id);
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out');
-
-
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
-        // Check if the employee is already clocked in
-        $clockedIn = Clock::where('eh_employee_id', $employee->eh_employee_id)->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure filtering by kiosk ID
-            ->whereNull('clock_out')  // If clock_out is null, the employee is clocked in
-            ->whereDate('clock_in', today()) // Only consider clock-ins from today
-            ->first();
-        // dd($clockedIn);
-        // If employee is clocked in, redirect to the clock-out page
+        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
+        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);      
+       
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
             return Inertia::render('kiosks/clocking/out', [
@@ -96,9 +68,7 @@ class KioskAuthController extends Controller
         // If employee is not clocked in, show the clock-in page
         $location = $kiosk->location;
         $locations = Location::where('eh_parent_id', $location->eh_location_id)->pluck('external_id')->toArray();
-        // Append clocked_in status to each employee based on the kiosk
 
-        // dd($employees);
         return Inertia::render('kiosks/clocking/in', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
@@ -107,6 +77,45 @@ class KioskAuthController extends Controller
             'employees' => $employees,
             'locations' => $locations,
         ]);
+    }
+
+    private function verifyLocalPin($kioskId, $employeeId, $pin)
+    {
+        $employee = Employee::where('eh_employee_id', $employeeId)->first();
+        if ($employee && $employee->pin === $pin) {
+            return true;
+        }
+        return false;
+    }
+    public function getKioskEmployeesWithClockedInState($kioskId)
+    {
+        $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        // Load emloyees from Kiosk and check if they are clocked in using the method below and append clocked in status to each employee as true or false
+        $employees =  $kiosk->employees->map(function ($employee) use ($kioskId) {
+            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
+                ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
+                ->whereDate('clock_in', today()) // Only consider clock-ins from today
+                ->whereNull('clock_out');
+
+            $employee->clocked_in = $clockedInQuery->exists();
+            return $employee;       
+        });
+        return $employees;
+    }
+
+    private function getCurrentOngoingTimesheet($kioskId, $employeeId)
+    {
+        $clockedIn = Clock::where('eh_employee_id', $employeeId)
+            ->where('eh_kiosk_id', $kioskId)
+            ->whereDate('clock_in', today())  // Ensure we only consider today's date
+            ->whereNull('clock_out')->first();
+
+        if($clockedIn) {
+           return $clockedIn;
+        } else {
+            return false; // no ongoing timesheet
+        }
+        
     }
 
     private function verifyKioskPin($kioskId, $employeeId, $pin)
@@ -140,21 +149,7 @@ class KioskAuthController extends Controller
 
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
 
-        // Append clocked_in status to each employee based on the kiosk
-        $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
-                ->whereNull('clock_out');
-
-            // Log the exact query for debugging
-            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kioskId}", [
-                'query' => $clockedInQuery->toSql(),
-                'bindings' => $clockedInQuery->getBindings()
-            ]);
-
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
+        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
         if ($response == "Pin reset email sent successfully.") {
             session()->flash('success', 'Pin reset email sent successfully.');
         } else {
