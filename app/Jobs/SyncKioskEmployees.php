@@ -18,24 +18,31 @@ class SyncKioskEmployees implements ShouldQueue
     public function handle(): void
     {
         Employee::pluck('eh_employee_id')
-            ->chunk(20)
-            ->each(function ($chunk) {
-                foreach ($chunk as $employeeId) {
-                    $locationIds = $this->getLocationsforEmployeeId($employeeId);
-                    $kioskIds = $this->getKioskIdforLocationIds($locationIds);
-
-                    $employee = Employee::where('eh_employee_id', $employeeId)->first();
-
-                    if ($employee) {
-                        if (!empty($kioskIds)) {
-                            $employee->kiosks()->sync($kioskIds);
-                        } else {
-                            Log::info("No kiosks found for employee {$employeeId}");
-                        }
+        ->chunk(20)
+        ->each(function ($chunk) {
+            foreach ($chunk as $employeeId) {
+                $locationIds = $this->getLocationsforEmployeeId($employeeId);
+                $kioskIds = $this->getKioskIdforLocationIds($locationIds);
+    
+                Log::info("Employee ID: {$employeeId} - Kiosk IDs: " . implode(', ', $kioskIds));
+    
+                $employee = Employee::where('eh_employee_id', $employeeId)->first();
+    
+                if ($employee) {
+                    $employee->kiosks()->detach();
+    
+                    if (!empty($kioskIds)) {
+                        $employee->kiosks()->attach($kioskIds);
+                    } else {
+                        Log::info("No kiosks found for employee {$employeeId}");
                     }
+                } else {
+                    Log::info("Employee with ID {$employeeId} not found.");
                 }
-            });
+            }
+        });
     }
+    
 
     protected function getLocationsforEmployeeId($employeeId): array
     {
@@ -45,6 +52,7 @@ class SyncKioskEmployees implements ShouldQueue
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/location");
 
+     
         return collect($response->json())
             ->filter(fn ($loc) => $loc['parentId'] == 1149031)
             ->pluck('id')
