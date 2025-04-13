@@ -33,27 +33,40 @@ export default function EditTimesheet() {
         locations: Location[];
     }>().props;
 
-    const fixedDate = new Date(clock.clock_in).toISOString().split("T")[0]; // YYYY-MM-DD
+    const fixedDate = clock.clock_in.split(" ")[0]; // YYYY-MM-DD
 
     const { data, setData, put, processing, errors } = useForm({
         clocks: [
             {
                 clock_in: clock.clock_in,
-                clock_out: clock.clock_out,
+                clock_out: clock.clock_out ?? `${fixedDate} 00:00`,
                 status: clock.status,
                 location_id: clock.location?.external_id,
+                hours_worked: clock.hours_worked ? clock.hours_worked : 0,
             },
         ],
     });
 
     const addLine = () => {
+        // Get the last clock out time
+        const lastClockOut = data.clocks[data.clocks.length - 1]?.clock_out;
+        const lastClockOutTime = lastClockOut ? new Date(lastClockOut) : new Date(`${fixedDate} 08:00`);
+    
+        // Set the new clock-in time to be the last clock-out time (add 5 minutes or any duration you prefer)
+        const newClockIn = new Date(lastClockOutTime);
+        newClockIn.setMinutes(lastClockOutTime.getMinutes()); // Add 5 minutes to the previous clock-out time
+    
+        // Create the new clock-in time string
+        const newClockInString = `${newClockIn.getFullYear()}-${(newClockIn.getMonth() + 1).toString().padStart(2, "0")}-${newClockIn.getDate().toString().padStart(2, "0")} ${newClockIn.getHours().toString().padStart(2, "0")}:${newClockIn.getMinutes().toString().padStart(2, "0")}:00`;
+    
         setData("clocks", [
             ...data.clocks,
             {
-                clock_in: `${fixedDate}T08:00`,
-                clock_out: `${fixedDate}T16:00`,
+                clock_in: newClockInString, // Set clock-in to the calculated time
+                clock_out: `${fixedDate} 16:00`, // Default clock-out time
                 status: "Present",
                 location_id: locations[0]?.external_id ?? "",
+                hours_worked: 0,
             },
         ]);
     };
@@ -63,9 +76,23 @@ export default function EditTimesheet() {
         setData("clocks", newClocks);
     };
 
-    const handleTimeChange = (index: number, field: "clock_in" | "clock_out", time: string) => {
+    const handleTimeChange = (
+        index: number,
+        field: "clock_in" | "clock_out",
+        hour: string,
+        minute: string
+    ) => {
         const updated = [...data.clocks];
-        updated[index][field] = `${fixedDate}T${time}`;
+        const date = fixedDate; // already in YYYY-MM-DD
+        updated[index][field] = `${date} ${hour}:${minute}:00`; // correct format
+
+        // Recalculate hours worked when time changes
+        const start = new Date(updated[index].clock_in);
+        const end = new Date(updated[index].clock_out);
+
+        const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // difference in hours
+        updated[index].hours_worked = diff > 0 ? diff.toFixed(2) : 0; // Set hours worked field
+
         setData("clocks", updated);
     };
 
@@ -98,36 +125,85 @@ export default function EditTimesheet() {
                 <Label className="p-10">Edit Timesheet - {new Date(fixedDate).toLocaleDateString('en-AU')}</Label>
                 <form onSubmit={handleSubmit} className="space-y-6 px-10">
                     {data.clocks.map((entry, index) => {
-                        const computedHours = (() => {
-                            if (!entry.clock_in || !entry.clock_out) return "0.00";
-                            const start = new Date(entry.clock_in);
-                            const end = new Date(entry.clock_out);
-                            const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-                            return diff > 0 ? diff.toFixed(2) : "0.00";
-                        })();
+                        const clockInTime = entry.clock_in?.split(" ")[1];
+                        const clockOutTime = entry.clock_out?.split(" ")[1];
+
+                        const clockInHour = clockInTime?.slice(0, 2) ?? "08";
+                        const clockInMinute = clockInTime?.slice(3, 5) ?? "00";
+
+                        const clockOutHour = clockOutTime?.slice(0, 2) ?? "16";
+                        const clockOutMinute = clockOutTime?.slice(3, 5) ?? "00";
 
                         return (
                             <div key={index} className="flex flex-row items-end space-x-4 border-b pb-4">
                                 <div className="flex-1">
                                     <Label>Clock In Time</Label>
-                                    <Input type="time"value={entry.clock_in?.split("T")[1]?.slice(0, 5) ?? ""}
-                                        onChange={(e) =>
-                                            handleTimeChange(index, "clock_in", e.target.value)
-                                        } >
-
-                                        </Input>
-                                   
+                                    <div className="flex space-x-2">
+                                        <select
+                                            value={clockInHour}
+                                            onChange={(e) =>
+                                                handleTimeChange(index, "clock_in", e.target.value, clockInMinute)
+                                            }
+                                            className="block w-full border rounded p-2"
+                                        >
+                                            {[...Array(23)].map((_, i) => {
+                                                const hour = (i + 1).toString().padStart(2, "0");
+                                                return (
+                                                    <option key={hour} value={hour}>
+                                                        {`${hour}`}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                        <select
+                                            value={clockInMinute}
+                                            onChange={(e) =>
+                                                handleTimeChange(index, "clock_in", clockInHour, e.target.value)
+                                            }
+                                            className="block w-full border rounded p-2"
+                                        >
+                                            {["00", "15", "30", "45"].map((minute) => (
+                                                <option key={minute} value={minute}>
+                                                    {minute}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1">
                                     <Label>Clock Out Time</Label>
-                                    <Input type="time" value={entry.clock_out?.split("T")[1]?.slice(0, 5) ?? ""}
-                                        onChange={(e) =>
-                                            handleTimeChange(index, "clock_out", e.target.value)
-                                        } >
-
-                                        </Input>
-                                  
+                                    <div className="flex space-x-2">
+                                        <select
+                                            value={clockOutHour}
+                                            onChange={(e) =>
+                                                handleTimeChange(index, "clock_out", e.target.value, clockOutMinute)
+                                            }
+                                            className="block w-full border rounded p-2"
+                                        >
+                                            {[...Array(23)].map((_, i) => {
+                                                const hour = (i + 1).toString().padStart(2, "0");
+                                                return (
+                                                    <option key={hour} value={hour}>
+                                                        {`${hour}`}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                        <select
+                                            value={clockOutMinute}
+                                            onChange={(e) =>
+                                                handleTimeChange(index, "clock_out", clockOutHour, e.target.value)
+                                            }
+                                            className="block w-full border rounded p-2"
+                                        >
+                                            {["00", "15", "30", "45"].map((minute) => (
+                                                <option key={minute} value={minute}>
+                                                    {minute}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1">
@@ -152,7 +228,7 @@ export default function EditTimesheet() {
                                     <input
                                         type="number"
                                         readOnly
-                                        value={computedHours}
+                                        value={entry.hours_worked}
                                         className="mt-1 block w-full border rounded p-2"
                                     />
                                 </div>

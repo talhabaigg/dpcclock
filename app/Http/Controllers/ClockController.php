@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use App\Models\Worktype;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 class ClockController extends Controller
 {
     /**
@@ -122,33 +123,57 @@ class ClockController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Clock $clock)
-    {
-        // dd($request->all());
-        $validated = $request->validate([
-            'clock_in' => ['required', 'date'],
-            'clock_out' => ['required', 'date', 'after:clock_in'],
-            'location_id' => ['required', 'exists:locations,external_id'],
-            'status' => ['nullable', 'string'],
-        ]);
 
-        
+
+     public function update(Request $request, Clock $clock)
+     {
+         $validated = $request->all();
+     
+         DB::transaction(function () use ($validated, $clock) {
+             $kioskId = $clock->eh_kiosk_id;
+             $employeeId = $clock->eh_employee_id;
+     
+             foreach ($validated['clocks'] as $index => $entry) {
+                 $start = new \DateTime($entry['clock_in']);
+                 $end = new \DateTime($entry['clock_out']);
+                 $hoursWorked = $start->diff($end)->h + ($start->diff($end)->i / 60);
+     
+                 $location = Location::where('external_id', $entry['location_id'])->pluck('eh_location_id')->first();
+     
+                 if ($index === 0) {
+                     $clockEntry = $clock;
+                 } else {
+                     // Check if a clock with the same time already exists
+                     $existingClock = Clock::where('eh_employee_id', $employeeId)
+                         ->where('clock_in', $entry['clock_in'])
+                         ->where('clock_out', $entry['clock_out'])
+                         ->first();
+     
+                     if ($existingClock) {
+                         continue; // Skip this entry if it already exists
+                     }
+     
+                     $clockEntry = new Clock();
+                 }
+     
+                 $clockEntry->clock_in = $entry['clock_in'];
+                 $clockEntry->clock_out = $entry['clock_out'];
+                 $clockEntry->hours_worked = round($hoursWorked, 2);
+                 $clockEntry->eh_location_id = $location;
+                 $clockEntry->status = $entry['status'] ?? 'Present';
+                 $clockEntry->eh_kiosk_id = $kioskId;
+                 $clockEntry->eh_employee_id = $employeeId;
+     
+                 $clockEntry->save();
+             }
+         });
+     
+         return redirect()->back()->with('success', 'Timesheet updated successfully.');
+     }
+     
+     
+     
     
-        $start = new \DateTime($validated['clock_in']);
-        $end = new \DateTime($validated['clock_out']);
-        $hoursWorked = $start->diff($end)->h + ($start->diff($end)->i / 60);
-       
-        $location = Location::where('external_id', $validated['location_id'])->pluck('eh_location_id')->first();
-
-        $clock->clock_in = $validated['clock_in'];
-        $clock->clock_out = $validated['clock_out'];
-        $clock->hours_worked = round($hoursWorked, 2);
-        $clock->eh_location_id = $location;
-        $clock->save();
-
-    
-        return redirect()->back()->with('success', 'Timesheet updated successfully.');
-    }
 
     /**
      * Remove the specified resource from storage.
