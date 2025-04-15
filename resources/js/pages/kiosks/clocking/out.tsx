@@ -89,9 +89,10 @@ export default function Clockout() {
         const defaultClockOutTime = dayjs(`${clockInTime.format('YYYY-MM-DD')}T${kiosk.default_end_time}`);
 
         if (now < defaultClockOutTime) {
-            const clockOut = now.minute(roundedMinutes % 60).second(0);
             const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
+            const clockOut = now.minute(roundedMinutes % 60).second(0);
             const clockOutTime = roundedMinutes === 60 ? clockOut.add(1, 'hour').minute(0) : clockOut;
+
             const duration = clockOutTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
             console.log('clock out is before default clock out time,Duration:', duration);
@@ -214,11 +215,11 @@ export default function Clockout() {
                     <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4">
                         {task.hours > 0 ? (
                             <>
-                                <div className="flex-3" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
+                                <div className="flex-4" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
                                     <Label>Level</Label>
                                     <TaskLevelDisplay task={task} />
                                 </div>
-                                <div className="flex-1 sm:flex-2">
+                                <div className="flex-1">
                                     <TaskHoursAndAllowances task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                 </div>
                             </>
@@ -241,13 +242,13 @@ export default function Clockout() {
                                         updateTaskAllocation={updateTaskAllocation}
                                     />
                                 </div>
-                                <div className="w-full flex-1 flex-col items-start sm:flex-2 sm:flex-row">
-                                    <div className="w-1/2">
+                                <div className="flex w-full flex-1 gap-4 sm:flex-2 sm:flex-row">
+                                    <div className="w-full sm:w-1/2">
                                         <Label>Select Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
 
-                                    <div className="flex w-1/2 flex-col items-start space-y-2 p-2">
+                                    <div className="flex w-full flex-col items-start space-y-2 sm:w-1/2">
                                         <Label className="font-semibold">Allowances</Label>
                                         <AllowanceToggle
                                             label="Insulation"
@@ -255,7 +256,6 @@ export default function Clockout() {
                                             checked={task.insulation_allowance}
                                             onToggle={toggleAllowance}
                                         />
-
                                         <AllowanceToggle label="SetOut" index={index} checked={task.setout_allowance} onToggle={toggleAllowance} />
                                     </div>
                                 </div>
