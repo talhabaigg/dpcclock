@@ -1,11 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
+import ActivitySelector from '../components/activitySelector';
+import AllowanceToggle from '../components/allowanceToggle';
+import HourSelector from '../components/hourSelector';
+import LevelSelector from '../components/levelSelector';
+import TaskHoursAndAllowances from '../components/TaskHoursAndAllowances';
+import TaskLevelDisplay from '../components/TaskLevelDisplay';
 import KioskLayout from '../partials/layout';
 
 interface Employee {
@@ -18,6 +23,7 @@ interface Kiosk {
     id: number;
     name: string;
     eh_kiosk_id: string;
+    default_end_time: string;
 }
 
 interface TaskAllocation {
@@ -36,12 +42,14 @@ export default function Clockout() {
         locations: any[];
         clockedIn: { clock_in: string };
         auth: {
-            isAdmin: boolean | Date | null; id: number; name: string; email: string 
-};
+            isAdmin: boolean | Date | null;
+            id: number;
+            name: string;
+            email: string;
+        };
     }>().props;
 
-
-    console.log(locations);
+    console.log(kiosk);
     const form = useForm<{
         kioskId: number;
         employeeId: number;
@@ -72,39 +80,29 @@ export default function Clockout() {
     ]);
     const [hoursAllocated, setHoursAllocated] = useState(0);
     const [laserAllowance, setLaserAllowance] = useState(false);
-    const [manualClockOut, setManualClockOut] = useState(false);
-    const [manualClockOutTime, setManualClockOutTime] = useState<Date | null>(null);
 
     useEffect(() => {
         if (!clockedIn.clock_in) return;
 
         const clockInTime = dayjs(clockedIn.clock_in);
         const now = dayjs();
+        const defaultClockOutTime = dayjs(`${clockInTime.format('YYYY-MM-DD')}T${kiosk.default_end_time}`);
 
-        if (now.diff(clockInTime, 'hours') > 8 && manualClockOutTime || auth.isAdmin) {
-            setManualClockOut(true);
-            
-            const duration = manualClockOutTime ? dayjs(manualClockOutTime).diff(clockInTime, 'hours', true) : 0;
-            console.log('Duration:', duration);
-            setHoursWorked(parseFloat(duration.toFixed(2)));
-        }
-        else {
-            setManualClockOut(false);
-            const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
+        if (now < defaultClockOutTime) {
             const clockOut = now.minute(roundedMinutes % 60).second(0);
+            const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
             const clockOutTime = roundedMinutes === 60 ? clockOut.add(1, 'hour').minute(0) : clockOut;
             const duration = clockOutTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
+            console.log('clock out is before default clock out time,Duration:', duration);
         }
-       
-    }, [clockedIn.clock_in, manualClockOutTime]);
 
-    const isManualClockOutNeeded = () => {
-        const clockInTime = dayjs(clockedIn.clock_in);
-        const now = dayjs();
-        const duration = now.diff(clockInTime, 'hours', true);
-        return duration > 10;
-    };
+        if (now > defaultClockOutTime) {
+            const duration = defaultClockOutTime.diff(clockInTime, 'hours', true);
+            console.log('clock out is after default clock out time,Duration::', duration);
+            setHoursWorked(parseFloat(duration.toFixed(2)));
+        }
+    }, [clockedIn.clock_in, kiosk.default_end_time]);
 
     useEffect(() => {
         const totalHours = taskAllocations.reduce((sum, task) => sum + task.hours, 0);
@@ -210,194 +208,59 @@ export default function Clockout() {
             <p className="text-center text-sm sm:text-base">
                 Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
-            {(isManualClockOutNeeded() || auth.isAdmin) && (
-    <div className="flex flex-col items-center">
-        <Label className="text-sm font-semibold">
-            Select Manual Clock Out Time
-        </Label>
-        <div className="flex space-x-2">
-            {/* Hour Dropdown */}
-            <select
-                value={manualClockOutTime ? dayjs(manualClockOutTime).hour().toString().padStart(2, '0') : ''}
-                onChange={(e) => {
-                    const hour = parseInt(e.target.value, 10);
-                    const current = manualClockOutTime
-                        ? dayjs(manualClockOutTime)
-                        : dayjs(clockedIn.clock_in);
-                    const updated = current.hour(hour).toDate();
-                    setManualClockOutTime(updated);
-                }}
-                className="border rounded p-2"
-            >
-                <option value="">HH</option>
-                {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i.toString().padStart(2, '0')}>
-                        {i.toString().padStart(2, '0')}
-                    </option>
-                ))}
-            </select>
-
-            {/* Minute Dropdown */}
-            <select
-                value={manualClockOutTime ? dayjs(manualClockOutTime).minute().toString().padStart(2, '0') : ''}
-                onChange={(e) => {
-                    let minute = parseInt(e.target.value, 10);
-                    if (minute === 60) minute = 0;
-
-                    const current = manualClockOutTime
-                        ? dayjs(manualClockOutTime)
-                        : dayjs(clockedIn.clock_in);
-                    const updated = current.minute(minute).toDate();
-                    setManualClockOutTime(updated);
-                }}
-                className="border rounded p-2"
-            >
-                <option value="">MM</option>
-                {[15, 30, 45, 60].map((m) => (
-                    <option key={m} value={m}>
-                        {m === 60 ? '00' : m.toString().padStart(2, '0')}
-                    </option>
-                ))}
-            </select>
-        </div>
-    </div>
-)}
 
             <form onSubmit={handleSubmit} className="w-full px-4">
                 {taskAllocations.map((task, index) => (
                     <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4">
                         {task.hours > 0 ? (
-                            <div className="flex-3" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
-                                <Label>Level</Label>
-                                <div className="rounded border p-1 text-black sm:w-full">
-                                    <Label className="dark:text-white">
-                                        {task.level.slice(7)}
-                                        <span className="dark:text-white">-{task.activity ? task.activity.slice(4) : 'No activity selected'}</span>
-                                    </Label>
+                            <>
+                                <div className="flex-3" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
+                                    <Label>Level</Label>
+                                    <TaskLevelDisplay task={task} />
                                 </div>
-                            </div>
+                                <div className="flex-1 sm:flex-2">
+                                    <TaskHoursAndAllowances task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
+                                </div>
+                            </>
                         ) : (
-                            <div className="flex-1">
-                                <Label>Select level</Label>
-                                <ul className="max-h-[200px] overflow-y-auto rounded border p-1">
-                                    {Object.keys(groupedLocations).map((level) => (
-                                        <li
-                                            key={level}
-                                            className={`cursor-pointer rounded-none border-b p-2 ${task.level === level ? 'bg-gray-200 text-black' : ''}`}
-                                            onClick={() => updateTaskAllocation(index, 'level', level)}
-                                        >
-                                            {level.slice(7)}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {task.hours > 0 ? null : (
-                            <div className="flex-1">
-                                <Label>Select Activity</Label>
-                                <ul className="max-h-[200px] overflow-y-auto rounded border">
-                                    {!task.level && <li className="h-50 p-2">Select a level to see activities</li>}
-                                    {task.level &&
-                                        groupedLocations[task.level].map((activity) => (
-                                            <li
-                                                key={activity}
-                                                className={`cursor-pointer rounded-none border-b p-2 ${task.activity === activity ? 'bg-gray-200 text-black' : ''}`}
-                                                onClick={() => updateTaskAllocation(index, 'activity', activity)}
-                                            >
-                                                {activity.slice(4)}
-                                            </li>
-                                        ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        <div className="flex-1 sm:flex-2">
-                            {task.hours > 0 ? (
-                                <div className="flex flex-row items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label>Hours</Label>
-                                        <Input
-                                            type="number"
-                                            value={task.hours}
-                                            onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                                            className="w-3/4 sm:w-full"
-                                            min="0"
-                                            step="0.5"
-                                        />
-                                    </div>
-                                    <div>
-                                        {(task.insulation_allowance || task.setout_allowance) && <Label>Allowances</Label>}
-
-                                        <div className="flex flex-row items-center space-x-2">
-                                            {(task.insulation_allowance || task.setout_allowance) && (
-                                                <>
-                                                    {task.insulation_allowance && (
-                                                        <>
-                                                            <span role="img" aria-label="checked" className="text-green-500">
-                                                                ✔️
-                                                            </span>
-                                                            <Label>Insulation</Label>
-                                                        </>
-                                                    )}
-
-                                                    {task.setout_allowance && (
-                                                        <>
-                                                            <span role="img" aria-label="checked" className="text-green-500">
-                                                                ✔️
-                                                            </span>
-                                                            <Label>SetOut</Label>
-                                                        </>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                            <>
+                                <div className="flex-1">
+                                    <Label>Select level</Label>
+                                    <LevelSelector
+                                        levels={Object.keys(groupedLocations)}
+                                        selectedLevel={task.level}
+                                        onSelect={(level: string | number) => updateTaskAllocation(index, 'level', level)}
+                                    />
                                 </div>
-                            ) : (
-                                <div className="flex w-full flex-row flex-wrap items-start">
+                                <div className="flex-1">
+                                    <Label>Select Activity</Label>
+                                    <ActivitySelector
+                                        task={task}
+                                        groupedLocations={groupedLocations}
+                                        index={index}
+                                        updateTaskAllocation={updateTaskAllocation}
+                                    />
+                                </div>
+                                <div className="w-full flex-1 flex-col items-start sm:flex-2 sm:flex-row">
                                     <div className="w-1/2">
                                         <Label>Select Hours</Label>
-                                        <ul className="max-h-[200px] overflow-y-auto rounded border p-2 sm:w-full">
-                                            {[...Array(20)].map((_, i) => {
-                                                const hourValue = (i + 1) * 0.5;
-                                                return (
-                                                    <li
-                                                        key={hourValue}
-                                                        className={`cursor-pointer rounded-none border-b p-2 text-center ${task.hours === hourValue ? 'bg-gray-200' : ''}`}
-                                                        onClick={() => updateTaskAllocation(index, 'hours', hourValue)}
-                                                    >
-                                                        {hourValue}
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
+                                        <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
 
                                     <div className="flex w-1/2 flex-col items-start space-y-2 p-2">
                                         <Label className="font-semibold">Allowances</Label>
-                                        <div className="flex flex-row items-center space-x-2">
-                                            <Checkbox
-                                                id={`insulation-${index}`}
-                                                className="h-8 w-8"
-                                                checked={task.insulation_allowance}
-                                                onCheckedChange={() => toggleAllowance(index, 'insulation')}
-                                            />
-                                            <span className="text-sm">Insulation</span>
-                                        </div>
-                                        <div className="flex flex-row items-center space-x-2">
-                                            <Checkbox
-                                                id={`setout-${index}`}
-                                                className="h-8 w-8"
-                                                checked={task.setout_allowance}
-                                                onCheckedChange={() => toggleAllowance(index, 'setout')}
-                                            />
-                                            <span className="text-sm">SetOut</span>
-                                        </div>
+                                        <AllowanceToggle
+                                            label="Insulation"
+                                            index={index}
+                                            checked={task.insulation_allowance}
+                                            onToggle={toggleAllowance}
+                                        />
+
+                                        <AllowanceToggle label="SetOut" index={index} checked={task.setout_allowance} onToggle={toggleAllowance} />
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                            </>
+                        )}
                     </div>
                 ))}
 

@@ -1,23 +1,20 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'; // Optional for toggle icon
 import { useEffect, useRef, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
+import TimesheetTable from './components/nestedTable';
 import { SearchEmployee } from './components/searchEmployee';
 import TimesheetSummaryCard from './components/summaryCard';
-import TimesheetTable from './components/nestedTable';
+
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Timesheet Management', href: '/clocks' }];
 
 export default function TimesheetManagement() {
     const { selectedWeekEnding, employeeName, selectedEmployeeId, timesheets } = usePage<{
         props: { selectedWeekEnding: string; employeeName: String; selectedEmployeeId: string; timesheets: any[] };
     }>().props;
- 
+
     const parseWeekEndingDate = (selectedWeekEnding: string): Date => {
         const parts = selectedWeekEnding.split('-');
         if (parts.length === 3) {
@@ -79,7 +76,6 @@ export default function TimesheetManagement() {
             prevWeekEndingDate.current = weekEndingDate;
         }
     }, [employeeId, weekEndingDate]); // Runs only when employeeId or weekEndingDate change
-    
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -101,12 +97,7 @@ export default function TimesheetManagement() {
                         <div>
                             <TimesheetSummaryCard name={employeeName} timesheet_qty={timesheets.length} />
                         </div>
-                        <TimesheetTable
-                                timesheets={timesheets}
-                                expandedRows={expandedRows}
-                                toggleRow={toggleRow}
-                            />
-                       
+                        <TimesheetTable timesheets={timesheets} expandedRows={expandedRows} toggleRow={toggleRow} />
                     </>
                 ) : (
                     <div>

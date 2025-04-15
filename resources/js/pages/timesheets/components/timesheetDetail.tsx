@@ -1,7 +1,9 @@
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Check } from 'lucide-react';
 
 export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
+    console.log(entries);
     return (
         <div className="flex flex-col gap-2 p-2">
             <Table className="border border-gray-200">
@@ -12,6 +14,9 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
                         <TableHead className="border">End Time</TableHead>
                         <TableHead className="border">Level/Activity</TableHead>
                         <TableHead className="border">Hours</TableHead>
+                        <TableHead className="border">Insulation</TableHead>
+                        <TableHead className="border">Setout</TableHead>
+                        <TableHead className="border">Laser</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -39,6 +44,9 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
                                 </TableCell>
                                 <TableCell className="border">{entry.location?.external_id}</TableCell>
                                 <TableCell className="border">{entry.hours_worked}</TableCell>
+                                <TableCell className="border">{entry.insulation_allowance ? <Check /> : null}</TableCell>
+                                <TableCell className="border">{entry.setout_allowance ? <Check /> : null}</TableCell>
+                                <TableCell className="border">{entry.laser_allowance ? <Check /> : null}</TableCell>
                             </>
                         </TableRow>
                     ))}

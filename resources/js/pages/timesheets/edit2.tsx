@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -52,7 +53,7 @@ export default function EditTimesheet() {
 
     const splitTime = (datetime: string | null) => {
         if (!datetime) {
-            return { hour: '08', minute: '00' };
+            return { hour: '', minute: '' };
         }
         const timePart = datetime.split(' ')[1] ?? '08:00:00';
         const [hour, minute] = timePart.split(':');
@@ -186,6 +187,15 @@ export default function EditTimesheet() {
             <Head title="Edit Timesheet" />
             {flash.success && <div className="m-2 rounded bg-green-100 p-4 text-green-800">{flash.success}</div>}
             {flash.error && <div className="mb-4 rounded bg-red-100 p-4 text-red-800">{flash.error}</div>}
+            {form.errors && (
+                <>
+                    {Object.values(form.errors).map((error, index) => (
+                        <Label className="p-1 font-bold text-red-500" key={index}>
+                            Please check - {error}
+                        </Label>
+                    ))}
+                </>
+            )}
 
             <Table>
                 <TableHeader>
