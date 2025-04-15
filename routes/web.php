@@ -46,7 +46,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/retrieve-kiosk-token', [ClockController::class, 'retrieveKioskToken'])->name('clocks.retrieveKioskToken');
 
         Route::get('/timesheets', [ClockController::class, 'viewTimesheet'])->name('timesheets.view');
-       
+        Route::get('/timesheets/edit', [ClockController::class, 'editTimesheet'])->name('clock.edit.summary');
+        Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
+
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
 

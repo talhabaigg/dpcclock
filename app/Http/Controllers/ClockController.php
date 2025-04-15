@@ -108,72 +108,185 @@ class ClockController extends Controller
     {
         $locations = Location::where('eh_parent_id', $clock->kiosk->location->eh_location_id)
             ->get();
-
-            // dd($locations);
         $clock = Clock::with(['kiosk.location'])
             ->where('id', $clock->id)
             ->first();
-     
+
         return Inertia::render('timesheets/edit', [
             'clock' => $clock,
             'locations' => $locations,
         ]);
     }
 
+    public function editTimesheet(Request $request)
+    {
+        $date = $request->query('date', Carbon::now('Australia/Brisbane')->format('d/m/Y'));
+        $employeeId = $request->query('employeeId');
+
+        $parsedDate = Carbon::createFromFormat('d/m/Y', $date, 'Australia/Brisbane')->format('Y-m-d');
+
+        $clocks = Clock::with(['kiosk.location', 'location'])
+            ->where('eh_employee_id', $employeeId)
+            ->whereDate('clock_in', $parsedDate)
+            ->get();
+        $kiosks = Kiosk::select('eh_kiosk_id', 'name')->get();
+
+
+        foreach ($clocks as $clock) {
+            $kiosk = $clock->kiosk;
+            $parent_location = $kiosk?->location->eh_location_id;
+
+            if ($parent_location) {
+                $locations = Location::where('eh_parent_id', $parent_location)->pluck('external_id')->toArray();
+                $clock->locations = $locations ?? $kiosk?->location->external_id;
+            }
+        }
+        // dd($clocks);
+        return Inertia::render('timesheets/edit2', [
+            'clocks' => $clocks,
+            'locations' => $locations ?? null,
+            'kiosks' => $kiosks,
+            'date' => $date,
+        ]);
+
+
+    }
+    public function saveTimesheets(Request $request)
+    {
+        $validated = $request->validate([
+            'clocks' => 'required|array',
+            'date' => 'required',
+        ]);
+
+        // Extract clocks array and the date from the request
+        $clocksData = $validated['clocks'];
+
+        $date = $validated['date'];
+
+        // Format the date as needed, here assuming it's 'Y-m-d'
+        $formattedDate = Carbon::createFromFormat('d/m/Y', $date)->format('Y-m-d');
+        // dd($formattedDate);
+        // Get existing clocks for the given date (matching clock_in date)
+        $existingClocks = Clock::whereDate('clock_in', $formattedDate)->get();
+
+
+        // To track clock ids that were processed
+        $processedClockIds = [];
+        $eh_employee_id = null;
+        // Loop through incoming clocks data
+        foreach ($clocksData as $clockData) {
+            // Check if this clock has an existing id
+            if (isset($clockData['id'])) {
+                // Update the existing clock by id
+                $clock = Clock::find($clockData['id']);
+
+                // If found, use its employee ID (only once)
+                if (!$eh_employee_id && $clock) {
+                    $eh_employee_id = $clock->eh_employee_id;
+
+
+                }
+
+                if ($clock) {
+
+                    $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
+                    $clock->update([
+                        'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
+                        'clock_out' => $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00',
+                        'eh_location_id' => $eh_location_id ?? null,
+                        'eh_kiosk_id' => isset($clockData['eh_kiosk_id']) ? (int) $clockData['eh_kiosk_id'] : null,
+                        'hours_worked' => $clockData['hoursWorked'] ?? null,
+                        'insulation_allowance' => $clockData['insulation_allowance'] ?? false,
+                        'setout_allowance' => $clockData['setout_allowance'] ?? false,
+                        'laser_allowance' => $clockData['laser_allowance'] ?? false,
+                    ]);
+                } else {
+                    // If no ID, treat as a new clock (e.g., UUID)
+                    $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
+
+                    $clock2 = Clock::create([
+                        'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
+                        'clock_out' => $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00',
+                        'eh_employee_id' => $eh_employee_id ?? null,
+                        'location' => $clockData['location'] ?? null,
+                        'eh_kiosk_id' => $clockData['eh_kiosk_id'] ?? null,
+                        'hours_worked' => $clockData['hoursWorked'] ?? null,
+                        'eh_location_id' => isset($eh_location_id) ? (int) $eh_location_id : null,
+                        'insulation_allowance' => $clockData['insulation_allowance'] ?? false,
+                        'setout_allowance' => $clockData['setout_allowance'] ?? false,
+                        'laser_allowance' => $clockData['laser_allowance'] ?? false,
+                    ]);
+
+                }
+            }
+
+            // Track the clock ID as processed
+            $processedClockIds[] = $clockData['id'] ?? null;
+        }
+
+        // // Now delete any clocks that were not part of the request (i.e., no longer present)
+        // Clock::whereDate('clock_in', $formattedDate)
+        //     ->whereNotIn('id', $processedClockIds)
+        //     ->delete();
+
+        return redirect()->back()->with('success', 'Timesheet updated successfully!');
+    }
+
+
     /**
      * Update the specified resource in storage.
      */
 
 
-     public function update(Request $request, Clock $clock)
-     {
-         $validated = $request->all();
-     
-         DB::transaction(function () use ($validated, $clock) {
-             $kioskId = $clock->eh_kiosk_id;
-             $employeeId = $clock->eh_employee_id;
-     
-             foreach ($validated['clocks'] as $index => $entry) {
-                 $start = new \DateTime($entry['clock_in']);
-                 $end = new \DateTime($entry['clock_out']);
-                 $hoursWorked = $start->diff($end)->h + ($start->diff($end)->i / 60);
-     
-                 $location = Location::where('external_id', $entry['location_id'])->pluck('eh_location_id')->first();
-     
-                 if ($index === 0) {
-                     $clockEntry = $clock;
-                 } else {
-                     // Check if a clock with the same time already exists
-                     $existingClock = Clock::where('eh_employee_id', $employeeId)
-                         ->where('clock_in', $entry['clock_in'])
-                         ->where('clock_out', $entry['clock_out'])
-                         ->first();
-     
-                     if ($existingClock) {
-                         continue; // Skip this entry if it already exists
-                     }
-     
-                     $clockEntry = new Clock();
-                 }
-     
-                 $clockEntry->clock_in = $entry['clock_in'];
-                 $clockEntry->clock_out = $entry['clock_out'];
-                 $clockEntry->hours_worked = round($hoursWorked, 2);
-                 $clockEntry->eh_location_id = $location;
-                 $clockEntry->status = $entry['status'] ?? 'Present';
-                 $clockEntry->eh_kiosk_id = $kioskId;
-                 $clockEntry->eh_employee_id = $employeeId;
-     
-                 $clockEntry->save();
-             }
-         });
-     
-         return redirect()->back()->with('success', 'Timesheet updated successfully.');
-     }
-     
-     
-     
-    
+    public function update(Request $request, Clock $clock)
+    {
+        $validated = $request->all();
+
+        DB::transaction(function () use ($validated, $clock) {
+            $kioskId = $clock->eh_kiosk_id;
+            $employeeId = $clock->eh_employee_id;
+
+            foreach ($validated['clocks'] as $index => $entry) {
+                $start = new \DateTime($entry['clock_in']);
+                $end = new \DateTime($entry['clock_out']);
+                $hoursWorked = $start->diff($end)->h + ($start->diff($end)->i / 60);
+
+                $location = Location::where('external_id', $entry['location_id'])->pluck('eh_location_id')->first();
+
+                if ($index === 0) {
+                    $clockEntry = $clock;
+                } else {
+                    // Check if a clock with the same time already exists
+                    $existingClock = Clock::where('eh_employee_id', $employeeId)
+                        ->where('clock_in', $entry['clock_in'])
+                        ->where('clock_out', $entry['clock_out'])
+                        ->first();
+
+                    if ($existingClock) {
+                        continue; // Skip this entry if it already exists
+                    }
+
+                    $clockEntry = new Clock();
+                }
+
+                $clockEntry->clock_in = $entry['clock_in'];
+                $clockEntry->clock_out = $entry['clock_out'];
+                $clockEntry->hours_worked = round($hoursWorked, 2);
+                $clockEntry->eh_location_id = $location;
+                $clockEntry->status = $entry['status'] ?? 'Present';
+                $clockEntry->eh_kiosk_id = $kioskId;
+                $clockEntry->eh_employee_id = $employeeId;
+
+                $clockEntry->save();
+            }
+        });
+
+        return redirect()->back()->with('success', 'Timesheet updated successfully.');
+    }
+
+
+
+
 
     /**
      * Remove the specified resource from storage.
@@ -376,7 +489,7 @@ class ClockController extends Controller
             $this->mapEmployee($rowData);
             $this->mapCostCode($rowData);
             $this->mapTimes($rowData);
-            $excludeCostCodes = ['2471109', '2516504', '2527509']; //the excluded cost codes are leaves and need to skip the default shift conditions
+            $excludeCostCodes = ['2471109', '2516504', '2471108']; //the excluded cost codes are leaves and need to skip the default shift conditions
             if (!in_array($rowData['COST CODE'], $excludeCostCodes)) {
                 $this->mapShiftConditions($rowData);
             }
@@ -462,6 +575,7 @@ class ClockController extends Controller
             '06-23-0127' => 'ANU00',
             '06-24-0134' => 'COA00',
             '06-99-TAFE' => 'zzTAFE',
+            '06-21-0113' => 'TVH00',
         ];
         $locationExternalId = $locations[$rowData['JOB NUMBER']] ?? null;
         if (!$locationExternalId) {

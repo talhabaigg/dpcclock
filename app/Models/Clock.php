@@ -9,6 +9,7 @@ class Clock extends Model
     protected $fillable = [
         'eh_kiosk_id',
         'eh_employee_id',
+        'eh_location_id',
         'clock_in',
         'clock_out',
         'hours_worked',
@@ -20,7 +21,7 @@ class Clock extends Model
 
     public function employee()
     {
-        return $this->belongsTo(Employee::class,  'eh_employee_id', 'eh_employee_id');
+        return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id');
     }
 
     public function kiosk()

@@ -1,14 +1,5 @@
 // components/TimesheetTable.tsx
-import { Label } from '@/components/ui/label';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useMemo } from 'react';
 import TimesheetDetailTable from './timesheetDetail';
 import TimesheetSummaryRow from './timesheetSummary';
@@ -29,13 +20,11 @@ export default function TimesheetTable({
             return acc;
         }, {});
     }, [timesheets]);
-
+    console.log(timesheets);
     const merged = useMemo(() => {
         return Object.entries(groupedTimesheets).map(([date, entries]) => {
             const startTimes = entries.map((ts) => new Date(ts.clock_in));
-            const endTimes = entries
-                .filter((ts) => ts.clock_out !== null)
-                .map((ts) => new Date(ts.clock_out));
+            const endTimes = entries.filter((ts) => ts.clock_out !== null).map((ts) => new Date(ts.clock_out));
 
             const totalHours = entries.reduce((sum, ts) => {
                 const hasClockOut = ts.clock_out !== null;
@@ -51,6 +40,7 @@ export default function TimesheetTable({
                 clock_in: earliestStart,
                 clock_out: latestEnd,
                 hours_worked: totalHours.toFixed(2),
+                eh_employee_id: entries[0].eh_employee_id,
                 entries,
             };
         });
@@ -64,6 +54,7 @@ export default function TimesheetTable({
                     <TableHead className="border border-gray-200">Start Time</TableHead>
                     <TableHead className="border border-gray-200">End Time</TableHead>
                     <TableHead className="border border-gray-200">Units</TableHead>
+                    <TableHead className="border border-gray-200">Action</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -73,12 +64,7 @@ export default function TimesheetTable({
 
                     return (
                         <>
-                            <TimesheetSummaryRow
-                                timesheet={timesheet}
-                                dateKey={dateKey}
-                                isExpanded={isExpanded}
-                                toggleRow={toggleRow}
-                        />
+                            <TimesheetSummaryRow timesheet={timesheet} dateKey={dateKey} isExpanded={isExpanded} toggleRow={toggleRow} />
 
                             {isExpanded && (
                                 <TableRow>
