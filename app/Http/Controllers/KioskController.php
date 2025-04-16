@@ -16,12 +16,19 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Redirect;
+use App\Services\KioskService;
 
 class KioskController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
+    protected KioskService $kioskService;
+
+    public function __construct(KioskService $kioskService)
+    {
+        $this->kioskService = $kioskService;
+    }
     public function index()
     {
         $kiosks = Kiosk::with('location')->get();
@@ -49,45 +56,29 @@ class KioskController extends Controller
     /**
      * Display the specified resource.
      */
-   public function show(Kiosk $kiosk)
-{
-    // Load employees related to the kiosk
-    $kiosk->load('employees');
-
-    // Append clocked_in status to each employee based on the kiosk
-    $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
-        $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-            ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
-            ->whereNull('clock_out')
-            ->whereDate('clock_in', today()); // Only consider clock-ins from today
-
-        // Log the exact query for debugging
-        Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
-            'query' => $clockedInQuery->toSql(),
-            'bindings' => $clockedInQuery->getBindings()
+    public function show(Kiosk $kiosk)
+    {
+        $kiosk->load('employees');
+        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+        // Check employees clocked in state and bind it to their object as bool using the kiosk service class
+        return Inertia::render('kiosks/show', [
+            'kiosk' => $kiosk,
+            'employees' => $employees, // Use modified employee list with clocked_in
         ]);
+    }
 
-        $employee->clocked_in = $clockedInQuery->exists();
-        return $employee;
-    });
-
-    return Inertia::render('kiosks/show', [
-        'kiosk' => $kiosk,
-        'employees' => $employees, // Use modified employee list with clocked_in
-    ]);
-}
 
 
     // Helper function to check if the token is valid in the cookie
-    private function isValidKioskToken()
-    {
-        $token = request()->cookie('kiosk_token_validated');  // Get the token from the cookie
+    // private function isValidKioskToken()
+    // {
+    //     $token = request()->cookie('kiosk_token_validated');  // Get the token from the cookie
 
-        // Retrieve the cached token for the specific kiosk
-        $cachedToken = cache()->get("kiosk_token");
+    //     // Retrieve the cached token for the specific kiosk
+    //     $cachedToken = cache()->get("kiosk_token");
 
-        return $token === $cachedToken;  // Compare cookie token with cached token
-    }
+    //     return $token === $cachedToken;  // Compare cookie token with cached token
+    // }
 
 
     /**

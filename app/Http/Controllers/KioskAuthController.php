@@ -15,18 +15,26 @@ use Illuminate\Support\Facades\Http;
 use App\Models\Location;
 use App\Models\User;
 use Illuminate\Support\Facades\Cookie;
+use App\Services\KioskService;
 
 class KioskAuthController extends Controller
 {
+    protected KioskService $kioskService;
+
+    public function __construct(KioskService $kioskService)
+    {
+        $this->kioskService = $kioskService;
+    }
     public function showPinPage($kioskId, $employeeId): Response
     {
-        $user = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
+        $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
-        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
+        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+
         return Inertia::render('kiosks/auth/pin', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
-            'employee' => $user,
+            'employee' => $employee,
             'kiosk' => $kiosk,
             'employees' => $employees,
         ]);
@@ -38,20 +46,20 @@ class KioskAuthController extends Controller
         $employee = Employee::findOrFail($employeeId);
         $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
         $pin = $request->input('pin');
-  
+
         // $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
         // if (!$ehPinCheck) {
         //         return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         //     }
         // }
 
-        $localPinCheck =  $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
         if (!$localPinCheck) {
             return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         }
-        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
-        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);      
-       
+        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
+
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
             return Inertia::render('kiosks/clocking/out', [
@@ -91,14 +99,14 @@ class KioskAuthController extends Controller
     {
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         // Load emloyees from Kiosk and check if they are clocked in using the method below and append clocked in status to each employee as true or false
-        $employees =  $kiosk->employees->map(function ($employee) use ($kioskId) {
+        $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
                 ->where('eh_kiosk_id', $kioskId) // Ensure filtering by kiosk ID
                 ->whereDate('clock_in', today()) // Only consider clock-ins from today
                 ->whereNull('clock_out');
 
             $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;       
+            return $employee;
         });
         return $employees;
     }
@@ -110,12 +118,12 @@ class KioskAuthController extends Controller
             ->whereDate('clock_in', today())  // Ensure we only consider today's date
             ->whereNull('clock_out')->first();
 
-        if($clockedIn) {
-           return $clockedIn;
+        if ($clockedIn) {
+            return $clockedIn;
         } else {
             return false; // no ongoing timesheet
         }
-        
+
     }
 
     private function verifyKioskPin($kioskId, $employeeId, $pin)
