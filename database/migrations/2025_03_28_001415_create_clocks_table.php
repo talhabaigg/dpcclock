@@ -13,7 +13,7 @@ return new class extends Migration {
         Schema::create('clocks', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('eh_kiosk_id')->index();
-            $table->unsignedBigInteger('eh_employee_id')->index();
+            $table->string('eh_employee_id')->nullable()->index();
             $table->timestamp('clock_in')->nullable();
             $table->timestamp('clock_out')->nullable();
             $table->string('eh_location_id')->nullable(); // Optional

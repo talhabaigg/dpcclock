@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__ . '/../routes/api.php',
         apiPrefix: 'api',
     )
+    ->withBroadcasting(
+
+        channels: __DIR__."/../routes/channels.php",
+    )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance']);
         $middleware->alias([
