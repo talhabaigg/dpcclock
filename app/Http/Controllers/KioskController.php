@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\EmployeeClockedEvent;
 use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Clock;
@@ -58,8 +59,7 @@ class KioskController extends Controller
     $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
         $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
             ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
-            ->whereNull('clock_out')
-            ->whereDate('clock_in', today()); // Only consider clock-ins from today
+            ->whereNull('clock_out'); // Only consider clock-ins from today
 
         // Log the exact query for debugging
         Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
@@ -70,6 +70,8 @@ class KioskController extends Controller
         $employee->clocked_in = $clockedInQuery->exists();
         return $employee;
     });
+
+    broadcast(new EmployeeClockedEvent($kiosk->id, $employees))->toOthers();
 
     return Inertia::render('kiosks/show', [
         'kiosk' => $kiosk,

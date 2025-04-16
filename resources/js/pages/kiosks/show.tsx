@@ -17,21 +17,36 @@ interface Kiosk {
 }
 
 export default function Kiosk() {
-    const { employees, flash, kiosk } = usePage<{
+    const { employees: initialEmployees, flash, kiosk } = usePage<{
         employees: Employee[];
         flash: { success?: string; error?: string };
         kiosk: Kiosk;
     }>().props;
 
+    const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
     const [flashMessage, setFlashMessage] = useState(flash);
+
     useEffect(() => {
-        if (flash.success || flash.error) {
-            const timer = setTimeout(() => {
+        const channel = window.Echo.private(`kiosk.${kiosk.id}`);
+    
+        channel.listen('.employee.clocked', (data: any) => {
+            const clockedEmployees: Employee[] = data.employees;
+    
+            setEmployees(clockedEmployees);
+        });
+    
+        const timer =
+            (flash.success || flash.error) &&
+            setTimeout(() => {
                 setFlashMessage({});
             }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [flash]);
+    
+        // ✅ Clean up Echo and timer
+        return () => {
+            window.Echo.leave(`private-kiosk.${kiosk.id}`);
+            if (timer) clearTimeout(timer);
+        };
+    }, [flash, kiosk.id]);    
 
     return (
         <KioskLayout employees={employees} kiosk={kiosk}>
