@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\EmployeeClockedEvent;
 use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Clock;
@@ -58,15 +59,32 @@ class KioskController extends Controller
      */
     public function show(Kiosk $kiosk)
     {
+        // Load employees related to the kiosk
         $kiosk->load('employees');
-        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
-        // Check employees clocked in state and bind it to their object as bool using the kiosk service class
+
+        // Append clocked_in status to each employee based on the kiosk
+        $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
+            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
+                ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
+                ->whereNull('clock_out'); // Only consider clock-ins from today
+
+            // Log the exact query for debugging
+            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
+                'query' => $clockedInQuery->toSql(),
+                'bindings' => $clockedInQuery->getBindings()
+            ]);
+
+            $employee->clocked_in = $clockedInQuery->exists();
+            return $employee;
+        });
+
+        broadcast(new EmployeeClockedEvent($kiosk->id, $employees))->toOthers();
+
         return Inertia::render('kiosks/show', [
             'kiosk' => $kiosk,
             'employees' => $employees, // Use modified employee list with clocked_in
         ]);
     }
-
 
 
     // Helper function to check if the token is valid in the cookie
