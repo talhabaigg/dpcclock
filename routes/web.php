@@ -9,6 +9,8 @@ use App\Models\Employee;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\WorktypeController;
+use App\Http\Controllers\PurchasingController;
+
 
 
 
@@ -50,6 +52,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
 
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
+
+        Route::get('/purchasing', [PurchasingController::class, 'create'])->name('purchasing.create');
+     
 
 
     });
