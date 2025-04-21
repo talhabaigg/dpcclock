@@ -66,6 +66,7 @@ class KioskController extends Controller
         $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
                 ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
+                ->whereDate('clock_in', now()->toDateString()) // Check if clock-in date is today
                 ->whereNull('clock_out'); // Only consider clock-ins from today
 
             // Log the exact query for debugging
