@@ -10,6 +10,7 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\MaterialItemController;
 
 
 
@@ -54,7 +55,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
         Route::get('/purchasing', [PurchasingController::class, 'create'])->name('purchasing.create');
-     
+        Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
+        Route::get('/material-items/{id}', [MaterialItemController::class, 'getMaterialItemById']);
+
+
 
 
     });

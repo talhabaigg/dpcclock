@@ -1,46 +1,58 @@
 'use client';
 
-import { Check, ChevronsUpDown } from 'lucide-react';
-import * as React from 'react';
-
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-
-const items = [
-    { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
-    { value: '10503000', label: '10503000', description: '76mm Flexible Track 3000', unitcost: 20, qty: 1 },
-];
+import axios from 'axios';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export function ComboboxDemo({ value, onValueChange }) {
-    const [open, setOpen] = React.useState(true);
+    const [open, setOpen] = useState(true);
+    const [search, setSearch] = useState('');
+    const [items, setItems] = useState([]);
 
-    const [search, setSearch] = React.useState('');
+    useEffect(() => {
+        const fetchItems = async () => {
+            const response = await axios.get('/material-items', {
+                params: { search },
+            });
+            const data = response.data;
 
-    // 🔍 Match search text to label, description, or item code (value)
-    const filteredItems = items.filter((item) => (item.value + item.label + item.description).toLowerCase().includes(search.toLowerCase()));
+            // Normalize for frontend
+            const mapped = data.map((item) => ({
+                value: item.id.toString(),
+                label: item.code,
+                description: item.description,
+            }));
+
+            setItems(mapped);
+        };
+
+        fetchItems();
+    }, [search]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-[250px] justify-between">
-                    {value ? items.find((item) => item.value === value)?.label : 'Search item...'}
+                <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between">
+                    {value && items.find((item) => item.value === value) ? items.find((item) => item.value === value)?.label : 'Search item...'}
                     <ChevronsUpDown className="opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[250px] p-0">
+            <PopoverContent className="p-0" style={{ width: 'var(--radix-popper-anchor-width)' }}>
                 <Command>
                     <CommandInput placeholder="Search item..." className="h-9" value={search} onValueChange={setSearch} />
                     <CommandList>
                         <CommandEmpty>No items found.</CommandEmpty>
                         <CommandGroup>
-                            {filteredItems.map((item) => (
+                            {items.map((item) => (
                                 <CommandItem
                                     key={item.value}
-                                    value={`${item.value} ${item.label} ${item.description}`} // 🔥 includes all fields
-                                    onSelect={(currentValue) => {
-                                        onValueChange(item.value); // store actual value
+                                    value={`${item.value} ${item.label} ${item.description}`}
+                                    onSelect={() => {
+                                        onValueChange(item.value);
                                         setSearch('');
                                         setOpen(false);
                                     }}

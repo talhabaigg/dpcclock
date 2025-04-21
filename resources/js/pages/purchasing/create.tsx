@@ -31,12 +31,28 @@ export default function Create() {
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
-            onCellValueChanged: (e) => {
-                console.log('Selected item object:', e.data.itemcode);
-                const selectedItem = items.find((item) => item.value === e.data.itemcode);
-                if (selectedItem) {
-                    e.data.description = selectedItem.description;
-                    e.data.unitcost = selectedItem.unitcost;
+            cellEditorParams: {
+                items, // 👈 Pass items here
+            },
+            onCellValueChanged: async (e) => {
+                const itemCode = e.data.itemcode;
+
+                try {
+                    const res = await fetch(`/material-items/${itemCode}`);
+                    if (!res.ok) throw new Error('Failed to fetch item');
+                    const item = await res.json();
+
+                    // Update the row with full item data
+                    e.data.itemcode = item.code; // assuming code is a string
+                    e.data.description = item.description;
+                    e.data.unitcost = item.unit_cost; // assuming unitcost is numeric
+
+                    // Update rowData
+                    const updated = [...rowData];
+                    updated[e.rowIndex] = e.data;
+                    setRowData(updated);
+                } catch (err) {
+                    console.error('Error fetching item:', err);
                 }
             },
         },
@@ -100,13 +116,15 @@ export default function Create() {
         <AppLayout>
             <div className="px-4">
                 <Label className="p-2 text-xl font-bold">Create Purchase Order</Label>
+                <div className="flex flex-col gap-2">
+                    <Label className="text-sm">Supplier</Label>
+                </div>
                 <div className="ag-theme-alpine" style={{ height: 300 }}>
                     <AgGridReact
                         rowData={rowData}
                         columnDefs={columnDefs}
                         defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true }}
                         rowModelType="clientSide"
-                        rowSelection="single" // Allow single row selection
                         onGridReady={onGridReady} // Initialize gridApi
                         onCellValueChanged={(e) => {
                             const updated = [...rowData];
@@ -146,10 +164,10 @@ export default function Create() {
                 </div>
                 {/* Add Button */}
                 <div className="mt-4">
-                    <Button onClick={addNewRow}>Add New Row</Button>
+                    <Button onClick={addNewRow}>Add</Button>
                     {/* Delete Button */}
                     <Button onClick={deleteSelectedRow} className="ml-2">
-                        Delete Selected Row
+                        Delete
                     </Button>
                 </div>
             </div>
