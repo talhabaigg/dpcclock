@@ -76,6 +76,7 @@ class EmployeeController extends Controller
             ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
 
             $employeeData = $response->json();
+
             $workTypeString = $employeeData['workTypes'] ?? ''; // May contain pipe-separated values
 
             // Skip if empty
@@ -125,6 +126,40 @@ class EmployeeController extends Controller
         }
 
         return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
+    }
+
+    public function syncSingleEmployeeWorktype($employeeId)
+    {
+        // dd($employeeId);
+        $apiKey = env('PAYROLL_API_KEY');
+        $missingWorkTypes = []; // Array to track missing work types
+        $allowedCodes = ['01-01', '03-01', '05-01', '07-01', '11-01'];
+        $employee = Employee::findOrFail($employeeId);
+        // dd($employee);
+        $employeeId = $employee->eh_employee_id;
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
+
+        $employeeData = $response->json();
+        $workTypeString = $employeeData['workTypes'] ?? '';
+        $workTypes = explode('|', $workTypeString);
+
+        $filteredWorkType = collect($workTypes)->first(function ($wt) use ($allowedCodes) {
+            foreach ($allowedCodes as $code) {
+                if (Str::contains($wt, $code)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        $workTypeId = WorkType::where('name', trim($filteredWorkType))->pluck('id')->first();
+
+        $employee->worktypes()->sync($workTypeId);
+        $employee->load('workTypes'); // Reload relationships
+
+
     }
 
     public function retrieveEmployees()

@@ -86,6 +86,13 @@ export default function EmployeesList() {
                                           ))
                                         : 'No work types available'}
                                 </TableCell>
+                                <TableCell>
+                                    <Link href={`/employee/${employee.id}/worktypes/sync`}>
+                                        <Button variant="outline" className="w-32">
+                                            Retry Sync
+                                        </Button>
+                                    </Link>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
