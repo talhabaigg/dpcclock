@@ -384,10 +384,12 @@ class ClockController extends Controller
             $this->mapEmployee($rowData);
             $this->mapCostCode($rowData);
             $this->mapTimes($rowData);
-            $excludeCostCodes = ['2471109', '2516504', '2471108']; //the excluded cost codes are leaves and need to skip the default shift conditions
+            $excludeCostCodes = ['2471109', '2471108', '2471107']; //the excluded cost codes are leaves and need to skip the default shift conditions
             if (!in_array($rowData['COST CODE'], $excludeCostCodes)) {
                 $this->mapShiftConditions($rowData);
             }
+
+
 
             $data[] = $rowData; // Add processed row to data
 
@@ -567,6 +569,7 @@ class ClockController extends Controller
 
         // Allowance: optional, can be multiple comma-separated values
         $allowanceIds = [];
+
         if (!empty($rowData['Allowance'])) {
             $allowanceNames = array_map('trim', explode(',', $rowData['Allowance']));
 
@@ -583,14 +586,22 @@ class ClockController extends Controller
         $defaultShiftConditions = isset($rowData['DEFAULT SHIFT CONDITIONS'])
             ? array_map('trim', explode(',', $rowData['DEFAULT SHIFT CONDITIONS']))
             : [];
+        if ($rowData['COST CODE'] == '2516504') {
+            $shiftConditionIds = array_filter(array_merge(
+                [$rowData['Travel']],
+                $allowanceIds
+            ));
+        } else {
+            $shiftConditionIds = array_filter(array_merge(
+                $defaultShiftConditions,
+                [$rowData['Travel']],
+                $allowanceIds
+            ));
+        }
 
-        $shiftConditionIds = array_filter(array_merge(
-            $defaultShiftConditions,
-            [$rowData['Travel']],
-            $allowanceIds
-        ));
 
         $rowData['shiftConditionIds'] = array_values($shiftConditionIds);
+
 
     }
 
