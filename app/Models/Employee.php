@@ -20,7 +20,7 @@ class Employee extends Model
         return $this->belongsToMany(Kiosk::class, 'employee_kiosk', 'eh_employee_id', 'eh_kiosk_id', 'eh_employee_id', 'eh_kiosk_id');
     }
 
-    public function clocks(): HasMany
+    public function clocks(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Clock::class, 'eh_employee_id', 'eh_employee_id');
     }

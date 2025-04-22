@@ -5,6 +5,9 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\User;
 use App\Notifications\KioskClockedInNotification;
+use App\Models\Employee;
+use App\Models\Kiosk;
+use Log;
 
 class SendKioskClockedInNotification extends Command
 {
@@ -28,6 +31,18 @@ class SendKioskClockedInNotification extends Command
     public function handle()
     {
         $user = User::find(1); // Replace with actual user ID or logic to get the user
-        $user->notify(new KioskClockedInNotification());
+        $employees = Employee::whereHas('clocks', function ($query) {
+            $query->whereNull('clock_out');
+        })
+            ->with([
+                'clocks' => function ($query) {
+                    $query->whereNull('clock_out');
+                }
+            ])
+            ->get();
+        Log::info('Employees clocked in: ', $employees->toArray());
+
+
+        $user->notify(new KioskClockedInNotification($employees->toArray()));
     }
 }
