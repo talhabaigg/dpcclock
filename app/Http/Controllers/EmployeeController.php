@@ -29,7 +29,7 @@ class EmployeeController extends Controller
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/details");
         $employeeData = $response->json();
-        dd($employeeData);
+        // dd($employeeData);
         // $workTypeId = Worktype::where('name',$employeeData[12]['workTypes'])->first();
 
         // dd($employeeData[12]['workTypes']);
@@ -135,11 +135,11 @@ class EmployeeController extends Controller
 
     public function updateKioskEmployees()
     {
-        
-            SyncKioskEmployees::dispatch();
-   
+
+        SyncKioskEmployees::dispatch();
+
 
         return response()->json(['status' => 'Sync queued.']);
     }
-   
+
 }
