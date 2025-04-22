@@ -512,6 +512,7 @@ class ClockController extends Controller
             "Personal/Carer's Leave Taken" => '2471109',
             'RDO Taken' => '2516504',
             'Annual Leave Taken' => '2471108',
+            'Public Holiday not worked' => '2471107',
         ];
 
         if (empty($rowData['COST CODE'])) {

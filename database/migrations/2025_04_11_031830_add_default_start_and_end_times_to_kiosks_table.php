@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('kiosks', function (Blueprint $table) {
-            $table->time('default_start_time')->nullable()->after('end_time')->default('06:30:00');
+            $table->time('default_start_time')->nullable()->default('06:30:00');
             $table->time('default_end_time')->nullable()->after('default_start_time')->default('14:30:00');
         });
     }
