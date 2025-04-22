@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
@@ -17,7 +19,14 @@ export default function Create() {
         const item = items.find((item) => item.value === value);
         return item ? item.description : '';
     };
-
+    const myTheme = themeQuartz.withParams({
+        fontFamily: {
+            googleFont: 'Instrument Sans',
+        },
+        headerBackgroundColor: '#00000000',
+        wrapperBorderRadius: '10px',
+        wrapperBorder: false,
+    });
     const columnDefs = [
         {
             field: 'lineIndex',
@@ -116,52 +125,86 @@ export default function Create() {
         <AppLayout>
             <div className="px-4">
                 <Label className="p-2 text-xl font-bold">Create Purchase Order</Label>
-                <div className="flex flex-col gap-2">
-                    <Label className="text-sm">Supplier</Label>
-                </div>
-                <div className="ag-theme-alpine" style={{ height: 300 }}>
-                    <AgGridReact
-                        rowData={rowData}
-                        columnDefs={columnDefs}
-                        defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true }}
-                        rowModelType="clientSide"
-                        onGridReady={onGridReady} // Initialize gridApi
-                        onCellValueChanged={(e) => {
-                            const updated = [...rowData];
-                            updated[e.rowIndex] = e.data;
-                            setRowData(updated);
-                        }}
-                        onCellKeyDown={(event) => {
-                            if (event.event.key === 'Tab') {
-                                const lastRowIndex = rowData.length - 1;
-                                const lastColIndex = columnDefs.length - 2; // Skip 'total' column
+                <Card className="my-4 p-4">
+                    <div className="flex flex-row items-center gap-2">
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Project</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Project</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                    </div>
+                    <div className="flex flex-row items-center gap-2">
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Date required</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Delivery Contact</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Reqested by</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                        <div className="flex w-1/2 flex-col">
+                            <Label className="text-sm">Deliver to</Label>
+                            <Input placeholder="Supplier Name" />
+                        </div>
+                    </div>
+                </Card>
+                <Card>
+                    <CardContent className="-p-4 -my-5">
+                        {' '}
+                        <div style={{ height: 300 }}>
+                            <AgGridReact
+                                rowData={rowData}
+                                theme={myTheme}
+                                columnDefs={columnDefs}
+                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true }}
+                                rowModelType="clientSide"
+                                onGridReady={onGridReady} // Initialize gridApi
+                                onCellValueChanged={(e) => {
+                                    const updated = [...rowData];
+                                    updated[e.rowIndex] = e.data;
+                                    setRowData(updated);
+                                }}
+                                onCellKeyDown={(event) => {
+                                    if (event.event.key === 'Tab') {
+                                        const lastRowIndex = rowData.length - 1;
+                                        const lastColIndex = columnDefs.length - 2; // Skip 'total' column
 
-                                if (event.rowIndex === lastRowIndex && event.column.getColId() === columnDefs[lastColIndex].field) {
-                                    setTimeout(() => {
-                                        const newRow = {
-                                            itemcode: '',
-                                            description: '',
-                                            unitcost: 0,
-                                            qty: 1,
-                                            lineIndex: rowData.length + 1, // Increment the line index for the new row
-                                        };
+                                        if (event.rowIndex === lastRowIndex && event.column.getColId() === columnDefs[lastColIndex].field) {
+                                            setTimeout(() => {
+                                                const newRow = {
+                                                    itemcode: '',
+                                                    description: '',
+                                                    unitcost: 0,
+                                                    qty: 1,
+                                                    lineIndex: rowData.length + 1, // Increment the line index for the new row
+                                                };
 
-                                        const updated = [...rowData, newRow];
-                                        setRowData(updated);
+                                                const updated = [...rowData, newRow];
+                                                setRowData(updated);
 
-                                        // 🔥 Wait a tiny bit for grid to render the new row, then focus
-                                        setTimeout(() => {
-                                            event.api.startEditingCell({
-                                                rowIndex: updated.length - 1,
-                                                colKey: 'itemcode', // Focus on the first editable field
-                                            });
-                                        }, 50);
-                                    }, 50);
-                                }
-                            }
-                        }}
-                    />
-                </div>
+                                                // 🔥 Wait a tiny bit for grid to render the new row, then focus
+                                                setTimeout(() => {
+                                                    event.api.startEditingCell({
+                                                        rowIndex: updated.length - 1,
+                                                        colKey: 'itemcode', // Focus on the first editable field
+                                                    });
+                                                }, 50);
+                                            }, 50);
+                                        }
+                                    }
+                                }}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* Add Button */}
                 <div className="mt-4">
                     <Button onClick={addNewRow}>Add</Button>
