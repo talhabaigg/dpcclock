@@ -50,4 +50,9 @@ class User extends Authenticatable
     {
         return $this->hasRole('admin');
     }
+
+    public function managedKiosks()
+    {
+        return $this->belongsToMany(Kiosk::class, 'kiosk_user');
+    }
 }

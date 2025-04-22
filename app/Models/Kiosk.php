@@ -32,4 +32,9 @@ class Kiosk extends Model
         return $this->hasOne(Location::class, 'eh_location_id', 'eh_location_id');
     }
 
+    public function managers()
+    {
+        return $this->belongsToMany(User::class, 'kiosk_user');
+    }
+
 }

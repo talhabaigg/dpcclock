@@ -164,8 +164,19 @@ class EmployeeController extends Controller
 
     public function retrieveEmployees()
     {
+        $user = auth()->user();
         $employees = Employee::select('eh_employee_id as id', 'name')->get();
-        return response()->json($employees);
+        $employees = $user->managedKiosks->flatMap(function ($kiosk) {
+            return $kiosk->employees;  // Fetch employees related to each kiosk
+        });
+        $employeeData = $employees->map(function ($employee) {
+            return [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                // Add any other necessary employee fields here
+            ];
+        });
+        return response()->json($employeeData);
     }
 
     public function updateKioskEmployees()

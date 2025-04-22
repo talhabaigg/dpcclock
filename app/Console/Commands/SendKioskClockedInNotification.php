@@ -30,19 +30,33 @@ class SendKioskClockedInNotification extends Command
      */
     public function handle()
     {
-        $user = User::find(1); // Replace with actual user ID or logic to get the user
-        $employees = Employee::whereHas('clocks', function ($query) {
-            $query->whereNull('clock_out');
-        })
-            ->with([
-                'clocks' => function ($query) {
-                    $query->whereNull('clock_out');
+        // Retrieve all kiosks
+        $kiosks = Kiosk::all();
+
+        // Iterate over each kiosk
+        foreach ($kiosks as $kiosk) {
+            // Retrieve employees from the current kiosk that are clocked in
+            $employees = $kiosk->employees()->whereHas('clocks', function ($query) {
+                $query->whereNull('clock_out'); // Only employees with an active clock-in
+            })
+                ->with([
+                    'clocks' => function ($query) {
+                        $query->whereNull('clock_out'); // Only active clock-in records
+                    }
+                ])
+                ->get();
+
+            // Check if there are any employees clocked in
+            if ($employees->isNotEmpty()) {
+                Log::info("Employees clocked in for kiosk {$kiosk->id}: ", $employees->toArray());
+
+                // Send notification to each manager of the kiosk
+                foreach ($kiosk->managers as $manager) {
+                    $manager->notify(new KioskClockedInNotification($employees->toArray(), $kiosk->name));
                 }
-            ])
-            ->get();
-        Log::info('Employees clocked in: ', $employees->toArray());
-
-
-        $user->notify(new KioskClockedInNotification($employees->toArray()));
+            } else {
+                Log::info("No employees clocked in for kiosk {$kiosk->id}.");
+            }
+        }
     }
 }
