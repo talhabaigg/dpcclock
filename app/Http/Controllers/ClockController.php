@@ -117,6 +117,7 @@ class ClockController extends Controller
     public function saveTimesheets(Request $request)
     {
         $validated = $request->validate([
+            'clocks.*.id' => 'nullable|integer',
             'clocks' => 'required|array',
             'clocks.*.clockInHour' => 'required',
             'clocks.*.clockInMinute' => 'required',
