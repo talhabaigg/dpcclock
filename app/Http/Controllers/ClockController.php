@@ -126,6 +126,9 @@ class ClockController extends Controller
             'clocks.*.location' => 'required',
             'clocks.*.eh_kiosk_id' => 'required',
             'clocks.*.hoursWorked' => 'required|numeric',
+            'clocks.*.insulation_allowance' => 'boolean',
+            'clocks.*.setout_allowance' => 'boolean',
+            'clocks.*.laser_allowance' => 'boolean',
             'date' => 'required',
         ]);
 
