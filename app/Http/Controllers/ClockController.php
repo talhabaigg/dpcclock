@@ -367,6 +367,10 @@ class ClockController extends Controller
             'file' => 'required|file|mimes:csv,txt',
         ]);
 
+        // Increase the timeout duration for the request
+        set_time_limit(300); // Set the maximum execution time to 300 seconds (5 minutes)
+        ini_set('max_execution_time', 300); // Alternative way to set the timeout
+
         // Open the file for reading
         $handle = fopen($validated['file']->getRealPath(), 'r');
         if ($handle === false) {
@@ -586,15 +590,21 @@ class ClockController extends Controller
             }
         }
 
+
         // Merge into final shiftConditionIds array
         $defaultShiftConditions = isset($rowData['DEFAULT SHIFT CONDITIONS'])
             ? array_map('trim', explode(',', $rowData['DEFAULT SHIFT CONDITIONS']))
             : [];
         if ($rowData['COST CODE'] == '2516504') {
+            $acceptedValues = ['2517933', '2517934'];
+            $matches = array_intersect($defaultShiftConditions, $acceptedValues);
+
             $shiftConditionIds = array_filter(array_merge(
+                $matches,
                 [$rowData['Travel']],
                 $allowanceIds
             ));
+
         } else {
             $shiftConditionIds = array_filter(array_merge(
                 $defaultShiftConditions,
