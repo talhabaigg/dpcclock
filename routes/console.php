@@ -11,5 +11,5 @@ use App\Console\Commands\SyncTimesheets;
 //     ->timezone('Australia/Brisbane');
 
 Schedule::command('app:send-kiosk-clocked-in-notification')->hourly()
-    ->timezone('Australia/Brisbane');
-// ->between('15:00', '17:30');
+    ->timezone('Australia/Brisbane')
+    ->between('15:00', '17:30');
