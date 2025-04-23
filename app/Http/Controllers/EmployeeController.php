@@ -171,7 +171,7 @@ class EmployeeController extends Controller
         });
         $employeeData = $employees->map(function ($employee) {
             return [
-                'id' => $employee->id,
+                'id' => $employee->eh_employee_id,
                 'name' => $employee->name,
                 // Add any other necessary employee fields here
             ];
