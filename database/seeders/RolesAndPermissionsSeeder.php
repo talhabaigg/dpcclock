@@ -11,6 +11,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Define roles
         $roles = [
             'admin',
+            'manager',
             'kiosk',
         ];
 
@@ -18,6 +19,8 @@ class RolesAndPermissionsSeeder extends Seeder
         $permissions = [
             'view kiosk',
             'retrieve kiosk token',
+            'update travel zones',
+            'view timesheet converter',
         ];
 
         // Create roles if they don't exist
@@ -38,6 +41,14 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $adminRole = Role::where('name', 'admin')->first();
         $adminRole->syncPermissions([
+            'view kiosk',
+            'retrieve kiosk token',
+            'update travel zones',
+            'view timesheet converter',
+        ]);
+
+        $managerRole = Role::where('name', 'manager')->first();
+        $managerRole->syncPermissions([
             'view kiosk',
             'retrieve kiosk token',
         ]);

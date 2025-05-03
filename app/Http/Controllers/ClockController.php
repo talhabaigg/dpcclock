@@ -645,7 +645,7 @@ class ClockController extends Controller
     public function generateKioskToken()
     {
         $token = Str::random(32); // Generate a random 32-character token
-        $expiresAt = now('Australia/Brisbane')->addMinutes(30); // Set expiration time to 30 minutes from now
+        $expiresAt = now('Australia/Brisbane')->addMinutes(2); // Set expiration time to 30 minutes from now
 
         // Save the token in cache with the key 'kiosk_token:{token}', which will expire in 30 minutes
         Cache::put("kiosk_token:$token", [
