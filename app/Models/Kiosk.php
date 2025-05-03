@@ -24,7 +24,7 @@ class Kiosk extends Model
             'eh_employee_id',  // Foreign key on pivot table pointing to `Employee`
             'eh_kiosk_id',     // Local key on `Kiosk` model
             'eh_employee_id'   // Local key on `Employee` model
-        );
+        )->withPivot('zone');
     }
 
     public function location()

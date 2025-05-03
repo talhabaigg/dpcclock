@@ -32,7 +32,7 @@ class KioskController extends Controller
     }
     public function index()
     {
-        $kiosks = Kiosk::with('location')->get();
+        $kiosks = Kiosk::with('location', 'employees')->get();
         return Inertia::render('kiosks/index', [
             'kiosks' => $kiosks,
         ]);
@@ -105,15 +105,45 @@ class KioskController extends Controller
      */
     public function edit(Kiosk $kiosk)
     {
-        //
+        $kiosk->load([
+            'employees' => function ($query) {
+                $query->select('employees.id', 'name')->withPivot('zone');
+            }
+        ]);
+
+        return Inertia::render('kiosks/edit', [
+            'kiosk' => $kiosk,
+            'employees' => $kiosk->employees,
+        ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Kiosk $kiosk)
+
+
+    public function updateZones(Request $request, Kiosk $kiosk)
     {
-        //
+        $data = $request->validate([
+            'zones' => 'required|array',
+            'zones.*.employee_id' => 'required|exists:employees,id',
+            'zones.*.zone' => 'nullable',
+        ]);
+        // dd($data);
+
+        foreach ($data['zones'] as $entry) {
+            $eh_employee = Employee::find($entry['employee_id']);
+            if (!$eh_employee) {
+                return redirect()->back()->with('error', 'Employee not found.');
+            } else {
+                $kiosk->employees()->updateExistingPivot($eh_employee->eh_employee_id, [
+                    'zone' => $entry['zone']
+                ]);
+            }
+
+        }
+
+        return redirect()->back()->with('success', 'Zones updated successfully.');
     }
 
     /**

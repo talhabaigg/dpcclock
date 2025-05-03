@@ -276,7 +276,7 @@ class ClockController extends Controller
     public function syncEhTimesheets()
     {
         // Get clocks that are not synced or have null status
-        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'location.worktypes'])
+        $clocks = Clock::with(['kiosk', 'employee.worktypes', 'employee.kiosks', 'location.worktypes'])
             ->where(function ($query) {
                 $query->whereNull('status')  // Include rows where the status is null
                     ->orWhere('status', '!=', 'synced');  // Include rows where status is not 'synced'
@@ -298,6 +298,28 @@ class ClockController extends Controller
 
             $employeeId = $clock->eh_employee_id;
             $shiftConditionIds = $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [];
+            $zoneShiftConditionIds = [
+                '1' => '2516899', // Example, replace with actual mapping
+                '2' => '2516901', // Example, replace with actual mapping
+                '3' => '2516902', // Example, replace with actual mapping
+            ];
+
+            $zone = $clock->employee->kiosks
+                ->where('eh_kiosk_id', $clock->eh_kiosk_id)
+                ->first()
+                ?->pivot
+                    ?->zone;
+            if ($zone && isset($zoneShiftConditionIds[$zone])) {
+                $shiftConditionIds = array_filter($shiftConditionIds, function ($id) use ($zoneShiftConditionIds) {
+                    return !in_array($id, $zoneShiftConditionIds);
+                });
+
+                // Add the correct zone-specific shift condition
+                $shiftConditionIds[] = $zoneShiftConditionIds[$zone];
+            }
+            $shiftConditionIds = array_values($shiftConditionIds);
+
+
             $allowances = [
                 'insulation_allowance' => '2518038',
                 'laser_allowance' => '2518041',
@@ -309,7 +331,7 @@ class ClockController extends Controller
                 }
             }
             $shiftConditionIds = array_unique($shiftConditionIds);
-
+            dd($shiftConditionIds);
             $timesheetData = [
                 "employeeId" => $employeeId,
                 "startTime" => $clock->clock_in,

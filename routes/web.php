@@ -37,6 +37,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('locations', LocationController::class)->names('locations');
 
         Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync');
+        Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit');
+        Route::post('/kiosks/{kiosk}/zones', [KioskController::class, 'updateZones'])->name('kiosks.updateZones');
+
 
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
 

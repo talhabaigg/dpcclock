@@ -18,6 +18,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' 
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
+    console.log(kiosks);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -40,8 +41,8 @@ export default function KiosksList() {
                             <TableHead>Location Name</TableHead>
                             <TableHead>Default Start Time</TableHead>
                             <TableHead>Default End Time</TableHead>
-                            {/* <TableHead>Actions</TableHead> */}
                             <TableHead>Actions</TableHead>
+                            <TableHead>Settings</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -57,6 +58,21 @@ export default function KiosksList() {
                                     <Link href={`/kiosks/${kiosk.id}`}>
                                         <Button>Open</Button>
                                     </Link>
+                                </TableCell>
+                                <TableCell>
+                                    {kiosk.employees.length > 0 ? (
+                                        <div className="space-y-1">
+                                            {kiosk.employees.map((employee) => (
+                                                <div key={employee.id} className="text-sm">
+                                                    {employee.name} {employee.pivot?.zone ? `(Zone ${employee.pivot.zone})` : ''}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <Link href={`/kiosks/${kiosk.id}/settings/create`}>
+                                            <Button variant="outline">Settings</Button>
+                                        </Link>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
