@@ -140,7 +140,6 @@ class KioskController extends Controller
                     'zone' => $entry['zone']
                 ]);
             }
-
         }
 
         return redirect()->back()->with('success', 'Zones updated successfully.');

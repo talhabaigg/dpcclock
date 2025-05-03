@@ -331,7 +331,7 @@ class ClockController extends Controller
                 }
             }
             $shiftConditionIds = array_unique($shiftConditionIds);
-            dd($shiftConditionIds);
+
             $timesheetData = [
                 "employeeId" => $employeeId,
                 "startTime" => $clock->clock_in,

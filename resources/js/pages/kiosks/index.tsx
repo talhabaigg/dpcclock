@@ -60,6 +60,11 @@ export default function KiosksList() {
                                     </Link>
                                 </TableCell>
                                 <TableCell>
+                                    <Link href={`/kiosks/${kiosk.id}/edit`}>
+                                        <Button variant="outline">Settings</Button>
+                                    </Link>
+                                </TableCell>
+                                {/* <TableCell>
                                     {kiosk.employees.length > 0 ? (
                                         <div className="space-y-1">
                                             {kiosk.employees.map((employee) => (
@@ -73,7 +78,7 @@ export default function KiosksList() {
                                             <Button variant="outline">Settings</Button>
                                         </Link>
                                     )}
-                                </TableCell>
+                                </TableCell> */}
                             </TableRow>
                         ))}
                     </TableBody>
