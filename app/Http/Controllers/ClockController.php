@@ -225,7 +225,8 @@ class ClockController extends Controller
         foreach ($validated['entries'] as $entry) {
             // Concatenate level and activity to create locationExternalId
             $locationExternalId = $entry['activity'] ? $entry['level'] . '-' . $entry['activity'] : $entry['level'];
-            $eh_kiosk_id = Kiosk::findorfail($validated['kioskId'])->pluck('eh_kiosk_id')->first();
+            $eh_kiosk_id = Kiosk::findOrFail($validated['kioskId'])->eh_kiosk_id;
+            // dd($eh_kiosk_id);
             // Find location based on external_id
             $location = Location::where('external_id', $locationExternalId)->pluck('eh_location_id')->first();
 
