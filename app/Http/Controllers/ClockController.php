@@ -249,6 +249,7 @@ class ClockController extends Controller
                     $clock->setout_allowance = $entry['setout_allowance'] ?? false;
                     $clock->laser_allowance = $entry['laser_allowance'] ?? false;
                     $clock->save();
+
                 }
 
                 // Set firstEntry to false for subsequent iterations

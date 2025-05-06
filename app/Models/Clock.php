@@ -18,7 +18,11 @@ class Clock extends Model
         'setout_allowance',
         'status',
     ];
-
+    protected $casts = [
+        'insulation_allowance' => 'boolean',
+        'laser_allowance' => 'boolean',
+        'setout_allowance' => 'boolean',
+    ];
     public function employee()
     {
         return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id');
