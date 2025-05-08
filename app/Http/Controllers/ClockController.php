@@ -155,6 +155,9 @@ class ClockController extends Controller
                 }
 
                 if ($clock) {
+                    if ($clock->status === 'synced') {
+                        continue;
+                    }
                     $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
                     $clock->update([
                         'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
