@@ -52,9 +52,15 @@ class SyncKioskEmployees implements ShouldQueue
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/location");
 
+        $json = $response->json();
 
-        return collect($response->json())
-            ->filter(fn($loc) => $loc['parentId'] == 1149031)
+        if (!is_array($json)) {
+            Log::error("Unexpected response for employee {$employeeId}: " . $response->body());
+            return [];
+        }
+
+        return collect($json)
+            ->filter(fn($loc) => is_array($loc) && ($loc['parentId'] ?? null) == 1149031)
             ->pluck('id')
             ->toArray();
     }
