@@ -2,7 +2,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { useState } from 'react';
@@ -10,6 +12,11 @@ import { ComboboxDemo } from './AutcompleteCellEditor';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function Create() {
+    const suppliers = usePage().props.suppliers;
+    const locations = usePage().props.locations;
+
+    const [selectedSupplier, setSelectedSupplier] = useState(null);
+
     const items = [
         { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
         { value: '10503000', label: '10503000', description: '76mm Flexible Track 3000', unitcost: 20.922999, qty: 1 },
@@ -42,6 +49,7 @@ export default function Create() {
             cellEditor: ComboboxDemo,
             cellEditorParams: {
                 items, // 👈 Pass items here
+                selectedSupplier,
             },
             onCellValueChanged: async (e) => {
                 const itemCode = e.data.itemcode;
@@ -89,9 +97,14 @@ export default function Create() {
                 return (unitcost || 0) * (qty || 0);
             },
         },
+        {
+            field: 'costcode',
+            headerName: 'Cost Code',
+            type: 'textColumn',
+        },
     ];
 
-    const [rowData, setRowData] = useState([{ itemcode: '', description: '', unitcost: 0, qty: 1, lineIndex: 1 }]);
+    const [rowData, setRowData] = useState([{ itemcode: '', description: '', unitcost: 0, qty: 1, lineIndex: 1, costcode: '' }]); // Initialize with one empty row
 
     // Function to add a new row
     const addNewRow = () => {
@@ -100,6 +113,7 @@ export default function Create() {
             description: '',
             unitcost: 0,
             qty: 1,
+            costcode: '',
             lineIndex: rowData.length + 1, // Increment the line index based on the current row count
         };
         setRowData([...rowData, newRow]);
@@ -123,17 +137,39 @@ export default function Create() {
 
     return (
         <AppLayout>
-            <div className="px-4">
-                <Label className="p-2 text-xl font-bold">Create Purchase Order</Label>
+            <div className="p-4">
+                <Label className="p-2 text-xl font-bold">Create Requisition</Label>
                 <Card className="my-4 p-4">
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Project</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Select>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select a location" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {locations.map((location) => (
+                                        <SelectItem key={location.id} value={location.id}>
+                                            {location.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="flex w-1/2 flex-col">
-                            <Label className="text-sm">Project</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Label className="text-sm">Supplier</Label>
+                            <Select onValueChange={setSelectedSupplier}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select a supplier" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {suppliers.map((supplier) => (
+                                        <SelectItem key={supplier.id} value={supplier.id}>
+                                            {supplier.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                     <div className="flex flex-row items-center gap-2">

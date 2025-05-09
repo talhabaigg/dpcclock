@@ -5,33 +5,43 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'; // 👈 Loader icon
 import { useEffect, useState } from 'react';
 
-export function ComboboxDemo({ value, onValueChange }) {
+export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
     const [open, setOpen] = useState(true);
     const [search, setSearch] = useState('');
     const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(false); // 👈 loading state
 
     useEffect(() => {
         const fetchItems = async () => {
-            const response = await axios.get('/material-items', {
-                params: { search },
-            });
-            const data = response.data;
+            setLoading(true);
+            try {
+                const response = await axios.get('/material-items', {
+                    params: {
+                        search,
+                        supplier_id: selectedSupplier,
+                    },
+                });
 
-            // Normalize for frontend
-            const mapped = data.map((item) => ({
-                value: item.id.toString(),
-                label: item.code,
-                description: item.description,
-            }));
+                const mapped = response.data.map((item) => ({
+                    value: item.id.toString(),
+                    label: item.code,
+                    description: item.description,
+                }));
 
-            setItems(mapped);
+                setItems(mapped);
+            } catch (err) {
+                console.error('Failed to load items:', err);
+                setItems([]);
+            } finally {
+                setLoading(false);
+            }
         };
 
-        fetchItems();
-    }, [search]);
+        if (selectedSupplier) fetchItems();
+    }, [search, selectedSupplier]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -45,26 +55,35 @@ export function ComboboxDemo({ value, onValueChange }) {
                 <Command>
                     <CommandInput placeholder="Search item..." className="h-9" value={search} onValueChange={setSearch} />
                     <CommandList>
-                        <CommandEmpty>No items found.</CommandEmpty>
-                        <CommandGroup>
-                            {items.map((item) => (
-                                <CommandItem
-                                    key={item.value}
-                                    value={`${item.value} ${item.label} ${item.description}`}
-                                    onSelect={() => {
-                                        onValueChange(item.value);
-                                        setSearch('');
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="font-medium">{item.label}</span>
-                                        <span className="text-muted-foreground text-xs">{item.description}</span>
-                                    </div>
-                                    <Check className={cn('ml-auto', value === item.value ? 'opacity-100' : 'opacity-0')} />
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
+                        {loading ? (
+                            <div className="flex items-center justify-center py-4">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                <span>Loading...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <CommandEmpty>No items found.</CommandEmpty>
+                                <CommandGroup>
+                                    {items.map((item) => (
+                                        <CommandItem
+                                            key={item.value}
+                                            value={`${item.value} ${item.label} ${item.description}`}
+                                            onSelect={() => {
+                                                onValueChange(item.value);
+                                                setSearch('');
+                                                setOpen(false);
+                                            }}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{item.label}</span>
+                                                <span className="text-muted-foreground text-xs">{item.description}</span>
+                                            </div>
+                                            <Check className={cn('ml-auto', value === item.value ? 'opacity-100' : 'opacity-0')} />
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </>
+                        )}
                     </CommandList>
                 </Command>
             </PopoverContent>

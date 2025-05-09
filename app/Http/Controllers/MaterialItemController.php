@@ -66,29 +66,38 @@ class MaterialItemController extends Controller
 
     public function getMaterialItems(Request $request)
     {
+        $supplierId = $request->input('supplier_id');
+
         $query = MaterialItem::query();
-    
-        if ($request->has('search') && $search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
-            });
+
+        // Wrap search + supplier filter inside the same where block
+        if ($request->has('search') && $request->has('supplier_id')) {
+            $search = $request->input('search');
+
+            $query->where('supplier_id', $supplierId)
+                ->where(function ($q) use ($search) {
+                    $q->where('code', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+        } elseif ($request->has('supplier_id')) {
+            // No search, just filter by supplier
+            $query->where('supplier_id', $supplierId);
         }
-    
+
         $materialItems = $query->limit(10)->get();
-    
+
         return response()->json($materialItems);
     }
 
     public function getMaterialItemById($id)
-{
-    Log::info('Fetching material item with ID: ' . $id);
-    $item = MaterialItem::find($id);
+    {
+        Log::info('Fetching material item with ID: ' . $id);
+        $item = MaterialItem::find($id);
 
-    if (!$item) {
-        return response()->json(['message' => 'Item not found'], 404);
+        if (!$item) {
+            return response()->json(['message' => 'Item not found'], 404);
+        }
+        Log::info('Material item found: ' . json_encode($item));
+        return response()->json($item);
     }
-    Log::info('Material item found: ' . json_encode($item));
-    return response()->json($item);
-}
 }
