@@ -65,7 +65,7 @@ export default function RequisitionList() {
                                 <TableCell>{requisition.date_required}</TableCell>
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
-                                <TableCell>${requisition.line_items_sum_total_cost?.toFixed(2)}</TableCell>
+                                <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
                                 <TableCell>
                                     <Link href={`/requisition/${requisition.id}`} className="text-blue-500 hover:underline">
                                         View
