@@ -63,8 +63,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
+        Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
+
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
-        Route::get('/material-items/{id}', [MaterialItemController::class, 'getMaterialItemById']);
+        Route::get('/material-items/{id}/{locationId}', [MaterialItemController::class, 'getMaterialItemById']);
 
     });
 

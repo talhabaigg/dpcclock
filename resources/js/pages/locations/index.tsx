@@ -1,12 +1,15 @@
 import PaginationComponent from '@/components/index-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { ChangeEvent, useState } from 'react';
 import SublocationDialog from './components/SublocationDialog';
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -44,6 +47,26 @@ type PaginatedLocations = {
 export default function LocationsList() {
     const { locations, flash } = usePage<{ locations: PaginatedLocations; flash: { success?: string } }>().props;
     let isLoading = false;
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [processing, setProcessing] = useState(false);
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
+
+    const handleUpload = (locationId: number) => {
+        if (!selectedFile) return;
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('location_id', locationId.toString());
+
+        router.post('/material-items/location/upload', formData, {
+            forceFormData: true,
+            onSuccess: () => setSelectedFile(null),
+        });
+    };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
@@ -108,6 +131,14 @@ export default function LocationsList() {
                                 </TableCell>
                                 <TableCell>
                                     <SublocationDialog subLocations={location.subLocations} locationName={location.name}></SublocationDialog>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        <Input type="file" accept=".csv" onChange={handleFileChange} />
+                                        <Button onClick={() => handleUpload(location.id)} disabled={!selectedFile || processing}>
+                                            Upload CSV
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}

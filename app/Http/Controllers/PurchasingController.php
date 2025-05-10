@@ -26,7 +26,7 @@ class PurchasingController extends Controller
     public function store(Request $request)
 {
     $validated = $request->validate([
-        'project_id' => 'nullable|integer|exists:projects,id',
+        'project_id' => 'nullable|integer|exists:locations,id',
         'supplier_id' => 'required|integer|exists:suppliers,id',
         'date_required' => 'nullable|date',
         'delivery_contact' => 'nullable|string|max:255',

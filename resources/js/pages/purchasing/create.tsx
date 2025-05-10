@@ -73,9 +73,15 @@ export default function Create() {
             },
             onCellValueChanged: async (e) => {
                 const itemCode = e.data.itemcode;
+                const locationId = data.project_id; // Assuming this is the location ID you want to use
+
+                if (!itemCode || !locationId) {
+                    alert('Please select both an item code and location.');
+                    return;
+                }
 
                 try {
-                    const res = await fetch(`/material-items/${itemCode}`);
+                    const res = await fetch(`/material-items/${itemCode}/${locationId}`);
                     if (!res.ok) throw new Error('Failed to fetch item');
                     const item = await res.json();
 

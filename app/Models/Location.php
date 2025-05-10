@@ -22,4 +22,11 @@ class Location extends Model
         return $this->hasOne(Kiosk::class, 'eh_location_id', 'eh_location_id');
     }
 
+    public function materialItems()
+{
+    return $this->belongsToMany(MaterialItem::class, 'project_item_pricing')
+                ->withPivot('unit_cost_override')
+                ->withTimestamps();
+}
+
 }

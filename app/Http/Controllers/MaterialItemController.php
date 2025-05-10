@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use App\Models\Supplier;
 use App\Models\CostCode;
+use App\Models\Location;
+use Illuminate\Support\Facades\DB;
 
 class MaterialItemController extends Controller
 {
@@ -108,6 +110,46 @@ class MaterialItemController extends Controller
     return redirect()->back()->with('success', 'CSV uploaded successfully.');
 }
 
+    public function uploadLocationPricing(Request $request) {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt',
+        ]);
+        // dd($request->file('file'));
+    
+        $path = $request->file('file')->getRealPath();
+        $rows = array_map('str_getcsv', file($path));
+        $header = array_map('trim', array_shift($rows));
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+        $insertCount = 0;
+        foreach ($rows as $index => $row) {
+            $data = array_combine($header, $row);
+    
+            $location = Location::where('external_id', $data['location_id'])->first();
+            $material = MaterialItem::where('code', $data['code'])->first();
+    
+            if (!$location || !$material) {
+                // You can log or skip
+                continue;
+            }
+    
+            DB::table('location_item_pricing')->updateOrInsert(
+                [
+                    'location_id' => $location->id,
+                    'material_item_id' => $material->id,
+                ],
+                [
+                    'unit_cost_override' => $data['unit_cost'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+    
+            $insertCount++;
+        }
+    
+        return back()->with('success', "Imported $insertCount prices successfully.");
+    }
+
     public function getMaterialItems(Request $request)
     {
         $supplierId = $request->input('supplier_id');
@@ -133,19 +175,42 @@ class MaterialItemController extends Controller
         return response()->json($materialItems);
     }
 
-    public function getMaterialItemById($id)
-    {
-        Log::info('Fetching material item with ID: ' . $id);
-        $item = MaterialItem::with('costCode')->find($id);
-       
+    public function getMaterialItemById($id, $locationId)
+{
+    Log::info('Fetching material item with ID: ' . $id);
+    Log::info('Fetching location with ID: ' . $locationId);
 
-        if (!$item) {
-            return response()->json(['message' => 'Item not found'], 404);
-        }
-        $itemArray = $item->toArray();
-        $itemArray['price_list'] = 'base_price';
-        $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
-        Log::info('Material item found: ' . json_encode($itemArray));
-        return response()->json($itemArray);
+    // Fetch the item and its related cost code
+    $item = MaterialItem::with('costCode')->find($id);
+
+    // If no item is found, return 404 early
+    if (!$item) {
+        return response()->json(['message' => 'Item not found'], 404);
     }
+
+    // Fetch the location-specific price (filtered in SQL)
+    $location_price = DB::table('location_item_pricing')
+        ->where('material_item_id', $id)
+        ->where('location_id', $locationId)
+        ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
+        ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+        ->first();
+
+    Log::info('Location price fetched: ' . json_encode($location_price));
+
+    if ($location_price) {
+        $item->unit_cost = $location_price->unit_cost_override;
+    }
+
+    // Convert to array for response
+    $itemArray = $item->toArray();
+    $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
+    $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+
+    Log::info('Material item found: ' . json_encode($itemArray));
+
+    return response()->json($itemArray);
+}
+
+    
 }

@@ -17,6 +17,12 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
     useEffect(() => {
         const fetchItems = async () => {
             setLoading(true);
+            if (!selectedSupplier) {
+                alert('Please select a supplier first.');
+                setLoading(false);
+                return;
+            }
+
             try {
                 const response = await axios.get('/material-items', {
                     params: {
@@ -44,7 +50,16 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
     }, [search, selectedSupplier]);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover
+            open={selectedSupplier ? open : false}
+            onOpenChange={(val) => {
+                if (!selectedSupplier) {
+                    alert('Please select a supplier first.');
+                    return;
+                }
+                setOpen(val);
+            }}
+        >
             <PopoverTrigger asChild>
                 <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between">
                     {value && items.find((item) => item.value === value) ? items.find((item) => item.value === value)?.label : 'Search item...'}
