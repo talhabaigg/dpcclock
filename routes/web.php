@@ -58,9 +58,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
+        
         Route::get('/requisition/all', [PurchasingController::class, 'index'])->name('requisition.index');
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
+        Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show');
+        Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
+        
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);

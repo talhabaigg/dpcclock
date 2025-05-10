@@ -30,4 +30,8 @@ class Requisition extends Model
     public function getTotalAttribute() {
         return $this->lineItems->sum('total');
     }
+
+    public function location() {
+        return $this->belongsTo(Location::class, 'project_number', 'id');
+    }
 }

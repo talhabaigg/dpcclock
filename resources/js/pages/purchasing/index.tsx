@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import { useState } from 'react';
 
@@ -53,7 +53,7 @@ export default function RequisitionList() {
                             <TableHead>Date required</TableHead>
                             <TableHead>Delivery Contact</TableHead>
                             <TableHead>Deliver to</TableHead>
-                            <TableHead>Requisition Cost</TableHead>
+                            <TableHead>Requisition Cost </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -65,6 +65,11 @@ export default function RequisitionList() {
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
                                 <TableCell>${requisition.line_items_sum_total_cost?.toFixed(2)}</TableCell>
+                                <TableCell>
+                                    <Link href={`/requisition/${requisition.id}`} className="text-blue-500 hover:underline">
+                                        View
+                                    </Link>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
