@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\MaterialItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use App\Models\Supplier;
+use App\Models\CostCode;
 
 class MaterialItemController extends Controller
 {
@@ -13,7 +16,13 @@ class MaterialItemController extends Controller
      */
     public function index()
     {
-        //
+        // Fetch all material items with their cost codes
+        $materialItems = MaterialItem::with('costCode', 'supplier')->get();
+
+
+       return Inertia::render('materialItem/index', [
+            'items' => $materialItems,
+        ]);
     }
 
     /**
@@ -63,6 +72,41 @@ class MaterialItemController extends Controller
     {
         //
     }
+
+    public function upload(Request $request)
+{
+    $request->validate([
+        'file' => 'required|file|mimes:csv,txt',
+    ]);
+  
+    $file = fopen($request->file('file')->getRealPath(), 'r');
+    $header = fgetcsv($file); // Skip header row
+
+    while (($row = fgetcsv($file)) !== false) {
+        [$code, $description, $unit_cost, $supplier_code, $costcode] = $row;
+       
+        // Lookup or create related records
+        $supplier = Supplier::where('code', trim($supplier_code))->first();
+        
+     
+        $costCode = CostCode::where('code', trim($costcode))->first();
+   
+
+        MaterialItem::updateOrCreate(
+            ['code' => trim($code)],
+            [
+                'description' => trim($description),
+                'unit_cost' => (float) $unit_cost,
+                'supplier_id' => $supplier->id,
+                'cost_code_id' => $costCode->id,
+            ]
+        );
+    }
+
+    fclose($file);
+
+    return redirect()->back()->with('success', 'CSV uploaded successfully.');
+}
 
     public function getMaterialItems(Request $request)
     {

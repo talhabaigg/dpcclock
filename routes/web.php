@@ -60,6 +60,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
+
+        Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
+        Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
         Route::get('/material-items/{id}', [MaterialItemController::class, 'getMaterialItemById']);
 

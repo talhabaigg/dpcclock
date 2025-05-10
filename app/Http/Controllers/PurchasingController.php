@@ -56,11 +56,11 @@ class PurchasingController extends Controller
         RequisitionLineItem::create([
             'serial_number' => $item['lineIndex'] ?? null,
             'requisition_id' => $requisition->id,
-            'itemcode' => $item['itemcode'],
+            'code' => $item['itemcode'],
             'description' => $item['description'],
             'qty' => $item['qty'],
             'unit_cost' => $item['unitcost'],
-            'costcode' => $item['costcode'] ?? null,
+            'cost_code' => $item['costcode'] ?? null,
             'price_list' => $item['price_list'] ?? null,
             'total_cost' => $item['total'] ?? null,
         ]);
