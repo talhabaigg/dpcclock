@@ -92,12 +92,16 @@ class MaterialItemController extends Controller
     public function getMaterialItemById($id)
     {
         Log::info('Fetching material item with ID: ' . $id);
-        $item = MaterialItem::find($id);
+        $item = MaterialItem::with('costCode')->find($id);
+       
 
         if (!$item) {
             return response()->json(['message' => 'Item not found'], 404);
         }
-        Log::info('Material item found: ' . json_encode($item));
-        return response()->json($item);
+        $itemArray = $item->toArray();
+        $itemArray['price_list'] = 'base_price';
+        $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+        Log::info('Material item found: ' . json_encode($itemArray));
+        return response()->json($itemArray);
     }
 }

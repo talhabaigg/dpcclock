@@ -59,6 +59,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
+        Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
         Route::get('/material-items/{id}', [MaterialItemController::class, 'getMaterialItemById']);
 

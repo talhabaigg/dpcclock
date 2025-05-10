@@ -4,10 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { usePage } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -15,12 +15,33 @@ export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
 
-    const [selectedSupplier, setSelectedSupplier] = useState(null);
-
     const items = [
         { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
         { value: '10503000', label: '10503000', description: '76mm Flexible Track 3000', unitcost: 20.922999, qty: 1 },
     ];
+    const { data, setData, post, processing, errors } = useForm({
+        project_id: '',
+        supplier_id: '',
+        date_required: '',
+        delivery_contact: '',
+        requested_by: '',
+        deliver_to: '',
+        items: [],
+    });
+
+    const [selectedSupplier, setSelectedSupplier] = useState(data.supplier_id);
+
+    const handleSupplierChange = (value) => {
+        setSelectedSupplier(value);
+        setData('supplier_id', value);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        console.log('Submitting form with data:', data);
+        setData('items', rowData);
+        post('/requisition/store');
+    };
 
     const getDescription = (value) => {
         const item = items.find((item) => item.value === value);
@@ -48,7 +69,6 @@ export default function Create() {
             editable: true,
             cellEditor: ComboboxDemo,
             cellEditorParams: {
-                items, // 👈 Pass items here
                 selectedSupplier,
             },
             onCellValueChanged: async (e) => {
@@ -63,6 +83,9 @@ export default function Create() {
                     e.data.itemcode = item.code; // assuming code is a string
                     e.data.description = item.description;
                     e.data.unitcost = item.unit_cost; // assuming unitcost is numeric
+                    e.data.price_list = item.price_list; // assuming pricelist is numeric
+                    e.data.costcode = item.cost_code; // assuming costcode is a string
+                    e.data.total = (e.data.unitcost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
 
                     // Update rowData
                     const updated = [...rowData];
@@ -73,7 +96,20 @@ export default function Create() {
                 }
             },
         },
-        { field: 'qty', headerName: 'Qty', editable: true, type: 'numericColumn' },
+        {
+            field: 'qty',
+            headerName: 'Qty',
+            editable: true,
+            type: 'numericColumn',
+            onCellValueChanged: (e) => {
+                const { unitcost, qty } = e.data;
+                e.data.total = (unitcost || 0) * (qty || 0);
+
+                const updated = [...rowData];
+                updated[e.rowIndex] = e.data;
+                setRowData(updated);
+            },
+        },
         {
             field: 'unitcost',
             headerName: 'Unit Cost',
@@ -92,20 +128,31 @@ export default function Create() {
                 if (params.value == null) return '';
                 return `$${parseFloat(params.value).toFixed(2)}`;
             },
-            valueGetter: (params) => {
-                const { unitcost, qty } = params.data;
-                return (unitcost || 0) * (qty || 0);
+            onCellValueChanged: (e) => {
+                const { unitcost, qty } = e.data;
+                e.data.total = (unitcost || 0) * (qty || 0);
+
+                const updated = [...rowData];
+                updated[e.rowIndex] = e.data;
+                setRowData(updated);
             },
         },
         {
             field: 'costcode',
             headerName: 'Cost Code',
-            type: 'textColumn',
+        },
+        {
+            field: 'price_list',
+            headerName: 'Price List',
         },
     ];
 
-    const [rowData, setRowData] = useState([{ itemcode: '', description: '', unitcost: 0, qty: 1, lineIndex: 1, costcode: '' }]); // Initialize with one empty row
-
+    const [rowData, setRowData] = useState([
+        { itemcode: '', description: '', unitcost: 0, qty: 1, total: 0, lineIndex: 1, costcode: '', price_list: '' },
+    ]); // Initialize with one empty row
+    useEffect(() => {
+        setData('items', rowData);
+    }, [rowData]);
     // Function to add a new row
     const addNewRow = () => {
         const newRow = {
@@ -114,6 +161,8 @@ export default function Create() {
             unitcost: 0,
             qty: 1,
             costcode: '',
+            price_list: '',
+            total: 0,
             lineIndex: rowData.length + 1, // Increment the line index based on the current row count
         };
         setRowData([...rowData, newRow]);
@@ -143,7 +192,7 @@ export default function Create() {
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Project</Label>
-                            <Select>
+                            <Select onValueChange={(val) => setData('project_id', val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a location" />
                                 </SelectTrigger>
@@ -158,7 +207,7 @@ export default function Create() {
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Supplier</Label>
-                            <Select onValueChange={setSelectedSupplier}>
+                            <Select onValueChange={handleSupplierChange}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a supplier" />
                                 </SelectTrigger>
@@ -175,19 +224,28 @@ export default function Create() {
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Date required</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Input
+                                placeholder="Enter date required"
+                                type="date"
+                                value={data.date_required}
+                                onChange={(e) => setData('date_required', e.target.value)}
+                            />
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Delivery Contact</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Input
+                                placeholder="Supplier Name"
+                                value={data.delivery_contact}
+                                onChange={(e) => setData('delivery_contact', e.target.value)}
+                            />
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Reqested by</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Input placeholder="Supplier Name" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Deliver to</Label>
-                            <Input placeholder="Supplier Name" />
+                            <Input placeholder="Supplier Name" value={data.deliver_to} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
                     </div>
                 </Card>
@@ -242,12 +300,19 @@ export default function Create() {
                 </Card>
 
                 {/* Add Button */}
-                <div className="mt-4">
-                    <Button onClick={addNewRow}>Add</Button>
-                    {/* Delete Button */}
-                    <Button onClick={deleteSelectedRow} className="ml-2">
-                        Delete
-                    </Button>
+                <div className="mt-4 flex justify-between">
+                    <div>
+                        <Button onClick={addNewRow}>Add</Button>
+                        {/* Delete Button */}
+                        <Button onClick={deleteSelectedRow} className="ml-2">
+                            Delete
+                        </Button>
+                    </div>
+                    <div>
+                        <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
+                            Submit
+                        </Button>
+                    </div>
                 </div>
             </div>
         </AppLayout>
