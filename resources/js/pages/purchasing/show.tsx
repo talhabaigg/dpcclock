@@ -68,7 +68,10 @@ export default function RequisitionShow() {
                             <tr>
                                 <td className="border border-2 bg-gray-100 p-1 py-1 pr-4 font-medium dark:bg-gray-700">Requisition Value:</td>
                                 <td className="border border-2 p-1 py-1 pr-4">
-                                    $ {requisition.line_items.reduce((sum, item) => sum + item.total_cost, 0).toFixed(2)}
+                                    ${' '}
+                                    {requisition.line_items && requisition.line_items.length > 0
+                                        ? requisition.line_items.reduce((sum, item) => sum + (Number(item.total_cost) || 0), 0).toFixed(2)
+                                        : '0.00'}
                                 </td>
                             </tr>
                         </tbody>
