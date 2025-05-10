@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { useForm, usePage } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { useEffect, useState } from 'react';
@@ -14,6 +14,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
+    const requisition = usePage().props.requisition ?? null;
+    console.log('Requisition:', requisition);
 
     const items = [
         { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
@@ -30,7 +32,21 @@ export default function Create() {
     });
 
     const [selectedSupplier, setSelectedSupplier] = useState(data.supplier_id);
-
+    useEffect(() => {
+        if (requisition) {
+            setData({
+                project_id: String(requisition.project_number ?? ''),
+                supplier_id: String(requisition.supplier_number ?? ''),
+                date_required: requisition.date_required,
+                delivery_contact: requisition.delivery_contact,
+                requested_by: requisition.requested_by,
+                deliver_to: requisition.deliver_to,
+                items: requisition.line_items || [],
+            });
+            setSelectedSupplier(String(requisition.supplier_number ?? ''));
+            setRowData(requisition.line_items || []);
+        }
+    }, [requisition]);
     const handleSupplierChange = (value) => {
         setSelectedSupplier(value);
         setData('supplier_id', value);
@@ -38,11 +54,24 @@ export default function Create() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        console.log('Submitting form with data:', data);
-        setData('items', rowData);
-        post('/requisition/store');
-    };
 
+        // Add lineIndex explicitly
+        const updatedItems = rowData.map((item, index) => ({
+            ...item,
+            serial_number: index + 1,
+        }));
+
+        setData('items', updatedItems);
+
+        if (requisition) {
+            router.put(`/requisition/${requisition.id}`, {
+                ...data,
+                items: updatedItems,
+            });
+        } else {
+            post('/requisition/store');
+        }
+    };
     const getDescription = (value) => {
         const item = items.find((item) => item.value === value);
         return item ? item.description : '';
@@ -57,14 +86,14 @@ export default function Create() {
     });
     const columnDefs = [
         {
-            field: 'lineIndex',
+            field: 'serial_number',
             headerName: 'PO Line #',
             valueGetter: 'node.rowIndex + 1', // Automatically increment the line number based on row index
             suppressMovable: true, // Make sure it stays in place
         },
         { field: 'description', headerName: 'Description', editable: true, singleClickEdit: false },
         {
-            field: 'itemcode',
+            field: 'code',
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
@@ -72,7 +101,7 @@ export default function Create() {
                 selectedSupplier,
             },
             onCellValueChanged: async (e) => {
-                const itemCode = e.data.itemcode;
+                const itemCode = e.data.code;
                 const locationId = data.project_id; // Assuming this is the location ID you want to use
 
                 if (!itemCode || !locationId) {
@@ -86,12 +115,12 @@ export default function Create() {
                     const item = await res.json();
 
                     // Update the row with full item data
-                    e.data.itemcode = item.code; // assuming code is a string
+                    e.data.code = item.code; // assuming code is a string
                     e.data.description = item.description;
-                    e.data.unitcost = item.unit_cost; // assuming unitcost is numeric
+                    e.data.unit_cost = item.unit_cost; // assuming unitcost is numeric
                     e.data.price_list = item.price_list; // assuming pricelist is numeric
-                    e.data.costcode = item.cost_code; // assuming costcode is a string
-                    e.data.total = (e.data.unitcost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
+                    e.data.cost_code = item.cost_code; // assuming costcode is a string
+                    e.data.total_cost = (e.data.unitcost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
 
                     // Update rowData
                     const updated = [...rowData];
@@ -108,8 +137,8 @@ export default function Create() {
             editable: true,
             type: 'numericColumn',
             onCellValueChanged: (e) => {
-                const { unitcost, qty } = e.data;
-                e.data.total = (unitcost || 0) * (qty || 0);
+                const { unit_cost, qty } = e.data;
+                e.data.total_cost = (unit_cost || 0) * (qty || 0);
 
                 const updated = [...rowData];
                 updated[e.rowIndex] = e.data;
@@ -117,7 +146,7 @@ export default function Create() {
             },
         },
         {
-            field: 'unitcost',
+            field: 'unit_cost',
             headerName: 'Unit Cost',
             editable: true,
             type: 'numericColumn',
@@ -127,7 +156,7 @@ export default function Create() {
             },
         },
         {
-            field: 'total',
+            field: 'total_cost',
             headerName: 'Total',
             type: 'numericColumn',
             valueFormatter: (params) => {
@@ -136,7 +165,7 @@ export default function Create() {
             },
             onCellValueChanged: (e) => {
                 const { unitcost, qty } = e.data;
-                e.data.total = (unitcost || 0) * (qty || 0);
+                e.data.total_cost = (unitcost || 0) * (qty || 0);
 
                 const updated = [...rowData];
                 updated[e.rowIndex] = e.data;
@@ -144,7 +173,7 @@ export default function Create() {
             },
         },
         {
-            field: 'costcode',
+            field: 'cost_code',
             headerName: 'Cost Code',
         },
         {
@@ -154,7 +183,7 @@ export default function Create() {
     ];
 
     const [rowData, setRowData] = useState([
-        { itemcode: '', description: '', unitcost: 0, qty: 1, total: 0, lineIndex: 1, costcode: '', price_list: '' },
+        { itemcode: '', description: '', unitcost: 0, qty: 1, total_cost: 0, serial_number: 1, cost_code: '', price_list: '' },
     ]); // Initialize with one empty row
     useEffect(() => {
         setData('items', rowData);
@@ -164,12 +193,12 @@ export default function Create() {
         const newRow = {
             itemcode: '',
             description: '',
-            unitcost: 0,
+            unit_cost: 0,
             qty: 1,
-            costcode: '',
+            cost_code: '',
             price_list: '',
-            total: 0,
-            lineIndex: rowData.length + 1, // Increment the line index based on the current row count
+            total_cost: 0,
+            serial_number: rowData.length + 1, // Increment the line index based on the current row count
         };
         setRowData([...rowData, newRow]);
     };
@@ -193,18 +222,18 @@ export default function Create() {
     return (
         <AppLayout>
             <div className="p-4">
-                <Label className="p-2 text-xl font-bold">Create Requisition</Label>
+                <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
                 <Card className="my-4 p-4">
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Project</Label>
-                            <Select onValueChange={(val) => setData('project_id', val)}>
+                            <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a location" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {locations.map((location) => (
-                                        <SelectItem key={location.id} value={location.id}>
+                                        <SelectItem key={location.id} value={String(location.id)}>
                                             {location.name}
                                         </SelectItem>
                                     ))}
@@ -213,13 +242,13 @@ export default function Create() {
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Supplier</Label>
-                            <Select onValueChange={handleSupplierChange}>
+                            <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a supplier" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {suppliers.map((supplier) => (
-                                        <SelectItem key={supplier.id} value={supplier.id}>
+                                        <SelectItem key={supplier.id} value={String(supplier.id)}>
                                             {supplier.name}
                                         </SelectItem>
                                     ))}
@@ -281,9 +310,10 @@ export default function Create() {
                                                 const newRow = {
                                                     itemcode: '',
                                                     description: '',
-                                                    unitcost: 0,
+                                                    unit_cost: 0,
                                                     qty: 1,
-                                                    lineIndex: rowData.length + 1, // Increment the line index for the new row
+                                                    total_cost: 0,
+                                                    serial_number: rowData.length + 1, // Increment the line index for the new row
                                                 };
 
                                                 const updated = [...rowData, newRow];
@@ -293,7 +323,7 @@ export default function Create() {
                                                 setTimeout(() => {
                                                     event.api.startEditingCell({
                                                         rowIndex: updated.length - 1,
-                                                        colKey: 'itemcode', // Focus on the first editable field
+                                                        colKey: 'code', // Focus on the first editable field
                                                     });
                                                 }, 50);
                                             }, 50);

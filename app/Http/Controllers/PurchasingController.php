@@ -39,18 +39,18 @@ class PurchasingController extends Controller
         'requested_by' => 'nullable|string|max:255',
         'deliver_to' => 'nullable|string|max:255',
         'items' => 'required|array|min:1',
-        'items.*.itemcode' => 'nullable|string|max:255',
+        'items.*.code' => 'nullable|string|max:255',
         'items.*.description' => 'nullable|string',
         'items.*.qty' => 'required|numeric|min:1',
         'items.*.unitcost' => 'required|numeric|min:0',
-        'items.*.costcode' => 'nullable|string|max:255',
+        'items.*.cost_code' => 'nullable|string|max:255',
         'items.*.price_list' => 'nullable|string|max:255',
-        'items.*.lineIndex' => 'nullable|integer',
+        'items.*.serial_number' => 'nullable|integer',
         'items.*.total' => 'nullable|numeric|min:0',
     ]);
-    // dd($validated);
+
     $requisition = Requisition::create([
-        'project_number' => $validated['project_id']?? 1,
+        'project_number' => $validated['project_id'] ?? 1,
         'supplier_number' => $validated['supplier_id'],
         'date_required' => $validated['date_required'] ?? now(),
         'delivery_contact' => $validated['delivery_contact'] ?? null,
@@ -60,20 +60,21 @@ class PurchasingController extends Controller
 
     foreach ($validated['items'] as $item) {
         RequisitionLineItem::create([
-            'serial_number' => $item['lineIndex'] ?? null,
+            'serial_number' => $item['serial_number'] ?? null,
             'requisition_id' => $requisition->id,
-            'code' => $item['itemcode'],
+            'code' => $item['code'],
             'description' => $item['description'],
             'qty' => $item['qty'],
             'unit_cost' => $item['unitcost'],
-            'cost_code' => $item['costcode'] ?? null,
+            'cost_code' => $item['cost_code'] ?? null,
             'price_list' => $item['price_list'] ?? null,
             'total_cost' => $item['total'] ?? 0,
         ]);
     }
 
-    return redirect()->route('requisition.index')->with('success', 'Requisition created successfully.');
+    return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');
 }
+
 
     public function index()
     {
@@ -88,10 +89,63 @@ class PurchasingController extends Controller
 
     public function show($id)
     {
-        $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
+        $requisition = Requisition::with('supplier', 'lineItems', 'location')->findOrFail($id);
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
         ]);
+    }
+
+    public function edit($id) {
+        $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
+        $suppliers = Supplier::all();
+        $locations = Location::where('eh_parent_id', 1149031)->get();
+
+        return Inertia::render('purchasing/create', [
+            'requisition' => $requisition,
+            'suppliers' => $suppliers,
+            'locations' => $locations,
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $requisition = Requisition::findOrFail($id);
+        // dd($request->all());
+        $validated = $request->validate([
+            'project_id' => 'required|integer',
+            'supplier_id' => 'required|integer',
+            'date_required' => 'required|date',
+            'delivery_contact' => 'nullable|string',
+            'requested_by' => 'nullable|string',
+            'deliver_to' => 'nullable|string',
+            'items' => 'required|array',
+            'items.*.code' => 'nullable|string',
+            'items.*.description' => 'required|string',
+            'items.*.unit_cost' => 'required|numeric',
+            'items.*.qty' => 'required|numeric',
+            'items.*.total_cost' => 'nullable|numeric',
+            'items.*.serial_number' => 'nullable|integer',
+            'items.*.cost_code' => 'nullable|string',
+            'items.*.price_list' => 'nullable|string',
+        ]);
+        // dd($validated);
+    
+        $requisition->update([
+            'project_number' => $validated['project_id'],
+            'supplier_id' => $validated['supplier_id'],
+            'date_required' => $validated['date_required'],
+            'delivery_contact' => $validated['delivery_contact'],
+            'requested_by' => $validated['requested_by'],
+            'deliver_to' => $validated['deliver_to'],
+        ]);
+    
+        // Optionally delete and recreate line items, or update them if you store them in a separate table
+        $requisition->lineItems()->delete();
+        foreach ($validated['items'] as $item) {
+            $requisition->lineItems()->create($item);
+        }
+    
+        return redirect()->route('requisition.index')->with('success', 'Requisition updated.');
     }
 
     public function excelImport(Requisition $requisition)

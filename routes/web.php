@@ -61,6 +61,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         
         Route::get('/requisition/all', [PurchasingController::class, 'index'])->name('requisition.index');
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
+        Route::get('/requisition/{id}/edit', [PurchasingController::class, 'edit'])->name('requisition.edit');
+        Route::put('/requisition/{requisition}', [PurchasingController::class, 'update'])->name('requisition.update');
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
         Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
