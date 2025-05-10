@@ -66,6 +66,19 @@ class PurchasingController extends Controller
         ]);
     }
 
-    return redirect()->route('kiosks.index')->with('success', 'Requisition created successfully.');
+    return redirect()->route('requisition.index')->with('success', 'Requisition created successfully.');
 }
+
+    public function index()
+    {
+        $requisitions = Requisition::with('supplier')
+        ->withSum('lineItems', 'total_cost')
+        ->get();
+       
+        return Inertia::render('purchasing/index', [
+            'requisitions' => $requisitions,
+        ]);
+    }
+
+    
 }

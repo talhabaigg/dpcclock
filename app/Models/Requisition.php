@@ -22,4 +22,12 @@ class Requisition extends Model
     {
         return $this->hasMany(RequisitionLineItem::class);
     }
+
+    public function supplier() {
+        return $this->belongsTo(Supplier::class, 'supplier_number', 'id');
+    }
+
+    public function getTotalAttribute() {
+        return $this->lineItems->sum('total');
+    }
 }

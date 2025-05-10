@@ -36,7 +36,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                         <SidebarMenuSub>
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild>
-                                    <Link href="/purchasing" className="flex items-center">
+                                    <Link href="/requisition/all" className="flex items-center">
                                         <span>View all</span>
                                     </Link>
                                 </SidebarMenuSubButton>
