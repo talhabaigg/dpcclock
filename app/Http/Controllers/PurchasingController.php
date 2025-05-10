@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Illuminate\Support\Str;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 
 class PurchasingController extends Controller
@@ -121,7 +122,7 @@ class PurchasingController extends Controller
             'items' => 'required|array',
             'items.*.code' => 'nullable|string',
             'items.*.description' => 'required|string',
-            'items.*.unit_cost' => 'required|numeric',
+            'items.*.unit_cost' => 'nullable|numeric',
             'items.*.qty' => 'required|numeric',
             'items.*.total_cost' => 'nullable|numeric',
             'items.*.serial_number' => 'nullable|integer',
@@ -147,7 +148,13 @@ class PurchasingController extends Controller
     
         return redirect()->route('requisition.index')->with('success', 'Requisition updated.');
     }
-
+    public function __invoke(Requisition $requisition)
+    {
+        $pdf = pdf::loadView('requisition.pdf', [
+            'requisition' => Requisition::with(['lineItems', 'location'])->find($requisition->id),
+        ]);
+        return $pdf->download("{$requisition->id}.pdf");
+    }
     public function excelImport(Requisition $requisition)
     {
         // Generate a unique file name with a UUID

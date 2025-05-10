@@ -83,6 +83,9 @@ export default function RequisitionShow() {
                         <Link href={`/requisition/${requisition.id}/edit`}>
                             <Button className="w-24">Edit</Button>
                         </Link>
+                        <a href={`/requisition/pdf/${requisition.id}`} className="ml-2">
+                            <Button className="w-24">PDF</Button>
+                        </a>
                     </div>
                 </div>
 
