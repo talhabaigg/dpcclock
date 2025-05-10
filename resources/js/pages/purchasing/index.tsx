@@ -14,6 +14,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 type Employee = {
+    line_items_sum_total_cost: any;
     id: number;
     name: string;
     email: string;
