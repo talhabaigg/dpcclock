@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -77,9 +77,9 @@ export default function RequisitionShow() {
                         </tbody>
                     </table>
                     <div className="flex w-1/2 justify-end self-start">
-                        <Link href={`/requisition/excel/${requisition.id}`} className="mr-2">
+                        <a href={`/requisition/excel/${requisition.id}`} className="mr-2">
                             <Button className="w-48">Download for Premier</Button>
-                        </Link>
+                        </a>
                     </div>
                 </div>
 

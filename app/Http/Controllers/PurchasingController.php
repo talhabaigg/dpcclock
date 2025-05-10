@@ -212,7 +212,7 @@ class PurchasingController extends Controller
             abort(404, 'Excel file not found.');
         }
         
-        return response()->download($filePath, $fileName)->deleteFileAfterSend();
+        return response()->download($filePath, $fileName);
     }
 
     
