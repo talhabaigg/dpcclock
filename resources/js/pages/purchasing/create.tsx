@@ -120,7 +120,7 @@ export default function Create() {
                     e.data.unit_cost = item.unit_cost; // assuming unitcost is numeric
                     e.data.price_list = item.price_list; // assuming pricelist is numeric
                     e.data.cost_code = item.cost_code; // assuming costcode is a string
-                    e.data.total_cost = (e.data.unitcost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
+                    e.data.total_cost = (e.data.unit_cost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
 
                     // Update rowData
                     const updated = [...rowData];
@@ -269,18 +269,18 @@ export default function Create() {
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Delivery Contact</Label>
                             <Input
-                                placeholder="Supplier Name"
+                                placeholder="Delivery Contact"
                                 value={data.delivery_contact}
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
                             />
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Reqested by</Label>
-                            <Input placeholder="Supplier Name" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
+                            <Input placeholder="Requested by" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Deliver to</Label>
-                            <Input placeholder="Supplier Name" value={data.deliver_to} onChange={(e) => setData('deliver_to', e.target.value)} />
+                            <Input placeholder="Deliver to" value={data.deliver_to} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
                     </div>
                 </Card>

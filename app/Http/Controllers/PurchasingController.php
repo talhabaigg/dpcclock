@@ -43,11 +43,11 @@ class PurchasingController extends Controller
         'items.*.code' => 'nullable|string|max:255',
         'items.*.description' => 'nullable|string',
         'items.*.qty' => 'required|numeric|min:1',
-        'items.*.unitcost' => 'required|numeric|min:0',
+        'items.*.unit_cost' => 'required|numeric|min:0',
         'items.*.cost_code' => 'nullable|string|max:255',
         'items.*.price_list' => 'nullable|string|max:255',
         'items.*.serial_number' => 'nullable|integer',
-        'items.*.total' => 'nullable|numeric|min:0',
+        'items.*.total_cost' => 'nullable|numeric|min:0',
     ]);
 
     $requisition = Requisition::create([
@@ -66,7 +66,7 @@ class PurchasingController extends Controller
             'code' => $item['code'],
             'description' => $item['description'],
             'qty' => $item['qty'],
-            'unit_cost' => $item['unitcost'],
+            'unit_cost' => $item['unit_cost'],
             'cost_code' => $item['cost_code'] ?? null,
             'price_list' => $item['price_list'] ?? null,
             'total_cost' => $item['total'] ?? 0,
@@ -79,7 +79,7 @@ class PurchasingController extends Controller
 
     public function index()
     {
-        $requisitions = Requisition::with('supplier')
+        $requisitions = Requisition::with('supplier', 'creator', 'location')
         ->withSum('lineItems', 'total_cost')
         ->get();
        
@@ -90,10 +90,36 @@ class PurchasingController extends Controller
 
     public function show($id)
     {
-        $requisition = Requisition::with('supplier', 'lineItems', 'location')->findOrFail($id);
+        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')->findOrFail($id);
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
         ]);
+    }
+
+    public function copy($id)
+    {
+    $originalRequisition = Requisition::with('lineItems')->findOrFail($id);
+
+    $newRequisition = $originalRequisition->replicate();
+    $newRequisition->created_at = now();
+    $newRequisition->updated_at = now();
+    $newRequisition->save();
+
+    foreach ($originalRequisition->lineItems as $lineItem) {
+        $newLineItem = $lineItem->replicate();
+        $newLineItem->requisition_id = $newRequisition->id;
+        $newLineItem->save();
+    }
+
+    return redirect()->route('requisition.index', $newRequisition->id)->with('success', 'Requisition copied successfully.');
+    }
+
+    public function destroy($id)
+    {
+        $requisition = Requisition::findOrFail($id);
+        $requisition->delete();
+
+        return redirect()->route('requisition.index')->with('success', 'Requisition deleted successfully.');
     }
 
     public function edit($id) {

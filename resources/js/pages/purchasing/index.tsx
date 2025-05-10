@@ -1,11 +1,19 @@
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { EllipsisVertical, Search } from 'lucide-react';
 import { useState } from 'react';
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Worktypes',
@@ -51,10 +59,13 @@ export default function RequisitionList() {
                         <TableRow>
                             <TableHead>ID</TableHead>
                             <TableHead>Supplier</TableHead>
+                            <TableHead>Project</TableHead>
                             <TableHead>Date required</TableHead>
                             <TableHead>Delivery Contact</TableHead>
                             <TableHead>Deliver to</TableHead>
+                            <TableHead>Created By</TableHead>
                             <TableHead>Requisition Cost </TableHead>
+                            <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -62,14 +73,34 @@ export default function RequisitionList() {
                             <TableRow key={requisition.id}>
                                 <TableCell>{requisition.id}</TableCell>
                                 <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
+                                <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.date_required}</TableCell>
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
+                                <TableCell>{requisition.creator?.name}</TableCell>
                                 <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
                                 <TableCell>
-                                    <Link href={`/requisition/${requisition.id}`} className="text-blue-500 hover:underline">
-                                        View
-                                    </Link>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger>
+                                            <Button variant="ghost">
+                                                {' '}
+                                                <EllipsisVertical />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <Link href={`/requisition/${requisition.id}`}>
+                                                <DropdownMenuItem>View </DropdownMenuItem>
+                                            </Link>
+                                            <Link href={`/requisition/${requisition.id}/copy`}>
+                                                <DropdownMenuItem>Copy </DropdownMenuItem>
+                                            </Link>{' '}
+                                            <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
+                                                <DropdownMenuItem> Delete</DropdownMenuItem>
+                                            </Link>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </TableCell>
                             </TableRow>
                         ))}

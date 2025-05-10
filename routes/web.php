@@ -65,6 +65,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/requisition/{requisition}', [PurchasingController::class, 'update'])->name('requisition.update');
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
         Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show');
+        Route::get('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
+        Route::get('/requisition/{id}/delete', [PurchasingController::class, 'destroy'])->name('requisition.delete');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
         

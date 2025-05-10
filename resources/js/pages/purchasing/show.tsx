@@ -21,6 +21,7 @@ export default function RequisitionShow() {
             deliver_to: string;
             date_required: string;
             supplier: { name: string };
+            creator: { name: string };
             line_items: {
                 id: number;
                 itemcode: string;
@@ -64,6 +65,10 @@ export default function RequisitionShow() {
                                 <td className="border border-2 bg-gray-100 p-1 py-1 pr-4 font-medium dark:bg-gray-700">Date Required:</td>
                                 <td className="border border-2 p-1 py-1 pr-4">{requisition.date_required}</td>
                             </tr>
+                            <tr>
+                                <td className="border border-2 bg-gray-100 p-1 py-1 pr-4 font-medium dark:bg-gray-700">Created by:</td>
+                                <td className="border border-2 p-1 py-1 pr-4">{requisition.creator?.name}</td>
+                            </tr>
 
                             <tr>
                                 <td className="border border-2 bg-gray-100 p-1 py-1 pr-4 font-medium dark:bg-gray-700">Requisition Value:</td>
@@ -76,15 +81,22 @@ export default function RequisitionShow() {
                             </tr>
                         </tbody>
                     </table>
-                    <div className="flex w-1/2 justify-end self-start">
-                        <a href={`/requisition/excel/${requisition.id}`} className="mr-2">
-                            <Button className="w-48">Download for Premier</Button>
-                        </a>
+                    <div className="flex w-1/2 flex-col items-end justify-end gap-2 self-start md:flex-row">
                         <Link href={`/requisition/${requisition.id}/edit`}>
-                            <Button className="w-24">Edit</Button>
+                            <Button className="w-28 text-xs" size="sm">
+                                Edit
+                            </Button>
                         </Link>
-                        <a href={`/requisition/pdf/${requisition.id}`} className="ml-2">
-                            <Button className="w-24">PDF</Button>
+                        <a href={`/requisition/excel/${requisition.id}`}>
+                            <Button className="w-28 text-xs" size="sm" variant="outline">
+                                Download Excel
+                            </Button>
+                        </a>
+
+                        <a href={`/requisition/pdf/${requisition.id}`}>
+                            <Button className="w-28 text-xs" size="sm" variant="outline">
+                                Print to PDF
+                            </Button>
                         </a>
                     </div>
                 </div>
