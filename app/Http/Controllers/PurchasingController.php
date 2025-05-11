@@ -31,58 +31,58 @@ class PurchasingController extends Controller
     }
 
     public function store(Request $request)
-{
-    $validated = $request->validate([
-        'project_id' => 'nullable|integer|exists:locations,id',
-        'supplier_id' => 'required|integer|exists:suppliers,id',
-        'date_required' => 'nullable|date',
-        'delivery_contact' => 'nullable|string|max:255',
-        'requested_by' => 'nullable|string|max:255',
-        'deliver_to' => 'nullable|string|max:255',
-        'items' => 'required|array|min:1',
-        'items.*.code' => 'nullable|string|max:255',
-        'items.*.description' => 'nullable|string',
-        'items.*.qty' => 'required|numeric|min:1',
-        'items.*.unit_cost' => 'required|numeric|min:0',
-        'items.*.cost_code' => 'nullable|string|max:255',
-        'items.*.price_list' => 'nullable|string|max:255',
-        'items.*.serial_number' => 'nullable|integer',
-        'items.*.total_cost' => 'nullable|numeric|min:0',
-    ]);
-
-    $requisition = Requisition::create([
-        'project_number' => $validated['project_id'] ?? 1,
-        'supplier_number' => $validated['supplier_id'],
-        'date_required' => $validated['date_required'] ?? now(),
-        'delivery_contact' => $validated['delivery_contact'] ?? null,
-        'requested_by' => $validated['requested_by'] ?? null,
-        'deliver_to' => $validated['deliver_to'] ?? null,
-    ]);
-
-    foreach ($validated['items'] as $item) {
-        RequisitionLineItem::create([
-            'serial_number' => $item['serial_number'] ?? null,
-            'requisition_id' => $requisition->id,
-            'code' => $item['code'],
-            'description' => $item['description'],
-            'qty' => $item['qty'],
-            'unit_cost' => $item['unit_cost'],
-            'cost_code' => $item['cost_code'] ?? null,
-            'price_list' => $item['price_list'] ?? null,
-            'total_cost' => $item['total'] ?? 0,
+    {
+        $validated = $request->validate([
+            'project_id' => 'nullable|integer|exists:locations,id',
+            'supplier_id' => 'required|integer|exists:suppliers,id',
+            'date_required' => 'nullable|date',
+            'delivery_contact' => 'nullable|string|max:255',
+            'requested_by' => 'nullable|string|max:255',
+            'deliver_to' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
+            'items.*.code' => 'nullable|string|max:255',
+            'items.*.description' => 'nullable|string',
+            'items.*.qty' => 'required|numeric|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.cost_code' => 'nullable|string|max:255',
+            'items.*.price_list' => 'nullable|string|max:255',
+            'items.*.serial_number' => 'nullable|integer',
+            'items.*.total_cost' => 'nullable|numeric|min:0',
         ]);
-    }
 
-    return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');
-}
+        $requisition = Requisition::create([
+            'project_number' => $validated['project_id'] ?? 1,
+            'supplier_number' => $validated['supplier_id'],
+            'date_required' => $validated['date_required'] ?? now(),
+            'delivery_contact' => $validated['delivery_contact'] ?? null,
+            'requested_by' => $validated['requested_by'] ?? null,
+            'deliver_to' => $validated['deliver_to'] ?? null,
+        ]);
+
+        foreach ($validated['items'] as $item) {
+            RequisitionLineItem::create([
+                'serial_number' => $item['serial_number'] ?? null,
+                'requisition_id' => $requisition->id,
+                'code' => $item['code'],
+                'description' => $item['description'],
+                'qty' => $item['qty'],
+                'unit_cost' => $item['unit_cost'],
+                'cost_code' => $item['cost_code'] ?? null,
+                'price_list' => $item['price_list'] ?? null,
+                'total_cost' => $item['total'] ?? 0,
+            ]);
+        }
+
+        return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');
+    }
 
 
     public function index()
     {
         $requisitions = Requisition::with('supplier', 'creator', 'location')
-        ->withSum('lineItems', 'total_cost')
-        ->get();
-       
+            ->withSum('lineItems', 'total_cost')
+            ->get();
+
         return Inertia::render('purchasing/index', [
             'requisitions' => $requisitions,
         ]);
@@ -98,20 +98,20 @@ class PurchasingController extends Controller
 
     public function copy($id)
     {
-    $originalRequisition = Requisition::with('lineItems')->findOrFail($id);
+        $originalRequisition = Requisition::with('lineItems')->findOrFail($id);
 
-    $newRequisition = $originalRequisition->replicate();
-    $newRequisition->created_at = now();
-    $newRequisition->updated_at = now();
-    $newRequisition->save();
+        $newRequisition = $originalRequisition->replicate();
+        $newRequisition->created_at = now();
+        $newRequisition->updated_at = now();
+        $newRequisition->save();
 
-    foreach ($originalRequisition->lineItems as $lineItem) {
-        $newLineItem = $lineItem->replicate();
-        $newLineItem->requisition_id = $newRequisition->id;
-        $newLineItem->save();
-    }
+        foreach ($originalRequisition->lineItems as $lineItem) {
+            $newLineItem = $lineItem->replicate();
+            $newLineItem->requisition_id = $newRequisition->id;
+            $newLineItem->save();
+        }
 
-    return redirect()->route('requisition.index', $newRequisition->id)->with('success', 'Requisition copied successfully.');
+        return redirect()->route('requisition.index', $newRequisition->id)->with('success', 'Requisition copied successfully.');
     }
 
     public function destroy($id)
@@ -125,37 +125,38 @@ class PurchasingController extends Controller
     public function process($id)
     {
         $requisition = Requisition::with('creator')->findOrFail($id);
-    
+
         $requisition->update([
             'status' => 'processed',
         ]);
-    
+
         $creator = $requisition->creator;
         $creatorEmail = $creator->email ?? null;
-    
+        // dd($creatorEmail);
         if (!$creatorEmail) {
             return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
         }
-    
+
         $timestamp = now()->format('d/m/Y h:i A');
-    
+
         $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
-    
+
         $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-           
-            'user_email' => 'talha@superiorgroup.com.au',
+
+            'user_email' => $creatorEmail,
             'message' => $messageBody,
         ]);
-    
+
         if ($response->failed()) {
             return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
         }
-    
+
         return redirect()->route('requisition.index')->with('success', 'Requisition processed successfully.');
     }
-    
 
-    public function edit($id) {
+
+    public function edit($id)
+    {
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
         $suppliers = Supplier::all();
         $locations = Location::where('eh_parent_id', 1149031)->get();
@@ -189,7 +190,7 @@ class PurchasingController extends Controller
             'items.*.price_list' => 'nullable|string',
         ]);
         // dd($validated);
-    
+
         $requisition->update([
             'project_number' => $validated['project_id'],
             'supplier_id' => $validated['supplier_id'],
@@ -198,13 +199,13 @@ class PurchasingController extends Controller
             'requested_by' => $validated['requested_by'],
             'deliver_to' => $validated['deliver_to'],
         ]);
-    
+
         // Optionally delete and recreate line items, or update them if you store them in a separate table
         $requisition->lineItems()->delete();
         foreach ($validated['items'] as $item) {
             $requisition->lineItems()->create($item);
         }
-    
+
         return redirect()->route('requisition.index')->with('success', 'Requisition updated.');
     }
     public function __invoke(Requisition $requisition)
@@ -218,10 +219,10 @@ class PurchasingController extends Controller
     {
         // Generate a unique file name with a UUID
         $uuid = Str::uuid();
-        
-        
+
+
         $fileName = sprintf('PO-%s-import.xlsx', $uuid);
-   
+
         // Define the file path
         $filePath = storage_path('app/public/' . $fileName);
 
@@ -237,7 +238,7 @@ class PurchasingController extends Controller
             public function collection()
             {
                 $requisition = Requisition::with(['lineItems', 'supplier'])->find($this->requisition->id);
-                
+
 
                 // Prepare the header row
                 $headers = [
@@ -288,7 +289,7 @@ class PurchasingController extends Controller
                     $row = [
                         'AP Subledger' => 'AP',
                         'PO #' => 'NEXT #',
-                        'Vendor Code' => $requisition->supplier?->code  ?? 'N/A',
+                        'Vendor Code' => $requisition->supplier?->code ?? 'N/A',
                         'Job #' => $requisition->location?->external_id ?? 'N/A',
                         'Memo' => $requisition->notes ?? 'N/A',
                         'PO Date' => now()->toDateString(),
@@ -299,7 +300,7 @@ class PurchasingController extends Controller
                         'Requested By' => $requisition->requested_by ?? 'N/A',
                         'Line' => $index + 1,
                         'Item Code' => '',
-                        'Line Description' => $lineItem->code  . '-' . $lineItem->description ?? 'N/A',
+                        'Line Description' => $lineItem->code . '-' . $lineItem->description ?? 'N/A',
                         'Qty' => $lineItem->qty ?? 0,
                         'UofM' => 'EA',
                         'Unit Cost' => $lineItem->unit_cost ?? 0,
@@ -323,17 +324,17 @@ class PurchasingController extends Controller
             }
         }, $fileName, 'public', ExcelFormat::XLSX);
 
-        if (! $stored) {
+        if (!$stored) {
             abort(500, 'Failed to store Excel file.');
         }
-    
+
         if (!file_exists($filePath)) {
             Log::error("Excel file not found: {$filePath}");
             abort(404, 'Excel file not found.');
         }
-        
+
         return response()->download($filePath, $fileName);
     }
 
-    
+
 }
