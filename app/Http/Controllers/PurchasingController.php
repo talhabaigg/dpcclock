@@ -134,7 +134,7 @@ class PurchasingController extends Controller
         $creatorEmail = $creator->email ?? null;
     
         if (!$creatorEmail) {
-            return redirect()->route('requisition.index')->with('error', 'Creator email not found.');
+            return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
         }
     
         $timestamp = now()->format('d/m/Y h:i A');
@@ -142,13 +142,13 @@ class PurchasingController extends Controller
         $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
     
         $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-            'requisition_id' => $requisition->id,
-            'user_email' => $creatorEmail,
+           
+            'user_email' => 'talha@superiorgroup.com.au',
             'message' => $messageBody,
         ]);
     
         if ($response->failed()) {
-            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+            return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
         }
     
         return redirect()->route('requisition.index')->with('success', 'Requisition processed successfully.');

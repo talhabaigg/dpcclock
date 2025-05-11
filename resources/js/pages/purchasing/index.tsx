@@ -17,8 +17,8 @@ import { EllipsisVertical, Search } from 'lucide-react';
 import { useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Worktypes',
-        href: '/worktypes',
+        title: 'Requisitions',
+        href: '/requisitions/all',
     },
 ];
 

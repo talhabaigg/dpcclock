@@ -292,7 +292,8 @@ export default function Create() {
                                 rowData={rowData}
                                 theme={myTheme}
                                 columnDefs={columnDefs}
-                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true }}
+                                suppressAutoSize={true}
+                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 150 }}
                                 rowModelType="clientSide"
                                 onGridReady={onGridReady} // Initialize gridApi
                                 onCellValueChanged={(e) => {

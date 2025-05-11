@@ -82,8 +82,11 @@ export default function RequisitionShow() {
                         </tbody>
                     </table>
                     <div className="flex w-1/2 flex-col items-end justify-end gap-2 self-start md:flex-row">
-                        <Link href={`/requisition/${requisition.id}/edit`}>
-                            <Button className="w-28 text-xs" size="sm">
+                        <Link
+                            href={`/requisition/${requisition.id}/edit`}
+                            className={requisition.status === 'processed' ? 'pointer-events-none' : ''}
+                        >
+                            <Button className="w-28 text-xs" size="sm" disabled={requisition.status === 'processed'}>
                                 Edit
                             </Button>
                         </Link>
@@ -98,12 +101,18 @@ export default function RequisitionShow() {
                                 Print to PDF
                             </Button>
                         </a>
-                        <Link href={`/requisition/${requisition.id}/process`}>
-                            <Button className="w-28 text-xs" size="sm" variant="outline">
-                                <CircleCheck />
-                                Process
+                        {requisition.status === 'processed' ? (
+                            <Button className="w-28 bg-green-500 text-xs text-white dark:bg-green-900" size="sm" disabled>
+                                Processed
                             </Button>
-                        </Link>
+                        ) : (
+                            <Link href={`/requisition/${requisition.id}/process`}>
+                                <Button className="w-28 text-xs" size="sm" variant="outline">
+                                    <CircleCheck />
+                                    Process
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 </div>
 
