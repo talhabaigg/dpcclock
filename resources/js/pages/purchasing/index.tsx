@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -60,6 +61,7 @@ export default function RequisitionList() {
                             <TableHead>ID</TableHead>
                             <TableHead>Supplier</TableHead>
                             <TableHead>Project</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Date required</TableHead>
                             <TableHead>Delivery Contact</TableHead>
                             <TableHead>Deliver to</TableHead>
@@ -74,6 +76,9 @@ export default function RequisitionList() {
                                 <TableCell>{requisition.id}</TableCell>
                                 <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
                                 <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
+                                <TableCell>
+                                    <Badge variant="outline">{requisition.status}</Badge>
+                                </TableCell>
                                 <TableCell>{requisition.date_required}</TableCell>
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>

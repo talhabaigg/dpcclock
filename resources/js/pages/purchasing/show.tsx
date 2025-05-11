@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-
+import { CircleCheck } from 'lucide-react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -98,6 +98,12 @@ export default function RequisitionShow() {
                                 Print to PDF
                             </Button>
                         </a>
+                        <Link href={`/requisition/${requisition.id}/process`}>
+                            <Button className="w-28 text-xs" size="sm" variant="outline">
+                                <CircleCheck />
+                                Process
+                            </Button>
+                        </Link>
                     </div>
                 </div>
 

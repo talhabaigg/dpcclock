@@ -17,6 +17,7 @@ class Requisition extends Model
         'delivery_contact',
         'requested_by',
         'deliver_to',
+        'status',
     ];
 
     protected static function booted()

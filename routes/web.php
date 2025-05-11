@@ -67,6 +67,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show');
         Route::get('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
         Route::get('/requisition/{id}/delete', [PurchasingController::class, 'destroy'])->name('requisition.delete');
+        Route::get('/requisition/{id}/process', [PurchasingController::class, 'process'])->name('requisition.process');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
         

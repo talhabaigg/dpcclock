@@ -15,7 +15,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
-
+use Illuminate\Support\Facades\Http;
 
 class PurchasingController extends Controller
 {
@@ -121,6 +121,39 @@ class PurchasingController extends Controller
 
         return redirect()->route('requisition.index')->with('success', 'Requisition deleted successfully.');
     }
+
+    public function process($id)
+    {
+        $requisition = Requisition::with('creator')->findOrFail($id);
+    
+        $requisition->update([
+            'status' => 'processed',
+        ]);
+    
+        $creator = $requisition->creator;
+        $creatorEmail = $creator->email ?? null;
+    
+        if (!$creatorEmail) {
+            return redirect()->route('requisition.index')->with('error', 'Creator email not found.');
+        }
+    
+        $timestamp = now()->format('d/m/Y h:i A');
+    
+        $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
+    
+        $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+            'requisition_id' => $requisition->id,
+            'user_email' => $creatorEmail,
+            'message' => $messageBody,
+        ]);
+    
+        if ($response->failed()) {
+            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+        }
+    
+        return redirect()->route('requisition.index')->with('success', 'Requisition processed successfully.');
+    }
+    
 
     public function edit($id) {
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
