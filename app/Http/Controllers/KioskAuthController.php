@@ -47,16 +47,16 @@ class KioskAuthController extends Controller
         $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
         $pin = $request->input('pin');
 
-        // $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-        // if (!$ehPinCheck) {
-        //         return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
-        //     }
-        // }
-
-        $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-        if (!$localPinCheck) {
+        $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        if (!$ehPinCheck) {
             return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
         }
+
+
+        // $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+        // if (!$localPinCheck) {
+        //     return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+        // }
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
 
