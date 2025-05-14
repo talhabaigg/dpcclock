@@ -121,11 +121,11 @@ class ClockController extends Controller
             'clocks' => 'required|array',
             'clocks.*.clockInHour' => 'required',
             'clocks.*.clockInMinute' => 'required',
-            'clocks.*.clockOutHour' => 'required',
-            'clocks.*.clockOutMinute' => 'required',
-            'clocks.*.location' => 'required',
+            'clocks.*.clockOutHour' => 'nullable',
+            'clocks.*.clockOutMinute' => 'nullable',
+            'clocks.*.location' => 'nullable',
             'clocks.*.eh_kiosk_id' => 'required',
-            'clocks.*.hoursWorked' => 'required|numeric',
+            'clocks.*.hoursWorked' => 'nullable|numeric',
             'clocks.*.insulation_allowance' => 'boolean',
             'clocks.*.setout_allowance' => 'boolean',
             'clocks.*.laser_allowance' => 'boolean',
@@ -159,16 +159,21 @@ class ClockController extends Controller
                         continue;
                     }
                     $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
-                    $clock->update([
+                    $updateData = [
                         'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
-                        'clock_out' => $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00',
                         'eh_location_id' => $eh_location_id ?? null,
                         'eh_kiosk_id' => isset($clockData['eh_kiosk_id']) ? (int) $clockData['eh_kiosk_id'] : null,
-                        'hours_worked' => $clockData['hoursWorked'] ?? null,
                         'insulation_allowance' => $clockData['insulation_allowance'] ?? false,
                         'setout_allowance' => $clockData['setout_allowance'] ?? false,
                         'laser_allowance' => $clockData['laser_allowance'] ?? false,
-                    ]);
+                    ];
+                    // Add clock_out only if both hour and minute are provided
+                    if (!is_null($clockData['clockOutHour']) && !is_null($clockData['clockOutMinute'])) {
+                        $updateData['clock_out'] = $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00';
+                        $updateData['hours_worked'] = $clockData['hoursWorked'] ?? null;
+                    }
+
+                    $clock->update($updateData);
                 } else {
                     // If no ID, treat as a new clock (e.g., UUID)
                     $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
