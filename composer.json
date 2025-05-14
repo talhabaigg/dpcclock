@@ -16,6 +16,7 @@
         "laravel/reverb": "^1.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "league/flysystem-sftp-v3": "^3.29",
         "maatwebsite/excel": "^3.1",
         "spatie/laravel-permission": "^6.16",
         "symfony/http-client": "^7.2",

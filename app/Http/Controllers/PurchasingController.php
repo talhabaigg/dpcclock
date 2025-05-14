@@ -16,6 +16,7 @@ use Maatwebsite\Excel\Excel as ExcelFormat;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
+use App\Services\ExcelExportService;
 
 class PurchasingController extends Controller
 {
@@ -126,32 +127,47 @@ class PurchasingController extends Controller
     {
         $requisition = Requisition::with('creator')->findOrFail($id);
 
-        $requisition->update([
-            'status' => 'processed',
-        ]);
 
-        $creator = $requisition->creator;
-        $creatorEmail = $creator->email ?? null;
-        // dd($creatorEmail);
-        if (!$creatorEmail) {
-            return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
+        $excelService = new ExcelExportService();
+        $fileName = $excelService->generateCsv($requisition);
+
+        $fileContent = Storage::disk('public')->get($fileName);
+        // dd($fileName, $fileContent);
+        // Upload to SFTP
+        $uploaded = Storage::disk('premier_sftp')->put("upload/{$fileName}", $fileContent);
+
+        if ($uploaded) {
+            $creator = $requisition->creator;
+            $creatorEmail = $creator->email ?? null;
+            // dd($creatorEmail);
+            if (!$creatorEmail) {
+                return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
+            }
+
+            $timestamp = now()->format('d/m/Y h:i A');
+
+            $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
+
+            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+
+                'user_email' => $creatorEmail,
+                'message' => $messageBody,
+            ]);
+
+            $requisition->update([
+                'status' => 'processed',
+            ]);
+
+            if ($response->failed()) {
+                return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
+            }
+
+            return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
+
+        } else {
+            dd('SFTP upload failed');
         }
 
-        $timestamp = now()->format('d/m/Y h:i A');
-
-        $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
-
-        $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-
-            'user_email' => $creatorEmail,
-            'message' => $messageBody,
-        ]);
-
-        if ($response->failed()) {
-            return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
-        }
-
-        return redirect()->route('requisition.index')->with('success', 'Requisition processed successfully.');
     }
 
 
