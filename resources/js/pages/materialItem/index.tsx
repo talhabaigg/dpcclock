@@ -69,6 +69,10 @@ export default function ItemList() {
                         className="pl-10"
                     />
                 </div>
+                <span className="">
+                    {flash.success && <div className="mt-2 text-sm text-green-600">{flash.success}</div>}
+                    {flash.error && <div className="mt-2 text-sm text-red-600">{flash.error}</div>}
+                </span>
                 <div className="flex items-center gap-2">
                     <Input type="file" accept=".csv" onChange={handleFileChange} />
                     <Button onClick={handleUpload} disabled={!selectedFile || processing}>

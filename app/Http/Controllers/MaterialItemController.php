@@ -22,7 +22,7 @@ class MaterialItemController extends Controller
         $materialItems = MaterialItem::with('costCode', 'supplier')->get();
 
 
-       return Inertia::render('materialItem/index', [
+        return Inertia::render('materialItem/index', [
             'items' => $materialItems,
         ]);
     }
@@ -76,46 +76,50 @@ class MaterialItemController extends Controller
     }
 
     public function upload(Request $request)
-{
-    $request->validate([
-        'file' => 'required|file|mimes:csv,txt',
-    ]);
-  
-    $file = fopen($request->file('file')->getRealPath(), 'r');
-    $header = fgetcsv($file); // Skip header row
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt',
+        ]);
 
-    while (($row = fgetcsv($file)) !== false) {
-        [$code, $description, $unit_cost, $supplier_code, $costcode] = $row;
-       
-        // Lookup or create related records
-        $supplier = Supplier::where('code', trim($supplier_code))->first();
-        
-     
-        $costCode = CostCode::where('code', trim($costcode))->first();
-   
+        $file = fopen($request->file('file')->getRealPath(), 'r');
+        $header = fgetcsv($file); // Skip header row
 
-        MaterialItem::updateOrCreate(
-            ['code' => trim($code)],
-            [
-                'description' => trim($description),
-                'unit_cost' => (float) $unit_cost,
-                'supplier_id' => $supplier->id,
-                'cost_code_id' => $costCode->id,
-            ]
-        );
+        while (($row = fgetcsv($file)) !== false) {
+            [$code, $description, $unit_cost, $supplier_code, $costcode] = $row;
+
+            // Lookup or create related records
+            $supplier = Supplier::where('code', trim($supplier_code))->first();
+            $costCode = CostCode::where('code', trim($costcode))->first();
+            if (!$supplier) {
+                return redirect()->back()->with('error', 'Supplier not found: ' . $supplier_code);
+            }
+            if (!$costCode) {
+                return redirect()->back()->with('error', 'Cost code not found: ' . $costcode);
+            }
+
+            MaterialItem::updateOrCreate(
+                ['code' => trim($code)],
+                [
+                    'description' => trim($description),
+                    'unit_cost' => (float) $unit_cost,
+                    'supplier_id' => $supplier->id,
+                    'cost_code_id' => $costCode->id,
+                ]
+            );
+        }
+
+        fclose($file);
+
+        return redirect()->back()->with('success', 'CSV uploaded successfully.');
     }
 
-    fclose($file);
-
-    return redirect()->back()->with('success', 'CSV uploaded successfully.');
-}
-
-    public function uploadLocationPricing(Request $request) {
+    public function uploadLocationPricing(Request $request)
+    {
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
         // dd($request->file('file'));
-    
+
         $path = $request->file('file')->getRealPath();
         $rows = array_map('str_getcsv', file($path));
         $header = array_map('trim', array_shift($rows));
@@ -123,15 +127,15 @@ class MaterialItemController extends Controller
         $insertCount = 0;
         foreach ($rows as $index => $row) {
             $data = array_combine($header, $row);
-    
+
             $location = Location::where('external_id', $data['location_id'])->first();
             $material = MaterialItem::where('code', $data['code'])->first();
-    
+
             if (!$location || !$material) {
                 // You can log or skip
                 continue;
             }
-    
+
             DB::table('location_item_pricing')->updateOrInsert(
                 [
                     'location_id' => $location->id,
@@ -143,10 +147,10 @@ class MaterialItemController extends Controller
                     'created_at' => now(),
                 ]
             );
-    
+
             $insertCount++;
         }
-    
+
         return back()->with('success', "Imported $insertCount prices successfully.");
     }
 
@@ -176,41 +180,41 @@ class MaterialItemController extends Controller
     }
 
     public function getMaterialItemById($id, $locationId)
-{
-    Log::info('Fetching material item with ID: ' . $id);
-    Log::info('Fetching location with ID: ' . $locationId);
+    {
+        Log::info('Fetching material item with ID: ' . $id);
+        Log::info('Fetching location with ID: ' . $locationId);
 
-    // Fetch the item and its related cost code
-    $item = MaterialItem::with('costCode')->find($id);
+        // Fetch the item and its related cost code
+        $item = MaterialItem::with('costCode')->find($id);
 
-    // If no item is found, return 404 early
-    if (!$item) {
-        return response()->json(['message' => 'Item not found'], 404);
+        // If no item is found, return 404 early
+        if (!$item) {
+            return response()->json(['message' => 'Item not found'], 404);
+        }
+
+        // Fetch the location-specific price (filtered in SQL)
+        $location_price = DB::table('location_item_pricing')
+            ->where('material_item_id', $id)
+            ->where('location_id', $locationId)
+            ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
+            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+            ->first();
+
+        Log::info('Location price fetched: ' . json_encode($location_price));
+
+        if ($location_price) {
+            $item->unit_cost = $location_price->unit_cost_override;
+        }
+
+        // Convert to array for response
+        $itemArray = $item->toArray();
+        $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
+        $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+
+        Log::info('Material item found: ' . json_encode($itemArray));
+
+        return response()->json($itemArray);
     }
 
-    // Fetch the location-specific price (filtered in SQL)
-    $location_price = DB::table('location_item_pricing')
-        ->where('material_item_id', $id)
-        ->where('location_id', $locationId)
-        ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
-        ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
-        ->first();
 
-    Log::info('Location price fetched: ' . json_encode($location_price));
-
-    if ($location_price) {
-        $item->unit_cost = $location_price->unit_cost_override;
-    }
-
-    // Convert to array for response
-    $itemArray = $item->toArray();
-    $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
-    $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
-
-    Log::info('Material item found: ' . json_encode($itemArray));
-
-    return response()->json($itemArray);
-}
-
-    
 }
