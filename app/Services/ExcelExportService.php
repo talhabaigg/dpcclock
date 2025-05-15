@@ -14,7 +14,7 @@ class ExcelExportService
     public function generateCsv(Requisition $requisition): string
     {
         $datetime = now()->format('YmdHis');
-        $fileName = "PO-{$datetime}_TESTSW.csv";
+        $fileName = "PO-{$datetime}_SWC.csv";
 
         Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
             protected $requisition;
