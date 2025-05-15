@@ -133,7 +133,8 @@ class PurchasingController extends Controller
         $fileName = $excelService->generateCsv($requisition);
 
         $fileContent = Storage::disk('public')->get($fileName);
-        // dd($fileName, $fileContent);
+        // For testing: return the Excel file as a download
+        dd('excel generated', $fileContent);
         // Upload to SFTP
         $uploaded = Storage::disk('premier_sftp')->put("upload/{$fileName}", $fileContent);
 

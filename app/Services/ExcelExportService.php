@@ -8,6 +8,7 @@ use App\Models\Requisition;
 use App\Models\MaterialItem;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Illuminate\Support\Collection;
+use Carbon\Carbon;
 
 class ExcelExportService
 {
@@ -74,9 +75,9 @@ class ExcelExportService
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->notes ?? 'N/A',
-                        now()->format('Y-m-d'),
-                        $requisition->date_required->format('Y-m-d') ?? 'N/A',
-                        ($requisition->date_required)->format('Y-m-d') ?? 'N/A',
+                        '= "' . Carbon::now()->format('Y-m-d') . '"',
+                        '= "' . Carbon::parse($requisition->date_required)->format('Y-m-d') . '"',
+                        '= "' . Carbon::parse($requisition->date_required)->format('Y-m-d') . '"',
                         'JOB',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->requested_by ?? 'N/A',
