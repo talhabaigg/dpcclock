@@ -9,13 +9,17 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-communi
 import { AgGridReact } from 'ag-grid-react';
 import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
+import GridSizeSelector from './gridSizeSelector';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
     const requisition = usePage().props.requisition ?? null;
-    console.log('Requisition:', requisition);
+
+    const [gridSize, setGridSize] = useState(() => {
+        return localStorage.getItem('gridSize') || '300px';
+    });
 
     const items = [
         { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
@@ -291,10 +295,11 @@ export default function Create() {
                         </div>
                     </div>
                 </Card>
+
                 <Card>
                     <CardContent className="-p-4 -my-5">
                         {' '}
-                        <div style={{ height: 500 }}>
+                        <div style={{ height: gridSize }}>
                             <AgGridReact
                                 rowData={rowData}
                                 theme={myTheme}
@@ -352,7 +357,8 @@ export default function Create() {
                             Delete
                         </Button>
                     </div>
-                    <div>
+                    <div className="flex w-1/2 flex-row items-center justify-end">
+                        <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
                             Submit
                         </Button>
