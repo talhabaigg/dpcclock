@@ -134,7 +134,7 @@ class PurchasingController extends Controller
 
         $fileContent = Storage::disk('public')->get($fileName);
         // For testing: return the Excel file as a download
-        dd('excel generated', $fileContent);
+        // dd('excel generated', $fileContent);
         // Upload to SFTP
         $uploaded = Storage::disk('premier_sftp')->put("upload/{$fileName}", $fileContent);
 
