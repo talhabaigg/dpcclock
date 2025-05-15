@@ -102,6 +102,7 @@ class PurchasingController extends Controller
         $originalRequisition = Requisition::with('lineItems')->findOrFail($id);
 
         $newRequisition = $originalRequisition->replicate();
+        $newRequisition->status = 'pending';
         $newRequisition->created_at = now();
         $newRequisition->updated_at = now();
         $newRequisition->save();

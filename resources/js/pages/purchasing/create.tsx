@@ -287,7 +287,7 @@ export default function Create() {
                 <Card>
                     <CardContent className="-p-4 -my-5">
                         {' '}
-                        <div style={{ height: 300 }}>
+                        <div style={{ height: 500 }}>
                             <AgGridReact
                                 rowData={rowData}
                                 theme={myTheme}
