@@ -150,6 +150,13 @@ export default function Create() {
             headerName: 'Unit Cost',
             editable: true,
             type: 'numericColumn',
+            onCellValueChanged: (e) => {
+                const { unit_cost, qty } = e.data;
+                e.data.total_cost = (unit_cost || 0) * (qty || 0);
+                const updated = [...rowData];
+                updated[e.rowIndex] = e.data;
+                setRowData(updated);
+            },
             valueFormatter: (params) => {
                 if (params.value == null) return '';
                 return `$${parseFloat(params.value).toFixed(6)}`; // Format to 6 decimal places
