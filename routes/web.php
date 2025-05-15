@@ -11,6 +11,7 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\MaterialItemController;
+use App\Http\Controllers\UserController;
 
 
 
@@ -27,6 +28,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('dashboard');
 
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
+
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::get('/users/edit/{user}', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
 
         Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
@@ -58,7 +63,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
-        
+
         Route::get('/requisition/all', [PurchasingController::class, 'index'])->name('requisition.index');
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
         Route::get('/requisition/{id}/edit', [PurchasingController::class, 'edit'])->name('requisition.edit');
@@ -70,7 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/process', [PurchasingController::class, 'process'])->name('requisition.process');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
-        
+
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
