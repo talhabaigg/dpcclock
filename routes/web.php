@@ -80,6 +80,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
+        Route::get('material-items/download', [MaterialItemController::class, 'download'])->name('material-items.download');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
 

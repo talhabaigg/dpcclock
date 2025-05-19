@@ -81,29 +81,25 @@ class MaterialItemController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
-
+        $suppliers = Supplier::all()->keyBy(fn($s) => trim($s->code));
+        $costCodes = CostCode::all()->keyBy(fn($c) => trim($c->code));
         $file = fopen($request->file('file')->getRealPath(), 'r');
         $header = fgetcsv($file); // Skip header row
         $missingCostCodeRows = [];
         while (($row = fgetcsv($file)) !== false) {
-            [$code, $description, $unit_cost, $supplier_code, $costcode] = $row;
+            [$code, $description, $unit_cost, $supplier_code, $costcode] = array_map('trim', $row);
 
-            $supplier = Supplier::where('code', trim($supplier_code))->first();
-            $costCode = CostCode::where('code', trim($costcode))->first();
+            $supplier = $suppliers->get($supplier_code);
+            $costCode = $costCodes->get($costcode);
 
-            if (!$supplier) {
+            if (!$supplier || !$costCode) {
+                $row[4] = '="' . $row[4] . '"'; // prevent Excel from formatting costcode
                 $missingCostCodeRows[] = $row;
-                continue; // Skip this row, continue processing others
-            }
-
-            if (!$costCode) {
-                // Save the row for the download later
-                $missingCostCodeRows[] = $row;
-                continue; // Skip this row, continue processing others
+                continue;
             }
 
             MaterialItem::updateOrCreate(
-                ['code' => trim($code)],
+                ['code' => $code],
                 [
                     'description' => trim($description),
                     'unit_cost' => (float) $unit_cost,
@@ -112,6 +108,7 @@ class MaterialItemController extends Controller
                 ]
             );
         }
+        fclose($file);
 
         if (!empty($missingCostCodeRows)) {
             $filename = 'missing_costcodes_' . now()->format('Ymd_His') . '.csv';
@@ -127,6 +124,30 @@ class MaterialItemController extends Controller
         }
 
         return redirect()->back()->with('success', 'Material items imported successfully.');
+    }
+
+    public function download()
+    {
+        $fileName = 'material_items_' . now()->format('Ymd_His') . '.csv';
+        $filePath = storage_path("app/{$fileName}");
+
+        $handle = fopen($filePath, 'w');
+        fputcsv($handle, ['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
+
+        $items = MaterialItem::with('supplier', 'costCode')->get();
+        foreach ($items as $item) {
+            fputcsv($handle, [
+                $item->code,
+                $item->description,
+                $item->unit_cost,
+                $item->supplier?->code,
+                $item->costCode?->code,
+
+            ]);
+        }
+        fclose($handle);
+
+        return response()->download($filePath)->deleteFileAfterSend(true);
     }
 
     public function uploadLocationPricing(Request $request)

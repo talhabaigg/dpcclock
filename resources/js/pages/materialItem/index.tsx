@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { Download, Search, Upload } from 'lucide-react';
 import { ChangeEvent, useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -73,11 +73,20 @@ export default function ItemList() {
                     {flash.success && <div className="mt-2 text-sm text-green-600">{flash.success}</div>}
                     {flash.error && <div className="mt-2 text-sm text-red-600">{flash.error}</div>}
                 </span>
+
                 <div className="flex items-center gap-2">
                     <Input type="file" accept=".csv" onChange={handleFileChange} />
                     <Button onClick={handleUpload} disabled={!selectedFile || processing}>
+                        <Upload />
                         Upload CSV
                     </Button>
+                    <a href="/material-items/download">
+                        <Button>
+                            {' '}
+                            <Download />
+                            Download CSV
+                        </Button>
+                    </a>
                 </div>
             </div>
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
