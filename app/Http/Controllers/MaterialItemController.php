@@ -77,6 +77,7 @@ class MaterialItemController extends Controller
 
     public function upload(Request $request)
     {
+        set_time_limit(300); // Extend request time to 5 minutes
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
