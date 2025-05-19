@@ -53,6 +53,9 @@ export default function LocationsList() {
     const [openDialog, setOpenDialog] = useState(false);
 
     const splitExternalId = (externalId: string) => {
+        if (!externalId) {
+            return { level: 'Not Set', activity: 'Not Set' };
+        }
         const trimmedId = externalId.split('::').pop() || '';
         const parts = trimmedId.split('-');
         const level = parts[0] ? parts[0] : 'Not Set';
@@ -89,7 +92,6 @@ export default function LocationsList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
             <div className="m-2 flex items-center gap-2">
-                {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '}
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                     <DialogTrigger asChild>
                         <Button variant="secondary">Create sub-location</Button>
@@ -112,6 +114,7 @@ export default function LocationsList() {
                         </DialogHeader>
                     </DialogContent>
                 </Dialog>
+                {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '}
             </div>
 
             <Card className="m-2 w-full p-0 md:w-1/2 2xl:w-1/3">

@@ -8,7 +8,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChangeEvent, useState } from 'react';
-import SublocationDialog from './components/SublocationDialog';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -130,7 +129,10 @@ export default function LocationsList() {
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <SublocationDialog subLocations={location.subLocations} locationName={location.name}></SublocationDialog>
+                                    <Link href={`locations/${location.id}`}>
+                                        <Button>Open</Button>
+                                    </Link>
+                                    {/* <SublocationDialog subLocations={location.subLocations} locationName={location.name}></SublocationDialog> */}
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
