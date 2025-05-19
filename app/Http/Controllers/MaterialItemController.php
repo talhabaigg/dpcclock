@@ -84,18 +84,22 @@ class MaterialItemController extends Controller
 
         $file = fopen($request->file('file')->getRealPath(), 'r');
         $header = fgetcsv($file); // Skip header row
-
+        $missingCostCodeRows = [];
         while (($row = fgetcsv($file)) !== false) {
             [$code, $description, $unit_cost, $supplier_code, $costcode] = $row;
 
-            // Lookup or create related records
             $supplier = Supplier::where('code', trim($supplier_code))->first();
             $costCode = CostCode::where('code', trim($costcode))->first();
+
             if (!$supplier) {
-                return redirect()->back()->with('error', 'Supplier not found: ' . $supplier_code);
+                $missingCostCodeRows[] = $row;
+                continue; // Skip this row, continue processing others
             }
+
             if (!$costCode) {
-                return redirect()->back()->with('error', 'Cost code not found: ' . $costcode);
+                // Save the row for the download later
+                $missingCostCodeRows[] = $row;
+                continue; // Skip this row, continue processing others
             }
 
             MaterialItem::updateOrCreate(
@@ -109,9 +113,20 @@ class MaterialItemController extends Controller
             );
         }
 
-        fclose($file);
+        if (!empty($missingCostCodeRows)) {
+            $filename = 'missing_costcodes_' . now()->format('Ymd_His') . '.csv';
+            $filePath = storage_path("app/{$filename}");
 
-        return redirect()->back()->with('success', 'CSV uploaded successfully.');
+            $handle = fopen($filePath, 'w');
+            foreach ($missingCostCodeRows as $missingRow) {
+                fputcsv($handle, $missingRow);
+            }
+            fclose($handle);
+
+            return redirect()->back()->with('success', json_encode($missingCostCodeRows));
+        }
+
+        return redirect()->back()->with('success', 'Material items imported successfully.');
     }
 
     public function uploadLocationPricing(Request $request)
