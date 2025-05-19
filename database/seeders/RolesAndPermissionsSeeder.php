@@ -17,6 +17,11 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Define permissions
         $permissions = [
+            'view dashboard',
+            'manage locations',
+            'manage employees',
+            'manage worktypes',
+            'manage timesheets',
             'view kiosk',
             'retrieve kiosk token',
             'update travel zones',
@@ -36,19 +41,19 @@ class RolesAndPermissionsSeeder extends Seeder
         // Assign permissions to roles
         $kioskRole = Role::where('name', 'kiosk')->first();
         $kioskRole->syncPermissions([
+            'view dashboard',
             'view kiosk',
         ]);
 
         $adminRole = Role::where('name', 'admin')->first();
-        $adminRole->syncPermissions([
-            'view kiosk',
-            'retrieve kiosk token',
-            'update travel zones',
-            'view timesheet converter',
-        ]);
+        $adminRole->syncPermissions($permissions);
 
         $managerRole = Role::where('name', 'manager')->first();
         $managerRole->syncPermissions([
+            'view dashboard',
+            'manage locations',
+            'manage employees',
+            'manage timesheets',
             'view kiosk',
             'retrieve kiosk token',
         ]);
