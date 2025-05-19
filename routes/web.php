@@ -40,6 +40,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
         Route::resource('locations', LocationController::class)->names('locations');
+        Route::post('sub-locations', [LocationController::class, 'createSubLocation'])->name('sub-locations.create');
 
         Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync');
         Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit');

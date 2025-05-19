@@ -52,7 +52,14 @@ class LocationController extends Controller
      */
     public function show(Location $location)
     {
-        //
+        $location->load('worktypes');
+        // Fetch sub-locations for the specified location
+        $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
+
+
+        return Inertia::render('locations/show', [
+            'location' => $location,
+        ]);
     }
 
     /**
@@ -107,4 +114,51 @@ class LocationController extends Controller
         }
         return redirect()->back()->with('success', 'Locations synced successfully from Employment Hero.');
     }
+
+
+    public function createSubLocation(Request $request)
+    {
+        $request->validate([
+            'level' => 'required|string|max:64',
+            'activity' => 'required|string|max:64',
+            'location_id' => 'required|integer',
+        ]);
+
+        $parentLocation = Location::find($request->location_id);
+        if (!$parentLocation) {
+            return redirect()->back()->with('error', 'Parent location not found.');
+        }
+        $data = [
+            'defaultShiftConditionIds' => $parentLocation->worktypes->pluck('eh_worktype_id')->toArray(),
+            'country' => 'Australia',
+            'name' => $request->level . '-' . $request->activity,
+            'parentId' => $parentLocation->eh_location_id,
+            'state' => 'QLD',
+            'source' => 'API - Portal',
+            'isRollupReportingLocation' => true,
+            'externalId' => $parentLocation->external_id . '::' . $request->level . '-' . $request->activity,
+        ];
+
+        $this->createEHLocation($data);
+
+
+
+    }
+
+    private function createEHLocation($data)
+    {
+        $apiKey = env('PAYROLL_API_KEY');
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
+        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/location", $data);
+
+        if ($response->successful()) {
+            $this->sync();
+            return redirect()->back()->with('success', 'Sub-location created successfully.');
+        } else {
+            return redirect()->back()->with('error', 'Failed to create sub-location.');
+        }
+
+    }
+
 }
