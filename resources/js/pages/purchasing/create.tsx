@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { darkTheme } from '@/themes/darktheme';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
@@ -20,6 +21,7 @@ export default function Create() {
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
     });
+    const isDarkMode = document.documentElement.classList.contains('dark');
 
     const items = [
         { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
@@ -88,6 +90,7 @@ export default function Create() {
         wrapperBorderRadius: '10px',
         wrapperBorder: false,
     });
+    const appliedTheme = isDarkMode ? darkTheme : myTheme;
     const columnDefs = [
         {
             field: 'serial_number',
@@ -302,7 +305,7 @@ export default function Create() {
                         <div style={{ height: gridSize }}>
                             <AgGridReact
                                 rowData={rowData}
-                                theme={myTheme}
+                                theme={appliedTheme}
                                 columnDefs={columnDefs}
                                 suppressAutoSize={true}
                                 defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 150 }}
