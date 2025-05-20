@@ -189,6 +189,7 @@ export default function Create() {
         {
             field: 'cost_code',
             headerName: 'Cost Code',
+            editable: true,
         },
         {
             field: 'price_list',
