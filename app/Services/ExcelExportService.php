@@ -69,28 +69,28 @@ class ExcelExportService
                     $costcode = $materialItem?->costcode;
                     $formattedCostcode = $costcode ? substr($costcode, 0, 2) . '-' . substr($costcode, 2) : 'N/A';
                     $po_number = $requisition->location?->external_id . '-PO-' . $requisition->id;
-
+                    $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
                     return [
                         'AP',
                         'NEXT #',
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->notes ?? 'N/A',
-                        '= "' . Carbon::now()->format('d/m/Y') . '"',
-                        '= "' . Carbon::parse($requisition->date_required)->format('d/m/Y') . '"',
-                        '= "' . Carbon::parse($requisition->date_required)->format('d/m/Y') . '"',
+                        Carbon::now()->format('d/m/Y'),
+                        Carbon::parse($requisition->date_required)->format('d/m/Y'),
+                        Carbon::parse($requisition->date_required)->format('d/m/Y'),
                         'JOB',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->requested_by ?? Auth::user()->name,
                         $index + 1,
                         '',
-                        $lineItem->code . '-' . $lineItem->description ?? 'N/A',
+                        $lineItemValue,
                         $lineItem->qty ?? 1,
                         'EA',
                         $lineItem->unit_cost ?? 0,
                         'J',
                         $requisition->location?->external_id ?? 'N/A',
-                        $lineItem->cost_code ?? '',
+                        $lineItem->cost_code ?? '90-10',
                         'MAT',
                         '',
                         '',
