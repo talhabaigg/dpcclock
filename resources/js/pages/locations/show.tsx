@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
@@ -147,31 +148,69 @@ export default function LocationsList() {
                     </TableRow>
                 </Table>
             </Card>
+            <Tabs defaultValue="sublocations">
+                <TabsList className="ml-2 grid grid-cols-2">
+                    <TabsTrigger value="sublocations">Sub-locations</TabsTrigger>
+                    <TabsTrigger value="pricelist">Price List</TabsTrigger>
+                </TabsList>
+                <TabsContent value="sublocations">
+                    <Card className="m-2 w-full p-0">
+                        <Table className="w-full">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Sub Location ID</TableHead>
+                                    <TableHead>Sub Location Name</TableHead>
+                                    <TableHead>Sub Location External ID</TableHead>
+                                    <TableHead>Level</TableHead>
+                                    <TableHead>Acitivity</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {location.subLocations.map((subLocation) => (
+                                    <TableRow key={subLocation.id}>
+                                        <TableCell>{subLocation.eh_location_id}</TableCell>
+                                        <TableCell>{subLocation.name}</TableCell>
+                                        <TableCell>{subLocation.external_id || 'Not Set'}</TableCell>
+                                        <TableCell>{splitExternalId(subLocation.external_id).level}</TableCell>
+                                        <TableCell>{splitExternalId(subLocation.external_id).activity}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="pricelist">
+                    <Card className="m-2">
+                        <Table className="w-full">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Code</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Unit Cost</TableHead>
+                                </TableRow>
+                            </TableHeader>
 
-            <Card className="m-2 w-full p-0">
-                <Table className="w-full">
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Sub Location ID</TableHead>
-                            <TableHead>Sub Location Name</TableHead>
-                            <TableHead>Sub Location External ID</TableHead>
-                            <TableHead>Level</TableHead>
-                            <TableHead>Acitivity</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {location.subLocations.map((subLocation) => (
-                            <TableRow key={subLocation.id}>
-                                <TableCell>{subLocation.eh_location_id}</TableCell>
-                                <TableCell>{subLocation.name}</TableCell>
-                                <TableCell>{subLocation.external_id || 'Not Set'}</TableCell>
-                                <TableCell>{splitExternalId(subLocation.external_id).level}</TableCell>
-                                <TableCell>{splitExternalId(subLocation.external_id).activity}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </Card>
+                            <TableBody>
+                                {!location.material_items || location.material_items.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center">
+                                            No price list available for this job.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    location.material_items.map((item) => (
+                                        <TableRow key={item.id}>
+                                            <TableCell>{item.code}</TableCell>
+                                            <TableCell>{item.description}</TableCell>
+                                            <TableCell>{item.unit_cost}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </AppLayout>
     );
 }

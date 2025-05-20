@@ -52,10 +52,11 @@ class LocationController extends Controller
      */
     public function show(Location $location)
     {
-        $location->load('worktypes');
+        $location->load('worktypes', 'materialItems');
         // Fetch sub-locations for the specified location
         $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
 
+        // dd($location->materialItems);
 
         return Inertia::render('locations/show', [
             'location' => $location,

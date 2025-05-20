@@ -14,19 +14,21 @@ class Location extends Model
         'external_id',
     ];
 
-    public function worktypes() {
+    public function worktypes()
+    {
         return $this->belongsToMany(Worktype::class);
     }
 
-    public function kiosk() {
+    public function kiosk()
+    {
         return $this->hasOne(Kiosk::class, 'eh_location_id', 'eh_location_id');
     }
 
     public function materialItems()
-{
-    return $this->belongsToMany(MaterialItem::class, 'project_item_pricing')
-                ->withPivot('unit_cost_override')
-                ->withTimestamps();
-}
+    {
+        return $this->belongsToMany(MaterialItem::class, 'location_item_pricing')
+            ->withPivot('unit_cost_override')
+            ->withTimestamps();
+    }
 
 }
