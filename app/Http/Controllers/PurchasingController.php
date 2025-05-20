@@ -70,7 +70,7 @@ class PurchasingController extends Controller
                 'unit_cost' => $item['unit_cost'],
                 'cost_code' => $item['cost_code'] ?? null,
                 'price_list' => $item['price_list'] ?? null,
-                'total_cost' => $item['total'] ?? 0,
+                'total_cost' => $item['total_cost'] ?? 0,
             ]);
         }
 

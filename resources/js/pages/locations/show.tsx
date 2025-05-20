@@ -52,7 +52,7 @@ export default function LocationsList() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
-
+    // const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const splitExternalId = (externalId: string) => {
         if (!externalId) {
             return { level: 'Not Set', activity: 'Not Set' };
@@ -69,7 +69,24 @@ export default function LocationsList() {
         activity: null,
         location_id: location.id,
     });
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
 
+    const handleUpload = (locationId: number) => {
+        if (!selectedFile) return;
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('location_id', locationId.toString());
+
+        router.post('/material-items/location/upload', formData, {
+            forceFormData: true,
+            onSuccess: () => setSelectedFile(null),
+        });
+    };
     const handleFormSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setProcessing(true);
@@ -180,6 +197,13 @@ export default function LocationsList() {
                     </Card>
                 </TabsContent>
                 <TabsContent value="pricelist">
+                    <div className="m-2 flex flex-col gap-2 sm:w-1/2 sm:flex-row 2xl:w-1/3">
+                        <Input type="file" accept=".csv" onChange={handleFileChange} />
+                        <Button onClick={() => handleUpload(location.id)} disabled={!selectedFile || processing}>
+                            Upload CSV
+                        </Button>
+                    </div>
+
                     <Card className="m-2">
                         <Table className="w-full">
                             <TableHeader>
