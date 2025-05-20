@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Auth;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Requisition;
@@ -71,7 +72,7 @@ class ExcelExportService
 
                     return [
                         'AP',
-                        $po_number,
+                        'NEXT #',
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->notes ?? 'N/A',
@@ -80,11 +81,11 @@ class ExcelExportService
                         '= "' . Carbon::parse($requisition->date_required)->format('d/m/Y') . '"',
                         'JOB',
                         $requisition->location?->external_id ?? 'N/A',
-                        $requisition->requested_by ?? 'N/A',
+                        $requisition->requested_by ?? Auth::user()->name,
                         $index + 1,
                         '',
                         $lineItem->code . '-' . $lineItem->description ?? 'N/A',
-                        $lineItem->qty ?? 0,
+                        $lineItem->qty ?? 1,
                         'EA',
                         $lineItem->unit_cost ?? 0,
                         'J',
