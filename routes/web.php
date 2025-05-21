@@ -86,6 +86,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
         Route::get('/material-items/{id}/{locationId}', [MaterialItemController::class, 'getMaterialItemById']);
+        Route::get('/material-items/code/{code}/{locationId}', [MaterialItemController::class, 'getMaterialItemByCode']);
 
     });
 

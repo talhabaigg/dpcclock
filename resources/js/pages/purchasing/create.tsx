@@ -1,13 +1,16 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme } from '@/themes/darktheme';
 import { router, useForm, usePage } from '@inertiajs/react';
+import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
+import { ClipboardPaste, Loader } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import GridSizeSelector from './gridSizeSelector';
@@ -17,6 +20,7 @@ export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
     const requisition = usePage().props.requisition ?? null;
+    const [pastingItems, setPastingItems] = useState(false);
 
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
@@ -91,6 +95,7 @@ export default function Create() {
         wrapperBorder: false,
     });
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
+
     const columnDefs = [
         {
             field: 'serial_number',
@@ -117,6 +122,7 @@ export default function Create() {
                 }
 
                 try {
+                    console.log('Fetching item with code:', itemCode, 'and location ID:', locationId);
                     const res = await fetch(`/material-items/${itemCode}/${locationId}`);
                     if (!res.ok) throw new Error('Failed to fetch item');
                     const item = await res.json();
@@ -233,11 +239,106 @@ export default function Create() {
     const onGridReady = (params) => {
         gridApi = params.api; // Get grid API
     };
+    // useEffect(() => {
+    //     const handlePaste = (e: ClipboardEvent) => {
+    //         const pastedText = e.clipboardData?.getData('text/plain');
+    //         if (!pastedText) return;
+
+    //         const lines = pastedText.trim().split(/\r?\n/);
+    //         if (lines.length === 0) return;
+
+    //         const newRows = lines.map((line, index) => {
+    //             const [description, qty, unit_cost] = line.split('\t');
+
+    //             const qtyNumber = parseFloat((qty?.trim() || '0').replace(/,/g, ''));
+    //             const unitCostNumber = parseFloat((unit_cost?.trim() || '0').replace(/,/g, ''));
+
+    //             return {
+    //                 code: '',
+    //                 description: description?.trim() || '',
+    //                 qty: isNaN(qtyNumber) ? 0 : qtyNumber,
+    //                 unit_cost: isNaN(unitCostNumber) ? 0 : unitCostNumber,
+    //                 total_cost: qtyNumber * unitCostNumber || 0,
+    //                 serial_number: rowData.length + index + 1,
+    //                 cost_code: '',
+    //                 price_list: '',
+    //             };
+    //         });
+
+    //         setRowData((prev) => [...prev, ...newRows]);
+    //         e.preventDefault();
+    //     };
+
+    //     window.addEventListener('paste', handlePaste);
+    //     return () => {
+    //         window.removeEventListener('paste', handlePaste);
+    //     };
+    // }, [rowData]);
+
+    const handlePasteTableData = async () => {
+        try {
+            setPastingItems(true);
+            const text = await navigator.clipboard.readText();
+            const rows = text.trim().split('\n');
+
+            const locationId = data.project_id; // Ensure this is available
+            if (!locationId) {
+                alert('Please select a project first.');
+                return;
+            }
+
+            const parsedRows = await Promise.all(
+                rows.slice(1).map(async (row, index) => {
+                    const [codeRaw, descRaw, qtyRaw, unitCostRaw] = row.split('\t');
+
+                    const code = codeRaw?.trim() || '';
+                    const fallbackDescription = descRaw?.trim() || '';
+                    const qty = parseFloat((qtyRaw?.trim() || '0').replace(/,/g, ''));
+                    const unit_cost = parseFloat((unitCostRaw?.trim() || '0').replace(/,/g, ''));
+
+                    let item = null;
+                    try {
+                        const res = await fetch(`/material-items/code/${code}/${locationId}`);
+                        if (res.ok) item = await res.json();
+                        console.log('Item fetched:', item);
+                    } catch (err) {
+                        console.warn(`Lookup failed for code: ${code}`);
+                    }
+
+                    return {
+                        code: code,
+                        description: item?.description || `${code} ${fallbackDescription}`.trim(),
+                        qty,
+                        unit_cost: item?.unit_cost ?? unit_cost,
+                        total_cost: (item?.unit_cost ?? unit_cost) * qty,
+                        cost_code: item?.cost_code || '',
+                        price_list: item?.price_list || '',
+                        serial_number: rowData.length + index + 1,
+                    };
+                }),
+            );
+
+            setRowData([...rowData, ...parsedRows]);
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            setPastingItems(false);
+        } catch (err) {
+            console.error('Failed to read from clipboard:', err);
+            alert('Unable to paste data. Please try again or check clipboard permissions.');
+        }
+    };
 
     return (
         <AppLayout>
             <div className="p-4">
                 <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
+                <Dialog open={pastingItems} onOpenChange={setPastingItems}>
+                    <DialogContent>
+                        <DialogDescription className="flex flex-col items-center gap-2">
+                            <span className="text-sm">Pasting items from clipboard...</span> <Loader />
+                        </DialogDescription>
+                    </DialogContent>
+                </Dialog>
+
                 <Card className="my-4 p-4">
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
@@ -362,6 +463,9 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-row items-center justify-end">
+                        <Button onClick={handlePasteTableData} className="mx-2 h-6 w-6 p-1 text-xs" size="icon" title="Paste Table Data">
+                            <ClipboardPaste className="h-4 w-4" />
+                        </Button>
                         <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
                             Submit

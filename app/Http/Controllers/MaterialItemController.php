@@ -253,5 +253,42 @@ class MaterialItemController extends Controller
         return response()->json($itemArray);
     }
 
+    public function getMaterialItemByCode($code, $locationId)
+    {
+        Log::info('Fetching material item with code: ' . $code);
+        Log::info('Fetching location with ID: ' . $locationId);
+
+        // Fetch the item and its related cost code
+        $item = MaterialItem::with('costCode')->where('code', $code)->first();
+
+        // If no item is found, return 404 early
+        if (!$item) {
+            return response()->json(['message' => 'Item not found'], 404);
+        }
+
+        // Fetch the location-specific price (filtered in SQL)
+        $location_price = DB::table('location_item_pricing')
+            ->where('material_item_id', $item->id)
+            ->where('location_id', $locationId)
+            ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
+            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+            ->first();
+
+        Log::info('Location price fetched: ' . json_encode($location_price));
+
+        if ($location_price) {
+            $item->unit_cost = $location_price->unit_cost_override;
+        }
+
+        // Convert to array for response
+        $itemArray = $item->toArray();
+        $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
+        $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+
+        Log::info('Material item found: ' . json_encode($itemArray));
+
+        return response()->json($itemArray);
+    }
+
 
 }
