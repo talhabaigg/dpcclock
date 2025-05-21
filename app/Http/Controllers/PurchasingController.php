@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 
+use App\Models\CostCode;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Supplier;
@@ -23,11 +24,13 @@ class PurchasingController extends Controller
     public function create()
     {
         $suppliers = Supplier::all();
+        $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         $locations = Location::where('eh_parent_id', 1149031)->get();
         return Inertia::render('purchasing/create', [
             'suppliers' => $suppliers,
             'locations' => $locations,
+            'costCodes' => $costCodes,
         ]);
     }
 

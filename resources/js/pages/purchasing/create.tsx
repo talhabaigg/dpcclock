@@ -15,12 +15,14 @@ import { AgGridReact } from 'ag-grid-react';
 import { ClipboardPaste, Loader } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
+import { CostCodeSelector } from './costCodeSelector';
 import GridSizeSelector from './gridSizeSelector';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
+    const costCodes = usePage().props.costCodes;
     const requisition = usePage().props.requisition ?? null;
     const [pastingItems, setPastingItems] = useState(false);
 
@@ -198,6 +200,11 @@ export default function Create() {
             field: 'cost_code',
             headerName: 'Cost Code',
             editable: true,
+            cellEditorParams: (params: any) => ({
+                value: params.value,
+                costCodes: costCodes,
+            }),
+            cellEditor: CostCodeSelector,
         },
         {
             field: 'price_list',
