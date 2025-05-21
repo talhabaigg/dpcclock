@@ -17,12 +17,13 @@ import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import GridSizeSelector from './gridSizeSelector';
+import { CostCode } from './types';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
-    const costCodes = usePage().props.costCodes;
+    const costCodes = usePage().props.costCodes as CostCode[];
     const requisition = usePage().props.requisition ?? null;
     const [pastingItems, setPastingItems] = useState(false);
 
@@ -174,7 +175,7 @@ export default function Create() {
                 updated[e.rowIndex] = e.data;
                 setRowData(updated);
             },
-            valueFormatter: (params) => {
+            valueFormatter: (params: any) => {
                 if (params.value == null) return '';
                 return `$${parseFloat(params.value).toFixed(6)}`; // Format to 6 decimal places
             },
@@ -205,6 +206,10 @@ export default function Create() {
                 costCodes: costCodes,
             }),
             cellEditor: CostCodeSelector,
+            valueFormatter: (params) => {
+                const costCode = costCodes.find((code) => code.code === params.value);
+                return costCode ? `${costCode.code} - ${costCode.description}` : '';
+            },
         },
         {
             field: 'price_list',
