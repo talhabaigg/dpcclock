@@ -134,8 +134,8 @@ export default function RequisitionShow() {
                                 <td className="p-1">{item.code}</td>
                                 <td className="p-1">{item.description}</td>
                                 <td className="p-1 text-left">{item.qty}</td>
-                                <td className="p-1 text-left">$ {Number(item.unit_cost)?.toFixed(2) || '0.00'}</td>
-                                <td className="p-1 text-left">$ {Number(item.total_cost)?.toFixed(2) || '0.00'}</td>
+                                <td className="p-1 text-left">$ {Number(item.unit_cost)?.toFixed(6) || '0.00'}</td>
+                                <td className="p-1 text-left">$ {Number(item.total_cost)?.toFixed(6) || '0.00'}</td>
                                 <td className="p-1 text-left">{item.cost_code || 'N/A'}</td>
                                 <td className="p-1 text-left">{item.price_list || 'N/A'}</td>
                             </tr>
