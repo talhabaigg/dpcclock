@@ -13,7 +13,7 @@ return new class extends Migration {
         Schema::table('requisition_line_items', function (Blueprint $table) {
             $table->decimal('unit_cost', 10, 6)->change();
             $table->decimal('total_cost', 12, 6)->change();
-            $table->decimal('qty', 10, 6)->change();
+            $table->decimal('qty', 16, 6)->change();
         });
     }
 
