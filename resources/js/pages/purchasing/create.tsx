@@ -208,7 +208,7 @@ export default function Create() {
             cellEditor: CostCodeSelector,
             valueFormatter: (params) => {
                 const costCode = costCodes.find((code) => code.code === params.value);
-                return costCode ? `${costCode.code} - ${costCode.description}` : '';
+                return costCode ? `${costCode.code} - ${costCode.description}` : params.value;
             },
         },
         {

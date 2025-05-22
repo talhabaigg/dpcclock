@@ -181,11 +181,13 @@ class PurchasingController extends Controller
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
         $suppliers = Supplier::all();
         $locations = Location::where('eh_parent_id', 1149031)->get();
+        $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         return Inertia::render('purchasing/create', [
             'requisition' => $requisition,
             'suppliers' => $suppliers,
             'locations' => $locations,
+            'costCodes' => $costCodes,
         ]);
     }
 
