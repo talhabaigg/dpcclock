@@ -11,6 +11,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Define roles
         $roles = [
             'admin',
+            'backoffice',
             'manager',
             'kiosk',
         ];
@@ -26,6 +27,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'retrieve kiosk token',
             'update travel zones',
             'view timesheet converter',
+            'view all requisitions',
         ];
 
         // Create roles if they don't exist
@@ -56,6 +58,19 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage timesheets',
             'view kiosk',
             'retrieve kiosk token',
+        ]);
+
+        $backofficeRole = Role::where('name', 'backoffice')->first();
+        $backofficeRole->syncPermissions([
+            'view dashboard',
+            'manage locations',
+            'manage employees',
+            'manage worktypes',
+            'manage timesheets',
+            'view kiosk',
+            'retrieve kiosk token',
+            'update travel zones',
+            'view all requisitions',
         ]);
 
     }

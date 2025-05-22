@@ -1,25 +1,35 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { darkTheme } from '@/themes/darktheme';
+import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
+import { type BreadcrumbItem } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { Dialog } from '@radix-ui/react-dialog';
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ClipboardPaste, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
-import GridSizeSelector from './gridSizeSelector';
+import GridSizeSelector from './create-partials/gridSizeSelector';
+import PasteTableButton from './create-partials/pasteTableButton';
 import { CostCode } from './types';
 ModuleRegistry.registerModules([AllCommunityModule]);
-
+const breadcrumbs: BreadcrumbItem[] = [
+    {
+        title: 'Requisitions',
+        href: '/requisition/all',
+    },
+    {
+        title: 'Create Requisition',
+        href: '/requisitions/create',
+    },
+];
 export default function Create() {
     const suppliers = usePage().props.suppliers;
     const locations = usePage().props.locations;
@@ -32,10 +42,6 @@ export default function Create() {
     });
     const isDarkMode = document.documentElement.classList.contains('dark');
 
-    const items = [
-        { value: '10303000', label: '10303000', description: '51mm (w) x 32mm (h) Flexible Track 3000', unitcost: 10, qty: 1 },
-        { value: '10503000', label: '10503000', description: '76mm Flexible Track 3000', unitcost: 20.922999, qty: 1 },
-    ];
     const { data, setData, post, processing, errors } = useForm({
         project_id: '',
         supplier_id: '',
@@ -87,18 +93,18 @@ export default function Create() {
             post('/requisition/store');
         }
     };
-    const getDescription = (value) => {
-        const item = items.find((item) => item.value === value);
-        return item ? item.description : '';
-    };
-    const myTheme = themeQuartz.withParams({
-        fontFamily: {
-            googleFont: 'Instrument Sans',
-        },
-        headerBackgroundColor: '#00000000',
-        wrapperBorderRadius: '10px',
-        wrapperBorder: false,
-    });
+    // const getDescription = (value) => {
+    //     const item = items.find((item) => item.value === value);
+    //     return item ? item.description : '';
+    // };
+    // const myTheme = themeQuartz.withParams({
+    //     fontFamily: {
+    //         googleFont: 'Instrument Sans',
+    //     },
+    //     headerBackgroundColor: '#00000000',
+    //     wrapperBorderRadius: '10px',
+    //     wrapperBorder: false,
+    // });
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
 
     const columnDefs = [
@@ -253,41 +259,6 @@ export default function Create() {
     const onGridReady = (params) => {
         gridApi = params.api; // Get grid API
     };
-    // useEffect(() => {
-    //     const handlePaste = (e: ClipboardEvent) => {
-    //         const pastedText = e.clipboardData?.getData('text/plain');
-    //         if (!pastedText) return;
-
-    //         const lines = pastedText.trim().split(/\r?\n/);
-    //         if (lines.length === 0) return;
-
-    //         const newRows = lines.map((line, index) => {
-    //             const [description, qty, unit_cost] = line.split('\t');
-
-    //             const qtyNumber = parseFloat((qty?.trim() || '0').replace(/,/g, ''));
-    //             const unitCostNumber = parseFloat((unit_cost?.trim() || '0').replace(/,/g, ''));
-
-    //             return {
-    //                 code: '',
-    //                 description: description?.trim() || '',
-    //                 qty: isNaN(qtyNumber) ? 0 : qtyNumber,
-    //                 unit_cost: isNaN(unitCostNumber) ? 0 : unitCostNumber,
-    //                 total_cost: qtyNumber * unitCostNumber || 0,
-    //                 serial_number: rowData.length + index + 1,
-    //                 cost_code: '',
-    //                 price_list: '',
-    //             };
-    //         });
-
-    //         setRowData((prev) => [...prev, ...newRows]);
-    //         e.preventDefault();
-    //     };
-
-    //     window.addEventListener('paste', handlePaste);
-    //     return () => {
-    //         window.removeEventListener('paste', handlePaste);
-    //     };
-    // }, [rowData]);
 
     const handlePasteTableData = async () => {
         try {
@@ -342,7 +313,7 @@ export default function Create() {
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <div className="p-4">
                 <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
                 <Dialog open={pastingItems} onOpenChange={setPastingItems}>
@@ -389,12 +360,16 @@ export default function Create() {
                     <div className="flex flex-row items-center gap-2">
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Date required</Label>
-                            <Input
+                            <DatePickerDemo
+                                value={data.date_required ? new Date(data.date_required) : undefined}
+                                onChange={(date) => setData('date_required', date?.toISOString() || '')}
+                            />
+                            {/* <Input
                                 placeholder="Enter date required"
                                 type="date"
                                 value={data.date_required}
                                 onChange={(e) => setData('date_required', e.target.value)}
-                            />
+                            /> */}
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Delivery Contact</Label>
@@ -477,36 +452,7 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-row items-center justify-end">
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger onClick={handlePasteTableData} className="mx-2 h-6 w-6 p-1 text-xs">
-                                    <ClipboardPaste className="h-4 w-4" />
-                                </TooltipTrigger>
-                                <TooltipContent className="h-32 space-y-2">
-                                    <Label>Click to paste items from excel in format below</Label>
-
-                                    <Table className="mt-2 text-xs">
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableCell>Item Code</TableCell>
-                                                <TableCell>Description</TableCell>
-                                                <TableCell>Qty</TableCell>
-                                                <TableCell>Unit Cost</TableCell>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            <TableRow>
-                                                <TableCell>10303000</TableCell>
-                                                <TableCell>51mm (w) x 32mm</TableCell>
-                                                <TableCell>1</TableCell>
-                                                <TableCell>$10.00</TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-
+                        <PasteTableButton onClick={handlePasteTableData} />
                         <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
                             Submit

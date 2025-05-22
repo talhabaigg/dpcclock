@@ -25,7 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return redirect()->route('kiosks.index');
     })->name('dashboard');
-    Route::middleware('role:admin|manager')->group(function () {
+    Route::middleware('role:admin|manager|backoffice')->group(function () {
 
 
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');

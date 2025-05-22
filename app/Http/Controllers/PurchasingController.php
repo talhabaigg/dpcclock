@@ -23,16 +23,29 @@ class PurchasingController extends Controller
 {
     public function create()
     {
-        $suppliers = Supplier::all();
+        $user = auth()->user();
+
+        $suppliers = Supplier::all(); // Consider selecting only necessary fields
         $costCodes = CostCode::select('id', 'code', 'description')->get();
 
-        $locations = Location::where('eh_parent_id', 1149031)->get();
+        // Base query for locations under specific parent
+        $locationsQuery = Location::where('eh_parent_id', 1149031);
+
+        // Apply filter for non-admins (or non-authorized users)
+        if ($user->cannot('view all requisitions')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
         return Inertia::render('purchasing/create', [
             'suppliers' => $suppliers,
             'locations' => $locations,
             'costCodes' => $costCodes,
         ]);
     }
+
 
     public function store(Request $request)
     {
@@ -83,8 +96,25 @@ class PurchasingController extends Controller
 
     public function index()
     {
+        $user = auth()->user();
+
+        if ($user->hasPermissionTo('view all requisitions')) {
+            $requisitions = Requisition::with('supplier', 'creator', 'location')
+                ->withSum('lineItems', 'total_cost')
+                ->get();
+            return Inertia::render('purchasing/index', [
+                'requisitions' => $requisitions,
+            ]);
+        }
+        $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
+
+        $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+
+
+
         $requisitions = Requisition::with('supplier', 'creator', 'location')
             ->withSum('lineItems', 'total_cost')
+            ->whereIn('project_number', $location_ids)
             ->get();
 
         return Inertia::render('purchasing/index', [
