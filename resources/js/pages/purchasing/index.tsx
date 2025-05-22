@@ -1,5 +1,4 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -86,11 +85,8 @@ export default function RequisitionList() {
                                 <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
-                                        <DropdownMenuTrigger>
-                                            <Button variant="ghost">
-                                                {' '}
-                                                <EllipsisVertical />
-                                            </Button>
+                                        <DropdownMenuTrigger asChild className="cursor-pointer">
+                                            <EllipsisVertical />
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent>
                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>

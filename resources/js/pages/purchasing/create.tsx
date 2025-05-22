@@ -4,7 +4,7 @@ import { DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme } from '@/themes/darktheme';
@@ -202,7 +202,7 @@ export default function Create() {
             headerName: 'Cost Code',
             editable: true,
             cellEditorParams: (params: any) => ({
-                value: params.value,
+                value: params.value || '',
                 costCodes: costCodes,
             }),
             cellEditor: CostCodeSelector,
@@ -400,7 +400,7 @@ export default function Create() {
                             <Label className="text-sm">Delivery Contact</Label>
                             <Input
                                 placeholder="Delivery Contact"
-                                value={data.delivery_contact}
+                                value={data.delivery_contact ?? ''}
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
                             />
                         </div>
@@ -410,7 +410,7 @@ export default function Create() {
                         </div>
                         <div className="flex w-1/2 flex-col">
                             <Label className="text-sm">Deliver to</Label>
-                            <Input placeholder="Deliver to" value={data.deliver_to} onChange={(e) => setData('deliver_to', e.target.value)} />
+                            <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
                     </div>
                 </Card>
@@ -477,35 +477,36 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-row items-center justify-end">
-                        <Button onClick={handlePasteTableData} className="mx-2 h-6 w-6 p-1 text-xs" size="icon" title="Paste Table Data">
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger>
-                                        <ClipboardPaste className="h-4 w-4" />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="h-32 space-y-2">
-                                        <Label>Click to paste items from excel in format below</Label>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger onClick={handlePasteTableData} className="mx-2 h-6 w-6 p-1 text-xs">
+                                    <ClipboardPaste className="h-4 w-4" />
+                                </TooltipTrigger>
+                                <TooltipContent className="h-32 space-y-2">
+                                    <Label>Click to paste items from excel in format below</Label>
 
-                                        <Table className="mt-2 text-xs">
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableCell>Item Code</TableCell>
-                                                    <TableCell>Description</TableCell>
-                                                    <TableCell>Qty</TableCell>
-                                                    <TableCell>Unit Cost</TableCell>
-                                                </TableRow>
-                                            </TableHeader>
+                                    <Table className="mt-2 text-xs">
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableCell>Item Code</TableCell>
+                                                <TableCell>Description</TableCell>
+                                                <TableCell>Qty</TableCell>
+                                                <TableCell>Unit Cost</TableCell>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
                                             <TableRow>
                                                 <TableCell>10303000</TableCell>
                                                 <TableCell>51mm (w) x 32mm</TableCell>
                                                 <TableCell>1</TableCell>
                                                 <TableCell>$10.00</TableCell>
                                             </TableRow>
-                                        </Table>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </Button>
+                                        </TableBody>
+                                    </Table>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
                         <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
                             Submit
