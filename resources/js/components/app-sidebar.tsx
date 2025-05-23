@@ -4,10 +4,9 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Box, Building, Clock, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
-import { NavDocuments } from './nav-documents';
-
+import { Box, Building, Clock, Database, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
+import { NavDocuments } from './nav-documents';
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
@@ -45,18 +44,7 @@ const mainNavItems: NavItem[] = [
         icon: Hourglass,
         permission: 'manage timesheets',
     },
-    {
-        title: 'Material',
-        href: '/material-items/all',
-        icon: Hammer,
-        permission: 'view all requisitions',
-    },
-    {
-        title: 'Suppliers',
-        href: '/suppliers',
-        icon: Box,
-        permission: 'view all requisitions',
-    },
+
     {
         title: 'Timesheet Converter',
         href: '/timesheets-converter',
@@ -72,14 +60,8 @@ const mainNavItems: NavItem[] = [
 ];
 const documents = [
     {
-        name: 'Material',
-        url: '/material-items/all',
-        icon: Hammer,
-        permission: 'view all requisitions',
-    },
-    {
         name: 'Data',
-        icon: Hammer,
+        icon: Database,
         permission: 'view all requisitions',
         subItems: [
             {

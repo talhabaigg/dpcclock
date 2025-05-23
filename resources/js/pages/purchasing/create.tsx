@@ -112,6 +112,7 @@ export default function Create() {
         {
             field: 'serial_number',
             headerName: 'PO Line #',
+            maxWidth: 100,
             valueGetter: 'node.rowIndex + 1', // Automatically increment the line number based on row index
             suppressMovable: true, // Make sure it stays in place
         },
@@ -121,6 +122,7 @@ export default function Create() {
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
+            minWidth: 250,
             cellEditorParams: {
                 selectedSupplier,
             },
@@ -156,6 +158,7 @@ export default function Create() {
                 }
             },
         },
+
         {
             field: 'qty',
             headerName: 'Qty',
@@ -296,7 +299,7 @@ export default function Create() {
                         description: item?.description || `${code} ${fallbackDescription}`.trim(),
                         qty,
                         unit_cost: unit_cost ? unit_cost : item?.unit_cost || 0,
-                        total_cost: (item?.unit_cost ?? unit_cost) * qty,
+                        total_cost: (unit_cost ? unit_cost || item?.unit_cost) * qty,
                         cost_code: item?.cost_code || '',
                         price_list: item?.price_list || '',
                         serial_number: rowData.length + index + 1,
@@ -326,8 +329,8 @@ export default function Create() {
                 </Dialog>
 
                 <Card className="my-4 p-4">
-                    <div className="flex flex-row items-center gap-2">
-                        <div className="flex w-1/2 flex-col">
+                    <div className="flex flex-col items-center gap-2 md:flex-row">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Project</Label>
                             <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
                                 <SelectTrigger className="w-full">
@@ -342,7 +345,7 @@ export default function Create() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex w-1/2 flex-col">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Supplier</Label>
                             <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
                                 <SelectTrigger className="w-full">
@@ -358,8 +361,8 @@ export default function Create() {
                             </Select>
                         </div>
                     </div>
-                    <div className="flex flex-row items-center gap-2">
-                        <div className="flex w-1/2 flex-col">
+                    <div className="flex flex-col items-center gap-2 md:flex-row">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Date required</Label>
                             <DatePickerDemo
                                 value={data.date_required ? new Date(data.date_required) : undefined}
@@ -373,7 +376,7 @@ export default function Create() {
                                 onChange={(e) => setData('date_required', e.target.value)}
                             /> */}
                         </div>
-                        <div className="flex w-1/2 flex-col">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Delivery Contact</Label>
                             <Input
                                 placeholder="Delivery Contact"
@@ -381,11 +384,11 @@ export default function Create() {
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
                             />
                         </div>
-                        <div className="flex w-1/2 flex-col">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Reqested by</Label>
                             <Input placeholder="Requested by" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
                         </div>
-                        <div className="flex w-1/2 flex-col">
+                        <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Deliver to</Label>
                             <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
@@ -401,7 +404,7 @@ export default function Create() {
                                 theme={appliedTheme}
                                 columnDefs={columnDefs}
                                 suppressAutoSize={true}
-                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 150 }}
+                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 150, suppressMovable: true }}
                                 rowModelType="clientSide"
                                 onGridReady={onGridReady} // Initialize gridApi
                                 onCellValueChanged={(e) => {
