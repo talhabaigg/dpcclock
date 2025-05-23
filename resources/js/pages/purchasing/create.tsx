@@ -299,7 +299,7 @@ export default function Create() {
                         description: item?.description || `${code} ${fallbackDescription}`.trim(),
                         qty,
                         unit_cost: unit_cost ? unit_cost : item?.unit_cost || 0,
-                        total_cost: (unit_cost ? unit_cost || item?.unit_cost) * qty,
+                        total_cost: (unit_cost ? unit_cost : item?.unit_cost) * qty,
                         cost_code: item?.cost_code || '',
                         price_list: item?.price_list || '',
                         serial_number: rowData.length + index + 1,
