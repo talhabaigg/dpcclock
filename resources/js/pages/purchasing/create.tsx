@@ -13,10 +13,11 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { Sparkles } from 'lucide-react';
+import { CircleX, Sparkles } from 'lucide-react';
 import OpenAI from 'openai';
 import { useEffect, useState } from 'react';
 import { BarLoader } from 'react-spinners';
+import Dropzone from 'shadcn-dropzone';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import GridSizeSelector from './create-partials/gridSizeSelector';
@@ -38,6 +39,8 @@ export default function Create() {
     const locations = usePage().props.locations;
     const costCodes = usePage().props.costCodes as CostCode[];
     const requisition = usePage().props.requisition ?? null;
+    const permissions = usePage().props.auth.permissions;
+
     const [pastingItems, setPastingItems] = useState(false);
 
     const [gridSize, setGridSize] = useState(() => {
@@ -336,7 +339,7 @@ export default function Create() {
 
         const base64 = await fileToBase64(file);
         const openai = new OpenAI({
-            apiKey: $apiKEY,
+            apiKey: import.meta.env.VITE_OPEN_AI_API_KEY,
             dangerouslyAllowBrowser: true,
         });
         setPastingItems(true);
@@ -372,21 +375,43 @@ export default function Create() {
             .replace(/```$/, '');
 
         // ✅ Try to parse
-        const parsed = JSON.parse(content);
-        setRowData(
-            parsed.map((item, index) => ({
-                code: item.code,
-                description: item.description,
-                qty: parseFloat(item.qty),
-                unit_cost: parseFloat(item.unit_cost),
-                total_cost: parseFloat(item.unit_cost) * parseFloat(item.qty),
-                cost_code: '',
-                price_list: '',
-                serial_number: rowData.length + index + 1,
-            })),
+        let parsed;
+        try {
+            parsed = JSON.parse(content);
+        } catch (error) {
+            console.error('Failed to parse JSON:', error);
+            return alert('Could not parse extracted data. Please try again.');
+        }
+
+        const rowDataMapped = await Promise.all(
+            parsed.map(async (item, index) => {
+                const locationId = data.project_id; // Ensure this exists in scope
+                let loadedItem = null;
+
+                try {
+                    const res = await fetch(`/material-items/code/${item.code}/${locationId}`);
+                    if (res.ok) loadedItem = await res.json();
+                } catch (err) {
+                    console.warn(`Lookup failed for code: ${item.code}`, err);
+                }
+
+                return {
+                    code: item.code,
+                    description: item.description,
+                    qty: parseFloat(item.qty),
+                    unit_cost: parseFloat(item.unit_cost),
+                    total_cost: parseFloat(item.unit_cost) * parseFloat(item.qty),
+                    cost_code: loadedItem?.cost_code || '',
+                    price_list: '',
+                    serial_number: index + 1,
+                };
+            }),
         );
+
+        setRowData(rowDataMapped);
         console.log('Response:', response.choices[0].message.content);
     };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="p-4">
@@ -518,23 +543,37 @@ export default function Create() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="my-2 p-4">
-                    <Label htmlFor="picture">Upload to AI</Label>
-                    <Input
-                        id="picture"
-                        type="file"
-                        accept="image/*"
-                        onInput={(e) => {
-                            const selectedFile = (e.target as HTMLInputElement).files?.[0] || null;
-                            setFile(selectedFile);
-                        }}
-                    />
-                    <span>
-                        <Button onClick={extractLineItems}>
-                            <Sparkles /> Extract
-                        </Button>
-                    </span>
-                </Card>
+                {permissions.includes('view all requisitions') && (
+                    <Card className="my-2 p-4">
+                        <Dropzone
+                            onDrop={(acceptedFiles: File[]) => {
+                                if (acceptedFiles.length > 0) {
+                                    setFile(acceptedFiles[0]);
+                                }
+                            }}
+                        />
+
+                        {file && (
+                            <div className="flex w-full items-center justify-start gap-2">
+                                <Label className="rounded-md border p-3">{file?.name}</Label>
+                                <Button variant="outline" size="icon" onClick={() => setFile(null)}>
+                                    {' '}
+                                    <CircleX />
+                                </Button>
+                            </div>
+                        )}
+
+                        <span>
+                            <Button onClick={extractLineItems}>
+                                <Sparkles /> Extract with AI
+                            </Button>
+                            <span className="text-muted-foreground ml-2 text-xs">
+                                (Note that AI features are experimental and may not work as expected.)
+                            </span>
+                        </span>
+                    </Card>
+                )}
+
                 {/* Add Button */}
                 <div className="mt-4 flex justify-between">
                     <div>
