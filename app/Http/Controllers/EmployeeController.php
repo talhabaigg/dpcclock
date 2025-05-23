@@ -165,17 +165,25 @@ class EmployeeController extends Controller
     public function retrieveEmployees()
     {
         $user = auth()->user();
-        $employees = Employee::select('eh_employee_id as id', 'name')->get();
-        $employees = $user->managedKiosks->flatMap(function ($kiosk) {
-            return $kiosk->employees;  // Fetch employees related to each kiosk
-        });
+
+        // Eager load employees to avoid N+1 queries
+        $kiosks = $user->managedKiosks()->with('employees')->get();
+
+        // Flatten, deduplicate, and sort employees by name
+        $employees = $kiosks->flatMap(function ($kiosk) {
+            return $kiosk->employees;
+        })->unique('eh_employee_id')
+            ->sortBy('name')
+            ->values(); // Reindex the array
+
+        // Format employee data
         $employeeData = $employees->map(function ($employee) {
             return [
                 'id' => $employee->eh_employee_id,
                 'name' => $employee->name,
-                // Add any other necessary employee fields here
             ];
         });
+
         return response()->json($employeeData);
     }
 
