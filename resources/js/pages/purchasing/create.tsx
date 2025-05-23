@@ -12,6 +12,7 @@ import { router, useForm, usePage } from '@inertiajs/react';
 import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
+import { format } from 'date-fns';
 import { Loader } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ComboboxDemo } from './AutcompleteCellEditor';
@@ -294,7 +295,7 @@ export default function Create() {
                         code: code,
                         description: item?.description || `${code} ${fallbackDescription}`.trim(),
                         qty,
-                        unit_cost: item?.unit_cost ?? unit_cost,
+                        unit_cost: unit_cost ? unit_cost : item?.unit_cost || 0,
                         total_cost: (item?.unit_cost ?? unit_cost) * qty,
                         cost_code: item?.cost_code || '',
                         price_list: item?.price_list || '',
@@ -362,8 +363,9 @@ export default function Create() {
                             <Label className="text-sm">Date required</Label>
                             <DatePickerDemo
                                 value={data.date_required ? new Date(data.date_required) : undefined}
-                                onChange={(date) => setData('date_required', date?.toISOString() || '')}
+                                onChange={(date) => setData('date_required', date ? format(date, 'yyyy-MM-dd HH:mm:ss') : '')}
                             />
+
                             {/* <Input
                                 placeholder="Enter date required"
                                 type="date"

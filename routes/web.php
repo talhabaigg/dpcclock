@@ -12,6 +12,7 @@ use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SupplierController;
 
 
 
@@ -87,6 +88,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
         Route::get('/material-items/{id}/{locationId}', [MaterialItemController::class, 'getMaterialItemById']);
         Route::get('/material-items/code/{code}/{locationId}', [MaterialItemController::class, 'getMaterialItemByCode']);
+
+        Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::get('/suppliers/download', [SupplierController::class, 'download'])->name('suppliers.download');
+        Route::post('/suppliers/upload', [SupplierController::class, 'upload'])->name('suppliers.upload');
 
     });
 

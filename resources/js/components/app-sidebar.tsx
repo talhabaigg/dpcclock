@@ -4,9 +4,10 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Building, Clock, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
-import AppLogo from './app-logo';
+import { Box, Building, Clock, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
+import { NavDocuments } from './nav-documents';
 
+import AppLogo from './app-logo';
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
@@ -45,13 +46,57 @@ const mainNavItems: NavItem[] = [
         permission: 'manage timesheets',
     },
     {
+        title: 'Material',
+        href: '/material-items/all',
+        icon: Hammer,
+        permission: 'view all requisitions',
+    },
+    {
+        title: 'Suppliers',
+        href: '/suppliers',
+        icon: Box,
+        permission: 'view all requisitions',
+    },
+    {
         title: 'Timesheet Converter',
         href: '/timesheets-converter',
         icon: FoldHorizontal,
         permission: 'view timesheet converter',
     },
+    {
+        title: 'Users',
+        href: '/users',
+        icon: UsersRound,
+        permission: 'view timesheet converter',
+    },
 ];
-
+const documents = [
+    {
+        name: 'Material',
+        url: '/material-items/all',
+        icon: Hammer,
+        permission: 'view all requisitions',
+    },
+    {
+        name: 'Data',
+        icon: Hammer,
+        permission: 'view all requisitions',
+        subItems: [
+            {
+                name: 'Material',
+                url: '/material-items/all',
+                icon: Hammer,
+                permission: 'view all requisitions',
+            },
+            {
+                name: 'Suppliers',
+                url: '/suppliers',
+                icon: Box,
+                permission: 'view all requisitions',
+            },
+        ],
+    },
+];
 const footerNavItems: NavItem[] = [
     // {
     //     title: 'Repository',
@@ -85,6 +130,7 @@ export function AppSidebar() {
     const permissions: string[] = props?.auth?.permissions ?? [];
 
     const filteredMainNavItems = mainNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -101,6 +147,7 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={filteredMainNavItems} />
+                <NavDocuments items={filteredDocuments} />
             </SidebarContent>
 
             <SidebarFooter>

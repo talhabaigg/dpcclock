@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
 use App\Services\ExcelExportService;
-
+use Carbon\Carbon;
 class PurchasingController extends Controller
 {
     public function create()
@@ -70,11 +70,15 @@ class PurchasingController extends Controller
         $requisition = Requisition::create([
             'project_number' => $validated['project_id'] ?? 1,
             'supplier_number' => $validated['supplier_id'],
-            'date_required' => $validated['date_required'] ?? now(),
+            'date_required' => isset($validated['date_required'])
+                ? Carbon::parse($validated['date_required'])->toDateTimeString() // Converts to 'Y-m-d H:i:s'
+                : now(),
             'delivery_contact' => $validated['delivery_contact'] ?? null,
             'requested_by' => $validated['requested_by'] ?? null,
             'deliver_to' => $validated['deliver_to'] ?? null,
         ]);
+
+        // dd($requisition);
 
         foreach ($validated['items'] as $item) {
             RequisitionLineItem::create([
@@ -247,7 +251,9 @@ class PurchasingController extends Controller
         $requisition->update([
             'project_number' => $validated['project_id'],
             'supplier_id' => $validated['supplier_id'],
-            'date_required' => $validated['date_required'],
+            'date_required' => isset($validated['date_required'])
+                ? Carbon::parse($validated['date_required'])->toDateTimeString() // Converts to 'Y-m-d H:i:s'
+                : now(),
             'delivery_contact' => $validated['delivery_contact'],
             'requested_by' => $validated['requested_by'],
             'deliver_to' => $validated['deliver_to'],
