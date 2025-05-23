@@ -13,8 +13,10 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { Loader } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import OpenAI from 'openai';
 import { useEffect, useState } from 'react';
+import { BarLoader } from 'react-spinners';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import GridSizeSelector from './create-partials/gridSizeSelector';
@@ -316,6 +318,75 @@ export default function Create() {
         }
     };
 
+    const [file, setFile] = useState<File | null>(null);
+
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                const result = reader.result?.toString() || '';
+                resolve(result.split(',')[1]); // Get only base64 part
+            };
+            reader.onerror = reject;
+        });
+    };
+    const extractLineItems = async () => {
+        if (!file) return alert('Please upload a file first.');
+
+        const base64 = await fileToBase64(file);
+        const openai = new OpenAI({
+            apiKey: $apiKEY,
+            dangerouslyAllowBrowser: true,
+        });
+        setPastingItems(true);
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o', // or 'gpt-4-vision-preview'
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Please extract line items from this quotation image. Return JSON object as fields: code, description, qty, unit_cost without $ sign.',
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:image/jpeg;base64,${base64}`,
+                            },
+                        },
+                    ],
+                },
+            ],
+            max_tokens: 1000,
+        });
+        setPastingItems(false);
+        let content = response.choices[0].message.content || '';
+        console.log('Raw response:', content);
+
+        // ✅ Remove triple backticks and "json" if present
+        content = content
+            .trim()
+            .replace(/^```(?:json)?/, '')
+            .replace(/```$/, '');
+
+        // ✅ Try to parse
+        const parsed = JSON.parse(content);
+        setRowData(
+            parsed.map((item, index) => ({
+                code: item.code,
+                description: item.description,
+                qty: parseFloat(item.qty),
+                unit_cost: parseFloat(item.unit_cost),
+                total_cost: parseFloat(item.unit_cost) * parseFloat(item.qty),
+                cost_code: '',
+                price_list: '',
+                serial_number: rowData.length + index + 1,
+            })),
+        );
+        console.log('Response:', response.choices[0].message.content);
+    };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="p-4">
@@ -323,7 +394,8 @@ export default function Create() {
                 <Dialog open={pastingItems} onOpenChange={setPastingItems}>
                     <DialogContent>
                         <DialogDescription className="flex flex-col items-center gap-2">
-                            <span className="text-sm">Pasting items from clipboard...</span> <Loader />
+                            <span className="text-sm">Adding line items...</span>
+                            <BarLoader />
                         </DialogDescription>
                     </DialogContent>
                 </Dialog>
@@ -446,7 +518,23 @@ export default function Create() {
                         </div>
                     </CardContent>
                 </Card>
-
+                <Card className="my-2 p-4">
+                    <Label htmlFor="picture">Upload to AI</Label>
+                    <Input
+                        id="picture"
+                        type="file"
+                        accept="image/*"
+                        onInput={(e) => {
+                            const selectedFile = (e.target as HTMLInputElement).files?.[0] || null;
+                            setFile(selectedFile);
+                        }}
+                    />
+                    <span>
+                        <Button onClick={extractLineItems}>
+                            <Sparkles /> Extract
+                        </Button>
+                    </span>
+                </Card>
                 {/* Add Button */}
                 <div className="mt-4 flex justify-between">
                     <div>
