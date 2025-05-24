@@ -129,7 +129,7 @@ export default function Create() {
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
-            initialWidth: 250,
+            minWidth: 250,
             cellEditorParams: {
                 selectedSupplier,
             },
@@ -517,7 +517,7 @@ export default function Create() {
                     <DialogContent>
                         <DialogDescription className="flex flex-col items-center gap-2">
                             <span className="text-sm">Adding line items...</span>
-                            <BarLoader />
+                            <BarLoader size={150} color={'#4A5568'} />
                         </DialogDescription>
                     </DialogContent>
                 </Dialog>
@@ -600,7 +600,7 @@ export default function Create() {
                                 columnDefs={columnDefs}
                                 maintainColumnOrder={true}
                                 suppressAutoSize={true}
-                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, initialWidth: 100 }}
+                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 100 }}
                                 rowModelType="clientSide"
                                 onGridReady={onGridReady} // Initialize gridApi
                                 onCellValueChanged={(e) => {
@@ -652,24 +652,37 @@ export default function Create() {
                             }}
                         />
 
-                        {file && (
-                            <div className="flex w-full items-center justify-start gap-2">
-                                <Label className="rounded-md border p-3">{file?.name}</Label>
-                                <Button variant="outline" size="icon" onClick={() => setFile(null)}>
-                                    {' '}
-                                    <CircleX />
+                        <div className="flex w-full flex-col items-center justify-between gap-2 sm:flex-row md:flex-row">
+                            <div className="flex w-full items-center justify-start gap-2 sm:justify-start">
+                                <Button onClick={extractLineItems}>
+                                    <Sparkles /> Extract with AI
                                 </Button>
+                                <span className="text-muted-foreground ml-2 hidden text-xs sm:block">
+                                    (Note that AI features are experimental and may not work as expected.)
+                                </span>
                             </div>
-                        )}
 
-                        <span>
-                            <Button onClick={extractLineItems}>
-                                <Sparkles /> Extract with AI
-                            </Button>
-                            <span className="text-muted-foreground ml-2 text-xs">
-                                (Note that AI features are experimental and may not work as expected.)
-                            </span>
-                        </span>
+                            {file && (
+                                <div className="flex w-full items-center justify-start gap-0 sm:justify-end">
+                                    <div className="bg-muted mr-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded border">
+                                        <img
+                                            src={URL.createObjectURL(file)}
+                                            alt="Preview"
+                                            className="h-full w-full object-contain"
+                                            style={{ aspectRatio: '1 / 1' }}
+                                        />
+                                    </div>
+                                    <Label className="flex items-center justify-between gap-2">
+                                        {file?.name}{' '}
+                                        <span className="ml-4">
+                                            <Button variant="outline" size="icon" onClick={() => setFile(null)}>
+                                                <CircleX />
+                                            </Button>
+                                        </span>
+                                    </Label>
+                                </div>
+                            )}
+                        </div>
                     </Card>
                 )}
 
@@ -683,7 +696,7 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
-                        <div className="flex w-1/2 flex-row items-center justify-end -space-x-2 sm:flex-row">
+                        <div className="flex hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
                             <Button onClick={saveState} variant="icon" title="Save column settings">
                                 <Save />
                             </Button>
@@ -696,8 +709,10 @@ export default function Create() {
                             <PasteTableButton onClick={handlePasteTableData} />
                         </div>
 
-                        <GridSizeSelector onChange={(val) => setGridSize(val)} />
-                        <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
+                        <div className="hidden sm:block">
+                            <GridSizeSelector onChange={(val) => setGridSize(val)} />
+                        </div>
+                        <Button onClick={handleSubmit} className="ml-auto sm:ml-2 sm:w-auto" disabled={processing}>
                             Submit
                         </Button>
                     </div>

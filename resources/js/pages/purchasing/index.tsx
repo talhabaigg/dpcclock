@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CircleCheck, EllipsisVertical, Search } from 'lucide-react';
+import { CirclePlus, EllipsisVertical, Search } from 'lucide-react';
 import { useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -49,7 +49,7 @@ export default function RequisitionList() {
             <div className="m-2 flex items-center justify-between gap-2">
                 <Button variant="outline">
                     <Link href="/requisition/create" className="flex items-center gap-2">
-                        <CircleCheck size={12} />
+                        <CirclePlus size={12} />
                         Create New
                     </Link>
                 </Button>
