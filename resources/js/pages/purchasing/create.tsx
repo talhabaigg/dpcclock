@@ -13,16 +13,18 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { CircleX, Sparkles } from 'lucide-react';
+import { CircleX, RotateCcw, Save, Sparkles, X } from 'lucide-react';
 import OpenAI from 'openai';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import Dropzone from 'shadcn-dropzone';
+import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import GridSizeSelector from './create-partials/gridSizeSelector';
 import PasteTableButton from './create-partials/pasteTableButton';
 import { CostCode } from './types';
+
 ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -40,7 +42,7 @@ export default function Create() {
     const costCodes = usePage().props.costCodes as CostCode[];
     const requisition = usePage().props.requisition ?? null;
     const permissions = usePage().props.auth.permissions;
-
+    const gridRef = useRef<AgGridReact<IOlympicData>>(null);
     const [pastingItems, setPastingItems] = useState(false);
 
     const [gridSize, setGridSize] = useState(() => {
@@ -127,7 +129,7 @@ export default function Create() {
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
-            minWidth: 250,
+            initialWidth: 250,
             cellEditorParams: {
                 selectedSupplier,
             },
@@ -267,6 +269,20 @@ export default function Create() {
 
     const onGridReady = (params) => {
         gridApi = params.api; // Get grid API
+        setTimeout(() => {
+            const savedState = localStorage.getItem('colState');
+            const savedWidths = localStorage.getItem('colWidths');
+
+            if (savedState) {
+                const parsedState = JSON.parse(savedState);
+                params.api.applyColumnState({
+                    state: parsedState,
+                    applyOrder: true,
+                });
+
+                console.log('column state restored with delay');
+            }
+        }, 300);
     };
 
     const handlePasteTableData = async () => {
@@ -411,6 +427,87 @@ export default function Create() {
         setRowData(rowDataMapped);
         console.log('Response:', response.choices[0].message.content);
     };
+    const saveState = useCallback(() => {
+        const fullState = gridRef.current!.api.getColumnState();
+
+        const filteredState = fullState.map(({ width, ...rest }) => rest);
+
+        window.colState = filteredState;
+        localStorage.setItem('colState', JSON.stringify(filteredState));
+        console.log('column state saved (no width)', filteredState);
+        toast('Column Order saved', {
+            description: 'The column order has been saved successfully.',
+            action: {
+                label: 'Undo',
+                onClick: () => resetState(),
+            },
+        });
+    }, []);
+
+    const restoreState = useCallback(() => {
+        const savedState = localStorage.getItem('colState');
+        if (!savedState) {
+            console.log('no columns state to restore by, you must save state first');
+            return;
+        }
+        gridRef.current!.api.applyColumnState({
+            state: JSON.parse(savedState),
+            applyOrder: true,
+        });
+        console.log('column state restored', window.colState);
+        toast('Column Order restored', {
+            description: 'The column order has been restored successfully.',
+            action: {
+                label: 'Clear',
+                onClick: () => resetState(),
+            },
+        });
+    }, [window]);
+
+    const resetState = useCallback(() => {
+        gridRef.current!.api.resetColumnState();
+        localStorage.removeItem('colState');
+        window.colState = null;
+        console.log('column state reset');
+        toast('Column Order reset', {
+            description: 'The column order has been reset successfully.',
+            action: {
+                label: 'Save',
+                onClick: () => saveState(),
+            },
+        });
+    }, []);
+
+    // const onGridReady = useCallback((params) => {
+    //     // gridRef.current = params.api;
+    //     const savedState = localStorage.getItem('colState');
+    //     if (savedState) {
+    //         const parsedState = JSON.parse(savedState);
+    //         params.api.applyColumnState({
+    //             state: parsedState,
+    //             applyOrder: true,
+    //         });
+    //         console.log('column state restored', parsedState);
+    //     }
+    // }, []);
+    // useEffect(() => {
+    //     const savedState = localStorage.getItem('colState');
+    //     const parsedState = JSON.parse(savedState);
+    //     if (!parsedState) return;
+    //     // Delay is important to let grid re-render rowData
+    //     const widthOnlyState = parsedState.map((col) => ({
+    //         colId: col.colId,
+    //         width: col.width,
+    //     }));
+
+    //     // Delay needed to ensure grid is fully re-rendered
+    //     setTimeout(() => {
+    //         gridRef.current.api.applyColumnState({
+    //             state: widthOnlyState,
+    //             applyOrder: false, // don't touch column order
+    //         });
+    //     }, 1);
+    // }, [rowData]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -497,11 +594,13 @@ export default function Create() {
                         {' '}
                         <div style={{ height: gridSize }}>
                             <AgGridReact
+                                ref={gridRef}
                                 rowData={rowData}
                                 theme={appliedTheme}
                                 columnDefs={columnDefs}
+                                maintainColumnOrder={true}
                                 suppressAutoSize={true}
-                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 150, suppressMovable: true }}
+                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, initialWidth: 100 }}
                                 rowModelType="clientSide"
                                 onGridReady={onGridReady} // Initialize gridApi
                                 onCellValueChanged={(e) => {
@@ -583,8 +682,20 @@ export default function Create() {
                             Delete
                         </Button>
                     </div>
-                    <div className="flex w-1/2 flex-row items-center justify-end">
-                        <PasteTableButton onClick={handlePasteTableData} />
+                    <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
+                        <div className="flex w-1/2 flex-row items-center justify-end -space-x-2 sm:flex-row">
+                            <Button onClick={saveState} variant="icon" title="Save column settings">
+                                <Save />
+                            </Button>
+                            <Button onClick={restoreState} variant="icon" title="Restore column settings">
+                                <RotateCcw />
+                            </Button>
+                            <Button onClick={resetState} variant="icon" title="Reset column settings">
+                                <X />
+                            </Button>
+                            <PasteTableButton onClick={handlePasteTableData} />
+                        </div>
+
                         <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         <Button onClick={handleSubmit} className="ml-2" disabled={processing}>
                             Submit
