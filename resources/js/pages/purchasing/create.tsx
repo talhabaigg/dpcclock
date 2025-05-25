@@ -13,15 +13,13 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { CircleX, RotateCcw, Save, Sparkles, X } from 'lucide-react';
-import OpenAI from 'openai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
-import Dropzone from 'shadcn-dropzone';
-import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
+import { AiImageExtractor } from './create-partials/aiImageExtractor';
 import GridSizeSelector from './create-partials/gridSizeSelector';
+import { GridStateToolbar } from './create-partials/gridStateToolbar';
 import PasteTableButton from './create-partials/pasteTableButton';
 import { CostCode } from './types';
 
@@ -285,229 +283,7 @@ export default function Create() {
         }, 300);
     };
 
-    const handlePasteTableData = async () => {
-        try {
-            setPastingItems(true);
-            const text = await navigator.clipboard.readText();
-            const rows = text.trim().split('\n');
-
-            const locationId = data.project_id; // Ensure this is available
-            if (!locationId) {
-                alert('Please select a project first.');
-                return;
-            }
-
-            const parsedRows = await Promise.all(
-                rows.slice(1).map(async (row, index) => {
-                    const [codeRaw, descRaw, qtyRaw, unitCostRaw] = row.split('\t');
-
-                    const code = codeRaw?.trim() || '';
-                    const fallbackDescription = descRaw?.trim() || '';
-                    const qty = parseFloat((qtyRaw?.trim() || '0').replace(/,/g, ''));
-                    const unit_cost = parseFloat((unitCostRaw?.trim() || '0').replace(/,/g, ''));
-
-                    let item = null;
-                    try {
-                        const res = await fetch(`/material-items/code/${code}/${locationId}`);
-                        if (res.ok) item = await res.json();
-                        console.log('Item fetched:', item);
-                    } catch (err) {
-                        console.warn(`Lookup failed for code: ${code}`);
-                    }
-
-                    return {
-                        code: code,
-                        description: item?.description || `${code} ${fallbackDescription}`.trim(),
-                        qty,
-                        unit_cost: unit_cost ? unit_cost : item?.unit_cost || 0,
-                        total_cost: (unit_cost ? unit_cost : item?.unit_cost) * qty,
-                        cost_code: item?.cost_code || '',
-                        price_list: item?.price_list || '',
-                        serial_number: rowData.length + index + 1,
-                    };
-                }),
-            );
-
-            setRowData([...rowData, ...parsedRows]);
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            setPastingItems(false);
-        } catch (err) {
-            console.error('Failed to read from clipboard:', err);
-            alert('Unable to paste data. Please try again or check clipboard permissions.');
-        }
-    };
-
     const [file, setFile] = useState<File | null>(null);
-
-    const fileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => {
-                const result = reader.result?.toString() || '';
-                resolve(result.split(',')[1]); // Get only base64 part
-            };
-            reader.onerror = reject;
-        });
-    };
-    const extractLineItems = async () => {
-        if (!file) return alert('Please upload a file first.');
-
-        const base64 = await fileToBase64(file);
-        const openai = new OpenAI({
-            apiKey: import.meta.env.VITE_OPEN_AI_API_KEY,
-            dangerouslyAllowBrowser: true,
-        });
-        setPastingItems(true);
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o', // or 'gpt-4-vision-preview'
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: 'Please extract line items from this quotation image. Return JSON object as fields: code, description, qty, unit_cost without $ sign.',
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:image/jpeg;base64,${base64}`,
-                            },
-                        },
-                    ],
-                },
-            ],
-            max_tokens: 1000,
-        });
-        setPastingItems(false);
-        let content = response.choices[0].message.content || '';
-        console.log('Raw response:', content);
-
-        // ✅ Remove triple backticks and "json" if present
-        content = content
-            .trim()
-            .replace(/^```(?:json)?/, '')
-            .replace(/```$/, '');
-
-        // ✅ Try to parse
-        let parsed;
-        try {
-            parsed = JSON.parse(content);
-        } catch (error) {
-            console.error('Failed to parse JSON:', error);
-            return alert('Could not parse extracted data. Please try again.');
-        }
-
-        const rowDataMapped = await Promise.all(
-            parsed.map(async (item, index) => {
-                const locationId = data.project_id; // Ensure this exists in scope
-                let loadedItem = null;
-
-                try {
-                    const res = await fetch(`/material-items/code/${item.code}/${locationId}`);
-                    if (res.ok) loadedItem = await res.json();
-                } catch (err) {
-                    console.warn(`Lookup failed for code: ${item.code}`, err);
-                }
-
-                return {
-                    code: item.code,
-                    description: item.description,
-                    qty: parseFloat(item.qty),
-                    unit_cost: parseFloat(item.unit_cost),
-                    total_cost: parseFloat(item.unit_cost) * parseFloat(item.qty),
-                    cost_code: loadedItem?.cost_code || '',
-                    price_list: '',
-                    serial_number: index + 1,
-                };
-            }),
-        );
-
-        setRowData(rowDataMapped);
-        console.log('Response:', response.choices[0].message.content);
-    };
-    const saveState = useCallback(() => {
-        const fullState = gridRef.current!.api.getColumnState();
-
-        const filteredState = fullState.map(({ width, ...rest }) => rest);
-
-        window.colState = filteredState;
-        localStorage.setItem('colState', JSON.stringify(filteredState));
-        console.log('column state saved (no width)', filteredState);
-        toast('Column Order saved', {
-            description: 'The column order has been saved successfully.',
-            action: {
-                label: 'Undo',
-                onClick: () => resetState(),
-            },
-        });
-    }, []);
-
-    const restoreState = useCallback(() => {
-        const savedState = localStorage.getItem('colState');
-        if (!savedState) {
-            console.log('no columns state to restore by, you must save state first');
-            return;
-        }
-        gridRef.current!.api.applyColumnState({
-            state: JSON.parse(savedState),
-            applyOrder: true,
-        });
-        console.log('column state restored', window.colState);
-        toast('Column Order restored', {
-            description: 'The column order has been restored successfully.',
-            action: {
-                label: 'Clear',
-                onClick: () => resetState(),
-            },
-        });
-    }, [window]);
-
-    const resetState = useCallback(() => {
-        gridRef.current!.api.resetColumnState();
-        localStorage.removeItem('colState');
-        window.colState = null;
-        console.log('column state reset');
-        toast('Column Order reset', {
-            description: 'The column order has been reset successfully.',
-            action: {
-                label: 'Save',
-                onClick: () => saveState(),
-            },
-        });
-    }, []);
-
-    // const onGridReady = useCallback((params) => {
-    //     // gridRef.current = params.api;
-    //     const savedState = localStorage.getItem('colState');
-    //     if (savedState) {
-    //         const parsedState = JSON.parse(savedState);
-    //         params.api.applyColumnState({
-    //             state: parsedState,
-    //             applyOrder: true,
-    //         });
-    //         console.log('column state restored', parsedState);
-    //     }
-    // }, []);
-    // useEffect(() => {
-    //     const savedState = localStorage.getItem('colState');
-    //     const parsedState = JSON.parse(savedState);
-    //     if (!parsedState) return;
-    //     // Delay is important to let grid re-render rowData
-    //     const widthOnlyState = parsedState.map((col) => ({
-    //         colId: col.colId,
-    //         width: col.width,
-    //     }));
-
-    //     // Delay needed to ensure grid is fully re-rendered
-    //     setTimeout(() => {
-    //         gridRef.current.api.applyColumnState({
-    //             state: widthOnlyState,
-    //             applyOrder: false, // don't touch column order
-    //         });
-    //     }, 1);
-    // }, [rowData]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -608,82 +384,18 @@ export default function Create() {
                                     updated[e.rowIndex] = e.data;
                                     setRowData(updated);
                                 }}
-                                onCellKeyDown={(event) => {
-                                    if (event.event.key === 'Tab') {
-                                        const lastRowIndex = rowData.length - 1;
-                                        const lastColIndex = columnDefs.length - 2; // Skip 'total' column
-
-                                        if (event.rowIndex === lastRowIndex && event.column.getColId() === columnDefs[lastColIndex].field) {
-                                            setTimeout(() => {
-                                                const newRow = {
-                                                    itemcode: '',
-                                                    description: '',
-                                                    unit_cost: 0,
-                                                    qty: 1,
-                                                    total_cost: 0,
-                                                    serial_number: rowData.length + 1, // Increment the line index for the new row
-                                                };
-
-                                                const updated = [...rowData, newRow];
-                                                setRowData(updated);
-
-                                                // 🔥 Wait a tiny bit for grid to render the new row, then focus
-                                                setTimeout(() => {
-                                                    event.api.startEditingCell({
-                                                        rowIndex: updated.length - 1,
-                                                        colKey: 'code', // Focus on the first editable field
-                                                    });
-                                                }, 50);
-                                            }, 50);
-                                        }
-                                    }
-                                }}
                             />
                         </div>
                     </CardContent>
                 </Card>
                 {permissions.includes('view all requisitions') && (
-                    <Card className="my-2 p-4">
-                        <Dropzone
-                            onDrop={(acceptedFiles: File[]) => {
-                                if (acceptedFiles.length > 0) {
-                                    setFile(acceptedFiles[0]);
-                                }
-                            }}
-                        />
-
-                        <div className="flex w-full flex-col items-center justify-between gap-2 sm:flex-row md:flex-row">
-                            <div className="flex w-full items-center justify-start gap-2 sm:justify-start">
-                                <Button onClick={extractLineItems}>
-                                    <Sparkles /> Extract with AI
-                                </Button>
-                                <span className="text-muted-foreground ml-2 hidden text-xs sm:block">
-                                    (Note that AI features are experimental and may not work as expected.)
-                                </span>
-                            </div>
-
-                            {file && (
-                                <div className="flex w-full items-center justify-start gap-0 sm:justify-end">
-                                    <div className="bg-muted mr-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded border">
-                                        <img
-                                            src={URL.createObjectURL(file)}
-                                            alt="Preview"
-                                            className="h-full w-full object-contain"
-                                            style={{ aspectRatio: '1 / 1' }}
-                                        />
-                                    </div>
-                                    <Label className="flex items-center justify-between gap-2">
-                                        {file?.name}{' '}
-                                        <span className="ml-4">
-                                            <Button variant="outline" size="icon" onClick={() => setFile(null)}>
-                                                <CircleX />
-                                            </Button>
-                                        </span>
-                                    </Label>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
+                    <AiImageExtractor
+                        setFile={setFile}
+                        file={file}
+                        setPastingItems={setPastingItems}
+                        projectId={data.project_id}
+                        setRowData={setRowData}
+                    />
                 )}
 
                 {/* Add Button */}
@@ -697,16 +409,13 @@ export default function Create() {
                     </div>
                     <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
                         <div className="flex hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
-                            <Button onClick={saveState} variant="icon" title="Save column settings">
-                                <Save />
-                            </Button>
-                            <Button onClick={restoreState} variant="icon" title="Restore column settings">
-                                <RotateCcw />
-                            </Button>
-                            <Button onClick={resetState} variant="icon" title="Reset column settings">
-                                <X />
-                            </Button>
-                            <PasteTableButton onClick={handlePasteTableData} />
+                            <GridStateToolbar gridRef={gridRef} />
+                            <PasteTableButton
+                                rowData={rowData}
+                                setRowData={setRowData}
+                                projectId={data.project_id}
+                                setPastingItems={setPastingItems}
+                            />
                         </div>
 
                         <div className="hidden sm:block">

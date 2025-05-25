@@ -33,6 +33,19 @@ type Employee = {
     mapping_type?: string; // Optional, assuming it's not part of the schema yet
 };
 
+const tableHeader = [
+    { title: 'ID', key: 'id' },
+    { title: 'Supplier', key: 'supplier' },
+    { title: 'Project', key: 'location' },
+    { title: 'Status', key: 'status' },
+    { title: 'Date required', key: 'date_required' },
+    { title: 'Delivery Contact', key: 'delivery_contact' },
+    { title: 'Deliver to', key: 'deliver_to' },
+    { title: 'Created By', key: 'creator' },
+    { title: 'Requisition Cost', key: 'line_items_sum_total_cost' },
+    { title: 'Actions', key: 'actions' },
+];
+
 export default function RequisitionList() {
     const { requisitions, flash } = usePage<{ requisitions: Employee[]; flash: { success: string; error: string } }>().props;
     let isLoading = false;
@@ -69,16 +82,11 @@ export default function RequisitionList() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Supplier</TableHead>
-                            <TableHead>Project</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Date required</TableHead>
-                            <TableHead>Delivery Contact</TableHead>
-                            <TableHead>Deliver to</TableHead>
-                            <TableHead>Created By</TableHead>
-                            <TableHead>Requisition Cost </TableHead>
-                            <TableHead>Actions</TableHead>
+                            {tableHeader.map((header) => (
+                                <TableHead key={header.key} className="text-left">
+                                    {header.title}
+                                </TableHead>
+                            ))}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -95,9 +103,18 @@ export default function RequisitionList() {
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.creator?.name}</TableCell>
                                 <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
-                                <TableCell>
+                                <TableCell className="table-cell sm:hidden">
+                                    <div className="flex items-center gap-2">
+                                        <Link href={`/requisition/${requisition.id}`}>View</Link>
+                                        <Link href={`/requisition/${requisition.id}/copy`}>Copy</Link>
+                                        <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
+                                            Delete
+                                        </Link>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell">
                                     <DropdownMenu>
-                                        <DropdownMenuTrigger asChild className="cursor-pointer">
+                                        <DropdownMenuTrigger asChild>
                                             <EllipsisVertical />
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent>

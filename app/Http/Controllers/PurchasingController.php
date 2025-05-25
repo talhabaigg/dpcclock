@@ -26,7 +26,8 @@ class PurchasingController extends Controller
         $user = auth()->user();
 
         $suppliers = Supplier::all(); // Consider selecting only necessary fields
-        $costCodes = CostCode::select('id', 'code', 'description')->get();
+        $costCodes = CostCode::select('id', 'code', 'description')->orderBy('code')->get();
+ 
 
         // Base query for locations under specific parent
         $locationsQuery = Location::where('eh_parent_id', 1149031);
