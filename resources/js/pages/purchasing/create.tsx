@@ -384,6 +384,36 @@ export default function Create() {
                                     updated[e.rowIndex] = e.data;
                                     setRowData(updated);
                                 }}
+                                onCellKeyDown={(event) => {
+                                    if (event.event.key === 'Tab') {
+                                        const lastRowIndex = rowData.length - 1;
+                                        const lastColIndex = columnDefs.length - 2; // Skip 'total' column
+
+                                        if (event.rowIndex === lastRowIndex && event.column.getColId() === columnDefs[lastColIndex].field) {
+                                            setTimeout(() => {
+                                                const newRow = {
+                                                    itemcode: '',
+                                                    description: '',
+                                                    unit_cost: 0,
+                                                    qty: 1,
+                                                    total_cost: 0,
+                                                    serial_number: rowData.length + 1, // Increment the line index for the new row
+                                                };
+
+                                                const updated = [...rowData, newRow];
+                                                setRowData(updated);
+
+                                                // 🔥 Wait a tiny bit for grid to render the new row, then focus
+                                                setTimeout(() => {
+                                                    event.api.startEditingCell({
+                                                        rowIndex: updated.length - 1,
+                                                        colKey: 'code', // Focus on the first editable field
+                                                    });
+                                                }, 50);
+                                            }, 50);
+                                        }
+                                    }
+                                }}
                             />
                         </div>
                     </CardContent>
