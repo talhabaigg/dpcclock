@@ -191,6 +191,32 @@ class MaterialItemController extends Controller
         return back()->with('success', "Imported $insertCount prices successfully.");
     }
 
+    public function downloadLocationPricingListCSV($locationId)
+    {
+        $location = Location::findOrFail($locationId);
+        $fileName = 'location_pricing_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
+        $filePath = storage_path("app/{$fileName}");
+
+        $handle = fopen($filePath, 'w');
+        fputcsv($handle, ['location_id', 'code', 'unit_cost']);
+
+        $items = DB::table('location_item_pricing')
+            ->where('location_id', $location->id)
+            ->join('material_items', 'location_item_pricing.material_item_id', '=', 'material_items.id')
+            ->select('location_item_pricing.location_id', 'material_items.code', 'location_item_pricing.unit_cost_override')
+            ->get();
+        foreach ($items as $item) {
+            fputcsv($handle, [
+                $location->external_id,
+                $item->code,
+                $item->unit_cost_override,
+            ]);
+        }
+        fclose($handle);
+
+        return response()->download($filePath)->deleteFileAfterSend(true);
+    }
+
     public function getMaterialItems(Request $request)
     {
         $supplierId = $request->input('supplier_id');

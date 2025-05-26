@@ -197,11 +197,14 @@ export default function LocationsList() {
                     </Card>
                 </TabsContent>
                 <TabsContent value="pricelist">
-                    <div className="m-2 flex flex-col gap-2 sm:w-1/2 sm:flex-row 2xl:w-1/3">
+                    <div className="m-2 flex flex-col gap-2 sm:w-1/2 sm:flex-row 2xl:w-1/2">
                         <Input type="file" accept=".csv" onChange={handleFileChange} />
                         <Button onClick={() => handleUpload(location.id)} disabled={!selectedFile || processing}>
                             Upload CSV
                         </Button>
+                        <a href={`/material-items/location/${location.id}/download-csv`} className="flex items-center justify-center">
+                            <Button>Download CSV</Button>
+                        </a>
                     </div>
 
                     <Card className="m-2">
