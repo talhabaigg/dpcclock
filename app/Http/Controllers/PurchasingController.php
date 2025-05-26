@@ -19,6 +19,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
 use App\Services\ExcelExportService;
 use Carbon\Carbon;
+
 class PurchasingController extends Controller
 {
     public function create()
@@ -26,8 +27,8 @@ class PurchasingController extends Controller
         $user = auth()->user();
 
         $suppliers = Supplier::all(); // Consider selecting only necessary fields
-        $costCodes = CostCode::select('id', 'code', 'description')->orderBy('code')->get();
- 
+        $costCodes = CostCode::select('id', 'code', 'description')->ordered()->get();
+
 
         // Base query for locations under specific parent
         $locationsQuery = Location::where('eh_parent_id', 1149031);
@@ -152,6 +153,21 @@ class PurchasingController extends Controller
         }
 
         return redirect()->route('requisition.index', $newRequisition->id)->with('success', 'Requisition copied successfully.');
+    }
+
+    public function toggleRequisitionTemplate($id)
+    {
+        $requisition = Requisition::findOrFail($id);
+        $wasTemplate = $requisition->is_template;
+
+        $requisition->is_template = !$wasTemplate;
+        $requisition->save();
+
+        $message = $requisition->is_template
+            ? 'Marked as a template successfully.'
+            : 'Removed template successfully.';
+
+        return redirect()->back()->with('success', $message);
     }
 
     public function destroy($id)

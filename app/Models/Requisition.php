@@ -18,6 +18,7 @@ class Requisition extends Model
         'requested_by',
         'deliver_to',
         'status',
+        'is_template',
     ];
 
     protected static function booted()
@@ -42,19 +43,23 @@ class Requisition extends Model
         return $this->hasMany(RequisitionLineItem::class);
     }
 
-    public function supplier() {
+    public function supplier()
+    {
         return $this->belongsTo(Supplier::class, 'supplier_number', 'id');
     }
 
-    public function getTotalAttribute() {
+    public function getTotalAttribute()
+    {
         return $this->lineItems->sum('total');
     }
 
-    public function location() {
+    public function location()
+    {
         return $this->belongsTo(Location::class, 'project_number', 'id');
     }
 
-    public function creator() {
+    public function creator()
+    {
         return $this->belongsTo(User::class, 'created_by', 'id');
     }
 }
