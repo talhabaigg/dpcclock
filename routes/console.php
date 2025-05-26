@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use App\Console\Commands\SyncTimesheets;
 
 
-Schedule::command(SyncTimesheets::class)
+Schedule::command('app:sync-timesheets')
     ->hourly()
     ->timezone('Australia/Brisbane');
 

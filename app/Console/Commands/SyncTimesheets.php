@@ -20,7 +20,7 @@ class SyncTimesheets extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Sync EH timesheets by triggering the /clocks/eh/sync endpoint';
 
     /**
      * Execute the console command.
