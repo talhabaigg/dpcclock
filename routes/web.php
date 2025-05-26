@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ClockController;
+use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Route;
@@ -93,6 +94,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         Route::get('/suppliers/download', [SupplierController::class, 'download'])->name('suppliers.download');
         Route::post('/suppliers/upload', [SupplierController::class, 'upload'])->name('suppliers.upload');
+
+        Route::get('/cost-codes', [CostcodeController::class, 'index'])->name('costcodes.index');
 
     });
 

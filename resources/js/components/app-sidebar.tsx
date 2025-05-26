@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Box, Building, Clock, Database, FoldHorizontal, Hammer, Hourglass, LayoutGrid, UsersRound } from 'lucide-react';
+import { Binary, Box, Building, Clock, Database, FoldHorizontal, Hammer, Hourglass, LayoutGrid, Pickaxe, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
 const mainNavItems: NavItem[] = [
@@ -58,6 +58,10 @@ const mainNavItems: NavItem[] = [
         permission: 'view timesheet converter',
     },
 ];
+
+const textIcon = (text: string) => () => (
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-500 text-sm font-medium text-white">{text}</span>
+);
 const documents = [
     {
         name: 'Data',
@@ -67,7 +71,7 @@ const documents = [
             {
                 name: 'Material',
                 url: '/material-items/all',
-                icon: Hammer,
+                icon: Pickaxe,
                 permission: 'view all requisitions',
             },
             {
@@ -76,9 +80,16 @@ const documents = [
                 icon: Box,
                 permission: 'view all requisitions',
             },
+            {
+                name: 'Cost Codes',
+                url: '/cost-codes',
+                icon: Binary,
+                permission: 'view all requisitions',
+            },
         ],
     },
 ];
+
 const footerNavItems: NavItem[] = [
     // {
     //     title: 'Repository',
