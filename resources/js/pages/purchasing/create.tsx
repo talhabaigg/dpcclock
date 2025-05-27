@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
-import { router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
@@ -287,6 +287,7 @@ export default function Create() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Create Requisition" />
             <div className="p-4">
                 <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
                 <Dialog open={pastingItems} onOpenChange={setPastingItems}>

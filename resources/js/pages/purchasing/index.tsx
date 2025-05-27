@@ -151,7 +151,7 @@ export default function RequisitionList() {
     };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Employees" />
+            <Head title="View Requisitions" />
             <div className="m-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <Button variant="outline">

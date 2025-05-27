@@ -14,7 +14,7 @@ interface Kiosk {
     };
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;

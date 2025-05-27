@@ -1,10 +1,13 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { X } from 'lucide-react';
+import { useEffect } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -28,6 +31,8 @@ type User = {
         id: number;
         name: string;
     }[];
+
+    managed_kiosks: Kiosk[];
 };
 
 type Role = {
@@ -35,15 +40,37 @@ type Role = {
     name: string;
 };
 
+type Kiosk = {
+    id: number;
+    name: string;
+};
+
 export default function UserEdit() {
-    const { user, roles, flash } = usePage<{ user: User; roles: Role[]; flash: { success: string; error: string } }>().props;
+    const { user, roles, flash, kiosks } = usePage<{ user: User; roles: Role[]; flash: { success: string; error: string }; kiosks: Kiosk[] }>().props;
     let isLoading = false;
     const { data, setData, put, processing, errors } = useForm({
         name: user.name,
         email: user.email,
         roles: user.roles[0]?.id.toString() ?? '', // assuming single role
+        managed_kiosks: user.managed_kiosks,
     });
 
+    const KioskForm = useForm({
+        kiosk_id: '',
+    });
+
+    useEffect(() => {
+        if (!KioskForm.data.kiosk_id) return; // prevent empty submissions
+
+        const res = KioskForm.post(route('users.kiosk.store', user.id), {
+            onSuccess: () => {
+                KioskForm.setData('kiosk_id', '');
+            },
+        });
+
+        console.log('KioskForm response:', res);
+    }, [KioskForm.data.kiosk_id]);
+    // console.log('User data:', user);
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         put(route('users.update', user.id));
@@ -80,6 +107,37 @@ export default function UserEdit() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="mb-2">
+                        <div className="my-2 flex flex-col items-start space-y-2">
+                            <Label htmlFor="roles">Kiosks</Label>
+                            <Select value={KioskForm.data.kiosk_id} onValueChange={(value) => KioskForm.setData('kiosk_id', value)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Kiosk" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {kiosks.map((kiosk) => (
+                                        <SelectItem key={kiosk.id} value={kiosk.id.toString()}>
+                                            {kiosk.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {/* <Button>Add</Button> */}
+                        </div>
+                        <Label htmlFor="kiosks" className="block">
+                            Manager for Kiosks
+                        </Label>
+                        <div className="mt-2 flex flex-col">
+                            {data.managed_kiosks.map((kiosk) => (
+                                <Link href={`/users/kiosk/${kiosk.id}/${user.id}/remove`} key={kiosk.id}>
+                                    <Badge key={kiosk.id} className="m-1">
+                                        {kiosk.name} <X size={12} />
+                                    </Badge>
+                                </Link>
+                            ))}
+                        </div>
                     </div>
                     <Button className="mb-2" type="submit" disabled={processing}>
                         {isLoading ? 'Saving...' : 'Save'}

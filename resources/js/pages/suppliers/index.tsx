@@ -50,7 +50,7 @@ export default function SuppliersList() {
     };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Employees" />
+            <Head title="Suppliers" />
             <div className="m-2 flex items-center justify-between gap-2">
                 <div className="relative w-72 sm:w-1/4">
                     <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
