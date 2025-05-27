@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
@@ -15,10 +16,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CirclePlus, EllipsisVertical, Search, SquarePlus, Trash2 } from 'lucide-react';
+import { CirclePlus, EllipsisVertical, Search, SquarePlus, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import CostRangeSlider from './index-partials/costRangeSlider';
+import { SelectFilter } from './index-partials/selectFilter';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -66,13 +68,14 @@ export default function RequisitionList() {
         const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);
         return [Math.min(...costs, 0), Math.max(...costs, 10000)];
     });
-    // const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);
-    // const minCost = Math.min(...costs, 0);
-    // const maxCost = Math.max(...costs, 10000);
 
-    // useEffect(() => {
-    //     setCostRange([minCost, maxCost]);
-    // }, [minCost, maxCost]);
+    const [filters, setFilters] = useState({
+        supplier: null,
+        status: null,
+        deliver_to: null,
+        creator: null,
+        contact: null,
+    });
     const filteredRequisitions = requisitions
         .filter((req) => {
             const cost = Number(req.line_items_sum_total_cost) || 0;
@@ -84,7 +87,39 @@ export default function RequisitionList() {
                 req.id?.toString().includes(searchQuery) ||
                 req.supplier?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 req.creator?.name.toLowerCase().includes(searchQuery.toLowerCase()),
+        )
+        .filter((req) => {
+            return (
+                (!filters.supplier || req.supplier?.name === filters.supplier) &&
+                (!filters.status || req.status === filters.status) &&
+                (!filters.deliver_to || req.deliver_to === filters.deliver_to) &&
+                (!filters.creator || req.creator?.name === filters.creator) &&
+                (!filters.contact || req.delivery_contact === filters.contact)
+            );
+        });
+
+    useEffect(() => {
+        const savedFilters = localStorage.getItem('requisitionFilters');
+        if (savedFilters) {
+            const parsed = JSON.parse(savedFilters);
+            setFilters(parsed.filters);
+            setSearchQuery(parsed.searchQuery);
+            setFilterOnlyTemplates(parsed.filterOnlyTemplates);
+            setCostRange(parsed.costRange);
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem(
+            'requisitionFilters',
+            JSON.stringify({
+                filters,
+                searchQuery,
+                filterOnlyTemplates,
+                costRange,
+            }),
         );
+    }, [filters, searchQuery, filterOnlyTemplates, costRange]);
 
     useEffect(() => {
         if (flash.success) {
@@ -103,6 +138,17 @@ export default function RequisitionList() {
             toast.error(flash.error);
         }
     }, [flash.success, flash.error]);
+
+    const filterDefinitions = [
+        { key: 'supplier', label: 'Supplier', getOptions: () => requisitions.map((r) => r.supplier?.name) },
+        { key: 'status', label: 'Status', getOptions: () => requisitions.map((r) => r.status) },
+        { key: 'deliver_to', label: 'Deliver To', getOptions: () => requisitions.map((r) => r.deliver_to) },
+        { key: 'creator', label: 'Creator', getOptions: () => requisitions.map((r) => r.creator?.name) },
+        { key: 'contact', label: 'Contact', getOptions: () => requisitions.map((r) => r.delivery_contact) },
+    ] as const;
+    const updateFilter = (key: keyof typeof filters, value: string | null) => {
+        setFilters((prev) => ({ ...prev, [key]: value }));
+    };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
@@ -116,10 +162,14 @@ export default function RequisitionList() {
                     </Button>
                     <span className="flex items-center gap-2">
                         {' '}
-                        <Checkbox checked={filterOnlyTemplates} onCheckedChange={(checked) => setFilterOnlyTemplates(checked === true)} />
-                        <span>
-                            <Label className="text-sm">View templates only</Label>
-                        </span>
+                        <Checkbox
+                            checked={filterOnlyTemplates}
+                            onCheckedChange={(checked) => setFilterOnlyTemplates(checked === true)}
+                            id="filter-templates"
+                        />
+                        <Label htmlFor="filter-templates" className="cursor-pointer text-sm">
+                            View templates only
+                        </Label>
                     </span>
                 </div>
 
@@ -136,10 +186,60 @@ export default function RequisitionList() {
                     />
                 </div>
             </div>
-            <div className="mx-4 flex flex-col items-start gap-4">
-                <CostRangeSlider min={minCost} max={maxCost} value={costRange} onChange={setCostRange} />
-                <span className="text-muted-foreground text-sm">Filter by Requisition Cost</span>
-            </div>
+            <Card className="mx-2 flex flex-col items-start justify-between gap-2 p-2 md:flex-row md:items-center">
+                <div className="ml-2 grid w-1/2 grid-cols-1 gap-2 p-2 md:grid-cols-3">
+                    {filterDefinitions.map(({ key, label, getOptions }) => {
+                        const options = [...new Set(getOptions())].filter(Boolean).map((val) => ({ value: val!, label: val! }));
+                        return (
+                            <SelectFilter
+                                key={key}
+                                filterName={`Filter by ${label}`}
+                                options={options}
+                                onChange={(val) => updateFilter(key, val)}
+                                value={filters[key] ?? ''}
+                            />
+                        );
+                    })}
+                    <div>
+                        <Button
+                            variant="link"
+                            onClick={() => {
+                                setFilters({
+                                    supplier: null,
+                                    status: null,
+                                    deliver_to: null,
+                                    creator: null,
+                                    contact: null,
+                                });
+                            }}
+                        >
+                            Clear Filters
+                        </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {Object.entries(filters).map(([key, value]) =>
+                            value ? (
+                                <Badge key={key} className="flex items-center gap-1">
+                                    {value}
+                                    <button
+                                        className="rounded-full hover:bg-gray-200"
+                                        onClick={() => updateFilter(key as keyof typeof filters, null)}
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </Badge>
+                            ) : null,
+                        )}
+                    </div>
+                </div>
+                <div className="mx-4 flex w-1/2 flex-col items-start gap-4 md:items-end">
+                    <div className="p-4">
+                        <CostRangeSlider min={minCost} max={maxCost} value={costRange} onChange={setCostRange} />
+                        <span className="text-muted-foreground text-sm">Filter by Requisition Value</span>
+                    </div>
+                </div>
+            </Card>
+
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <Table>
                     <TableHeader>
