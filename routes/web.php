@@ -99,6 +99,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/suppliers/upload', [SupplierController::class, 'upload'])->name('suppliers.upload');
 
         Route::get('/cost-codes', [CostcodeController::class, 'index'])->name('costcodes.index');
+        Route::post('/cost-codes/upload', [CostcodeController::class, 'upload'])->name('costcodes.upload');
+        Route::get('/cost-codes/download', [CostcodeController::class, 'download'])->name('costcodes.download');
 
     });
 
