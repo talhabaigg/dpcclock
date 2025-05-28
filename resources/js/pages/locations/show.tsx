@@ -1,3 +1,4 @@
+import CsvImporterDialog from '@/components/csv-importer';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -52,6 +53,7 @@ export default function LocationsList() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
+    const [open, setOpen] = useState(false);
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const splitExternalId = (externalId: string) => {
         if (!externalId) {
@@ -105,6 +107,10 @@ export default function LocationsList() {
 
         formData.reset();
         setOpenDialog(false); // <-- Close the dialog
+    };
+    const handleCsvSubmit = (mappedData) => {
+        console.log('Mapped CSV data ready to send:', mappedData);
+        // TODO: send mappedData to your backend API
     };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -206,7 +212,14 @@ export default function LocationsList() {
                             <Button>Download CSV</Button>
                         </a>
                     </div>
-
+                    <button onClick={() => setOpen(true)}>Import CSV</button>
+                    {open && (
+                        <CsvImporterDialog
+                            requiredColumns={['location_id', 'code', 'unit_cost']}
+                            onSubmit={handleCsvSubmit}
+                            onClose={() => setOpen(false)}
+                        />
+                    )}
                     <Card className="m-2">
                         <Table className="w-full">
                             <TableHeader>
