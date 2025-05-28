@@ -85,6 +85,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
+        Route::get('material-items/{materialItem}/edit', [MaterialItemController::class, 'edit'])->name('material-items.edit');
+        Route::get('material-items/{materialItem}/next', [MaterialItemController::class, 'next'])->name('material-items.next');
+        Route::get('material-items/{materialItem}/previous', [MaterialItemController::class, 'previous'])->name('material-items.previous');
+        Route::put('material-items/{materialItem}', [MaterialItemController::class, 'update'])->name('material-items.update');
+        Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy');
         Route::get('material-items/download', [MaterialItemController::class, 'download'])->name('material-items.download');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::get('/material-items/location/{locationId}/download-csv', [MaterialItemController::class, 'downloadLocationPricingListCSV']);

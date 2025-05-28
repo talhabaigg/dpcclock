@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Download, Search, Upload } from 'lucide-react';
 import { ChangeEvent, useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -110,6 +110,11 @@ export default function ItemList() {
                                 <TableCell>${item.unit_cost || 'no price'}</TableCell>
                                 <TableCell>{item.cost_code?.code || 'no code'}</TableCell>
                                 <TableCell>{item.supplier?.code || 'no supplier'}</TableCell>
+                                <TableCell>
+                                    <Link href={`/material-items/${item.id}/edit`}>
+                                        <Button variant="link">Edit</Button>
+                                    </Link>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

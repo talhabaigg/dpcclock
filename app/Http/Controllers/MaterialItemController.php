@@ -56,15 +56,80 @@ class MaterialItemController extends Controller
      */
     public function edit(MaterialItem $materialItem)
     {
-        //
+        if (!$materialItem->exists) {
+            return redirect()->route('material-items.index')->with('error', 'Material item not found.');
+        }
+        $item = $materialItem->load('costCode', 'supplier');
+        $maxItems = MaterialItem::count();
+        return Inertia::render('materialItem/edit', [
+            'item' => $item,
+            'costCodes' => CostCode::all(),
+            'suppliers' => Supplier::all(),
+            'maxItems' => $maxItems,
+
+        ]);
     }
 
+
+    public function next(MaterialItem $materialItem)
+    {
+        $nextItem = MaterialItem::where('id', '>', $materialItem->id)->first();
+        if ($nextItem) {
+            return redirect()->route('material-items.edit', ['materialItem' => $nextItem->id]);
+        }
+        $firstItem = MaterialItem::orderBy('id', 'asc')->first();
+        if ($firstItem) {
+            return redirect()->route('material-items.edit', ['materialItem' => $firstItem->id]);
+        }
+
+        // If there are no items at all
+        return redirect()->route('material-items.index')->with('success', 'No items available to edit.');
+    }
+
+    public function previous(MaterialItem $materialItem)
+    {
+        // Try to get the previous item (with smaller ID)
+        $previousItem = MaterialItem::where('id', '<', $materialItem->id)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        // If found, redirect to edit that item
+        if ($previousItem) {
+            return redirect()->route('material-items.edit', ['materialItem' => $previousItem->id]);
+        }
+
+        // If not found, loop to the item with the highest ID
+        $lastItem = MaterialItem::orderBy('id', 'desc')->first();
+        if ($lastItem) {
+            return redirect()->route('material-items.edit', ['materialItem' => $lastItem->id]);
+        }
+
+        // If there are no items at all
+        return redirect()->route('material-items.index')->with('success', 'No items available to edit.');
+    }
     /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, MaterialItem $materialItem)
     {
-        //
+        $request->validate([
+            'code' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'unit_cost' => 'required|numeric|min:0',
+            'cost_code_id' => 'nullable|exists:cost_codes,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
+        ]);
+
+        $materialItem->update([
+            'code' => $request->input('code'),
+            'description' => $request->input('description'),
+            'unit_cost' => $request->input('unit_cost'),
+            'cost_code_id' => $request->input('cost_code_id'),
+            'supplier_id' => $request->input('supplier_id'),
+
+        ]);
+
+        return redirect()->back()->with('success', 'Material item updated successfully.');
     }
 
     /**
@@ -72,7 +137,8 @@ class MaterialItemController extends Controller
      */
     public function destroy(MaterialItem $materialItem)
     {
-        //
+        $materialItem->delete();
+        return redirect()->route('material-items.index')->with('success', 'Material item deleted successfully.');
     }
 
     public function upload(Request $request)
