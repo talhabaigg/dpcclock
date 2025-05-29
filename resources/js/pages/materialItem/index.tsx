@@ -1,13 +1,16 @@
 import CsvImporterDialog from '@/components/csv-importer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
+import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+import { AgGridReact } from 'ag-grid-react';
 import { Download, Search } from 'lucide-react';
 import { ChangeEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Items',
@@ -28,11 +31,14 @@ type MaterialItem = {
         id: number;
         code: string;
     };
+    actions?: string;
 };
 
 export default function ItemList() {
     const { items, flash } = usePage<{ items: MaterialItem[]; flash: { success: string; error: string } }>().props;
     console.log('items', items);
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const appliedTheme = isDarkMode ? darkTheme : myTheme;
     let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredItems = items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -81,8 +87,8 @@ export default function ItemList() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
-            <div className="m-2 flex items-center justify-between gap-2">
-                <div className="relative w-72 sm:w-1/4">
+            <div className="m-2 flex flex-col items-center gap-2 sm:flex-row md:justify-between">
+                <div className="relative w-full sm:w-1/4">
                     <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                     <Input
                         type="text"
@@ -92,17 +98,12 @@ export default function ItemList() {
                         className="pl-10"
                     />
                 </div>
-                <span className="">
+                {/* <span className="">
                     {flash.success && <div className="mt-2 text-sm text-green-600">{flash.success}</div>}
                     {flash.error && <div className="mt-2 text-sm text-red-600">{flash.error}</div>}
-                </span>
+                </span> */}
 
-                <div className="flex items-center gap-2">
-                    {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
-                    <Button onClick={handleUpload} disabled={!selectedFile || processing}>
-                        <Upload />
-                        Upload CSV
-                    </Button> */}
+                <div className="m-2 flex items-center gap-2">
                     <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                     <a href="/material-items/download">
                         <Button>
@@ -113,7 +114,35 @@ export default function ItemList() {
                     </a>
                 </div>
             </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+
+            <div className="ag-theme-alpine m-2 h-full max-w-sm rounded-xl border-0 p-0 sm:max-w-full sm:pr-4">
+                <AgGridReact
+                    rowData={filteredItems}
+                    theme={appliedTheme}
+                    columnDefs={[
+                        { field: 'id', headerName: 'ID' },
+                        { field: 'code', headerName: 'Code' },
+                        { field: 'description', headerName: 'Description' },
+                        { field: 'unit_cost', headerName: 'Unit Cost', valueFormatter: ({ value }) => `$${value}` },
+                        { field: 'cost_code.code', headerName: 'Cost Code' },
+                        { field: 'supplier.code', headerName: 'Supplier Code' },
+                        {
+                            field: 'actions',
+                            headerName: 'Actions',
+                            cellRenderer: (params: { data: { id: any } }) => (
+                                <a href={`/material-items/${params.data.id}/edit`}>
+                                    <Button variant="link">Edit</Button>
+                                </a>
+                            ),
+                        },
+                    ]}
+                    defaultColDef={{ flex: 1, minWidth: 100, filter: 'agTextColumnFilter' }}
+                    pagination={true}
+                    paginationPageSize={20}
+                />
+            </div>
+
+            {/* <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -143,7 +172,7 @@ export default function ItemList() {
                         ))}
                     </TableBody>
                 </Table>
-            </div>
+            </div> */}
         </AppLayout>
     );
 }
