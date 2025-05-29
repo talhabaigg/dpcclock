@@ -58,6 +58,7 @@ class PurchasingController extends Controller
             'delivery_contact' => 'nullable|string|max:255',
             'requested_by' => 'nullable|string|max:255',
             'deliver_to' => 'nullable|string|max:255',
+            'order_reference' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
             'items.*.code' => 'nullable|string|max:255',
             'items.*.description' => 'nullable|string',
@@ -69,6 +70,7 @@ class PurchasingController extends Controller
             'items.*.total_cost' => 'nullable|numeric|min:0',
         ]);
 
+
         $requisition = Requisition::create([
             'project_number' => $validated['project_id'] ?? 1,
             'supplier_number' => $validated['supplier_id'],
@@ -78,6 +80,7 @@ class PurchasingController extends Controller
             'delivery_contact' => $validated['delivery_contact'] ?? null,
             'requested_by' => $validated['requested_by'] ?? null,
             'deliver_to' => $validated['deliver_to'] ?? null,
+            'order_reference' => $validated['order_reference'] ?? null,
         ]);
 
         // dd($requisition);
@@ -142,6 +145,7 @@ class PurchasingController extends Controller
 
         $newRequisition = $originalRequisition->replicate();
         $newRequisition->status = 'pending';
+        $newRequisition->is_template = false; // Reset template status
         $newRequisition->created_at = now();
         $newRequisition->updated_at = now();
         $newRequisition->save();
@@ -253,6 +257,7 @@ class PurchasingController extends Controller
             'delivery_contact' => 'nullable|string',
             'requested_by' => 'nullable|string',
             'deliver_to' => 'nullable|string',
+            'order_reference' => 'nullable|string|max:255',
             'items' => 'required|array',
             'items.*.code' => 'nullable|string',
             'items.*.description' => 'required|string',
@@ -274,6 +279,7 @@ class PurchasingController extends Controller
             'delivery_contact' => $validated['delivery_contact'],
             'requested_by' => $validated['requested_by'],
             'deliver_to' => $validated['deliver_to'],
+            'order_reference' => $validated['order_reference'] ?? null,
         ]);
 
         // Optionally delete and recreate line items, or update them if you store them in a separate table

@@ -19,6 +19,7 @@ class Requisition extends Model
         'deliver_to',
         'status',
         'is_template',
+        'order_reference',
     ];
 
     protected static function booted()

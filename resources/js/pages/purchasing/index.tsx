@@ -35,6 +35,7 @@ type Requisition = {
     location: { name: string } | null;
     status: string;
     is_template: boolean;
+    order_reference: string | null;
     date_required: string;
     delivery_contact: string | null;
     deliver_to: string | null;
@@ -48,6 +49,7 @@ const tableHeader = [
     { title: 'Project', key: 'location' },
     { title: 'Status', key: 'status' },
     { title: 'Is Template', key: 'is_template' },
+    { title: 'Order reference', key: 'order_reference' },
     { title: 'Date required', key: 'date_required' },
     { title: 'Delivery Contact', key: 'delivery_contact' },
     { title: 'Deliver to', key: 'deliver_to' },
@@ -86,7 +88,8 @@ export default function RequisitionList() {
             (req) =>
                 req.id?.toString().includes(searchQuery) ||
                 req.supplier?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                req.creator?.name.toLowerCase().includes(searchQuery.toLowerCase()),
+                req.creator?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                req.order_reference?.toLowerCase().includes(searchQuery.toLowerCase()),
         )
         .filter((req) => {
             return (
@@ -179,7 +182,7 @@ export default function RequisitionList() {
                     <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                     <Input
                         type="text"
-                        placeholder="Search by ID, Supplier, or Created By"
+                        placeholder="Search by ID, Order Ref, Supplier, or Created By"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
@@ -261,6 +264,7 @@ export default function RequisitionList() {
                                     <Badge variant="outline">{requisition.status}</Badge>
                                 </TableCell>
                                 <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
+                                <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
                                 <TableCell>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</TableCell>
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>

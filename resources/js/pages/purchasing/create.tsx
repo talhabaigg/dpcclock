@@ -55,6 +55,7 @@ export default function Create() {
         delivery_contact: '',
         requested_by: '',
         deliver_to: '',
+        order_reference: '',
         items: [],
     });
 
@@ -68,6 +69,7 @@ export default function Create() {
                 delivery_contact: requisition.delivery_contact,
                 requested_by: requisition.requested_by,
                 deliver_to: requisition.deliver_to,
+                order_reference: requisition.order_reference,
                 items: requisition.line_items || [],
             });
             setSelectedSupplier(String(requisition.supplier_number ?? ''));
@@ -362,6 +364,14 @@ export default function Create() {
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Deliver to</Label>
                             <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
+                        </div>
+                        <div className="flex w-full flex-col md:w-1/2">
+                            <Label className="text-sm">Order reference</Label>
+                            <Input
+                                placeholder="Order reference"
+                                value={data.order_reference ?? ''}
+                                onChange={(e) => setData('order_reference', e.target.value)}
+                            />
                         </div>
                     </div>
                 </Card>
