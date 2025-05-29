@@ -9,8 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { JSX } from 'react/jsx-runtime';
+import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -22,6 +23,7 @@ type Location = {
     id: number;
     name: string;
     eh_location_id: string;
+    eh_parent_id: string;
     external_id: string;
     subLocations: Array<{
         id: number;
@@ -34,9 +36,18 @@ type Location = {
         name: string;
         eh_worktype_id: string;
     }>;
+    material_items: Array<{
+        id: number;
+        code: string;
+        description: string;
+        pivot?: {
+            unit_cost_override: number;
+        };
+    }>;
 };
 
 type PaginatedLocations = {
+    id: any;
     map(arg0: (location: any) => JSX.Element): import('react').ReactNode;
     data: Location[];
     current_page: number;
@@ -47,13 +58,15 @@ type PaginatedLocations = {
     prev_page_url: string | null;
 };
 export default function LocationsList() {
-    const { location, flash } = usePage<{ location: PaginatedLocations; flash: { success?: string } }>().props;
-    console.log('location', location);
+    const { location, flash } = usePage<{ location: Location; flash: { success?: string } }>().props;
+    console.log('Location:', location);
     let isLoading = false;
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
+
     const [open, setOpen] = useState(false);
+    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const splitExternalId = (externalId: string) => {
         if (!externalId) {
@@ -66,7 +79,11 @@ export default function LocationsList() {
         return { level, activity };
     };
 
-    const formData = useForm({
+    const formData = useForm<{
+        level: string | null;
+        activity: string | null;
+        location_id: number;
+    }>({
         level: null,
         activity: null,
         location_id: location.id,
@@ -78,7 +95,10 @@ export default function LocationsList() {
     };
 
     const handleUpload = (locationId: number) => {
-        if (!selectedFile) return;
+        if (!selectedFile) {
+            console.error('No file selected for upload');
+            return;
+        }
 
         const formData = new FormData();
         formData.append('file', selectedFile);
@@ -108,10 +128,29 @@ export default function LocationsList() {
         formData.reset();
         setOpenDialog(false); // <-- Close the dialog
     };
-    const handleCsvSubmit = (mappedData) => {
-        console.log('Mapped CSV data ready to send:', mappedData);
-        // TODO: send mappedData to your backend API
+    const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
+
+    const handleCsvSubmit = (mappedData: any) => {
+        // Create CSV content from mapped data
+        console.log('Mapped Data:', mappedData);
+        // Define headers in state and use them for CSV
+        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
+        const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
+        setSelectedFile(file);
+        setShouldUploadAfterSet(true);
     };
+    useEffect(() => {
+        if (selectedFile && shouldUploadAfterSet) {
+            handleUpload(location.id);
+            setShouldUploadAfterSet(false); // reset the flag
+        }
+    }, [selectedFile, shouldUploadAfterSet]);
+
+    useEffect(() => {
+        if (flash.success) {
+            toast.success(flash.success);
+        }
+    }, [flash.success]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
@@ -138,37 +177,39 @@ export default function LocationsList() {
                         </DialogHeader>
                     </DialogContent>
                 </Dialog>
-                {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '}
+                {/* {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '} */}
             </div>
 
             <Card className="m-2 w-full p-0 md:w-1/2 2xl:w-1/3">
                 <Table>
-                    <TableRow>
-                        <TableHead>Location ID</TableHead>
-                        <TableCell className="w-[100px]">{location.eh_location_id}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                        <TableHead>External ID</TableHead>
-                        <TableCell className="w-[100px]">{location.external_id}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableCell className="w-[100px]">{location.name}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                        <TableHead>Sub Locations</TableHead>
-                        <TableCell className="w-[100px]">
-                            {location.worktypes.map((worktype) => (
-                                <div key={worktype.id} className="flex items-center gap-2">
-                                    <span className="flex-wrap">{worktype.name}</span>
-                                </div>
-                            ))}
-                        </TableCell>
-                    </TableRow>
-                    <TableRow>
-                        <TableHead>Parent EH Location Id</TableHead>
-                        <TableCell>{location.eh_parent_id}</TableCell>
-                    </TableRow>
+                    <TableBody>
+                        <TableRow>
+                            <TableHead>Location ID</TableHead>
+                            <TableCell className="w-[100px]">{location.eh_location_id}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                            <TableHead>External ID</TableHead>
+                            <TableCell className="w-[100px]">{location.external_id}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableCell className="w-[100px]">{location.name}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                            <TableHead>Sub Locations</TableHead>
+                            <TableCell className="w-[100px]">
+                                {location.worktypes.map((worktype) => (
+                                    <div key={worktype.id} className="flex items-center gap-2">
+                                        <span className="flex-wrap">{worktype.name}</span>
+                                    </div>
+                                ))}
+                            </TableCell>
+                        </TableRow>
+                        <TableRow>
+                            <TableHead>Parent EH Location Id</TableHead>
+                            <TableCell>{location.eh_parent_id}</TableCell>
+                        </TableRow>
+                    </TableBody>
                 </Table>
             </Card>
             <Tabs defaultValue="sublocations">
@@ -203,23 +244,17 @@ export default function LocationsList() {
                     </Card>
                 </TabsContent>
                 <TabsContent value="pricelist">
-                    <div className="m-2 flex flex-col gap-2 sm:w-1/2 sm:flex-row 2xl:w-1/2">
-                        <Input type="file" accept=".csv" onChange={handleFileChange} />
+                    <div className="m-2 flex flex-col justify-end gap-2 sm:flex-row">
+                        {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
                         <Button onClick={() => handleUpload(location.id)} disabled={!selectedFile || processing}>
                             Upload CSV
-                        </Button>
-                        <a href={`/material-items/location/${location.id}/download-csv`} className="flex items-center justify-center">
+                        </Button> */}
+                        <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
+                        <a href={`/material-items/location/${location.id}/download-csv`}>
                             <Button>Download CSV</Button>
                         </a>
                     </div>
-                    <button onClick={() => setOpen(true)}>Import CSV</button>
-                    {open && (
-                        <CsvImporterDialog
-                            requiredColumns={['location_id', 'code', 'unit_cost']}
-                            onSubmit={handleCsvSubmit}
-                            onClose={() => setOpen(false)}
-                        />
-                    )}
+
                     <Card className="m-2">
                         <Table className="w-full">
                             <TableHeader>
@@ -242,7 +277,7 @@ export default function LocationsList() {
                                         <TableRow key={item.id}>
                                             <TableCell>{item.code}</TableCell>
                                             <TableCell>{item.description}</TableCell>
-                                            <TableCell>{item.unit_cost}</TableCell>
+                                            <TableCell>${item.pivot?.unit_cost_override}</TableCell>
                                         </TableRow>
                                     ))
                                 )}
