@@ -131,6 +131,9 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
                             variant="outline"
                             onClick={() => {
                                 setIsOpen(false);
+                                setCsvHeaders([]); // Reset headers
+                                setCsvData([]); // Reset data
+                                setMappings({}); // Reset mappings
                             }}
                         >
                             Cancel
