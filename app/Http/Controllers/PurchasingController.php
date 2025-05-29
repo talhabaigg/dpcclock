@@ -133,7 +133,7 @@ class PurchasingController extends Controller
 
     public function show($id)
     {
-        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')->findOrFail($id);
+        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')->withSum('lineItems', 'total_cost')->findOrFail($id);
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
         ]);

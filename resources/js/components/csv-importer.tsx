@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Upload } from 'lucide-react';
 import Papa from 'papaparse';
 import { useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
@@ -65,7 +66,11 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
         <div className="dialog-backdrop">
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="outline">Import</Button>
+                    <Button variant="outline">
+                        {' '}
+                        <Upload />
+                        Import
+                    </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>

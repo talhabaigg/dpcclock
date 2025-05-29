@@ -1,11 +1,13 @@
+import CsvImporterDialog from '@/components/csv-importer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Download, Search, Upload } from 'lucide-react';
-import { ChangeEvent, useState } from 'react';
+import { Download, Search } from 'lucide-react';
+import { ChangeEvent, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Items',
@@ -34,10 +36,10 @@ export default function ItemList() {
     let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredItems = items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
-
+    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
     const { post, processing } = useForm();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
+    const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
             setSelectedFile(e.target.files[0]);
@@ -55,6 +57,27 @@ export default function ItemList() {
             onSuccess: () => setSelectedFile(null),
         });
     };
+    const handleCsvSubmit = (mappedData: any) => {
+        // Create CSV content from mapped data
+        console.log('Mapped Data:', mappedData);
+        // Define headers in state and use them for CSV
+        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
+        const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
+        setSelectedFile(file);
+        setShouldUploadAfterSet(true);
+    };
+    useEffect(() => {
+        if (selectedFile && shouldUploadAfterSet) {
+            handleUpload();
+            setShouldUploadAfterSet(false); // reset the flag
+        }
+    }, [selectedFile, shouldUploadAfterSet]);
+
+    useEffect(() => {
+        if (flash.success) {
+            toast.success(flash.success);
+        }
+    }, [flash.success]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
@@ -75,11 +98,12 @@ export default function ItemList() {
                 </span>
 
                 <div className="flex items-center gap-2">
-                    <Input type="file" accept=".csv" onChange={handleFileChange} />
+                    {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
                     <Button onClick={handleUpload} disabled={!selectedFile || processing}>
                         <Upload />
                         Upload CSV
-                    </Button>
+                    </Button> */}
+                    <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                     <a href="/material-items/download">
                         <Button>
                             {' '}
