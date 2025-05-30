@@ -221,41 +221,52 @@ class MaterialItemController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
-        // dd($request->file('file'));
 
         $path = $request->file('file')->getRealPath();
         $rows = array_map('str_getcsv', file($path));
         $header = array_map('trim', array_shift($rows));
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
-        $insertCount = 0;
-        foreach ($rows as $index => $row) {
+
+        $dataToInsert = [];
+        $locationIds = [];
+
+        foreach ($rows as $row) {
             $data = array_combine($header, $row);
 
             $location = Location::where('external_id', $data['location_id'])->first();
             $material = MaterialItem::where('code', $data['code'])->first();
 
             if (!$location || !$material) {
-                // You can log or skip
                 continue;
             }
 
-            DB::table('location_item_pricing')->updateOrInsert(
-                [
-                    'location_id' => $location->id,
-                    'material_item_id' => $material->id,
-                ],
-                [
-                    'unit_cost_override' => $data['unit_cost'],
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
+            $locationIds[] = $location->id;
 
-            $insertCount++;
+            $dataToInsert[] = [
+                'location_id' => $location->id,
+                'material_item_id' => $material->id,
+                'unit_cost_override' => $data['unit_cost'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
         }
 
-        return back()->with('success', "Imported $insertCount prices successfully.");
+        $uniqueLocationIds = array_unique($locationIds);
+
+        DB::transaction(function () use ($uniqueLocationIds, $dataToInsert) {
+            // Delete old pricing only for relevant locations
+            DB::table('location_item_pricing')
+                ->whereIn('location_id', $uniqueLocationIds)
+                ->delete();
+
+            // Insert new pricing
+            DB::table('location_item_pricing')->insert($dataToInsert);
+        });
+
+        return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully.");
     }
+
+
 
     public function downloadLocationPricingListCSV($locationId)
     {
