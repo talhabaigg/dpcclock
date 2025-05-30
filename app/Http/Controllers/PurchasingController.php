@@ -55,9 +55,9 @@ class PurchasingController extends Controller
         $validated = $request->validate([
             'project_id' => 'nullable|integer|exists:locations,id',
             'supplier_id' => 'required|integer|exists:suppliers,id',
-            'date_required' => 'nullable|date',
+            'date_required' => 'required|date',
             'delivery_contact' => 'nullable|string|max:255',
-            'requested_by' => 'nullable|string|max:255',
+            'requested_by' => 'required|string|max:255',
             'deliver_to' => 'nullable|string|max:255',
             'order_reference' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',

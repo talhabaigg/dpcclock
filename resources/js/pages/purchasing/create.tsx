@@ -15,6 +15,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
+import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import { AiImageExtractor } from './create-partials/aiImageExtractor';
@@ -287,9 +288,23 @@ export default function Create() {
 
     const [file, setFile] = useState<File | null>(null);
 
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            toast.error(errors[Object.keys(errors)[0]]); // Display the first error message
+        }
+    }, [errors]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
+            {/* {errors && (
+                <div className="m-2 text-red-500">
+                    {Object.values(errors).map((error, index) => (
+                        <div key={index}>{error}</div>
+                    ))}
+                </div>
+            )} */}
+
             <div className="p-4">
                 <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
                 <Dialog open={pastingItems} onOpenChange={setPastingItems}>

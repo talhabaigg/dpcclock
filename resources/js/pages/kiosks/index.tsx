@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
+import React from 'react';
 
 // Define the Kiosk type
 interface Kiosk {
@@ -18,7 +19,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
-    console.log(kiosks);
+    const [loading, setLoading] = React.useState(false);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -27,6 +28,11 @@ export default function KiosksList() {
                 <Link href="/kiosks/sync" method="get">
                     <Button variant="outline" className="w-32">
                         Sync Kiosk
+                    </Button>
+                </Link>
+                <Link href="/employees/kiosks/update" method="get">
+                    <Button variant="outline" className="w-full" onClick={() => setLoading(true)} disabled={loading}>
+                        {loading ? 'Syncing...' : 'Sync Employees with Kiosk'}
                     </Button>
                 </Link>
                 {flash?.success && <div className="text-green-500">{flash.success}</div>}
