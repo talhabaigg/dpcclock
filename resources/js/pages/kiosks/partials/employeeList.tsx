@@ -1,7 +1,6 @@
-import EmployeeListButton from './employeeButton';
-import { useState } from 'react';
-import { useLayoutEffect, useRef } from 'react';
 import { router } from '@inertiajs/react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import EmployeeListButton from './employeeButton';
 
 interface Employee {
     id: number;
@@ -18,11 +17,7 @@ interface Props {
     kioskId: string;
 }
 
-export default function EmployeeList({
-    employees,
-    selectedEmployee,
-    kioskId,
-}: Props) {
+export default function EmployeeList({ employees, selectedEmployee, kioskId }: Props) {
     const groupedEmployees = employees.reduce<Record<string, Employee[]>>((acc, emp) => {
         const firstLetter = emp.name[0].toUpperCase();
         if (!acc[firstLetter]) acc[firstLetter] = [];
@@ -48,7 +43,7 @@ export default function EmployeeList({
         router.visit(url, { preserveScroll: true });
     };
 
-const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     return (
         <div ref={listRef} className="h-full overflow-y-auto">
             <ul className="w-full">

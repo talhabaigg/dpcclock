@@ -88,20 +88,20 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
                                     <CommandEmpty>No employee found.</CommandEmpty>
                                 ) : (
                                     <CommandGroup>
-                                      {employees.map((emp) => (
-                                        <CommandItem
-                                            key={emp.value}
-                                            value={emp.label.toLowerCase()} // ✅ This lets filtering match the text shown
-                                            onSelect={() => {
-                                                setValue(emp.value);
-                                                setOpen(false);
-                                                onEmployeeChange(emp.value);
-                                            }}
-                                        >
-                                            <Check className={cn('mr-2 h-4 w-4', value === emp.value ? 'opacity-100' : 'opacity-0')} />
-                                            {emp.label}
-                                        </CommandItem>
-                                    ))}
+                                        {employees.map((emp) => (
+                                            <CommandItem
+                                                key={emp.value}
+                                                value={emp.label.toLowerCase()} // ✅ This lets filtering match the text shown
+                                                onSelect={() => {
+                                                    setValue(emp.value);
+                                                    setOpen(false);
+                                                    onEmployeeChange(emp.value);
+                                                }}
+                                            >
+                                                <Check className={cn('mr-2 h-4 w-4', value === emp.value ? 'opacity-100' : 'opacity-0')} />
+                                                {emp.label}
+                                            </CommandItem>
+                                        ))}
                                     </CommandGroup>
                                 )}
                             </CommandList>

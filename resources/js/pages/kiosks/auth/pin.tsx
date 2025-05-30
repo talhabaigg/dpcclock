@@ -4,9 +4,9 @@ import { ChevronLeft, Delete, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
+import ForgotPinLink from './components/forgotPin';
 import PinNumpad from './components/numpad';
 import PinInputBox from './components/pinInputBox';
-import ForgotPinLink from './components/forgotPin';
 interface Employee {
     id: number;
     name: string;
@@ -125,11 +125,7 @@ export default function ShowPin() {
                         }
                     }}
                 />
-                <ForgotPinLink
-                    eh_employee_id={employee.eh_employee_id}
-                    eh_kiosk_id={kiosk.eh_kiosk_id}
-                />
-                
+                <ForgotPinLink eh_employee_id={employee.eh_employee_id} eh_kiosk_id={kiosk.eh_kiosk_id} />
             </form>
         </div>
     );

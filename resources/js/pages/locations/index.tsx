@@ -1,4 +1,3 @@
-import PaginationComponent from '@/components/index-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -7,6 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -20,6 +20,7 @@ type Location = {
     name: string;
     eh_location_id: string;
     external_id: string;
+    eh_parent_id: string | null;
     subLocations: Array<{
         id: number;
         name: string;
@@ -43,28 +44,14 @@ type PaginatedLocations = {
     prev_page_url: string | null;
 };
 export default function LocationsList() {
-    const { locations, flash } = usePage<{ locations: PaginatedLocations; flash: { success?: string } }>().props;
+    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
     let isLoading = false;
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    console.log('Locations:', locations);
     const [processing, setProcessing] = useState(false);
-    // const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    //     if (e.target.files?.[0]) {
-    //         setSelectedFile(e.target.files[0]);
-    //     }
-    // };
+    const [filter, setFilter] = useState<string | null>(null);
+    const filteredLocations = filter ? locations.filter((location) => location.eh_parent_id === filter) : locations;
 
-    // const handleUpload = (locationId: number) => {
-    //     if (!selectedFile) return;
-
-    //     const formData = new FormData();
-    //     formData.append('file', selectedFile);
-    //     formData.append('location_id', locationId.toString());
-
-    //     router.post('/material-items/location/upload', formData, {
-    //         forceFormData: true,
-    //         onSuccess: () => setSelectedFile(null),
-    //     });
-    // };
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
@@ -74,8 +61,20 @@ export default function LocationsList() {
                         {isLoading ? 'Syncing...' : 'Sync Locations'}
                     </Button>
                 </Link>
+                <div>
+                    <SelectFilter
+                        options={[
+                            { value: '1149031', label: 'SWC' },
+                            { value: '1198645', label: 'Greenline' },
+                        ]}
+                        filterName={`Filter by Company`}
+                        onChange={(val) => setFilter(val)}
+                    />
+                </div>
+
                 {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
             </div>
+
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 <Table>
                     <TableHeader>
@@ -89,7 +88,7 @@ export default function LocationsList() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {locations.data.map((location) => (
+                        {filteredLocations.map((location) => (
                             <TableRow key={location.id}>
                                 <TableCell>{location.eh_location_id}</TableCell>
 
@@ -147,7 +146,7 @@ export default function LocationsList() {
                         ))}
                     </TableBody>
                 </Table>
-                <PaginationComponent pagination={locations} />
+                {/* <PaginationComponent pagination={locations} /> */}
             </div>
         </AppLayout>
     );

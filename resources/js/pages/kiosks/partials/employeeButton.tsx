@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { useInitials } from '@/hooks/use-initials';
 interface Employee {
     id: number;
@@ -34,6 +34,6 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
                     {emp.clocked_in && <span className="text-green-500">Clocked In</span>}
                 </div>
             </Button>
-       </>
+        </>
     );
 }

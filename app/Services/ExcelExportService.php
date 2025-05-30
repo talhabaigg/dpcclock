@@ -4,19 +4,30 @@ namespace App\Services;
 
 use Auth;
 use Illuminate\Support\Facades\Storage;
+use Log;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Requisition;
 use App\Models\MaterialItem;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Illuminate\Support\Collection;
 use Carbon\Carbon;
+use App\Models\Location;
 
 class ExcelExportService
 {
     public function generateCsv(Requisition $requisition): string
     {
         $datetime = now()->format('YmdHis');
-        $fileName = "PO-{$datetime}_SWC.csv";
+        $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
+        Log::info('Parent ID: ' . $parentId);
+
+        if ($parentId === '1149031') {
+            $company = 'SWC';
+        }
+        if ($parentId === '1198645') {
+            $company = 'GREEN';
+        }
+        $fileName = "PO-{$datetime}_{$company}.csv";
 
         Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
             protected $requisition;

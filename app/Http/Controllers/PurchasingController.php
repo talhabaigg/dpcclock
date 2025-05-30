@@ -31,7 +31,8 @@ class PurchasingController extends Controller
 
 
         // Base query for locations under specific parent
-        $locationsQuery = Location::where('eh_parent_id', 1149031);
+        $locationsQuery = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)
+            ->with('worktypes');
 
         // Apply filter for non-admins (or non-authorized users)
         if ($user->cannot('view all requisitions')) {
