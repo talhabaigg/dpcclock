@@ -10,11 +10,18 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Models\User;
+
 
 class SyncKioskEmployees implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    protected int $userId;
+    public function __construct(int $userId)
+    {
+        $this->userId = $userId;
+    }
     public function handle(): void
     {
         Employee::pluck('eh_employee_id')
@@ -41,6 +48,11 @@ class SyncKioskEmployees implements ShouldQueue
                     }
                 }
             });
+
+        $user = User::find($this->userId);
+        if ($user) {
+            $user->notify(new \App\Notifications\SyncKioskEmployeesFinished());
+        }
     }
 
 
@@ -60,7 +72,14 @@ class SyncKioskEmployees implements ShouldQueue
         }
 
         return collect($json)
-            ->filter(fn($loc) => is_array($loc) && ($loc['parentId'] ?? null) == 1149031)
+            ->filter(
+                fn($loc) =>
+                is_array($loc) &&
+                (
+                    in_array($loc['parentId'] ?? null, [1149031, 1198645]) ||
+                    in_array($loc['id'] ?? null, [1149031, 1198645])
+                )
+            )
             ->pluck('id')
             ->toArray();
     }

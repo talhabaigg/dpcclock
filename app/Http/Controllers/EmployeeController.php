@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use App\Models\Worktype;
 use App\Models\Location;
 use App\Jobs\SyncKioskEmployees;
+use Illuminate\Support\Facades\Auth;
 
 class EmployeeController extends Controller
 {
@@ -189,11 +190,14 @@ class EmployeeController extends Controller
 
     public function updateKioskEmployees()
     {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->back()->with('error', 'You must be logged in to update kiosk employees.');
+        }
+        SyncKioskEmployees::dispatch($user->id);
 
-        SyncKioskEmployees::dispatch();
 
-
-        return response()->json(['status' => 'Sync queued.']);
+        return redirect()->back()->with('success', 'Kiosk employees update job has been dispatched. You will be notified when it is complete.');
     }
 
 }
