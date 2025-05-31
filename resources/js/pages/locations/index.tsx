@@ -34,21 +34,20 @@ type Location = {
     }>;
 };
 
-type PaginatedLocations = {
-    data: Location[];
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    next_page_url: string | null;
-    prev_page_url: string | null;
-};
+// type PaginatedLocations = {
+//     data: Location[];
+//     current_page: number;
+//     last_page: number;
+//     per_page: number;
+//     total: number;
+//     next_page_url: string | null;
+//     prev_page_url: string | null;
+// };
 export default function LocationsList() {
     const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
-    let isLoading = false;
+    const isLoading = false;
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
     console.log('Locations:', locations);
-    const [processing, setProcessing] = useState(false);
     const [filter, setFilter] = useState<string | null>(null);
     const filteredLocations = filter ? locations.filter((location) => location.eh_parent_id === filter) : locations;
 

@@ -46,7 +46,8 @@ export default function TimesheetManagement() {
 
     // Function to handle week ending date change
     const handleWeekEndingDateChange = (date: Date) => {
-        setWeekEndingDate(date); // Update week ending date in state
+        setSelectedWeekEndingDate(date);
+        setWeekEndingDate(date);
     };
     const [expandedRows, setExpandedRows] = useState<{ [key: string]: boolean }>({});
 

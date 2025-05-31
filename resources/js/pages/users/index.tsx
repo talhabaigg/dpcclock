@@ -33,7 +33,6 @@ type User = {
 
 export default function LocationsList() {
     const { users, flash } = usePage<{ users: User[]; flash: { success: string; error: string } }>().props;
-    let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredUsers = users.filter((user) => user.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return (

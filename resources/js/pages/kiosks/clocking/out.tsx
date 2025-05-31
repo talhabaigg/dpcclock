@@ -35,18 +35,12 @@ interface TaskAllocation {
 }
 
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn, auth } = usePage<{
+    const { employees, kiosk, employee, locations, clockedIn } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
         locations: any[];
         clockedIn: { clock_in: string };
-        auth: {
-            isAdmin: boolean | Date | null;
-            id: number;
-            name: string;
-            email: string;
-        };
     }>().props;
 
     console.log(kiosk);

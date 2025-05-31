@@ -4,11 +4,11 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { Download, Search } from 'lucide-react';
-import { ChangeEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
@@ -39,18 +39,16 @@ export default function ItemList() {
     console.log('items', items);
     const isDarkMode = document.documentElement.classList.contains('dark');
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
-    let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredItems = items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
-    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
-    const { post, processing } = useForm();
+    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
-    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            setSelectedFile(e.target.files[0]);
-        }
-    };
+    // const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    //     if (e.target.files?.[0]) {
+    //         setSelectedFile(e.target.files[0]);
+    //     }
+    // };
 
     const handleUpload = () => {
         if (!selectedFile) return;

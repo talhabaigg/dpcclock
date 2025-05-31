@@ -322,13 +322,11 @@ export default function Create() {
         }
     };
 
-    let gridApi;
-
     const onGridReady = (params) => {
-        gridApi = params.api; // Get grid API
+        // let gridApi;
+        // gridApi = params.api; // Get grid API
         setTimeout(() => {
             const savedState = localStorage.getItem('colState');
-            const savedWidths = localStorage.getItem('colWidths');
 
             if (savedState) {
                 const parsedState = JSON.parse(savedState);

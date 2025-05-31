@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Download, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -26,11 +26,9 @@ type Supplier = {
 export default function SuppliersList() {
     const { suppliers, flash } = usePage<{ suppliers: Supplier[]; flash: { success: string; error: string } }>().props;
     console.log('items', suppliers);
-    let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredSuppliers = suppliers.filter((supplier) => supplier.code.toLowerCase().includes(searchQuery.toLowerCase()));
-    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['name', 'code']);
-    const { post, processing } = useForm();
+    const [csvImportHeaders] = useState<string[]>(['name', 'code']);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
     // const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -64,7 +62,7 @@ export default function SuppliersList() {
             handleUpload();
             setShouldUploadAfterSet(false); // reset the flag
         }
-    }, [selectedFile, shouldUploadAfterSet]);
+    }, [selectedFile, shouldUploadAfterSet, handleUpload]);
 
     useEffect(() => {
         if (flash.success) {

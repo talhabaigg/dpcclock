@@ -59,7 +59,7 @@ export default function TimesheetTable({
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {merged.map((timesheet, index) => {
+                {merged.map((timesheet) => {
                     const dateKey = new Date(timesheet.clock_in).toLocaleDateString('en-GB');
                     const isExpanded = expandedRows[dateKey];
 

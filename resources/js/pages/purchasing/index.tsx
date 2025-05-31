@@ -60,7 +60,6 @@ const tableHeader = [
 
 export default function RequisitionList() {
     const { requisitions, flash } = usePage<{ requisitions: Requisition[]; flash: { success: string; error: string } }>().props;
-    let isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOnlyTemplates, setFilterOnlyTemplates] = useState(false);
     const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);

@@ -55,7 +55,7 @@ const TimeSelector = ({ datetime, onTimeChange }) => {
     const emitTimeChange = (hours, minutes) => {
         const updatedTime = `${hours}:${minutes}`;
         console.log('Updated Time:', updatedTime); // Log the emitted time
-        onTimeChange && onTimeChange(updatedTime);
+        onTimeChange(updatedTime);
     };
 
     return (

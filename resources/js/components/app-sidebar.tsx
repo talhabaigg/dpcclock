@@ -59,9 +59,9 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-const textIcon = (text: string) => () => (
-    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-500 text-sm font-medium text-white">{text}</span>
-);
+// const textIcon = (text: string) => () => (
+//     <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-500 text-sm font-medium text-white">{text}</span>
+// );
 const documents = [
     {
         name: 'Data',

@@ -9,8 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { ChangeEvent, useEffect, useState } from 'react';
-import { JSX } from 'react/jsx-runtime';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -46,27 +45,23 @@ type Location = {
     }>;
 };
 
-type PaginatedLocations = {
-    id: any;
-    map(arg0: (location: any) => JSX.Element): import('react').ReactNode;
-    data: Location[];
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    next_page_url: string | null;
-    prev_page_url: string | null;
-};
+// type PaginatedLocations = {
+//     id: any;
+//     map(arg0: (location: any) => JSX.Element): import('react').ReactNode;
+//     data: Location[];
+//     current_page: number;
+//     last_page: number;
+//     per_page: number;
+//     total: number;
+//     next_page_url: string | null;
+//     prev_page_url: string | null;
+// };
 export default function LocationsList() {
     const { location, flash } = usePage<{ location: Location; flash: { success?: string } }>().props;
     console.log('Location:', location);
-    let isLoading = false;
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [processing, setProcessing] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
-
-    const [open, setOpen] = useState(false);
-    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);
+    const [csvImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const splitExternalId = (externalId: string) => {
         if (!externalId) {
@@ -88,11 +83,6 @@ export default function LocationsList() {
         activity: null,
         location_id: location.id,
     });
-    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            setSelectedFile(e.target.files[0]);
-        }
-    };
 
     const handleUpload = (locationId: number) => {
         if (!selectedFile) {

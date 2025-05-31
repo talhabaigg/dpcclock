@@ -44,7 +44,7 @@ const handlePasteTableData = async (
                     if (res.ok) item = await res.json();
                     console.log('Item fetched:', item);
                 } catch (err) {
-                    console.warn(`Lookup failed for code: ${code}`);
+                    console.warn(`Lookup failed for code: ${code} - ${err}`);
                 }
 
                 return {

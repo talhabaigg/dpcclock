@@ -26,7 +26,7 @@ const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
 
     const saveState = useCallback(() => {
         const fullState = gridRef.current!.api.getColumnState();
-        const filteredState = fullState.map(({ width, ...rest }) => rest);
+        const filteredState = fullState.map(({ ...rest }) => rest);
         window.colState = filteredState;
         localStorage.setItem('colState', JSON.stringify(filteredState));
         console.log('column state saved (no width)', filteredState);

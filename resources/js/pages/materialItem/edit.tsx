@@ -42,11 +42,10 @@ type Supplier = {
 };
 
 export default function EditMaterialItem() {
-    const { item, flash, costCodes, suppliers, maxItems } = usePage<{
+    const { item, flash, costCodes, suppliers } = usePage<{
         item: MaterialItem;
         costCodes: CostCode[];
         suppliers: Supplier[];
-        maxItems: number;
         flash: { success: string; error: string };
     }>().props;
     const form = useForm({

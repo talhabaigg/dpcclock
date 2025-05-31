@@ -186,10 +186,10 @@ export default function EditTimesheet() {
 
         form.post(`${route('clock.edit.summary.post')}?date=${selectedDate}`, {
             onSuccess: () => {
-                flash.success && flash.success;
+                console.log('Form submitted successfully');
             },
             onError: () => {
-                flash.error && flash.error;
+                console.error('Form submission failed', form.errors);
             },
         });
     };

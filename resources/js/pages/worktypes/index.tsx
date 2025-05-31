@@ -26,7 +26,7 @@ type Employee = {
 
 export default function LocationsList() {
     const { worktypes, flash } = usePage<{ worktypes: Employee[]; flash: { success: string; error: string } }>().props;
-    let isLoading = false;
+    const isLoading = false;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredWorktypes = worktypes.filter((worktype) => worktype.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return (

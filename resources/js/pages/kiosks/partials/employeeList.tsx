@@ -43,7 +43,7 @@ export default function EmployeeList({ employees, selectedEmployee, kioskId }: P
         router.visit(url, { preserveScroll: true });
     };
 
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const [collapsed] = useState<Record<string, boolean>>({});
     return (
         <div ref={listRef} className="h-full overflow-y-auto">
             <ul className="w-full">

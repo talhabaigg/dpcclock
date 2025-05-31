@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Download } from 'lucide-react';
-import { ChangeEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -18,15 +18,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function CostCodesIndex() {
     const { costcodes, flash } = usePage<{ costcodes: CostCode[]; flash: { success?: string } }>().props;
 
-    const { post, processing } = useForm();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
-    const [csvImportHeaders, setCSVImportHeaders] = useState<string[]>(['code', 'description']);
-    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            setSelectedFile(e.target.files[0]);
-        }
-    };
+    const [csvImportHeaders] = useState<string[]>(['code', 'description']);
 
     const handleUpload = () => {
         if (!selectedFile) return;

@@ -56,6 +56,15 @@ export default function Edit({ kiosk, employees, errors, flash }) {
     return (
         <AppLayout>
             <div className="items-top flex flex-row justify-center p-2">
+                {errors && (
+                    <div className="w-full">
+                        {Object.keys(errors).map((key) => (
+                            <div key={key} className="text-red-500">
+                                {errors[key]}
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <Card className="m-2 h-full w-1/2">
                     {' '}
                     <CardHeader className="text-lg font-bold">Select Zones for Employees</CardHeader>

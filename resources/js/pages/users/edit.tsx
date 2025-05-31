@@ -47,7 +47,7 @@ type Kiosk = {
 
 export default function UserEdit() {
     const { user, roles, flash, kiosks } = usePage<{ user: User; roles: Role[]; flash: { success: string; error: string }; kiosks: Kiosk[] }>().props;
-    let isLoading = false;
+    const isLoading = false;
     const { data, setData, put, processing, errors } = useForm({
         name: user.name,
         email: user.email,
@@ -69,7 +69,7 @@ export default function UserEdit() {
         });
 
         console.log('KioskForm response:', res);
-    }, [KioskForm.data.kiosk_id]);
+    }, [KioskForm.data.kiosk_id, user.id]);
     // console.log('User data:', user);
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,6 +81,13 @@ export default function UserEdit() {
             <div className="m-2 flex items-center justify-between gap-2">
                 <div className="m-2 flex items-center gap-2">{flash.success && <div className="m-2 text-green-500">{flash.success}</div>}</div>
             </div>
+            {errors && (
+                <div className="m-2 text-red-500">
+                    {Object.values(errors).map((error, index) => (
+                        <div key={index}>{error}</div>
+                    ))}
+                </div>
+            )}
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <form onSubmit={handleSubmit}>
                     <input type="hidden" name="_method" value="PUT" />
