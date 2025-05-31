@@ -101,16 +101,14 @@ export default function LocationsList() {
     };
     const handleFormSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setProcessing(true);
+
         console.log('formData', formData.data);
 
         router.post('/sub-locations', formData.data, {
             onSuccess: () => {
                 formData.reset();
-                setProcessing(false);
             },
             onError: () => {
-                setProcessing(false);
                 console.log('Error creating sub-location');
             },
         });
