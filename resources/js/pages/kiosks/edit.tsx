@@ -3,15 +3,39 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useForm } from '@inertiajs/react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
 
-export default function Edit({ kiosk, employees }) {
+export default function Edit({ kiosk, employees, errors, flash }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
             zone: emp.pivot.zone ?? '',
         })),
     });
-    console.log('Initial data:', data);
+
+    useEffect(() => {
+        if (flash.success) {
+            toast.success(flash.success);
+        }
+        if (flash.error) {
+            toast.error(flash.error);
+        }
+    }, [flash]);
+    const {
+        data: kioskForm,
+        setData: setKioskData,
+        put: putKiosk,
+        processing: processingKiosk,
+    } = useForm({
+        start_time: kiosk.default_start_time || '06:30:00',
+        end_time: kiosk.default_end_time || '14:30:00',
+        kiosk_id: kiosk.id,
+    });
+
+    const handleKioskSettingsChange = (field, value) => {
+        setKioskData((prev) => ({ ...prev, [field]: value }));
+    };
 
     const handleZoneChange = (index, value) => {
         const updated = [...data.zones];
@@ -22,6 +46,11 @@ export default function Edit({ kiosk, employees }) {
     const handleSubmit = (e) => {
         e.preventDefault();
         post(route('kiosks.updateZones', kiosk.id));
+    };
+
+    const handleSubmitKioskSettings = (e) => {
+        e.preventDefault();
+        putKiosk(route('kiosks.updateSettings', kiosk.id)); // 👈 adjust route as needed
     };
 
     return (
@@ -59,13 +88,13 @@ export default function Edit({ kiosk, employees }) {
                 <Card className="m-2 h-60 w-1/2">
                     <CardHeader className="text-lg font-bold">Shift default times</CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="w-full space-y-4">
+                        <form onSubmit={handleSubmitKioskSettings} className="w-full space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label>Start Time</Label>
                                 <input
                                     type="time"
-                                    value={kiosk.default_start_time}
-                                    onChange={(e) => setData('start_time', e.target.value)}
+                                    value={kioskForm.start_time}
+                                    onChange={(e) => handleKioskSettingsChange('start_time', e.target.value)}
                                     className="rounded border px-2 py-1 dark:bg-gray-800 dark:text-white"
                                 />
                             </div>
@@ -73,12 +102,12 @@ export default function Edit({ kiosk, employees }) {
                                 <Label>End Time</Label>
                                 <input
                                     type="time"
-                                    value={kiosk.default_end_time}
-                                    onChange={(e) => setData('end_time', e.target.value)}
+                                    value={kioskForm.end_time}
+                                    onChange={(e) => handleKioskSettingsChange('end_time', e.target.value)}
                                     className="rounded border px-2 py-1 dark:bg-gray-800 dark:text-white"
                                 />
                             </div>
-                            <Button type="submit" disabled={processing}>
+                            <Button type="submit" disabled={processingKiosk}>
                                 Save shift times
                             </Button>
                         </form>

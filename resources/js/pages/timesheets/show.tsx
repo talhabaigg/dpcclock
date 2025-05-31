@@ -10,10 +10,16 @@ import TimesheetSummaryCard from './components/summaryCard';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Timesheet Management', href: '/clocks' }];
 
+type TimesheetManagementProps = {
+    selectedWeekEnding: string;
+    employeeName: string;
+    selectedEmployeeId: string;
+    timesheets: any[];
+};
+
 export default function TimesheetManagement() {
-    const { selectedWeekEnding, employeeName, selectedEmployeeId, timesheets } = usePage<{
-        props: { selectedWeekEnding: string; employeeName: String; selectedEmployeeId: string; timesheets: any[] };
-    }>().props;
+    const { selectedWeekEnding, employeeName, selectedEmployeeId, timesheets } = usePage<TimesheetManagementProps>().props;
+    console.log({ selectedWeekEnding, employeeName, selectedEmployeeId, timesheets });
 
     const parseWeekEndingDate = (selectedWeekEnding: string): Date => {
         const parts = selectedWeekEnding.split('-');
@@ -23,7 +29,7 @@ export default function TimesheetManagement() {
         return new Date(); // Fallback to current date if parsing fails
     };
 
-    const [employeeId, setEmployeeId] = useState<string>(selectedEmployeeId);
+    const [employeeId, setEmployeeId] = useState<string>(String(selectedEmployeeId));
     const [weekEndingDate, setWeekEndingDate] = useState<Date | null>(parseWeekEndingDate(selectedWeekEnding)); // Initially set weekEndingDate based on props
     const [selectedWeekEndingDate, setSelectedWeekEndingDate] = useState<Date>(parseWeekEndingDate(selectedWeekEnding));
     // Ref to store previous values of employeeId and weekEndingDate

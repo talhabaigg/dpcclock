@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Redirect;
 use App\Services\KioskService;
 
+
 class KioskController extends Controller
 {
     /**
@@ -145,6 +146,23 @@ class KioskController extends Controller
         return redirect()->back()->with('success', 'Zones updated successfully.');
     }
 
+    public function updateSettings(Request $request)
+    {
+        $data = $request->validate([
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+            'kiosk_id' => 'required|exists:kiosks,id',
+        ]);
+
+        $kiosk = Kiosk::findOrFail($data['kiosk_id']);
+
+        $kiosk->update([
+            'default_start_time' => $data['start_time'],
+            'default_end_time' => $data['end_time'],
+        ]);
+
+        return redirect()->back()->with('success', 'Kiosk settings updated successfully.');
+    }
     /**
      * Remove the specified resource from storage.
      */

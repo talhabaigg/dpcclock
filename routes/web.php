@@ -107,6 +107,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/cost-codes/upload', [CostcodeController::class, 'upload'])->name('costcodes.upload');
         Route::get('/cost-codes/download', [CostcodeController::class, 'download'])->name('costcodes.download');
 
+        Route::put('/kiosks/settings/update', [KioskController::class, 'updateSettings'])->name('kiosks.updateSettings');
+
     });
 
     Route::middleware('permission:view kiosk')->group(function () {
