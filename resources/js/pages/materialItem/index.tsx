@@ -36,7 +36,6 @@ type MaterialItem = {
 
 export default function ItemList() {
     const { items, flash } = usePage<{ items: MaterialItem[]; flash: { success: string; error: string } }>().props;
-    console.log('items', items);
     const isDarkMode = document.documentElement.classList.contains('dark');
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
     const [searchQuery, setSearchQuery] = useState('');
@@ -63,8 +62,6 @@ export default function ItemList() {
     };
     const handleCsvSubmit = (mappedData: any) => {
         // Create CSV content from mapped data
-        console.log('Mapped Data:', mappedData);
-        // Define headers in state and use them for CSV
         const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
         const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
         setSelectedFile(file);

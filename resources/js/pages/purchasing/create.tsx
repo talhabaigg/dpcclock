@@ -200,7 +200,6 @@ export default function Create() {
                 }
 
                 try {
-                    console.log('Fetching item with code:', itemCode, 'and location ID:', locationId);
                     const res = await fetch(`/material-items/${itemCode}/${locationId}`);
                     if (!res.ok) throw new Error('Failed to fetch item');
                     const item = await res.json();
@@ -218,7 +217,7 @@ export default function Create() {
                     updated[e.rowIndex] = e.data;
                     setRowData(updated);
                 } catch (err) {
-                    console.error('Error fetching item:', err);
+                    toast.error(`Error fetching item: ${err.message}`);
                 }
             },
         },
@@ -334,8 +333,6 @@ export default function Create() {
                     state: parsedState,
                     applyOrder: true,
                 });
-
-                console.log('column state restored with delay');
             }
         }, 300);
     };

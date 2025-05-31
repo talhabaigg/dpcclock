@@ -57,7 +57,6 @@ export default function EditTimesheet() {
         flash: { success?: string; error?: string };
         locations: Location[];
     }>().props;
-    console.log(clocks);
 
     const splitTime = (datetime: string | null) => {
         if (!datetime) {
@@ -184,14 +183,7 @@ export default function EditTimesheet() {
         e.preventDefault();
         const selectedDate = date; // or wherever you get it from
 
-        form.post(`${route('clock.edit.summary.post')}?date=${selectedDate}`, {
-            onSuccess: () => {
-                console.log('Form submitted successfully');
-            },
-            onError: () => {
-                console.error('Form submission failed', form.errors);
-            },
-        });
+        form.post(`${route('clock.edit.summary.post')}?date=${selectedDate}`);
     };
 
     return (

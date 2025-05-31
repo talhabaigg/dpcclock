@@ -24,7 +24,6 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     const isKioskUser = auth?.user?.roles?.some((role: any) => role.name === 'kiosk');
     useEffect(() => {
         if (isKioskUser) {
-            console.log('isKioskUser', isKioskUser);
             const timeout = setTimeout(
                 () => {
                     router.post('/logout'); // uses POST method

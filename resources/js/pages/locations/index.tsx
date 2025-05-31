@@ -47,7 +47,6 @@ export default function LocationsList() {
     const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
     const isLoading = false;
     // const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    console.log('Locations:', locations);
     const [filter, setFilter] = useState<string | null>(null);
     const filteredLocations = filter ? locations.filter((location) => location.eh_parent_id === filter) : locations;
 

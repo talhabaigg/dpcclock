@@ -3,7 +3,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Check } from 'lucide-react';
 
 export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
-    console.log(entries);
     return (
         <div className="flex flex-col gap-2 p-2">
             <Table className="border border-gray-200">

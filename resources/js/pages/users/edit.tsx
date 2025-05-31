@@ -62,13 +62,11 @@ export default function UserEdit() {
     useEffect(() => {
         if (!KioskForm.data.kiosk_id) return; // prevent empty submissions
 
-        const res = KioskForm.post(route('users.kiosk.store', user.id), {
+        KioskForm.post(route('users.kiosk.store', user.id), {
             onSuccess: () => {
                 KioskForm.setData('kiosk_id', '');
             },
         });
-
-        console.log('KioskForm response:', res);
     }, [KioskForm.data.kiosk_id, user.id]);
     // console.log('User data:', user);
     const handleSubmit = (e: React.FormEvent) => {

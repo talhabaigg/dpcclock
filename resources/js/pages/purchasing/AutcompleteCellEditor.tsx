@@ -39,7 +39,7 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
 
                 setItems(mapped);
             } catch (err) {
-                console.error('Failed to load items:', err);
+                alert('Failed to fetch items. Please try again later. ' + err.message);
                 setItems([]);
             } finally {
                 setLoading(false);

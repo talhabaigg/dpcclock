@@ -43,7 +43,6 @@ export default function Clockout() {
         clockedIn: { clock_in: string };
     }>().props;
 
-    console.log(kiosk);
     const form = useForm<{
         kioskId: number;
         employeeId: number;
@@ -89,12 +88,12 @@ export default function Clockout() {
 
             const duration = clockOutTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
-            console.log('clock out is before default clock out time,Duration:', duration);
+            alert('Clock out is before default clock out time, Duration: ' + duration);
         }
 
         if (now > defaultClockOutTime) {
             const duration = defaultClockOutTime.diff(clockInTime, 'hours', true);
-            console.log('clock out is after default clock out time,Duration::', duration);
+            alert('Clock out is after default clock out time, Duration: ' + duration);
             setHoursWorked(parseFloat(duration.toFixed(2)));
         }
     }, [clockedIn.clock_in, kiosk.default_end_time]);

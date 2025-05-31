@@ -28,7 +28,7 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
                 })),
             );
         } catch (error) {
-            console.error('Failed to fetch employees', error);
+            alert('Failed to fetch employees. Please try again later. ' + error);
         } finally {
             setLoading(false);
         }

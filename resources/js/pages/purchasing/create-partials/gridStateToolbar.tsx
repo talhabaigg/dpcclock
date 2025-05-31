@@ -14,7 +14,7 @@ const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
         gridRef.current!.api.resetColumnState();
         localStorage.removeItem('colState');
         window.colState = null;
-        console.log('column state reset');
+
         toast('Column Order reset', {
             description: 'The column order has been reset successfully.',
             action: {
@@ -29,7 +29,6 @@ const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
         const filteredState = fullState.map(({ ...rest }) => rest);
         window.colState = filteredState;
         localStorage.setItem('colState', JSON.stringify(filteredState));
-        console.log('column state saved (no width)', filteredState);
         toast('Column Order saved', {
             description: 'The column order has been saved successfully.',
             action: {
@@ -42,14 +41,12 @@ const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
     const restoreState = useCallback(() => {
         const savedState = localStorage.getItem('colState');
         if (!savedState) {
-            console.log('no columns state to restore by, you must save state first');
             return;
         }
         gridRef.current!.api.applyColumnState({
             state: JSON.parse(savedState),
             applyOrder: true,
         });
-        console.log('column state restored', window.colState);
         toast('Column Order restored', {
             description: 'The column order has been restored successfully.',
             action: {

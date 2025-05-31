@@ -25,7 +25,7 @@ type Supplier = {
 
 export default function SuppliersList() {
     const { suppliers, flash } = usePage<{ suppliers: Supplier[]; flash: { success: string; error: string } }>().props;
-    console.log('items', suppliers);
+
     const [searchQuery, setSearchQuery] = useState('');
     const filteredSuppliers = suppliers.filter((supplier) => supplier.code.toLowerCase().includes(searchQuery.toLowerCase()));
     const [csvImportHeaders] = useState<string[]>(['name', 'code']);
@@ -50,7 +50,7 @@ export default function SuppliersList() {
     };
     const handleCsvSubmit = (mappedData: any) => {
         // Create CSV content from mapped data
-        console.log('Mapped Data:', mappedData);
+
         // Define headers in state and use them for CSV
         const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
         const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });

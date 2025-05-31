@@ -42,9 +42,8 @@ const handlePasteTableData = async (
                 try {
                     const res = await fetch(`/material-items/code/${code}/${projectId}`);
                     if (res.ok) item = await res.json();
-                    console.log('Item fetched:', item);
                 } catch (err) {
-                    console.warn(`Lookup failed for code: ${code} - ${err}`);
+                    alert(`Failed to fetch item with code ${code}. Please check the code and try again.` + err);
                 }
 
                 return {
@@ -64,8 +63,7 @@ const handlePasteTableData = async (
         await new Promise((resolve) => setTimeout(resolve, 2000));
         setPastingItems(false);
     } catch (err) {
-        console.error('Failed to read from clipboard:', err);
-        alert('Unable to paste data. Please try again or check clipboard permissions.');
+        alert('Unable to paste data. Please try again or check clipboard permissions. ' + err);
         setPastingItems(false);
     }
 };

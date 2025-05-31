@@ -19,7 +19,6 @@ type TimesheetManagementProps = {
 
 export default function TimesheetManagement() {
     const { selectedWeekEnding, employeeName, selectedEmployeeId, timesheets } = usePage<TimesheetManagementProps>().props;
-    console.log({ selectedWeekEnding, employeeName, selectedEmployeeId, timesheets });
 
     const parseWeekEndingDate = (selectedWeekEnding: string): Date => {
         const parts = selectedWeekEnding.split('-');

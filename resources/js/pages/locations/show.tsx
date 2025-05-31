@@ -58,7 +58,7 @@ type Location = {
 // };
 export default function LocationsList() {
     const { location, flash } = usePage<{ location: Location; flash: { success?: string } }>().props;
-    console.log('Location:', location);
+
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [csvImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);
@@ -86,7 +86,7 @@ export default function LocationsList() {
 
     const handleUpload = (locationId: number) => {
         if (!selectedFile) {
-            console.error('No file selected for upload');
+            alert('No file selected for upload');
             return;
         }
 
@@ -102,14 +102,14 @@ export default function LocationsList() {
     const handleFormSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        console.log('formData', formData.data);
+        alert('formData', formData.data);
 
         router.post('/sub-locations', formData.data, {
             onSuccess: () => {
                 formData.reset();
             },
             onError: () => {
-                console.log('Error creating sub-location');
+                alert('Error creating sub-location');
             },
         });
 
@@ -120,7 +120,7 @@ export default function LocationsList() {
 
     const handleCsvSubmit = (mappedData: any) => {
         // Create CSV content from mapped data
-        console.log('Mapped Data:', mappedData);
+        alert('Mapped Data: ' + JSON.stringify(mappedData));
         // Define headers in state and use them for CSV
         const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
         const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });

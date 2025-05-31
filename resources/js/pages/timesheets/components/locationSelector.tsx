@@ -12,7 +12,6 @@ type prop = {
 };
 
 export default function LocationSelector({ locations, selectedLocation, onChange }: prop) {
-    console.log(locations);
     return (
         <Select value={selectedLocation ?? ''} onValueChange={onChange}>
             <SelectTrigger className="w-full border-none shadow-none">

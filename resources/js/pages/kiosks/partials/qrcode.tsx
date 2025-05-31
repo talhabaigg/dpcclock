@@ -24,7 +24,7 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
                 setToken(newToken);
             }
         } catch (error) {
-            console.error('Error fetching token:', error);
+            alert('Failed to fetch kiosk token: ' + error.message);
             setToken(null);
         } finally {
             setLoading(false);

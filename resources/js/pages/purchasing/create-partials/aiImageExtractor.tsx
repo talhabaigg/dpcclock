@@ -41,7 +41,6 @@ const extractLineItems = async (file, setPastingItems, projectId, setRowData, se
     });
 
     let content = response.choices[0].message.content || '';
-    console.log('Raw response:', content);
 
     // ✅ Remove triple backticks and "json" if present
     content = content
@@ -54,7 +53,7 @@ const extractLineItems = async (file, setPastingItems, projectId, setRowData, se
     try {
         parsed = JSON.parse(content);
     } catch (error) {
-        console.error('Failed to parse JSON:', error);
+        alert('Failed to parse extracted data. Please try again. Error: ' + error.message);
         return alert('Could not parse extracted data. Please try again.');
     }
 
@@ -86,7 +85,7 @@ const extractLineItems = async (file, setPastingItems, projectId, setRowData, se
                 const res = await fetch(`/material-items/code/${item.code}/${locationId}`);
                 if (res.ok) loadedItem = await res.json();
             } catch (err) {
-                console.warn(`Lookup failed for code: ${item.code}`, err);
+                alert(`Failed to fetch item with code ${item.code}. Please check the code and try again. Error: ${err.message}`);
             }
 
             return {
@@ -108,7 +107,6 @@ const extractLineItems = async (file, setPastingItems, projectId, setRowData, se
     toast.success('Line items extracted successfully using AI', {
         description: `Extracted ${rowDataMapped.length} items.`,
     });
-    console.log('Response:', response.choices[0].message.content);
 };
 const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {

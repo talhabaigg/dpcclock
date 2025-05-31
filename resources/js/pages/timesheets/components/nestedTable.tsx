@@ -20,7 +20,6 @@ export default function TimesheetTable({
             return acc;
         }, {});
     }, [timesheets]);
-    console.log(timesheets);
     const merged = useMemo(() => {
         return Object.entries(groupedTimesheets).map(([date, entries]) => {
             const typedEntries = entries as any[];
@@ -46,7 +45,7 @@ export default function TimesheetTable({
             };
         });
     }, [groupedTimesheets]);
-    console.log('Merged Timesheets:', merged);
+
     return (
         <Table className="max-w-2xl border border-gray-200">
             <TableHeader>
