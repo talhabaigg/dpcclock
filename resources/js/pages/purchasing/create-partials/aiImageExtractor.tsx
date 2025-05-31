@@ -148,7 +148,7 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
         <Card className="my-2 p-4">
             {loading ? (
                 <div className="flex w-full flex-col items-center justify-center gap-2">
-                    <BeatLoader color="#4f46e5" width={100} />
+                    <BeatLoader color="#4f46e5" size={24} />
                     <span
                         key={loadingTextIndex}
                         className={`text-muted-foreground inline-block transition-all duration-300 ${

@@ -3,6 +3,12 @@ import { RotateCcw, Save, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 
+declare global {
+    interface Window {
+        colState: any;
+    }
+}
+
 const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
     const resetState = useCallback(() => {
         gridRef.current!.api.resetColumnState();
@@ -55,13 +61,13 @@ const GridStateToolbar = ({ gridRef }: { gridRef: any }) => {
 
     return (
         <>
-            <Button onClick={saveState} variant="icon" title="Save column settings">
+            <Button onClick={saveState} variant="ghost" title="Save column settings">
                 <Save />
             </Button>
-            <Button onClick={restoreState} variant="icon" title="Restore column settings">
+            <Button onClick={restoreState} variant="ghost" title="Restore column settings">
                 <RotateCcw />
             </Button>
-            <Button onClick={resetState} variant="icon" title="Reset column settings">
+            <Button onClick={resetState} variant="ghost" title="Reset column settings">
                 <X />
             </Button>
         </>

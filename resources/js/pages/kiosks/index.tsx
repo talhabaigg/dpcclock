@@ -13,6 +13,8 @@ interface Kiosk {
     location?: {
         name?: string;
     };
+    default_start_time: string;
+    default_end_time: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];

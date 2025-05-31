@@ -12,15 +12,21 @@ import KioskSelector from './components/kioskSelector';
 import LocationSelector from './components/locationSelector';
 import MinuteSelector from './components/minuteSelector';
 
-type Clock = {
+type Location = {
     id: number;
+    name: string;
+    external_id: string;
+    eh_location_id: string;
+};
+
+type Clock = {
+    id: number | string;
     clock_in: string;
     clock_out: string | null;
     hours_worked: string;
     status: string;
     eh_employee_id: string | null;
-    locations: Location | null;
-    location: Location | null;
+    locations: Location[];
     insulation_allowance: string;
     setout_allowance: string;
     laser_allowance: string;
@@ -29,6 +35,8 @@ type Clock = {
         name: string;
         location: Location;
     };
+    location: Location | null;
+    eh_kiosk_id: number | null;
 };
 
 type Kiosk = {
@@ -93,6 +101,10 @@ export default function EditTimesheet() {
                 location: '',
                 kioskName: '',
                 hoursWorked: '',
+                eh_kiosk_id: '',
+                insulation_allowance: '0',
+                setout_allowance: '0',
+                laser_allowance: '0',
             },
         ]);
     };
@@ -251,7 +263,7 @@ export default function EditTimesheet() {
                                 {' '}
                                 <KioskSelector
                                     kiosks={kiosks}
-                                    selectedKiosk={clock.eh_kiosk_id}
+                                    selectedKiosk={clock.eh_kiosk_id ? Number(clock.eh_kiosk_id) : undefined}
                                     onChange={(val) => updateKioskField(clock.id, val)}
                                 />
                             </TableCell>

@@ -35,13 +35,58 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/requisitions/create',
     },
 ];
+
+type Supplier = {
+    id: number;
+    code: string;
+    name: string;
+};
+
+type Location = {
+    id: number;
+    name: string;
+    external_id: string;
+    eh_location_id: string;
+};
+// type CostCode = {
+//     id: number;
+//     code: string;
+//     description: string;
+// };
+type LineItem = {
+    code: string;
+    description: string;
+    unit_cost: number;
+    qty: number;
+    total_cost: number;
+    serial_number?: number; // Optional, will be set automatically
+    cost_code?: string; // Assuming cost_code is a string
+    price_list?: string; // Assuming price_list is a string
+};
+type Requisition = {
+    id: number;
+    project_number: string;
+    supplier_number: string;
+    date_required: string;
+    delivery_contact: string;
+    requested_by: string;
+    deliver_to: string;
+    order_reference: string;
+    line_items: LineItem[];
+};
+
+type CreateRequisitionProps = {
+    suppliers: Supplier[];
+    locations: Location[];
+    costCodes: CostCode[];
+    requisition?: Requisition | null;
+    permissions: string[];
+};
 export default function Create() {
-    const suppliers = usePage().props.suppliers;
-    const locations = usePage().props.locations;
-    const costCodes = usePage().props.costCodes as CostCode[];
-    const requisition = usePage().props.requisition ?? null;
-    const permissions = usePage().props.auth.permissions;
-    const gridRef = useRef<AgGridReact<IOlympicData>>(null);
+    const { suppliers, locations, costCodes, requisition } = usePage<CreateRequisitionProps>().props;
+
+    const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
+    const gridRef = useRef<AgGridReact>(null);
     const [pastingItems, setPastingItems] = useState(false);
 
     const [gridSize, setGridSize] = useState(() => {
@@ -74,7 +119,18 @@ export default function Create() {
                 items: requisition.line_items || [],
             });
             setSelectedSupplier(String(requisition.supplier_number ?? ''));
-            setRowData(requisition.line_items || []);
+            setRowData(
+                (requisition.line_items || []).map((item, idx) => ({
+                    code: item.code ?? '',
+                    description: item.description ?? '',
+                    unit_cost: item.unit_cost ?? 0,
+                    qty: item.qty ?? 1,
+                    total_cost: item.total_cost ?? 0,
+                    serial_number: item.serial_number ?? idx + 1,
+                    cost_code: item.cost_code ?? '',
+                    price_list: item.price_list ?? '',
+                })),
+            );
         }
     }, [requisition]);
     const handleSupplierChange = (value) => {
@@ -236,7 +292,7 @@ export default function Create() {
     ];
 
     const [rowData, setRowData] = useState([
-        { itemcode: '', description: '', unitcost: 0, qty: 1, total_cost: 0, serial_number: 1, cost_code: '', price_list: '' },
+        { code: '', description: '', unit_cost: 0, qty: 1, total_cost: 0, serial_number: 1, cost_code: '', price_list: '' },
     ]); // Initialize with one empty row
     useEffect(() => {
         setData('items', rowData);
@@ -244,7 +300,7 @@ export default function Create() {
     // Function to add a new row
     const addNewRow = () => {
         const newRow = {
-            itemcode: '',
+            code: '',
             description: '',
             unit_cost: 0,
             qty: 1,
@@ -311,7 +367,7 @@ export default function Create() {
                     <DialogContent>
                         <DialogDescription className="flex flex-col items-center gap-2">
                             <span className="text-sm">Adding line items...</span>
-                            <BarLoader size={150} color={'#4A5568'} />
+                            <BarLoader width={150} color={'#4A5568'} />
                         </DialogDescription>
                     </DialogContent>
                 </Dialog>
@@ -411,19 +467,27 @@ export default function Create() {
                                     setRowData(updated);
                                 }}
                                 onCellKeyDown={(event) => {
-                                    if (event.event.key === 'Tab') {
+                                    if ((event.event as KeyboardEvent).key === 'Tab') {
                                         const lastRowIndex = rowData.length - 1;
                                         const lastColIndex = columnDefs.length - 2; // Skip 'total' column
 
-                                        if (event.rowIndex === lastRowIndex && event.column.getColId() === columnDefs[lastColIndex].field) {
+                                        // Type guard to ensure event has 'column'
+                                        if (
+                                            'column' in event &&
+                                            event.rowIndex === lastRowIndex &&
+                                            event.column &&
+                                            event.column.getColId() === columnDefs[lastColIndex].field
+                                        ) {
                                             setTimeout(() => {
                                                 const newRow = {
-                                                    itemcode: '',
+                                                    code: '',
                                                     description: '',
                                                     unit_cost: 0,
                                                     qty: 1,
                                                     total_cost: 0,
                                                     serial_number: rowData.length + 1, // Increment the line index for the new row
+                                                    cost_code: '',
+                                                    price_list: '',
                                                 };
 
                                                 const updated = [...rowData, newRow];
@@ -469,7 +533,7 @@ export default function Create() {
                             <PasteTableButton
                                 rowData={rowData}
                                 setRowData={setRowData}
-                                projectId={data.project_id}
+                                projectId={Number(data.project_id)}
                                 setPastingItems={setPastingItems}
                             />
                         </div>

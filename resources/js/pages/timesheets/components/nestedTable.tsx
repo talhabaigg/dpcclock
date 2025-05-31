@@ -23,10 +23,11 @@ export default function TimesheetTable({
     console.log(timesheets);
     const merged = useMemo(() => {
         return Object.entries(groupedTimesheets).map(([date, entries]) => {
-            const startTimes = entries.map((ts) => new Date(ts.clock_in));
-            const endTimes = entries.filter((ts) => ts.clock_out !== null).map((ts) => new Date(ts.clock_out));
+            const typedEntries = entries as any[];
+            const startTimes = typedEntries.map((ts) => new Date(ts.clock_in));
+            const endTimes = typedEntries.filter((ts) => ts.clock_out !== null).map((ts) => new Date(ts.clock_out));
 
-            const totalHours = entries.reduce((sum, ts) => {
+            const totalHours = typedEntries.reduce((sum, ts) => {
                 const hasClockOut = ts.clock_out !== null;
                 const hours = hasClockOut ? parseFloat(ts.hours_worked) : 0;
                 return sum + (isNaN(hours) ? 0 : hours);
@@ -40,8 +41,8 @@ export default function TimesheetTable({
                 clock_in: earliestStart,
                 clock_out: latestEnd,
                 hours_worked: totalHours.toFixed(2),
-                eh_employee_id: entries[0].eh_employee_id,
-                entries,
+                eh_employee_id: typedEntries[0].eh_employee_id,
+                entries: typedEntries,
             };
         });
     }, [groupedTimesheets]);

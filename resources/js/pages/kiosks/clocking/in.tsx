@@ -15,6 +15,7 @@ interface Employee {
 interface Kiosk {
     id: number;
     name: string;
+    eh_kiosk_id: string;
 }
 
 export default function ClockIn() {

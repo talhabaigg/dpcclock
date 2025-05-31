@@ -20,6 +20,7 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: '/dashboard',
         icon: LayoutGrid,
+        permission: undefined, // Assuming no specific permission is required
     },
 ];
 
@@ -28,11 +29,13 @@ const rightNavItems: NavItem[] = [
         title: 'Repository',
         href: 'https://github.com/laravel/react-starter-kit',
         icon: Folder,
+        permission: undefined, // Assuming no specific permission is required
     },
     {
         title: 'Documentation',
         href: 'https://laravel.com/docs/starter-kits',
         icon: BookOpen,
+        permission: undefined, // Assuming no specific permission is required
     },
 ];
 
