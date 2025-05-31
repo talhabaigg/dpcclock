@@ -8,7 +8,7 @@ test('guests are redirected to the login page', function () {
     $this->get('/dashboard')->assertRedirect('/login');
 });
 
-test('only users with the admin role can access the dashboard', function () {
+test('only users with the admin role can access the timesheets converter', function () {
     // Create the 'admin' role
     Role::create(['name' => 'admin']);
 
@@ -17,7 +17,7 @@ test('only users with the admin role can access the dashboard', function () {
 
     // Regular user should be forbidden or redirected
     $this->actingAs($user)
-        ->get('/dashboard')
+        ->get('/timesheets-converter')
         ->assertForbidden(); // Or ->assertRedirect('/some-page')
 
     // Create an admin user and assign the 'admin' role
@@ -26,6 +26,6 @@ test('only users with the admin role can access the dashboard', function () {
 
     // Admin should have access
     $this->actingAs($admin)
-        ->get('/dashboard')
+        ->get('/timesheets-converter')
         ->assertOk();
 });
