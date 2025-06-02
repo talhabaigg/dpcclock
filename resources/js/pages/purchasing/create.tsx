@@ -267,8 +267,8 @@ export default function Create() {
                 return qty * unitCost;
             },
             onCellValueChanged: (e) => {
-                const { unitcost, qty } = e.data;
-                e.data.total_cost = (unitcost || 0) * (qty || 0);
+                const { unit_cost, qty } = e.data;
+                e.data.total_cost = (unit_cost || 0) * (qty || 0);
 
                 const updated = [...rowData];
                 updated[e.rowIndex] = e.data;

@@ -1,6 +1,6 @@
 // components/TimesheetTable.tsx
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import TimesheetDetailTable from './timesheetDetail';
 import TimesheetSummaryRow from './timesheetSummary';
 export default function TimesheetTable({
@@ -63,7 +63,7 @@ export default function TimesheetTable({
                     const isExpanded = expandedRows[dateKey];
 
                     return (
-                        <>
+                        <React.Fragment key={dateKey}>
                             <TimesheetSummaryRow timesheet={timesheet} dateKey={dateKey} isExpanded={isExpanded} toggleRow={toggleRow} />
 
                             {isExpanded && (
@@ -73,7 +73,7 @@ export default function TimesheetTable({
                                     </TableCell>
                                 </TableRow>
                             )}
-                        </>
+                        </React.Fragment>
                     );
                 })}
             </TableBody>
