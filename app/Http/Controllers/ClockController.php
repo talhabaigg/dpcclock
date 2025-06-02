@@ -604,6 +604,7 @@ class ClockController extends Controller
             }
             $rowData['Travel'] = $travel;
         } else {
+            dd($rowData['Travel']);
             $rowData['Travel'] = null;
         }
 

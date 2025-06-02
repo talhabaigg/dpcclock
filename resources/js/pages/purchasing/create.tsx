@@ -1,4 +1,5 @@
 import { DatePickerDemo } from '@/components/date-picker';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
@@ -386,7 +387,19 @@ export default function Create() {
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Supplier</Label>
-                            <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
+                            <div className="w-full">
+                                <SearchSelect
+                                    optionName="supplier"
+                                    selectedOption={selectedSupplier}
+                                    onValueChange={handleSupplierChange}
+                                    options={suppliers.map((supplier) => ({
+                                        value: String(supplier.id),
+                                        label: supplier.name,
+                                    }))}
+                                />
+                            </div>
+
+                            {/* <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a supplier" />
                                 </SelectTrigger>
@@ -397,7 +410,7 @@ export default function Create() {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </div>
                     </div>
                     <div className="flex flex-col items-center gap-2 md:flex-row">
