@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
@@ -262,6 +261,11 @@ export default function Create() {
                 if (params.value == null) return '';
                 return `$${parseFloat(params.value).toFixed(2)}`;
             },
+            valueGetter: (params) => {
+                const qty = params.data.qty || 0;
+                const unitCost = params.data.unit_cost || 0;
+                return qty * unitCost;
+            },
             onCellValueChanged: (e) => {
                 const { unitcost, qty } = e.data;
                 e.data.total_cost = (unitcost || 0) * (qty || 0);
@@ -372,7 +376,16 @@ export default function Create() {
                     <div className="flex flex-col items-center gap-2 md:flex-row">
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Project</Label>
-                            <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
+                            <SearchSelect
+                                optionName="Project"
+                                selectedOption={data.project_id}
+                                onValueChange={(val) => setData('project_id', val)}
+                                options={locations.map((location) => ({
+                                    value: String(location.id),
+                                    label: location.name,
+                                }))}
+                            />
+                            {/* <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a location" />
                                 </SelectTrigger>
@@ -383,7 +396,7 @@ export default function Create() {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Supplier</Label>
@@ -536,7 +549,7 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
-                        <div className="flex hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
+                        <div className="hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
                             <GridStateToolbar gridRef={gridRef} />
                             <PasteTableButton
                                 rowData={rowData}

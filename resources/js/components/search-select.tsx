@@ -40,9 +40,8 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                             {options.map((option) => (
                                 <CommandItem
                                     key={option.value}
-                                    value={option.value}
-                                    onSelect={(currentValue) => {
-                                        onValueChange(currentValue);
+                                    onSelect={() => {
+                                        onValueChange(option.value);
                                         setOpen(false);
                                     }}
                                 >
