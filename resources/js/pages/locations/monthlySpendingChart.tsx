@@ -55,7 +55,7 @@ const lastMonthInsight = (chartData: chartData[]): Insight | null => {
 export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
     const insight = lastMonthInsight(chartData);
     return (
-        <Card className="m-2 w-full">
+        <Card className="">
             <CardHeader>
                 <CardTitle>Ordering trend</CardTitle>
                 <CardDescription>
@@ -63,9 +63,9 @@ export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <ChartContainer config={chartConfig}>
+                <ChartContainer config={chartConfig} className="aspect-auto h-[150px] max-w-md 2xl:max-w-full">
                     <ResponsiveContainer width="50%" height={200}>
-                        <LineChart accessibilityLayer data={chartData} margin={{ top: 32, bottom: 24, left: 24, right: 24 }}>
+                        <LineChart accessibilityLayer data={chartData} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
                             <CartesianGrid vertical={false} />
                             <XAxis
                                 dataKey="month"
@@ -81,10 +81,10 @@ export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
                                 name="Total"
                                 dataKey="value"
                                 type="natural"
-                                stroke="var(--color-desktop)"
+                                stroke="var(--color-mobile)"
                                 strokeWidth={2}
                                 dot={{
-                                    fill: 'var(--color-desktop)',
+                                    fill: 'var(--color-mobile)',
                                 }}
                                 activeDot={{
                                     r: 6,

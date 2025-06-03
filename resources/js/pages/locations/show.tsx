@@ -211,12 +211,14 @@ export default function LocationsList() {
                         </TableBody>
                     </Table>
                 </Card>
-                <ChartLineLabel
-                    chartData={monthlySpending.map((month) => ({
-                        month: month.month,
-                        value: Number(month.total),
-                    }))}
-                />
+                <div className="m-2 w-full">
+                    <ChartLineLabel
+                        chartData={monthlySpending.map((month) => ({
+                            month: month.month,
+                            value: Number(month.total),
+                        }))}
+                    />
+                </div>
             </div>
             <Tabs defaultValue="sublocations">
                 <TabsList className="ml-2 grid grid-cols-2">
