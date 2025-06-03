@@ -5,6 +5,8 @@ import AppLayout from '@/layouts/app-layout';
 import { useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import HourSelector from '../timesheets/components/hourSelector';
+import MinuteSelector from '../timesheets/components/minuteSelector';
 
 export default function Edit({ kiosk, employees, errors, flash }) {
     const { data, setData, post, processing } = useForm({
@@ -55,17 +57,17 @@ export default function Edit({ kiosk, employees, errors, flash }) {
 
     return (
         <AppLayout>
-            <div className="items-top flex flex-row justify-center p-2">
-                {errors && (
-                    <div className="w-full">
-                        {Object.keys(errors).map((key) => (
-                            <div key={key} className="text-red-500">
-                                {errors[key]}
-                            </div>
-                        ))}
-                    </div>
-                )}
-                <Card className="m-2 h-full w-1/2">
+            {errors && (
+                <div className="w-full">
+                    {Object.keys(errors).map((key) => (
+                        <div key={key} className="text-red-500">
+                            {errors[key]}
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="items-top flex flex-col justify-center p-2 md:flex-row">
+                <Card className="m-2 h-full w-full">
                     {' '}
                     <CardHeader className="text-lg font-bold">Select Zones for Employees</CardHeader>
                     <CardContent>
@@ -94,27 +96,47 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                         </form>
                     </CardContent>
                 </Card>
-                <Card className="m-2 h-60 w-1/2">
-                    <CardHeader className="text-lg font-bold">Shift default times</CardHeader>
+                <Card className="m-2 h-60 w-full">
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">
+                        <div className="flex w-full justify-between">
+                            <div>Shift Default Times</div>
+                            <div className="flex flex-row items-center space-x-2">
+                                <Label>Select hour</Label>
+                                <Label>Select minute</Label>
+                            </div>
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmitKioskSettings} className="w-full space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label>Start Time</Label>
-                                <input
-                                    type="time"
-                                    value={kioskForm.start_time}
-                                    onChange={(e) => handleKioskSettingsChange('start_time', e.target.value)}
-                                    className="rounded border px-2 py-1 dark:bg-gray-800 dark:text-white"
-                                />
+                                <div className="flex items-center space-x-2">
+                                    <HourSelector
+                                        clockInHour={kioskForm.start_time.split(':')[0]}
+                                        onChange={(value) => handleKioskSettingsChange('start_time', value + ':00:00')}
+                                    />
+
+                                    <MinuteSelector
+                                        minute={kioskForm.start_time.split(':')[1]}
+                                        onChange={(value) =>
+                                            handleKioskSettingsChange('start_time', kioskForm.start_time.split(':')[0] + ':' + value)
+                                        }
+                                    />
+                                </div>
                             </div>
                             <div className="flex items-center justify-between">
                                 <Label>End Time</Label>
-                                <input
-                                    type="time"
-                                    value={kioskForm.end_time}
-                                    onChange={(e) => handleKioskSettingsChange('end_time', e.target.value)}
-                                    className="rounded border px-2 py-1 dark:bg-gray-800 dark:text-white"
-                                />
+                                <div className="flex items-center space-x-2">
+                                    <HourSelector
+                                        clockInHour={kioskForm.end_time.split(':')[0]}
+                                        onChange={(value) => handleKioskSettingsChange('end_time', value + ':00:00')}
+                                    />
+
+                                    <MinuteSelector
+                                        minute={kioskForm.end_time.split(':')[1]}
+                                        onChange={(value) => handleKioskSettingsChange('end_time', kioskForm.end_time.split(':')[0] + ':' + value)}
+                                    />
+                                </div>
                             </div>
                             <Button type="submit" disabled={processingKiosk}>
                                 Save shift times

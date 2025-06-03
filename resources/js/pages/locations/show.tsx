@@ -102,8 +102,6 @@ export default function LocationsList() {
     const handleFormSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        alert('formData', formData.data);
-
         router.post('/sub-locations', formData.data, {
             onSuccess: () => {
                 formData.reset();
