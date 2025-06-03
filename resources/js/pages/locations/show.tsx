@@ -12,12 +12,6 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Locations',
-        href: '/locations',
-    },
-];
 
 type Location = {
     id: number;
@@ -68,7 +62,16 @@ export default function LocationsList() {
         flash: { success?: string };
         monthlySpending: MonthlySpend[];
     }>().props;
-
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: 'Locations',
+            href: '/locations',
+        },
+        {
+            title: 'Edit Location',
+            href: `/locations/${location.id}/edit`,
+        },
+    ];
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [csvImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);

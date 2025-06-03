@@ -1,13 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
-import { useForm } from '@inertiajs/react';
+import { type BreadcrumbItem } from '@/types';
+import { Head, useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
 import MinuteSelector from '../timesheets/components/minuteSelector';
-
 export default function Edit({ kiosk, employees, errors, flash }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
@@ -54,9 +55,13 @@ export default function Edit({ kiosk, employees, errors, flash }) {
         e.preventDefault();
         putKiosk(route('kiosks.updateSettings', kiosk.id)); // 👈 adjust route as needed
     };
-
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Kiosks', href: '/kiosks' },
+        { title: 'Edit Kiosk', href: `/kiosks/${kiosk.id}/edit` },
+    ];
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Kiosks" />
             {errors && (
                 <div className="w-full">
                     {Object.keys(errors).map((key) => (
@@ -66,27 +71,35 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                     ))}
                 </div>
             )}
-            <div className="items-top flex flex-col justify-center p-2 md:flex-row">
+            <div className="mx-auto flex max-w-md flex-col justify-between space-y-4 p-4">
                 <Card className="m-2 h-full w-full">
-                    {' '}
                     <CardHeader className="text-lg font-bold">Select Zones for Employees</CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="w-full space-y-4">
+                        <form onSubmit={handleSubmit} className="w-full space-y-2">
                             {employees.map((employee, index) => (
                                 <div key={employee.id} className="flex items-center justify-between">
                                     <Label>{employee.name}</Label>
-                                    <select
-                                        value={data.zones[index].zone}
-                                        onChange={(e) => handleZoneChange(index, e.target.value)}
-                                        className="rounded border px-2 py-1 dark:bg-gray-800 dark:text-white"
-                                    >
-                                        <option value="" disabled>
-                                            Select a zone
-                                        </option>
-                                        <option value="1">Zone 1</option>
-                                        <option value="2">Zone 2</option>
-                                        <option value="3">Zone 3</option>
-                                    </select>
+                                    <div className="min-w-48">
+                                        <ToggleGroup
+                                            type="single"
+                                            value={data.zones[index].zone}
+                                            onValueChange={(value) => handleZoneChange(index, value)}
+                                        >
+                                            <ToggleGroupItem value="1">Zone 1</ToggleGroupItem>
+                                            <ToggleGroupItem value="2">Zone 2</ToggleGroupItem>
+                                            <ToggleGroupItem value="3">Zone 3</ToggleGroupItem>
+                                        </ToggleGroup>
+                                        {/* <SearchSelect
+                                            options={[
+                                                { value: '1', label: 'Zone 1' },
+                                                { value: '2', label: 'Zone 2' },
+                                                { value: '3', label: 'Zone 3' },
+                                            ]}
+                                            optionName="Travel Zone"
+                                            selectedOption={data.zones[index].zone}
+                                            onValueChange={(value) => handleZoneChange(index, value)}
+                                        /> */}
+                                    </div>
                                 </div>
                             ))}
 
@@ -96,7 +109,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                         </form>
                     </CardContent>
                 </Card>
-                <Card className="m-2 h-60 w-full">
+                <Card className="m-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">
                         <div className="flex w-full justify-between">
                             <div>Shift Default Times</div>
@@ -107,7 +120,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmitKioskSettings} className="w-full space-y-4">
+                        <form onSubmit={handleSubmitKioskSettings} className="w-full space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label>Start Time</Label>
                                 <div className="flex items-center space-x-2">
