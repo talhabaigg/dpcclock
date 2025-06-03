@@ -1,10 +1,10 @@
 import { DatePickerDemo } from '@/components/date-picker';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
@@ -81,9 +81,14 @@ type CreateRequisitionProps = {
     costCodes: CostCode[];
     requisition?: Requisition | null;
     permissions: string[];
+    flash: {
+        success: string;
+        error: string;
+        message: string;
+    };
 };
 export default function Create() {
-    const { suppliers, locations, costCodes, requisition } = usePage<CreateRequisitionProps>().props;
+    const { suppliers, locations, costCodes, requisition, flash } = usePage<CreateRequisitionProps>().props;
 
     const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
     const gridRef = useRef<AgGridReact>(null);
@@ -261,9 +266,14 @@ export default function Create() {
                 if (params.value == null) return '';
                 return `$${parseFloat(params.value).toFixed(2)}`;
             },
+            valueGetter: (params) => {
+                const qty = params.data.qty || 0;
+                const unitCost = params.data.unit_cost || 0;
+                return qty * unitCost;
+            },
             onCellValueChanged: (e) => {
-                const { unitcost, qty } = e.data;
-                e.data.total_cost = (unitcost || 0) * (qty || 0);
+                const { unit_cost, qty } = e.data;
+                e.data.total_cost = (unit_cost || 0) * (qty || 0);
 
                 const updated = [...rowData];
                 updated[e.rowIndex] = e.data;
@@ -345,6 +355,16 @@ export default function Create() {
         }
     }, [errors]);
 
+    useEffect(() => {
+        if (!flash) return;
+
+        const { success, error, message } = flash;
+
+        if (success || error || message) {
+            toast[success ? 'success' : error ? 'error' : 'info'](success || error || message);
+        }
+    }, [flash]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
@@ -371,7 +391,16 @@ export default function Create() {
                     <div className="flex flex-col items-center gap-2 md:flex-row">
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Project</Label>
-                            <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
+                            <SearchSelect
+                                optionName="Project"
+                                selectedOption={data.project_id}
+                                onValueChange={(val) => setData('project_id', val)}
+                                options={locations.map((location) => ({
+                                    value: String(location.id),
+                                    label: location.name,
+                                }))}
+                            />
+                            {/* <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a location" />
                                 </SelectTrigger>
@@ -382,11 +411,23 @@ export default function Create() {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
                             <Label className="text-sm">Supplier</Label>
-                            <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
+                            <div className="w-full">
+                                <SearchSelect
+                                    optionName="supplier"
+                                    selectedOption={selectedSupplier}
+                                    onValueChange={handleSupplierChange}
+                                    options={suppliers.map((supplier) => ({
+                                        value: String(supplier.id),
+                                        label: supplier.name,
+                                    }))}
+                                />
+                            </div>
+
+                            {/* <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a supplier" />
                                 </SelectTrigger>
@@ -397,7 +438,7 @@ export default function Create() {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </div>
                     </div>
                     <div className="flex flex-col items-center gap-2 md:flex-row">
@@ -523,7 +564,7 @@ export default function Create() {
                         </Button>
                     </div>
                     <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
-                        <div className="flex hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
+                        <div className="hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
                             <GridStateToolbar gridRef={gridRef} />
                             <PasteTableButton
                                 rowData={rowData}

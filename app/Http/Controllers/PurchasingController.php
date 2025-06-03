@@ -157,7 +157,7 @@ class PurchasingController extends Controller
             $newLineItem->save();
         }
 
-        return redirect()->route('requisition.index', $newRequisition->id)->with('success', 'Requisition copied successfully.');
+        return redirect()->route('requisition.edit', $newRequisition->id)->with('success', 'Requisition copied successfully.');
     }
 
     public function toggleRequisitionTemplate($id)

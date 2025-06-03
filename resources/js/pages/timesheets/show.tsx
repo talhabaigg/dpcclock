@@ -57,7 +57,22 @@ export default function TimesheetManagement() {
             [date]: !prev[date],
         }));
     };
+    const expandAll = () => {
+        const allDates = timesheets.map((ts) => new Date(ts.clock_in).toLocaleDateString('en-GB'));
 
+        const uniqueDates = Array.from(new Set(allDates));
+
+        const newExpanded: Record<string, boolean> = {};
+        uniqueDates.forEach((date) => {
+            newExpanded[date] = true;
+        });
+
+        setExpandedRows(newExpanded);
+    };
+
+    const collapseAll = () => {
+        setExpandedRows({});
+    };
     const navigateWithParams = () => {
         if (employeeId && weekEndingDate) {
             const formattedWeekEnding = weekEndingDate?.toLocaleDateString('en-GB').split('/').join('-') || '';
@@ -101,13 +116,18 @@ export default function TimesheetManagement() {
                 {timesheets.length > 0 ? (
                     <>
                         <div>
-                            <TimesheetSummaryCard name={employeeName} timesheet_qty={timesheets.length} />
+                            <TimesheetSummaryCard
+                                name={employeeName}
+                                timesheet_qty={timesheets.length}
+                                expandAll={expandAll}
+                                collapseAll={collapseAll}
+                            />
                         </div>
                         <TimesheetTable timesheets={timesheets} expandedRows={expandedRows} toggleRow={toggleRow} />
                     </>
                 ) : (
                     <div>
-                        <TimesheetSummaryCard name={employeeName} timesheet_qty={timesheets.length} />
+                        <TimesheetSummaryCard name={employeeName} timesheet_qty={timesheets.length} expandAll={expandAll} collapseAll={collapseAll} />
                     </div>
                 )}
             </div>

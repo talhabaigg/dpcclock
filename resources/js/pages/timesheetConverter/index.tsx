@@ -13,7 +13,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function TimesheetConverter() {
-    const { flash } = usePage<{ flash: { success: string; message: string } }>().props;
+    const { flash } = usePage<{ flash: { success: string; message: string; error: String } }>().props;
 
     const uploadForm = useForm({
         file: null as File | null,
@@ -30,6 +30,7 @@ export default function TimesheetConverter() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Timesheet Converter" />
             {flash.message && <p className="mx-4 text-green-600">{flash.message}</p>}
+            {flash.error && <p className="mx-4 text-green-600">{flash.message}</p>}
             {/* {data.map((item, index) => (
                 <div key={index} className="mx-4 my-2">
                     <p>{item.name}</p>

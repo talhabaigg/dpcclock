@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Models\Worktype;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 
 class LocationController extends Controller
@@ -52,7 +54,14 @@ class LocationController extends Controller
      */
     public function show(Location $location)
     {
-        $location->load('worktypes', 'materialItems');
+        $location->load([
+            'worktypes',
+            'materialItems',
+            'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
+        ]);
+        $monthlySpending = $this->getMonthlySpending($location);
+        // dd($monthlySpending);
+
         // Fetch sub-locations for the specified location
         $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
 
@@ -60,9 +69,26 @@ class LocationController extends Controller
 
         return Inertia::render('locations/show', [
             'location' => $location,
+            'monthlySpending' => $monthlySpending
         ]);
     }
 
+    private function getMonthlySpending($location)
+    {
+        $driver = DB::getDriverName();
+        $monthExpression = $driver === 'sqlite'
+            ? "strftime('%Y-%m', requisitions.created_at)"
+            : "DATE_FORMAT(requisitions.created_at, '%Y-%m')";
+        $monthlySpending = DB::table('requisitions')
+            ->join('requisition_line_items', 'requisitions.id', '=', 'requisition_line_items.requisition_id')
+            ->selectRaw("$monthExpression as month, SUM(requisition_line_items.total_cost) as total")
+            ->where('requisitions.project_number', $location->id)
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+        return $monthlySpending;
+    }
     /**
      * Show the form for editing the specified resource.
      */

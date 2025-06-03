@@ -15,7 +15,7 @@ use App\Models\Location;
 
 class ExcelExportService
 {
-    public function generateCsv(Requisition $requisition): string
+    public function generateCsv($requisition): string
     {
         $datetime = now()->format('YmdHis');
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
