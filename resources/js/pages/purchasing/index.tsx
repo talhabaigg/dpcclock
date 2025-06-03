@@ -134,6 +134,8 @@ export default function RequisitionList() {
                 toast.success(flash.success, {
                     icon: <Trash2 />,
                 });
+            } else {
+                toast.success(flash.success);
             }
         }
         if (flash.error) {

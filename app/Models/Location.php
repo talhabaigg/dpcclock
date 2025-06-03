@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Requisition;
 
 
 class Location extends Model
@@ -22,6 +23,11 @@ class Location extends Model
     public function kiosk()
     {
         return $this->hasOne(Kiosk::class, 'eh_location_id', 'eh_location_id');
+    }
+
+    public function requisitions()
+    {
+        return $this->hasMany(Requisition::class, 'project_number', 'id');
     }
 
     public function materialItems()

@@ -11,6 +11,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { ChartLineLabel } from './monthlySpendingChart';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -56,8 +57,17 @@ type Location = {
 //     next_page_url: string | null;
 //     prev_page_url: string | null;
 // };
+
+interface MonthlySpend {
+    month: string;
+    total: number;
+}
 export default function LocationsList() {
-    const { location, flash } = usePage<{ location: Location; flash: { success?: string } }>().props;
+    const { location, flash, monthlySpending } = usePage<{
+        location: Location;
+        flash: { success?: string };
+        monthlySpending: MonthlySpend[];
+    }>().props;
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
@@ -165,39 +175,46 @@ export default function LocationsList() {
                 </Dialog>
                 {/* {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '} */}
             </div>
-
-            <Card className="m-2 w-full p-0 md:w-1/2 2xl:w-1/3">
-                <Table>
-                    <TableBody>
-                        <TableRow>
-                            <TableHead>Location ID</TableHead>
-                            <TableCell className="w-[100px]">{location.eh_location_id}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableHead>External ID</TableHead>
-                            <TableCell className="w-[100px]">{location.external_id}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableCell className="w-[100px]">{location.name}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableHead>Sub Locations</TableHead>
-                            <TableCell className="w-[100px]">
-                                {location.worktypes.map((worktype) => (
-                                    <div key={worktype.id} className="flex items-center gap-2">
-                                        <span className="flex-wrap">{worktype.name}</span>
-                                    </div>
-                                ))}
-                            </TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableHead>Parent EH Location Id</TableHead>
-                            <TableCell>{location.eh_parent_id}</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </Card>
+            <div className="flex flex-row">
+                <Card className="m-2 w-full p-0 md:w-1/2 2xl:w-1/3">
+                    <Table>
+                        <TableBody>
+                            <TableRow>
+                                <TableHead>Location ID</TableHead>
+                                <TableCell className="w-[100px]">{location.eh_location_id}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableHead>External ID</TableHead>
+                                <TableCell className="w-[100px]">{location.external_id}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableCell className="w-[100px]">{location.name}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableHead>Shift Conditionss</TableHead>
+                                <TableCell className="w-[100px]">
+                                    {location.worktypes.map((worktype) => (
+                                        <div key={worktype.id} className="flex items-center gap-2">
+                                            <span className="flex-wrap">{worktype.name}</span>
+                                        </div>
+                                    ))}
+                                </TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableHead>Parent EH Location Id</TableHead>
+                                <TableCell>{location.eh_parent_id}</TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </Card>
+                <ChartLineLabel
+                    chartData={monthlySpending.map((month) => ({
+                        month: month.month,
+                        value: Number(month.total),
+                    }))}
+                />
+            </div>
             <Tabs defaultValue="sublocations">
                 <TabsList className="ml-2 grid grid-cols-2">
                     <TabsTrigger value="sublocations">Sub-locations</TabsTrigger>

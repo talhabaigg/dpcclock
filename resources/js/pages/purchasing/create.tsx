@@ -81,9 +81,14 @@ type CreateRequisitionProps = {
     costCodes: CostCode[];
     requisition?: Requisition | null;
     permissions: string[];
+    flash: {
+        success: string;
+        error: string;
+        message: string;
+    };
 };
 export default function Create() {
-    const { suppliers, locations, costCodes, requisition } = usePage<CreateRequisitionProps>().props;
+    const { suppliers, locations, costCodes, requisition, flash } = usePage<CreateRequisitionProps>().props;
 
     const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
     const gridRef = useRef<AgGridReact>(null);
@@ -349,6 +354,16 @@ export default function Create() {
             toast.error(errors[Object.keys(errors)[0]]); // Display the first error message
         }
     }, [errors]);
+
+    useEffect(() => {
+        if (!flash) return;
+
+        const { success, error, message } = flash;
+
+        if (success || error || message) {
+            toast[success ? 'success' : error ? 'error' : 'info'](success || error || message);
+        }
+    }, [flash]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
