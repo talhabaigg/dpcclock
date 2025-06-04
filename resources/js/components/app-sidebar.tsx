@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Binary, Box, Building, Clock, Database, FoldHorizontal, Hammer, Hourglass, LayoutGrid, Pickaxe, UsersRound } from 'lucide-react';
+import { Binary, Box, Building, Clock, Database, Folder, FoldHorizontal, Hammer, Hourglass, LayoutGrid, Pickaxe, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
 const mainNavItems: NavItem[] = [
@@ -56,6 +56,12 @@ const mainNavItems: NavItem[] = [
         href: '/users',
         icon: UsersRound,
         permission: 'view timesheet converter',
+    },
+    {
+        title: 'Requisitions',
+        href: '/requisition/all',
+        icon: Folder,
+        permission: 'view all requisitions',
     },
 ];
 

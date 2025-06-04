@@ -1,12 +1,20 @@
 'use client';
 
-import { MoreHorizontalIcon, type LucideIcon } from 'lucide-react';
+import { ChevronRight, type LucideIcon } from 'lucide-react';
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+    SidebarGroup,
+    SidebarMenu,
+    SidebarMenuAction,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
+} from '@/components/ui/sidebar';
 
-import { SidebarGroup, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
-
-import { usePage } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 
 export function NavDocuments({
     items,
@@ -23,46 +31,46 @@ export function NavDocuments({
         }[];
     }[];
 }) {
-    const { isMobile } = useSidebar();
+    // const { isMobile } = useSidebar();
     const page = usePage();
 
     return (
-        <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+        <SidebarGroup className="px-2 py-0">
             <SidebarMenu>
                 {items.map((item) => (
-                    <SidebarMenuItem key={item.name}>
-                        <SidebarMenuButton asChild isActive={item.url === page.url}>
-                            <a href={item.url || '#'}>
-                                <item.icon />
-                                <span>{item.name}</span>
-                            </a>
-                        </SidebarMenuButton>
-
-                        {item.subItems && item.subItems.length > 0 && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <SidebarMenuAction showOnHover className="data-[state=open]:bg-accent rounded-sm">
-                                        <MoreHorizontalIcon />
-                                        <span className="sr-only">More</span>
-                                    </SidebarMenuAction>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    className="w-40 rounded-lg"
-                                    side={isMobile ? 'bottom' : 'right'}
-                                    align={isMobile ? 'end' : 'start'}
-                                >
-                                    {item.subItems.map((sub) => (
-                                        <DropdownMenuItem key={sub.name} asChild>
-                                            <a href={sub.url} className="flex items-center gap-2">
-                                                <sub.icon className="h-4 w-4" />
-                                                <span>{sub.name}</span>
-                                            </a>
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
-                    </SidebarMenuItem>
+                    <Collapsible key={item.name} asChild defaultOpen={true}>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip={item.name}>
+                                <a href={item.url}>
+                                    <item.icon />
+                                    <span>{item.name}</span>
+                                </a>
+                            </SidebarMenuButton>
+                            {item.subItems?.length ? (
+                                <>
+                                    <CollapsibleTrigger asChild>
+                                        <SidebarMenuAction className="data-[state=open]:rotate-90">
+                                            <ChevronRight />
+                                            <span className="sr-only">Toggle</span>
+                                        </SidebarMenuAction>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <SidebarMenuSub>
+                                            {item.subItems?.map((subItem) => (
+                                                <SidebarMenuSubItem key={subItem.name}>
+                                                    <SidebarMenuSubButton asChild isActive={subItem.url === page.url}>
+                                                        <Link href={subItem.url}>
+                                                            <span>{subItem.name}</span>
+                                                        </Link>
+                                                    </SidebarMenuSubButton>
+                                                </SidebarMenuSubItem>
+                                            ))}
+                                        </SidebarMenuSub>
+                                    </CollapsibleContent>
+                                </>
+                            ) : null}
+                        </SidebarMenuItem>
+                    </Collapsible>
                 ))}
             </SidebarMenu>
         </SidebarGroup>
