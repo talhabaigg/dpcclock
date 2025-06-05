@@ -7,6 +7,7 @@ export const myTheme = themeQuartz.withParams({
     headerBackgroundColor: '#00000000',
     wrapperBorderRadius: '10px',
     wrapperBorder: false,
+    columnBorder: true,
 });
 
 export const darkTheme = themeQuartz.withParams({

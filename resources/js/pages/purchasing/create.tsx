@@ -185,13 +185,26 @@ export default function Create() {
             valueGetter: 'node.rowIndex + 1', // Automatically increment the line number based on row index
             suppressMovable: true, // Make sure it stays in place
         },
-        { field: 'description', headerName: 'Description', editable: true, singleClickEdit: false },
+        {
+            field: 'description',
+            headerName: 'Description',
+            editable: true,
+            singleClickEdit: false,
+            cellRenderer: (params: any) => {
+                if (params.value) return params.value; // If description exists, show it
+                return <span className="text-gray-500">Double click to type...</span>;
+            },
+        },
         {
             field: 'code',
             headerName: 'Item Code',
             editable: true,
             cellEditor: ComboboxDemo,
             minWidth: 250,
+            cellRenderer: (params: any) => {
+                if (params.value) return params.value; // If code exists, show it
+                return <span className="text-gray-500">Search item...</span>;
+            },
             cellEditorParams: {
                 selectedSupplier,
             },
