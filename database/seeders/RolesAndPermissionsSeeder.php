@@ -28,6 +28,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'update travel zones',
             'view timesheet converter',
             'view all requisitions',
+            'can process requisitions',
         ];
 
         // Create roles if they don't exist
@@ -71,6 +72,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'retrieve kiosk token',
             'update travel zones',
             'view all requisitions',
+            'can process requisitions',
         ]);
 
     }

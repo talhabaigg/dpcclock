@@ -26,21 +26,23 @@ class PurchasingController extends Controller
     {
         $user = auth()->user();
 
-        $suppliers = Supplier::all(); // Consider selecting only necessary fields
+        $suppliers = Supplier::all();
         $costCodes = CostCode::select('id', 'code', 'description')->ordered()->get();
 
-
-        // Base query for locations under specific parent
-        $locationsQuery = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)
+        // Group OR conditions properly
+        $locationsQuery = Location::where(function ($query) {
+            $query->where('eh_parent_id', 1149031)
+                ->orWhere('eh_parent_id', 1198645);
+        })
             ->with('worktypes');
 
-        // Apply filter for non-admins (or non-authorized users)
-        if ($user->cannot('view all requisitions')) {
+        if ($user->hasRole('manager')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }
 
         $locations = $locationsQuery->get();
+
 
         return Inertia::render('purchasing/create', [
             'suppliers' => $suppliers,
@@ -98,6 +100,26 @@ class PurchasingController extends Controller
                 'price_list' => $item['price_list'] ?? null,
                 'total_cost' => $item['total_cost'] ?? 0,
             ]);
+        }
+
+        $messageBody = "New requisition order #{$requisition->id} has been submitted by {$requisition->creator->name} for supplier {$requisition->supplier->name} at {$requisition->location->name}.";
+        // dd($messageBody);
+        $recipients = ['talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au'];
+
+        foreach ($recipients as $recipient) {
+            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+                'user_email' => $recipient,
+                'message' => $messageBody,
+            ]);
+
+            if ($response->failed()) {
+                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+            }
+        }
+
+
+        if ($response->failed()) {
+            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
         }
 
         return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');

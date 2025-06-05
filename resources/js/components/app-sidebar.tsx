@@ -61,7 +61,7 @@ const mainNavItems: NavItem[] = [
         title: 'Requisitions',
         href: '/requisition/all',
         icon: Folder,
-        permission: 'view all requisitions',
+        permission: 'manage timesheets',
     },
 ];
 
