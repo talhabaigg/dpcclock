@@ -134,6 +134,7 @@ class PurchasingController extends Controller
         if ($user->hasPermissionTo('view all requisitions')) {
             $requisitions = Requisition::with('supplier', 'creator', 'location')
                 ->withSum('lineItems', 'total_cost')
+                ->orderByDesc('id')
                 ->get();
             return Inertia::render('purchasing/index', [
                 'requisitions' => $requisitions,
@@ -362,7 +363,7 @@ class PurchasingController extends Controller
             $requisition->lineItems()->create($item);
         }
 
-        return redirect()->route('requisition.index')->with('success', 'Requisition updated.');
+        return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition updated.');
     }
     public function __invoke(Requisition $requisition)
     {
