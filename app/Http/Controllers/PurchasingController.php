@@ -19,6 +19,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
 use App\Services\ExcelExportService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PurchasingController extends Controller
 {
@@ -168,6 +169,7 @@ class PurchasingController extends Controller
 
         $newRequisition = $originalRequisition->replicate();
         $newRequisition->status = 'pending';
+        $newRequisition->po_number = null; // Reset PO number
         $newRequisition->is_template = false; // Reset template status
         $newRequisition->created_at = now();
         $newRequisition->updated_at = now();
@@ -205,18 +207,58 @@ class PurchasingController extends Controller
         return redirect()->route('requisition.index')->with('success', 'Requisition deleted successfully.');
     }
 
+    private function getPONumber($requisition)
+    {
+        return DB::transaction(function () use ($requisition) {
+            $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
+            if ($parentId === '1149031') {
+                $companyCode = 'SWC';
+            } elseif ($parentId === '1198645') {
+                $companyCode = 'GREEN';
+            } else {
+                throw new \Exception('Invalid parent ID for PO number generation.');
+            }
+            $sequence = DB::table('po_num_sequence')->lockForUpdate()->where('company_code', $companyCode)->first();
+
+            // Build formatted PO number
+            $poNumber = str_pad($sequence->next_po_number, 6, '0', STR_PAD_LEFT);
+
+            // Assign and save
+            $requisition->po_number = $poNumber;
+            $requisition->status = 'processed';
+            $requisition->save();
+
+            // Increment the sequence
+            DB::table('po_num_sequence')->where('company_code', $companyCode)->update([
+                'next_po_number' => $sequence->next_po_number + 1,
+            ]);
+
+            return $poNumber; // ✅ Make sure to return the PO number
+        });
+    }
     public function process($id)
     {
         $requisition = Requisition::with('creator')->findOrFail($id);
+        if ($requisition->status !== 'pending') {
+            return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');
+        }
+        $next_num = $this->getPONumber($requisition);
+
+        // dd('PO' . $next_num);
+
 
 
         $excelService = new ExcelExportService();
         $fileName = $excelService->generateCsv($requisition);
 
+
+
         $fileContent = Storage::disk('public')->get($fileName);
         // For testing: return the Excel file as a download
         // dd('excel generated', $fileContent);
         // Upload to SFTP
+        // $uploaded = true;
+
         $uploaded = Storage::disk('premier_sftp')->put("upload/{$fileName}", $fileContent);
 
         if ($uploaded) {
@@ -229,13 +271,22 @@ class PurchasingController extends Controller
 
             $timestamp = now()->format('d/m/Y h:i A');
 
-            $messageBody = "Your requisition order #{$requisition->id} has been sent to the supplier by {$creator->name}.";
+            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to the supplier by {$creator->name}.";
 
-            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+            $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
+            $recepients = array_unique($recepients); // Ensure unique recipients
 
-                'user_email' => $creatorEmail,
-                'message' => $messageBody,
-            ]);
+            foreach ($recepients as $recepient) {
+                $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+                    'user_email' => $recepient,
+                    'message' => $messageBody,
+                ]);
+
+                if ($response->failed()) {
+                    return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+                }
+            }
+
 
             $requisition->update([
                 'status' => 'processed',
@@ -258,7 +309,7 @@ class PurchasingController extends Controller
     {
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
         $suppliers = Supplier::all();
-        $locations = Location::where('eh_parent_id', 1149031)->get();
+        $locations = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->get();
         $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         return Inertia::render('purchasing/create', [

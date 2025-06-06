@@ -34,6 +34,7 @@ type Requisition = {
     supplier: { name: string };
     location: { name: string } | null;
     status: string;
+    po_number: string | null;
     is_template: boolean;
     order_reference: string | null;
     date_required: string;
@@ -47,6 +48,8 @@ const tableHeader = [
     { title: 'ID', key: 'id' },
     { title: 'Supplier', key: 'supplier' },
     { title: 'Project', key: 'location' },
+
+    { title: 'PO Number', key: 'po_number' },
     { title: 'Status', key: 'status' },
     { title: 'Is Template', key: 'is_template' },
     { title: 'Order reference', key: 'order_reference' },
@@ -261,6 +264,7 @@ export default function RequisitionList() {
                                 <TableCell>{requisition.id}</TableCell>
                                 <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
                                 <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
+                                <TableCell>{requisition.po_number ? `PO${requisition.po_number}` : 'Not Found'}</TableCell>
                                 <TableCell>
                                     <Badge variant="outline">{requisition.status}</Badge>
                                 </TableCell>

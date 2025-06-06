@@ -83,7 +83,7 @@ class ExcelExportService
                     $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
                     return [
                         'AP',
-                        'NEXT #',
+                        'PO' . $requisition->po_number ?? $po_number,
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->notes ?? 'N/A',

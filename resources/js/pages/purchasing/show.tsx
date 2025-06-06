@@ -18,6 +18,7 @@ const requisitionHeaderTable: {
     title: string;
     key: string; // dot notation like 'location.name'
 }[] = [
+    { title: 'PO Number', key: 'po_number' },
     { title: 'Project', key: 'location.name' },
     { title: 'Supplier', key: 'supplier.name' },
     { title: 'Deliver To', key: 'deliver_to' },
@@ -107,6 +108,7 @@ export default function RequisitionShow() {
                                         <TableCell className="font-semibold">{header.title}</TableCell>
                                         <TableCell className="font-light">
                                             {header.key.includes('sum') ? '$ ' : ''}
+                                            {header.key === 'po_number' ? 'PO' : ''}
                                             {getNestedValue(requisition, header.key)}
                                         </TableCell>
                                     </TableRow>

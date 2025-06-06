@@ -26,7 +26,7 @@ const extractLineItems = async (file, setPastingItems, projectId, setRowData, se
                 content: [
                     {
                         type: 'text',
-                        text: 'Please extract all line items from this quotation image. Return the result as a JSON array of objects, even if only a single line item is found. Each object must include the following fields: code, description, qty, and unit_cost (without a $ sign). Prioritise ex-GST pricing over incl-GST where both are available. If a non-standard unit of measure is used, calculate unit_cost by dividing the total cost by the quantity. If any comment line found, include that as an object with description as the "comment - $lineValue", qty as 1, unit_cost as 0, and code as empty string.',
+                        text: 'Please extract all line items from this quotation image. Return the result as a JSON array of objects, even if only a single line item is found. Each object must include the following fields: code, description, qty, and unit_cost (without a $ sign). Prioritise ex-GST pricing over incl-GST where both are available. If a non-standard unit of measure is used, calculate unit_cost by dividing the total cost by the quantity.',
                     },
                     {
                         type: 'image_url',
