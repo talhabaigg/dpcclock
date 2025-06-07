@@ -44,7 +44,7 @@ export default function Clockout() {
         clockedIn: { clock_in: string };
     }>().props;
 
-    const { data, setData, post, processing, errors } = useForm<{
+    const { setData, post, processing } = useForm<{
         kioskId: number;
         employeeId: number;
         entries: {
