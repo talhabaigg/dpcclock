@@ -4,15 +4,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
 import AllowanceToggle from '../components/allowanceToggle';
 import HourSelector from '../components/hourSelector';
+import KioskDialogBox from '../components/kiosk-dialog';
 import LevelSelector from '../components/levelSelector';
 import TaskHoursAndAllowances from '../components/TaskHoursAndAllowances';
 import TaskLevelDisplay from '../components/TaskLevelDisplay';
 import KioskLayout from '../partials/layout';
-
 interface Employee {
     id: number;
     name: string;
@@ -43,7 +44,7 @@ export default function Clockout() {
         clockedIn: { clock_in: string };
     }>().props;
 
-    const form = useForm<{
+    const { data, setData, post, processing, errors } = useForm<{
         kioskId: number;
         employeeId: number;
         entries: {
@@ -153,12 +154,12 @@ export default function Clockout() {
 
     useEffect(() => {
         const clockEntries = generateClockEntries();
-        form.setData('entries', clockEntries);
+        setData('entries', clockEntries);
     }, [taskAllocations]);
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        form.post(route('clocks.out'));
+        post(route('clocks.out'));
     };
 
     const isClockOutDisabled = taskAllocations.some((task) => {
@@ -202,6 +203,14 @@ export default function Clockout() {
             <p className="text-center text-sm sm:text-base">
                 Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
+            {processing && (
+                <KioskDialogBox isOpen={processing} title="Please wait" description="Please wait..." onClose={() => {}}>
+                    <div className="flex items-center justify-center space-x-2">
+                        <Loader2 className="animate-spin" />
+                        <span>Logging out</span>
+                    </div>
+                </KioskDialogBox>
+            )}
 
             <form onSubmit={handleSubmit} className="w-full px-4">
                 {taskAllocations.map((task, index) => (

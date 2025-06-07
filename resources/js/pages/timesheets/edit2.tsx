@@ -9,6 +9,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { AlertCircleIcon, BadgeCheckIcon } from 'lucide-react';
 import React from 'react';
+import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import HourSelector from './components/hourSelector';
 import KioskSelector from './components/kioskSelector';
@@ -217,6 +218,7 @@ export default function EditTimesheet() {
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableCell className="col-span-1 bg-gray-50 dark:bg-gray-900"></TableCell>
                         <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Status</TableHead>
                         <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Start time</TableHead>
                         <TableHead className="border-r-2 bg-gray-50 dark:bg-gray-900">End time</TableHead>
@@ -232,7 +234,12 @@ export default function EditTimesheet() {
                     {form.data.clocks.map((clock) => {
                         const isSynced = clock.status?.toLowerCase() === 'synced';
                         return (
-                            <TableRow key={clock.id}>
+                            <TableRow key={clock.id} className="relative">
+                                {isSynced ? (
+                                    <div className="absolute inset-0 z-10 cursor-not-allowed" onClick={() => toast.warning('Locked for editing.')} />
+                                ) : (
+                                    <div></div>
+                                )}
                                 <TableCell className="border-r-2">
                                     {clock.status ? (
                                         <Badge variant="secondary" className="bg-green-700 text-white dark:bg-green-900">
