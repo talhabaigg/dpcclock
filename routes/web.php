@@ -22,7 +22,7 @@ use App\Http\Controllers\SupplierController;
 Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
-
+Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return redirect()->route('kiosks.index');
@@ -38,7 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/users/kiosk/{user}/store', [UserController::class, 'storeKiosk'])->name('users.kiosk.store');
         Route::get('/users/kiosk/{kiosk}/{user}/remove', [UserController::class, 'removeKiosk'])->name('users.kiosk.remove');
 
-        Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
+
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
         Route::get('/employee/{employeeId}/worktypes/sync', [EmployeeController::class, 'syncSingleEmployeeWorktype'])->name('employee.worktypes.sync');
         Route::get('/employees/kiosks/update', [EmployeeController::class, 'updateKioskEmployees'])->name('employees.kiosks.update');

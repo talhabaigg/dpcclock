@@ -56,6 +56,12 @@ class EmployeeController extends Controller
 
         }
         $employees = Employee::all();
+
+        if (!Auth::check()) {
+            return response()->json([
+                'message' => 'Employees synced successfully from Employment Hero.',
+            ], 200);
+        }
         // dd('Synced');
         return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment hero.');
     }
