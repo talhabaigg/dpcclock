@@ -184,6 +184,7 @@ export default function Create() {
             maxWidth: 100,
             valueGetter: 'node.rowIndex + 1', // Automatically increment the line number based on row index
             suppressMovable: true, // Make sure it stays in place
+            rowDrag: true,
         },
         {
             field: 'description',
@@ -504,6 +505,26 @@ export default function Create() {
                                 ref={gridRef}
                                 rowData={rowData}
                                 theme={appliedTheme}
+                                rowDragManaged={true}
+                                onRowDragEnd={(event) => {
+                                    const movingData = event.node.data;
+                                    const overIndex = event.overIndex;
+
+                                    if (overIndex === undefined || overIndex < 0) return;
+
+                                    const displayedRows = [];
+                                    event.api.forEachNodeAfterFilterAndSort((node) => {
+                                        displayedRows.push(node.data);
+                                    });
+
+                                    // Remove movingData from wherever it is in rowData
+                                    const filteredRowData = rowData.filter((d) => d !== movingData);
+
+                                    // Insert movingData at the overIndex
+                                    filteredRowData.splice(overIndex, 0, movingData);
+
+                                    setRowData(filteredRowData);
+                                }}
                                 columnDefs={columnDefs}
                                 maintainColumnOrder={true}
                                 suppressAutoSize={true}
