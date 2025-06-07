@@ -1,3 +1,5 @@
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -5,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/react';
+import { AlertCircleIcon, BadgeCheckIcon } from 'lucide-react';
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import HourSelector from './components/hourSelector';
@@ -73,6 +76,7 @@ export default function EditTimesheet() {
             const { hour: clockOutHour, minute: clockOutMinute } = splitTime(clock.clock_out);
             return {
                 id: clock.id,
+                status: clock.status,
                 clockInHour,
                 clockInMinute,
                 clockOutHour,
@@ -93,6 +97,7 @@ export default function EditTimesheet() {
             ...form.data.clocks,
             {
                 id: uuidv4(),
+                status: '',
                 clockInHour: '',
                 clockInMinute: '',
                 clockOutHour: '',
@@ -189,6 +194,14 @@ export default function EditTimesheet() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Timesheet" />
+            <Alert variant="default" className="m-4">
+                <AlertCircleIcon />
+                <AlertTitle>Heads up!</AlertTitle>
+                <AlertDescription>
+                    Once timesheets are synced with Employment Hero, they cannot be edited. Please login to EH to make changes or contact your payroll
+                    officer for assistance.
+                </AlertDescription>
+            </Alert>
             {flash.success && <div className="m-2 rounded bg-green-100 p-4 text-green-800">{flash.success}</div>}
             {flash.error && <div className="mb-4 rounded bg-red-100 p-4 text-red-800">{flash.error}</div>}
             {form.errors && (
@@ -204,6 +217,7 @@ export default function EditTimesheet() {
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Status</TableHead>
                         <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Start time</TableHead>
                         <TableHead className="border-r-2 bg-gray-50 dark:bg-gray-900">End time</TableHead>
                         <TableHead className="border-r-2 bg-gray-50 dark:bg-gray-900">Location</TableHead>
@@ -215,74 +229,95 @@ export default function EditTimesheet() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {form.data.clocks.map((clock) => (
-                        <TableRow key={clock.id}>
-                            <TableCell className="border-r-2">
-                                {' '}
-                                <div className="flex w-full flex-row">
-                                    <HourSelector
-                                        clockInHour={clock.clockInHour}
-                                        onChange={(val) => updateClockField(clock.id, 'clockInHour', val)}
+                    {form.data.clocks.map((clock) => {
+                        const isSynced = clock.status?.toLowerCase() === 'synced';
+                        return (
+                            <TableRow key={clock.id}>
+                                <TableCell className="border-r-2">
+                                    {clock.status ? (
+                                        <Badge variant="secondary" className="bg-green-700 text-white dark:bg-green-900">
+                                            <BadgeCheckIcon />
+                                            {clock.status}
+                                        </Badge>
+                                    ) : (
+                                        <></>
+                                    )}
+                                </TableCell>
+                                <TableCell className="border-r-2">
+                                    {' '}
+                                    <div className="flex w-full flex-row">
+                                        <HourSelector
+                                            clockInHour={clock.clockInHour}
+                                            onChange={(val) => updateClockField(clock.id, 'clockInHour', val)}
+                                            disabled={isSynced}
+                                        />
+                                        <MinuteSelector
+                                            minute={clock.clockInMinute}
+                                            onChange={(val) => updateClockField(clock.id, 'clockInMinute', val)}
+                                            disabled={isSynced}
+                                        />
+                                    </div>
+                                </TableCell>
+                                <TableCell className="border-r-2">
+                                    {' '}
+                                    <div className="flex w-full flex-row">
+                                        <HourSelector
+                                            clockInHour={clock.clockOutHour}
+                                            onChange={(val) => updateClockField(clock.id, 'clockOutHour', val)}
+                                            disabled={isSynced}
+                                        />
+                                        <MinuteSelector
+                                            minute={clock.clockOutMinute}
+                                            onChange={(val) => updateClockField(clock.id, 'clockOutMinute', val)}
+                                            disabled={isSynced}
+                                        />
+                                    </div>
+                                </TableCell>
+                                <TableCell className="border-r-2">
+                                    {' '}
+                                    <LocationSelector
+                                        locations={locations}
+                                        selectedLocation={clock.location}
+                                        onChange={(val) => updateLocationField(clock.id, val)} // pass actual value
+                                        disabled={isSynced}
                                     />
-                                    <MinuteSelector
-                                        minute={clock.clockInMinute}
-                                        onChange={(val) => updateClockField(clock.id, 'clockInMinute', val)}
+                                </TableCell>
+                                <TableCell className="border-r-2">
+                                    {' '}
+                                    <KioskSelector
+                                        kiosks={kiosks}
+                                        selectedKiosk={clock.eh_kiosk_id ? Number(clock.eh_kiosk_id) : undefined}
+                                        onChange={(val) => updateKioskField(clock.id, val)}
+                                        disabled={isSynced}
                                     />
-                                </div>
-                            </TableCell>
-                            <TableCell className="border-r-2">
-                                {' '}
-                                <div className="flex w-full flex-row">
-                                    <HourSelector
-                                        clockInHour={clock.clockOutHour}
-                                        onChange={(val) => updateClockField(clock.id, 'clockOutHour', val)}
+                                </TableCell>
+                                <TableCell>
+                                    <input value={clock.hoursWorked ?? 0} disabled className="rounded-sm border border-none p-2 shadow-none" />
+                                </TableCell>
+                                <TableCell className="border-l-2">
+                                    <Checkbox
+                                        disabled={isSynced}
+                                        checked={!!+clock.setout_allowance}
+                                        onCheckedChange={(checked) => updateSetoutAllowance(clock.id, !!checked)}
                                     />
-                                    <MinuteSelector
-                                        minute={clock.clockOutMinute}
-                                        onChange={(val) => updateClockField(clock.id, 'clockOutMinute', val)}
+                                </TableCell>
+                                <TableCell className="border-l-2">
+                                    <Checkbox
+                                        disabled={isSynced}
+                                        checked={!!+clock.insulation_allowance}
+                                        onCheckedChange={(checked) => updateInsulationAllowance(clock.id, !!checked)}
                                     />
-                                </div>
-                            </TableCell>
-                            <TableCell className="border-r-2">
-                                {' '}
-                                <LocationSelector
-                                    locations={locations}
-                                    selectedLocation={clock.location}
-                                    onChange={(val) => updateLocationField(clock.id, val)} // pass actual value
-                                />
-                            </TableCell>
-                            <TableCell className="border-r-2">
-                                {' '}
-                                <KioskSelector
-                                    kiosks={kiosks}
-                                    selectedKiosk={clock.eh_kiosk_id ? Number(clock.eh_kiosk_id) : undefined}
-                                    onChange={(val) => updateKioskField(clock.id, val)}
-                                />
-                            </TableCell>
-                            <TableCell>
-                                <input value={clock.hoursWorked ?? 0} disabled className="rounded-sm border border-none p-2 shadow-none" />
-                            </TableCell>
-                            <TableCell className="border-l-2">
-                                <Checkbox
-                                    checked={!!+clock.setout_allowance}
-                                    onCheckedChange={(checked) => updateSetoutAllowance(clock.id, !!checked)}
-                                />
-                            </TableCell>
-                            <TableCell className="border-l-2">
-                                <Checkbox
-                                    checked={!!+clock.insulation_allowance}
-                                    onCheckedChange={(checked) => updateInsulationAllowance(clock.id, !!checked)}
-                                />
-                            </TableCell>
-                            <TableCell className="border-l-2">
-                                <Checkbox
-                                    checked={!!+clock.laser_allowance}
-                                    disabled={isLaserAlreadySelectedElsewhere(clock.id) && clock.laser_allowance !== '1'}
-                                    onCheckedChange={(checked) => updateLaserAllowance(clock.id, !!checked)}
-                                />
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                                </TableCell>
+                                <TableCell className="border-l-2">
+                                    <Checkbox
+                                        checked={!!+clock.laser_allowance}
+                                        disabled={isSynced || (isLaserAlreadySelectedElsewhere(clock.id) && clock.laser_allowance !== '1')}
+                                        onCheckedChange={(checked) => updateLaserAllowance(clock.id, !!checked)}
+                                    />
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
                 </TableBody>
             </Table>
 

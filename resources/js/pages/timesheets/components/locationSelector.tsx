@@ -8,12 +8,13 @@ type Location = {
 type prop = {
     locations: Location[];
     selectedLocation: string | null;
+    disabled?: boolean;
     onChange: (val: string) => void;
 };
 
-export default function LocationSelector({ locations, selectedLocation, onChange }: prop) {
+export default function LocationSelector({ locations, selectedLocation, onChange, disabled }: prop) {
     return (
-        <Select value={selectedLocation ?? ''} onValueChange={onChange}>
+        <Select value={selectedLocation ?? ''} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger className="w-full border-none shadow-none">
                 <SelectValue placeholder="Select location" />
             </SelectTrigger>

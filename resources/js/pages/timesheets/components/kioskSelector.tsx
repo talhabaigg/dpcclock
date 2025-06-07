@@ -9,13 +9,15 @@ export default function KioskSelector({
     kiosks,
     selectedKiosk,
     onChange,
+    disabled,
 }: {
     kiosks: Kiosk[];
     selectedKiosk: number | null;
     onChange: (val: string) => void;
+    disabled?: boolean;
 }) {
     return (
-        <Select value={selectedKiosk !== null ? String(selectedKiosk) : ''} onValueChange={onChange}>
+        <Select value={selectedKiosk !== null ? String(selectedKiosk) : ''} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger className="w-full border-none shadow-none">
                 <SelectValue placeholder="Select a kiosk" />
             </SelectTrigger>

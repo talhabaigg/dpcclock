@@ -2,11 +2,12 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 type Props = {
     minute: string;
     onChange: (val: string) => void;
+    disabled?: boolean;
 };
 
-export default function MinuteSelector({ minute, onChange }: Props) {
+export default function MinuteSelector({ minute, onChange, disabled }: Props) {
     return (
-        <Select value={minute} onValueChange={onChange}>
+        <Select value={minute} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger className="w-full border-none shadow-none">
                 <SelectValue placeholder="Select minute" />
             </SelectTrigger>
