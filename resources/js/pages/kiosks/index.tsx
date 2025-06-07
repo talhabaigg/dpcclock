@@ -1,8 +1,12 @@
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
+import { Settings } from 'lucide-react';
 import React from 'react';
 
 // Define the Kiosk type
@@ -15,13 +19,18 @@ interface Kiosk {
     };
     default_start_time: string;
     default_end_time: string;
+    employees?:
+        | {
+              name: string;
+          }[]
+        | undefined;
 }
-
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
     const [loading, setLoading] = React.useState(false);
+    const getInitials = useInitials();
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -39,58 +48,75 @@ export default function KiosksList() {
                 </Link>
                 {flash?.success && <div className="text-green-500">{flash.success}</div>}
             </div>
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                {kiosks.map((kiosk) => (
+                    <Card key={kiosk.id} className="mb-4 p-4">
+                        <CardTitle>{kiosk.name}</CardTitle>
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Kiosk ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Location Name</TableHead>
-                            <TableHead>Default Start Time</TableHead>
-                            <TableHead>Default End Time</TableHead>
-                            <TableHead>Actions</TableHead>
-                            <TableHead>Settings</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {kiosks.map((kiosk) => (
-                            <TableRow key={kiosk.id}>
-                                <TableCell>{kiosk.eh_location_id}</TableCell>
-                                <TableCell>{kiosk.name}</TableCell>
-                                <TableCell>{kiosk.location?.name?.trim() || 'N/A'}</TableCell>
-                                <TableCell>{kiosk.default_start_time}</TableCell>
-                                <TableCell>{kiosk.default_end_time}</TableCell>
-
-                                <TableCell>
-                                    <Link href={`/kiosks/${kiosk.id}`}>
-                                        <Button>Open</Button>
-                                    </Link>
-                                </TableCell>
-                                <TableCell>
-                                    <Link href={`/kiosks/${kiosk.id}/edit`}>
-                                        <Button variant="outline">Settings</Button>
-                                    </Link>
-                                </TableCell>
-                                {/* <TableCell>
-                                    {kiosk.employees.length > 0 ? (
-                                        <div className="space-y-1">
-                                            {kiosk.employees.map((employee) => (
-                                                <div key={employee.id} className="text-sm">
-                                                    {employee.name} {employee.pivot?.zone ? `(Zone ${employee.pivot.zone})` : ''}
-                                                </div>
+                        <CardDescription>
+                            <Label
+                                className="block max-w-xs truncate text-sm font-normal"
+                                title={`${kiosk.eh_location_id} - ${kiosk.location?.name?.trim() || 'N/A'}`}
+                            >
+                                {kiosk.eh_location_id} - {kiosk.location?.name?.trim() || 'N/A'}
+                            </Label>
+                            <div className="mt-2 flex items-center justify-between">
+                                <Label>Default Start time</Label>
+                                <Label className="text-muted-foreground">
+                                    {(() => {
+                                        const [hour, minute] = kiosk.default_start_time.split(':');
+                                        const date = new Date();
+                                        date.setHours(Number(hour), Number(minute));
+                                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+                                    })()}
+                                </Label>
+                            </div>
+                            <div className="mt-2 flex items-center justify-between">
+                                <Label>Default End time</Label>
+                                <Label className="text-muted-foreground">
+                                    {(() => {
+                                        const [hour, minute] = kiosk.default_end_time.split(':');
+                                        const date = new Date();
+                                        date.setHours(Number(hour), Number(minute));
+                                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+                                    })()}
+                                </Label>
+                            </div>
+                            <div>
+                                {kiosk.employees && kiosk.employees.length > 0 ? (
+                                    <Label className="mt-2 flex items-center gap-2">
+                                        Employees:{' '}
+                                        <div className="flex -space-x-1 overflow-hidden">
+                                            {kiosk.employees.slice(0, 5).map((employee, idx) => (
+                                                <Avatar key={employee.name + idx} className="h-8 w-8 overflow-hidden rounded-full">
+                                                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+                                                        {getInitials(employee.name)}
+                                                    </AvatarFallback>
+                                                </Avatar>
                                             ))}
                                         </div>
-                                    ) : (
-                                        <Link href={`/kiosks/${kiosk.id}/settings/create`}>
-                                            <Button variant="outline">Settings</Button>
-                                        </Link>
-                                    )}
-                                </TableCell> */}
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                                    </Label>
+                                ) : (
+                                    <Label className="mt-2">No employees assigned</Label>
+                                )}
+                            </div>
+
+                            <div className="mt-4 flex items-center justify-between">
+                                {' '}
+                                <Link href={`/kiosks/${kiosk.id}`}>
+                                    <Button>Open</Button>
+                                </Link>
+                                <Link href={`/kiosks/${kiosk.id}/edit`}>
+                                    <Button variant="outline">
+                                        {' '}
+                                        <Settings />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </CardDescription>
+                        <CardContent></CardContent>
+                    </Card>
+                ))}
             </div>
         </AppLayout>
     );
