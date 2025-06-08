@@ -272,7 +272,7 @@ class PurchasingController extends Controller
 
             $timestamp = now()->format('d/m/Y h:i A');
 
-            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to the supplier by {$creator->name}.";
+            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$creator->name}.";
 
             $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
             $recepients = array_unique($recepients); // Ensure unique recipients
@@ -280,6 +280,7 @@ class PurchasingController extends Controller
             foreach ($recepients as $recepient) {
                 $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
                     'user_email' => $recepient,
+                    'requisition_id' => $requisition->id,
                     'message' => $messageBody,
                 ]);
 
