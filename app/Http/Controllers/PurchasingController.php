@@ -105,19 +105,27 @@ class PurchasingController extends Controller
 
         $messageBody = "New requisition order #{$requisition->id} has been submitted by {$requisition->creator->name} for supplier {$requisition->supplier->name} at {$requisition->location->name}.";
         // dd($messageBody);
-        $recipients = ['talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au'];
+        // $recipients = ['talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au'];
 
-        foreach ($recipients as $recipient) {
-            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-                'user_email' => $recipient,
-                'message' => $messageBody,
-            ]);
+        // foreach ($recipients as $recipient) {
+        //     $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+        //         'user_email' => $recipient,
+        //         'message' => $messageBody,
+        //     ]);
 
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-            }
+        //     if ($response->failed()) {
+        //         return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+        //     }
+        // }
+        $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+            'user_email' => 'talha@superiorgroup.com.au',
+            'requisition_id' => $requisition->id,
+            'message' => $messageBody,
+        ]);
+
+        if ($response->failed()) {
+            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
         }
-
 
         if ($response->failed()) {
             return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
@@ -272,23 +280,31 @@ class PurchasingController extends Controller
 
             $timestamp = now()->format('d/m/Y h:i A');
 
-            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$creator->name}.";
+            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing.";
 
-            $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
-            $recepients = array_unique($recepients); // Ensure unique recipients
+            // $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
+            // $recepients = array_unique($recepients); // Ensure unique recipients
 
-            foreach ($recepients as $recepient) {
-                $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-                    'user_email' => $recepient,
-                    'requisition_id' => $requisition->id,
-                    'message' => $messageBody,
-                ]);
+            // foreach ($recepients as $recepient) {
+            //     $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+            //         'user_email' => $recepient,
+            //         'requisition_id' => $requisition->id,
+            //         'message' => $messageBody,
+            //     ]);
 
-                if ($response->failed()) {
-                    return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-                }
+            //     if ($response->failed()) {
+            //         return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+            //     }
+            // }
+            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+                'user_email' => $creatorEmail,
+                'requisition_id' => $requisition->id,
+                'message' => $messageBody,
+            ]);
+
+            if ($response->failed()) {
+                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
             }
-
 
             $requisition->update([
                 'status' => 'processed',
