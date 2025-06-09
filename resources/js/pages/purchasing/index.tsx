@@ -48,15 +48,14 @@ const tableHeader = [
     { title: 'ID', key: 'id' },
     { title: 'Supplier', key: 'supplier' },
     { title: 'Project', key: 'location' },
-
     { title: 'PO Number', key: 'po_number' },
     { title: 'Status', key: 'status' },
     { title: 'Is Template', key: 'is_template' },
     { title: 'Order reference', key: 'order_reference' },
+    { title: 'Created By', key: 'creator' },
     { title: 'Date required', key: 'date_required' },
     { title: 'Delivery Contact', key: 'delivery_contact' },
     { title: 'Deliver to', key: 'deliver_to' },
-    { title: 'Created By', key: 'creator' },
     { title: 'Requisition Value', key: 'line_items_sum_total_cost' },
     { title: 'Actions', key: 'actions' },
 ];
