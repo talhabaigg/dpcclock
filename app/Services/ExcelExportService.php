@@ -27,7 +27,7 @@ class ExcelExportService
         if ($parentId === '1198645') {
             $company = 'GREEN';
         }
-        $fileName = "PO-{$requisition->po_number}-{$datetime}_{$company}.csv";
+        $fileName = "PO-{$requisition->po_number}{$datetime}_{$company}.csv";
 
         Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
             protected $requisition;
