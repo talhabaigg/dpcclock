@@ -269,10 +269,11 @@ export default function RequisitionList() {
                                 </TableCell>
                                 <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
                                 <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
+                                <TableCell>{requisition.creator?.name}</TableCell>
                                 <TableCell>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</TableCell>
                                 <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
                                 <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
-                                <TableCell>{requisition.creator?.name}</TableCell>
+
                                 <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
                                 <TableCell className="table-cell sm:hidden">
                                     <div className="flex items-center gap-2">
