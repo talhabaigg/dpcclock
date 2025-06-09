@@ -28,8 +28,8 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 () => {
                     router.post('/logout'); // uses POST method
                 },
-                3 * 60 * 1000,
-            ); // 5 seconds
+                5 * 60 * 1000,
+            );
 
             return () => clearTimeout(timeout);
         }
