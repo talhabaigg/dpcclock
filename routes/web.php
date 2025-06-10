@@ -4,6 +4,7 @@ use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -108,6 +109,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/cost-codes/download', [CostcodeController::class, 'download'])->name('costcodes.download');
 
         Route::put('/kiosks/settings/update', [KioskController::class, 'updateSettings'])->name('kiosks.updateSettings');
+
+        Route::get('/reports/req-line-items-desc', [ReportController::class, 'reqLineReport'])->name('reports.reqLineReport');
 
     });
 

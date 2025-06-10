@@ -96,6 +96,22 @@ const documents = [
     },
 ];
 
+const reports = [
+    {
+        name: 'Reports',
+        icon: Database,
+        permission: 'view all requisitions',
+        subItems: [
+            {
+                name: 'Req Line Desc Report',
+                url: '/reports/req-line-items-desc',
+                icon: Pickaxe,
+                permission: 'view all requisitions',
+            },
+        ],
+    },
+];
+
 const footerNavItems: NavItem[] = [
     // {
     //     title: 'Repository',
@@ -130,6 +146,7 @@ export function AppSidebar() {
 
     const filteredMainNavItems = mainNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -147,6 +164,7 @@ export function AppSidebar() {
             <SidebarContent>
                 <NavMain items={filteredMainNavItems} />
                 <NavDocuments items={filteredDocuments} />
+                <NavDocuments items={filteredReports} />
             </SidebarContent>
 
             <SidebarFooter>
