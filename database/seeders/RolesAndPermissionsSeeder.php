@@ -59,6 +59,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage timesheets',
             'view kiosk',
             'retrieve kiosk token',
+            'can process requisitions',
         ]);
 
         $backofficeRole = Role::where('name', 'backoffice')->first();

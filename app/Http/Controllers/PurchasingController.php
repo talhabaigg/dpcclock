@@ -103,6 +103,7 @@ class PurchasingController extends Controller
             ]);
         }
 
+
         $messageBody = "New requisition order #{$requisition->id} has been submitted by {$requisition->creator->name} for supplier {$requisition->supplier->name} at {$requisition->location->name}.";
         // dd($messageBody);
         // $recipients = ['talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au'];
@@ -119,7 +120,7 @@ class PurchasingController extends Controller
         // }
         $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
             'user_email' => 'talha@superiorgroup.com.au',
-            'requisition_id' => $requisition->id,
+            'requisition_id' => (string) $requisition->id,
             'message' => $messageBody,
         ]);
 
