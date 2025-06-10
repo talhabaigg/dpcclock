@@ -7,6 +7,7 @@ import { Head, usePage } from '@inertiajs/react';
 import Papa from 'papaparse';
 import React, { useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
+import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Reports',
@@ -46,7 +47,7 @@ const tableHeader = [
 ];
 
 export default function RequisitionList() {
-    const { lineItems, flash } = usePage<{ lineItems: LineItem[]; flash: { success: string; error: string } }>().props;
+    const { lineItems, flash } = usePage<{ lineItems: LineItem[]; flash: { success: string; error: string; message: string } }>().props;
     console.log(lineItems);
     const LOCAL_STORAGE_KEY = 'reqLineItemsDateRange';
     const [filteredLineItems, setFilteredLineItems] = React.useState<LineItem[]>(lineItems);
@@ -55,6 +56,18 @@ export default function RequisitionList() {
 
     // Use saved date or default
     const [date, setDate] = React.useState<DateRange | undefined>(initialDate ?? { from: new Date(), to: new Date() });
+
+    useEffect(() => {
+        if (flash?.success) {
+            toast.success(flash.success);
+        }
+        if (flash.error) {
+            toast.error(flash.error);
+        }
+        if (flash.message) {
+            toast.info(flash.message);
+        }
+    }, [flash]);
 
     useEffect(() => {
         if (date) {

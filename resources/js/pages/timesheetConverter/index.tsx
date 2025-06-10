@@ -13,7 +13,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function TimesheetConverter() {
-    const { flash } = usePage<{ flash: { success: string; message: string; error: String } }>().props;
+    const { flash } = usePage<{ flash: { success: string; message: string; error: string } }>().props;
 
     const uploadForm = useForm({
         file: null as File | null,

@@ -116,7 +116,7 @@ export default function Clockout() {
         const { level, activity } = splitLocation(location);
         if (!level) return acc;
         //teams.microsoft.com/l/channel/19%3AGDihvN17ACV9mqG6FbxkrjxZ-qYVNbuN0QV_JFv9ejk1%40thread.tacv2/Orders?groupId=c558fac8-12a6-45a7-a03d-375a7ae142df&tenantId=e6336c44-c964-45cd-a717-4f1dad7a9b8chttps://teams.microsoft.com/l/channel/19%3AGDihvN17ACV9mqG6FbxkrjxZ-qYVNbuN0QV_JFv9ejk1%40thread.tacv2/Orders?groupId=c558fac8-12a6-45a7-a03d-375a7ae142df&tenantId=e6336c44-c964-45cd-a717-4f1dad7a9b8c
-        https: if (!acc[level]) acc[level] = [];
+        if (!acc[level]) acc[level] = [];
         if (activity) {
             acc[level].push(activity);
         }
