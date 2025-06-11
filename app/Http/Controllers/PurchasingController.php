@@ -125,12 +125,9 @@ class PurchasingController extends Controller
         ]);
 
         if ($response->failed()) {
-            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+            return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send notification.');
         }
 
-        if ($response->failed()) {
-            return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-        }
 
         return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');
     }
@@ -158,6 +155,7 @@ class PurchasingController extends Controller
         $requisitions = Requisition::with('supplier', 'creator', 'location')
             ->withSum('lineItems', 'total_cost')
             ->whereIn('project_number', $location_ids)
+            ->orderByDesc('id')
             ->get();
 
         return Inertia::render('purchasing/index', [

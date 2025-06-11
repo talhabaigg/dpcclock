@@ -48,7 +48,7 @@ const tableHeader = [
 
 export default function RequisitionList() {
     const { lineItems, flash } = usePage<{ lineItems: LineItem[]; flash: { success: string; error: string; message: string } }>().props;
-    console.log(lineItems);
+
     const LOCAL_STORAGE_KEY = 'reqLineItemsDateRange';
     const [filteredLineItems, setFilteredLineItems] = React.useState<LineItem[]>(lineItems);
     const savedDateJson = localStorage.getItem(LOCAL_STORAGE_KEY);

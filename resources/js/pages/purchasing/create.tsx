@@ -1,5 +1,6 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { SearchSelect } from '@/components/search-select';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
@@ -13,6 +14,7 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
+import { AlertCircleIcon, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
@@ -23,7 +25,6 @@ import GridSizeSelector from './create-partials/gridSizeSelector';
 import { GridStateToolbar } from './create-partials/gridStateToolbar';
 import PasteTableButton from './create-partials/pasteTableButton';
 import { CostCode } from './types';
-
 ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -31,7 +32,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/requisition/all',
     },
     {
-        title: 'Create Requisition',
+        title: `'Create Requisition'`,
         href: '/requisitions/create',
     },
 ];
@@ -89,7 +90,7 @@ type CreateRequisitionProps = {
 };
 export default function Create() {
     const { suppliers, locations, costCodes, requisition, flash } = usePage<CreateRequisitionProps>().props;
-
+    const [autoSaving, setAutoSaving] = useState(true);
     const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
     const gridRef = useRef<AgGridReact>(null);
     const [pastingItems, setPastingItems] = useState(false);
@@ -98,6 +99,7 @@ export default function Create() {
         return localStorage.getItem('gridSize') || '300px';
     });
     const isDarkMode = document.documentElement.classList.contains('dark');
+    const STORAGE_KEY = 'incomplete-order-form';
 
     const { data, setData, post, processing, errors } = useForm({
         project_id: '',
@@ -110,6 +112,10 @@ export default function Create() {
         items: [],
     });
 
+    // useEffect(() => {
+    //     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    //     console.log('saving data', data);
+    // }, [data]);
     const [selectedSupplier, setSelectedSupplier] = useState(data.supplier_id);
     useEffect(() => {
         if (requisition) {
@@ -145,7 +151,7 @@ export default function Create() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-
+        setAutoSaving(false);
         // Add lineIndex explicitly
         const updatedItems = rowData.map((item, index) => ({
             ...item,
@@ -161,8 +167,11 @@ export default function Create() {
             });
         } else {
             post('/requisition/store');
+
+            localStorage.removeItem(STORAGE_KEY);
         }
     };
+
     // const getDescription = (value) => {
     //     const item = items.find((item) => item.value === value);
     //     return item ? item.description : '';
@@ -378,10 +387,51 @@ export default function Create() {
             toast[success ? 'success' : error ? 'error' : 'info'](success || error || message);
         }
     }, [flash]);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    const savedData = saved ? JSON.parse(saved) : null;
+    const restoreReqFromSession = () => {
+        setData(savedData);
+        setRowData(savedData.items);
+    };
+    const saveReqInSession = () => {
+        if (!autoSaving) {
+            return;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    };
+
+    const [orderRestored, setOrderRestored] = useState(false); //state to show that order was restored from memory
+    useEffect(() => {
+        const hasMeaningfulData = (savedData?.project_id && savedData.project_id !== '') || (savedData?.supplier_id && savedData.supplier_id !== '');
+        if (hasMeaningfulData) {
+            const confirmRestore = window.confirm('Incomplete requisition found. Restore it?');
+            if (confirmRestore) {
+                restoreReqFromSession();
+                setOrderRestored(true);
+            } else {
+                localStorage.removeItem(STORAGE_KEY);
+            }
+        }
+    }, []); //this hook runs on first mount and if no meaning full data available in local storage, it skips
+    useEffect(() => {
+        if (setAutoSaving) {
+            saveReqInSession();
+        }
+    }, [rowData, data]); //this hook saves data in local storage unless autoSaving was set to false - that is done while submitting so that local storage is clear
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
+            {orderRestored && (
+                <Alert className="mx-4 mt-2 flex max-w-full flex-row items-center p-1 px-2 sm:max-w-1/2">
+                    <AlertCircleIcon />
+                    <AlertTitle className="mt-1">Your order was restored from memory</AlertTitle>
+                    <Button className="ml-auto" variant="ghost" size="sm" onClick={() => setOrderRestored(false)}>
+                        <X size={6} />
+                    </Button>
+                </Alert>
+            )}
+
             {/* {errors && (
                 <div className="m-2 text-red-500">
                     {Object.values(errors).map((error, index) => (
