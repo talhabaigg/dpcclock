@@ -1,5 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardTitle } from '@/components/ui/card';
 import {
     DropdownMenu,
@@ -75,8 +76,14 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                     <Badge variant="secondary">${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</Badge>
                 </div>
 
+                <div className="flex items-center gap-2 sm:hidden">
+                    <Link href={`/requisition/${requisition.id}`}>
+                        <Button>Open</Button>
+                    </Link>
+                </div>
+
                 <DropdownMenu>
-                    <DropdownMenuTrigger asChild className="rounded-sm p-1 hover:bg-gray-200">
+                    <DropdownMenuTrigger asChild className="hidden rounded-sm p-1 hover:bg-gray-200 sm:block">
                         <EllipsisVertical size={24} />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
