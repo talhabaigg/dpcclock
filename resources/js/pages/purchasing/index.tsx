@@ -51,7 +51,6 @@ export default function RequisitionList() {
     const { requisitions, flash } = usePage<{ requisitions: Requisition[]; flash: { success: string; error: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOnlyTemplates, setFilterOnlyTemplates] = useState(false);
-    const tabViewSetting = localStorage.getItem('viewMode');
     const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') ?? 'table');
     const handleTabChange = (value) => {
         setViewMode(value);
