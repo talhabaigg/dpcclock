@@ -72,9 +72,7 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
             <CardFooter className="flex justify-between p-0">
                 <div className="space-x-2">
                     <Badge> {requisition.supplier.code}</Badge>
-                    <Badge variant="secondary">
-                        ${typeof requisition.line_items_sum_total_cost === 'number' ? requisition.line_items_sum_total_cost.toFixed(2) : '0.00'}
-                    </Badge>
+                    <Badge variant="secondary">${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</Badge>
                 </div>
 
                 <DropdownMenu>
