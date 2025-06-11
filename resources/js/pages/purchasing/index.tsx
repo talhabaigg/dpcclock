@@ -51,6 +51,12 @@ export default function RequisitionList() {
     const { requisitions, flash } = usePage<{ requisitions: Requisition[]; flash: { success: string; error: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOnlyTemplates, setFilterOnlyTemplates] = useState(false);
+    const tabViewSetting = localStorage.getItem('viewMode');
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') ?? 'table');
+    const handleTabChange = (value) => {
+        setViewMode(value);
+        localStorage.setItem('viewMode', value);
+    };
     const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);
     const minCost = Math.min(...costs, 0);
     const maxCost = Math.max(...costs, 10000);
@@ -232,7 +238,7 @@ export default function RequisitionList() {
                     </div>
                 </div>
             </Card>
-            <Tabs className="p-4" defaultValue="cards">
+            <Tabs className="p-4" defaultValue={viewMode} onValueChange={handleTabChange}>
                 <TabsList>
                     <TabsTrigger value="table">Table</TabsTrigger>
                     <TabsTrigger value="cards">Cards</TabsTrigger>

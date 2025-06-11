@@ -6,11 +6,10 @@ interface CardsIndexProps {
 }
 
 const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
-    console.log(filteredRequisitions);
     return (
         <div className="grid grid-cols-1 space-y-2 space-x-2 sm:grid-cols-2 md:grid-cols-3">
             {filteredRequisitions.map((requisition) => (
-                <RequisitionCard requisition={requisition} />
+                <RequisitionCard key={requisition.id} requisition={requisition} />
             ))}
         </div>
     );

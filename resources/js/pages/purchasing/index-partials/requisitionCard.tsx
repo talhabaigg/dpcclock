@@ -25,47 +25,49 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                 {requisition.po_number ? <>PO{requisition.po_number}</> : 'Not generated'}
             </CardTitle>{' '}
             {/* Replace 'title' with an actual field from Requisition */}
-            <CardDescription>
+            <CardDescription className="p-0">
                 <div className="flex justify-between">
                     <Label>Project</Label>
                     <Label className="">{requisition.location.name}</Label>
                 </div>
-                <Accordion type="single" collapsible className="p-0">
-                    <AccordionItem value="item-1">
-                        <AccordionTrigger>View Details</AccordionTrigger>
-                        <AccordionContent>
-                            <div className="flex justify-between">
-                                <Label>Template</Label>
-                                <Label>{requisition.is_template ? 'yes' : 'no'}</Label>
-                            </div>
+                <div>
+                    <Accordion type="single" collapsible className="p-0">
+                        <AccordionItem value="item-1">
+                            <AccordionTrigger>View Details</AccordionTrigger>
+                            <AccordionContent>
+                                <div className="flex justify-between">
+                                    <Label>Template</Label>
+                                    <Label>{requisition.is_template ? 'yes' : 'no'}</Label>
+                                </div>
 
-                            <div className="flex justify-between">
-                                <Label>Supplier</Label>
-                                <Label>{requisition.supplier.name}</Label>
-                            </div>
-                            <div className="flex justify-between">
-                                <Label>Status</Label>
-                                <Label>{requisition.status}</Label>
-                            </div>
-                            <div className="flex justify-between">
-                                <Label>Order Ref</Label>
-                                <Label>{requisition.order_reference ? requisition.order_reference : '-'}</Label>
-                            </div>
-                            <div className="flex justify-between">
-                                <Label>Required Date</Label>
-                                <Label>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</Label>
-                            </div>
-                            <div className="flex justify-between">
-                                <Label>Create Date</Label>
-                                <Label>{new Date(requisition.created_at).toLocaleDateString('en-GB')}</Label>
-                            </div>
-                            <div className="flex justify-between">
-                                <Label>Created by</Label>
-                                <Label>{requisition.creator.name}</Label>
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
+                                <div className="flex justify-between">
+                                    <Label>Supplier</Label>
+                                    <Label>{requisition.supplier.name}</Label>
+                                </div>
+                                <div className="flex justify-between">
+                                    <Label>Status</Label>
+                                    <Label>{requisition.status}</Label>
+                                </div>
+                                <div className="flex justify-between">
+                                    <Label>Order Ref</Label>
+                                    <Label>{requisition.order_reference ? requisition.order_reference : '-'}</Label>
+                                </div>
+                                <div className="flex justify-between">
+                                    <Label>Required Date</Label>
+                                    <Label>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</Label>
+                                </div>
+                                <div className="flex justify-between">
+                                    <Label>Create Date</Label>
+                                    <Label>{new Date(requisition.created_at).toLocaleDateString('en-GB')}</Label>
+                                </div>
+                                <div className="flex justify-between">
+                                    <Label>Created by</Label>
+                                    <Label>{requisition.creator.name}</Label>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </div>
             </CardDescription>
             <CardFooter className="flex justify-between p-0">
                 <div className="space-x-2">
