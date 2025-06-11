@@ -32,7 +32,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/requisition/all',
     },
     {
-        title: `'Create Requisition'`,
+        title: 'Create Requisition',
         href: '/requisitions/create',
     },
 ];

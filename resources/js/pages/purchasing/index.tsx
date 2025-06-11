@@ -13,36 +13,23 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { CirclePlus, EllipsisVertical, Search, SquarePlus, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import CardsIndex from './index-partials/cardsIndex';
 import CostRangeSlider from './index-partials/costRangeSlider';
 import { SelectFilter } from './index-partials/selectFilter';
+import { Requisition } from './index-partials/types';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
         href: '/requisitions/all',
     },
 ];
-
-type Requisition = {
-    line_items_sum_total_cost: any;
-    id: number;
-    supplier: { name: string };
-    location: { name: string } | null;
-    status: string;
-    po_number: string | null;
-    is_template: boolean;
-    order_reference: string | null;
-    date_required: string;
-    delivery_contact: string | null;
-    deliver_to: string | null;
-    creator: { name: string } | null;
-    created_at: string;
-};
 
 const tableHeader = [
     { title: 'ID', key: 'id' },
@@ -245,73 +232,85 @@ export default function RequisitionList() {
                     </div>
                 </div>
             </Card>
+            <Tabs className="p-4" defaultValue="cards">
+                <TabsList>
+                    <TabsTrigger value="table">Table</TabsTrigger>
+                    <TabsTrigger value="cards">Cards</TabsTrigger>
+                </TabsList>
+                <TabsContent value="cards">
+                    <CardsIndex filteredRequisitions={filteredRequisitions}></CardsIndex>
+                </TabsContent>
+                <TabsContent value="table">
+                    <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {tableHeader.map((header) => (
+                                        <TableHead key={header.key} className="text-left">
+                                            {header.title}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredRequisitions.map((requisition) => (
+                                    <TableRow key={requisition.id}>
+                                        <TableCell>{requisition.id}</TableCell>
+                                        <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
+                                        <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
+                                        <TableCell>{requisition.po_number ? `PO${requisition.po_number}` : 'Not Found'}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">{requisition.status}</Badge>
+                                        </TableCell>
+                                        <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
+                                        <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
+                                        <TableCell>{requisition.creator?.name}</TableCell>
+                                        <TableCell>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</TableCell>
+                                        <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
+                                        <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            {tableHeader.map((header) => (
-                                <TableHead key={header.key} className="text-left">
-                                    {header.title}
-                                </TableHead>
-                            ))}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredRequisitions.map((requisition) => (
-                            <TableRow key={requisition.id}>
-                                <TableCell>{requisition.id}</TableCell>
-                                <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
-                                <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
-                                <TableCell>{requisition.po_number ? `PO${requisition.po_number}` : 'Not Found'}</TableCell>
-                                <TableCell>
-                                    <Badge variant="outline">{requisition.status}</Badge>
-                                </TableCell>
-                                <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
-                                <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
-                                <TableCell>{requisition.creator?.name}</TableCell>
-                                <TableCell>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</TableCell>
-                                <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
-                                <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
-
-                                <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
-                                <TableCell className="table-cell sm:hidden">
-                                    <div className="flex items-center gap-2">
-                                        <Link href={`/requisition/${requisition.id}`}>View</Link>
-                                        <Link href={`/requisition/${requisition.id}/copy`}>Copy</Link>
-                                        <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
-                                            Delete
-                                        </Link>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="hidden sm:table-cell">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild className="rounded-sm p-1 hover:bg-gray-200">
-                                            <EllipsisVertical size={24} />
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                            <DropdownMenuSeparator />
-                                            <Link href={`/requisition/${requisition.id}`}>
-                                                <DropdownMenuItem>View </DropdownMenuItem>
-                                            </Link>
-                                            <Link href={`/requisition/${requisition.id}/copy`}>
-                                                <DropdownMenuItem>Copy </DropdownMenuItem>
-                                            </Link>{' '}
-                                            <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
-                                                <DropdownMenuItem>{requisition.is_template ? 'Remove template' : 'Mark template'}</DropdownMenuItem>
-                                            </Link>
-                                            <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
-                                                <DropdownMenuItem> Delete</DropdownMenuItem>
-                                            </Link>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
+                                        <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
+                                        <TableCell className="table-cell sm:hidden">
+                                            <div className="flex items-center gap-2">
+                                                <Link href={`/requisition/${requisition.id}`}>View</Link>
+                                                <Link href={`/requisition/${requisition.id}/copy`}>Copy</Link>
+                                                <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
+                                                    Delete
+                                                </Link>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="hidden sm:table-cell">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild className="rounded-sm p-1 hover:bg-gray-200">
+                                                    <EllipsisVertical size={24} />
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <Link href={`/requisition/${requisition.id}`}>
+                                                        <DropdownMenuItem>View </DropdownMenuItem>
+                                                    </Link>
+                                                    <Link href={`/requisition/${requisition.id}/copy`}>
+                                                        <DropdownMenuItem>Copy </DropdownMenuItem>
+                                                    </Link>{' '}
+                                                    <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
+                                                        <DropdownMenuItem>
+                                                            {requisition.is_template ? 'Remove template' : 'Mark template'}
+                                                        </DropdownMenuItem>
+                                                    </Link>
+                                                    <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
+                                                        <DropdownMenuItem> Delete</DropdownMenuItem>
+                                                    </Link>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+            </Tabs>
         </AppLayout>
     );
 }
