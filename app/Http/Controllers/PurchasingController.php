@@ -65,10 +65,10 @@ class PurchasingController extends Controller
             'order_reference' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
             'items.*.code' => 'nullable|string|max:255',
-            'items.*.description' => 'nullable|string',
+            'items.*.description' => 'required|string',
             'items.*.qty' => 'required|numeric|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
-            'items.*.cost_code' => 'nullable|string|max:255',
+            'items.*.cost_code' => 'required|string|max:255',
             'items.*.price_list' => 'nullable|string|max:255',
             'items.*.serial_number' => 'nullable|integer',
             'items.*.total_cost' => 'nullable|numeric|min:0',
@@ -278,8 +278,8 @@ class PurchasingController extends Controller
             }
 
             $timestamp = now()->format('d/m/Y h:i A');
-
-            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing.";
+            $auth = auth()->user()->name;
+            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
 
             // $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
             // $recepients = array_unique($recepients); // Ensure unique recipients
@@ -307,6 +307,7 @@ class PurchasingController extends Controller
 
             $requisition->update([
                 'status' => 'processed',
+                'processed_by' => auth()->id(),
             ]);
 
             if ($response->failed()) {
