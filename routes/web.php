@@ -26,6 +26,8 @@ Route::get('/', function () {
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])
     ->name('requisition.updateStatusFromBuildMetrix');
+Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
+    ->name('requisition.updateStatusFromPowerAutomate');
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return redirect()->route('kiosks.index');

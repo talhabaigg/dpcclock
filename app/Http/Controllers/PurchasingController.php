@@ -558,6 +558,20 @@ class PurchasingController extends Controller
         }
     }
 
+    public function updateStatusFromPowerAutomate(Request $request)
+    {
+        // $guid = $request->query('guid');
+        $body = $request->getContent();
+        preg_match('/PO-\d+/', $body, $matches);
+
+        $poNumber = $matches[0] ?? null;
+
+        return response()->json([
+            'message' => 'received successfully',
+            'body' => $poNumber
+        ]);
+    }
+
 
 
 }
