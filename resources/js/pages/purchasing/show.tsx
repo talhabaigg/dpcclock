@@ -122,7 +122,7 @@ export default function RequisitionShow() {
                                 href={`/requisition/${requisition.id}/edit`}
                                 className={requisition.status === 'processed' ? 'pointer-events-none' : ''}
                             >
-                                <Button className="w-28 text-xs" size="sm" disabled={requisition.status === 'processed'}>
+                                <Button className="w-28 text-xs" size="sm" disabled={requisition.status !== 'pending'}>
                                     Edit
                                 </Button>
                             </Link>
@@ -137,7 +137,7 @@ export default function RequisitionShow() {
                                     Print to PDF
                                 </Button>
                             </a>
-                            {requisition.status === 'processed' ? (
+                            {requisition.status !== 'pending' ? (
                                 <Button className="w-28 bg-green-500 text-xs text-white dark:bg-green-900" size="sm" disabled>
                                     Processed
                                 </Button>
