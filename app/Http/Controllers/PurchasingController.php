@@ -306,7 +306,7 @@ class PurchasingController extends Controller
             }
 
             $requisition->update([
-                'status' => 'processed',
+                'status' => 'sent to premier',
                 'processed_by' => auth()->id(),
             ]);
 
@@ -509,6 +509,55 @@ class PurchasingController extends Controller
 
         return response()->download($filePath, $fileName);
     }
+
+    public function updateStatusFromBuildMetrix(Request $request)
+    {
+        $guid = $request->query('guid');
+        $status = (int) $request->query('status');
+        $fileName = $request->query('file_name');
+
+        // Validate GUID
+        if ($guid !== config('app.buildmetrix_guid')) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        // Extract PO number
+        if (!preg_match('/PO-(\d{6})/', $fileName, $matches)) {
+            return response()->json(['error' => 'PO number not found in file name'], 400);
+        }
+
+        $poNumber = $matches[1];
+
+        $requisition = Requisition::where('po_number', $poNumber)->first();
+
+        if (!$requisition) {
+            return response()->json([
+                'error' => 'Requisition not found',
+                'po_number' => $poNumber
+            ], 404);
+        }
+
+        if ($status === 200) {
+            $requisition->status = 'success';
+            $requisition->save();
+
+            return response()->json([
+                'message' => 'Status updated successfully',
+                'po_number' => $poNumber,
+                'status' => $requisition->status
+            ], 200);
+        } else {
+            $requisition->status = 'failed';
+            $requisition->save();
+
+            return response()->json([
+                'message' => 'Status not updated due to non-200 status code',
+                'po_number' => $poNumber,
+                'received_status' => $status
+            ], 202);
+        }
+    }
+
 
 
 }

@@ -123,4 +123,12 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | BuildMetrix GUID auth for updating requisition status
+    |--------------------------------------------------------------------------
+    |
+    |
+    */
+    'buildmetrix_guid' => env('BUILDMETRIX_GUID'),
 ];

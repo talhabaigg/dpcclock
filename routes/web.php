@@ -24,6 +24,8 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
+Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])
+    ->name('requisition.updateStatusFromBuildMetrix');
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return redirect()->route('kiosks.index');
