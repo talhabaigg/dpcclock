@@ -264,9 +264,20 @@ export default function RequisitionList() {
                                         <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
                                         <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
                                         <TableCell>{requisition.po_number ? `PO${requisition.po_number}` : 'Not Found'}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{requisition.status}</Badge>
-                                        </TableCell>
+                                        {requisition.status === 'success' ? (
+                                            <TableCell>
+                                                <Badge className="bg-green-900 text-gray-200">success</Badge>
+                                            </TableCell>
+                                        ) : requisition.status === 'failed' ? (
+                                            <TableCell>
+                                                <Badge className="bg-red-800 text-white">failed</Badge>
+                                            </TableCell>
+                                        ) : (
+                                            <TableCell>
+                                                <Badge>{requisition.status}</Badge>
+                                            </TableCell>
+                                        )}
+
                                         <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
                                         <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
                                         <TableCell>{requisition.creator?.name}</TableCell>
