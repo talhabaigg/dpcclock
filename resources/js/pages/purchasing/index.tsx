@@ -283,11 +283,17 @@ export default function RequisitionList() {
                                         )}
 
                                         <TableCell>{requisition.is_template ? <Badge variant="outline">Template</Badge> : <>No</>}</TableCell>
-                                        <TableCell>{requisition.order_reference || 'Not Found'}</TableCell>
+                                        <TableCell className="max-w-24 break-words whitespace-normal">
+                                            {requisition.order_reference || 'Not Found'}
+                                        </TableCell>
                                         <TableCell>{requisition.creator?.name}</TableCell>
                                         <TableCell>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</TableCell>
-                                        <TableCell>{requisition.delivery_contact || 'Not Found'}</TableCell>
-                                        <TableCell>{requisition.deliver_to || 'Not Found'}</TableCell>
+                                        <TableCell className="max-w-24 break-words whitespace-normal">
+                                            {requisition.delivery_contact || 'Not Found'}
+                                        </TableCell>
+                                        <TableCell className="max-w-24 break-words whitespace-normal">
+                                            {requisition.deliver_to || 'Not Found'}
+                                        </TableCell>
 
                                         <TableCell>${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</TableCell>
                                         <TableCell className="table-cell sm:hidden">
