@@ -261,8 +261,12 @@ export default function RequisitionList() {
                                 {filteredRequisitions.map((requisition) => (
                                     <TableRow key={requisition.id}>
                                         <TableCell>{requisition.id}</TableCell>
-                                        <TableCell>{requisition.supplier?.name.toUpperCase()}</TableCell>
-                                        <TableCell>{requisition.location?.name || 'Not Found'}</TableCell>
+                                        <TableCell className="max-w-24 break-all whitespace-normal">
+                                            {requisition.supplier?.name.toUpperCase()}
+                                        </TableCell>
+                                        <TableCell className="max-w-24 break-words whitespace-normal">
+                                            {requisition.location?.name || 'Not Found'}
+                                        </TableCell>
                                         <TableCell>{requisition.po_number ? `PO${requisition.po_number}` : 'Not Found'}</TableCell>
                                         {requisition.status === 'success' ? (
                                             <TableCell>
