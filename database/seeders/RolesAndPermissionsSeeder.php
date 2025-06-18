@@ -61,7 +61,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view kiosk',
             'retrieve kiosk token',
             'can process requisitions',
-            'can send requisitions',
+
         ]);
 
         $backofficeRole = Role::where('name', 'backoffice')->first();
@@ -76,6 +76,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'update travel zones',
             'view all requisitions',
             'can process requisitions',
+            'can send requisitions',
         ]);
 
     }
