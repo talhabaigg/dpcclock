@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
@@ -12,12 +11,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CirclePlus, EllipsisVertical, Search, SquarePlus, Trash2, X } from 'lucide-react';
+import { CirclePlus, EllipsisVertical, ListFilterPlus, Search, SquarePlus, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import CardsIndex from './index-partials/cardsIndex';
@@ -170,78 +170,92 @@ export default function RequisitionList() {
                         </Label>
                     </span>
                 </div>
-
-                {/* <div className="m-2 flex items-center gap-2">{flash.success && toast(flash.success)}</div> */}
-
-                <div className="relative w-72 sm:w-1/4">
-                    <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
-                    <Input
-                        type="text"
-                        placeholder="Search by ID, Order Ref, Supplier, or Created By"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                    />
-                </div>
             </div>
-            <Card className="mx-2 flex flex-col items-start justify-between gap-2 p-2 md:flex-row md:items-center">
-                <div className="ml-2 grid w-1/2 grid-cols-1 gap-2 p-2 md:grid-cols-3">
-                    {filterDefinitions.map(({ key, label, getOptions }) => {
-                        const options = [...new Set(getOptions())].filter(Boolean).map((val) => ({ value: val!, label: val! }));
-                        return (
-                            <SelectFilter
-                                key={key}
-                                filterName={`Filter by ${label}`}
-                                options={options}
-                                onChange={(val) => updateFilter(key, val)}
-                                value={filters[key] ?? ''}
-                            />
-                        );
-                    })}
-                    <div>
-                        <Button
-                            variant="link"
-                            onClick={() => {
-                                setFilters({
-                                    supplier: null,
-                                    status: null,
-                                    deliver_to: null,
-                                    creator: null,
-                                    contact: null,
-                                });
-                            }}
-                        >
-                            Clear Filters
-                        </Button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {Object.entries(filters).map(([key, value]) =>
-                            value ? (
-                                <Badge key={key} className="flex items-center gap-1">
-                                    {value}
-                                    <button
-                                        className="rounded-full hover:bg-gray-200"
-                                        onClick={() => updateFilter(key as keyof typeof filters, null)}
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                </Badge>
-                            ) : null,
-                        )}
-                    </div>
-                </div>
-                <div className="mx-4 flex w-1/2 flex-col items-start gap-4 md:items-end">
-                    <div className="p-4">
-                        <CostRangeSlider min={minCost} max={maxCost} value={costRange} onChange={setCostRange} />
-                        <span className="text-muted-foreground text-sm">Filter by Requisition Value</span>
-                    </div>
-                </div>
-            </Card>
             <Tabs className="p-4" defaultValue={viewMode} onValueChange={handleTabChange}>
-                <TabsList>
-                    <TabsTrigger value="table">Table</TabsTrigger>
-                    <TabsTrigger value="cards">Cards</TabsTrigger>
-                </TabsList>
+                <div className="flex items-center justify-start space-x-2 md:justify-between">
+                    <div className="flex items-center space-x-2">
+                        <TabsList>
+                            <div>
+                                <TabsTrigger value="table">Table</TabsTrigger>
+                                <TabsTrigger value="cards">Cards</TabsTrigger>
+                            </div>
+                        </TabsList>
+                        <Sheet>
+                            <SheetTrigger>
+                                <ListFilterPlus className="h-4 w-4" />
+                            </SheetTrigger>
+                            <SheetContent>
+                                <SheetHeader>
+                                    <SheetTitle>Filters</SheetTitle>
+                                </SheetHeader>
+                                <SheetDescription>
+                                    <div className="space-y-2 p-2">
+                                        {filterDefinitions.map(({ key, label, getOptions }) => {
+                                            const options = [...new Set(getOptions())].filter(Boolean).map((val) => ({ value: val!, label: val! }));
+                                            return (
+                                                <SelectFilter
+                                                    key={key}
+                                                    filterName={`Filter by ${label}`}
+                                                    options={options}
+                                                    onChange={(val) => updateFilter(key, val)}
+                                                    value={filters[key] ?? ''}
+                                                />
+                                            );
+                                        })}
+                                        <div>
+                                            <Button
+                                                variant="link"
+                                                onClick={() => {
+                                                    setFilters({
+                                                        supplier: null,
+                                                        status: null,
+                                                        deliver_to: null,
+                                                        creator: null,
+                                                        contact: null,
+                                                    });
+                                                }}
+                                            >
+                                                Clear Filters
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="p-4">
+                                        <CostRangeSlider min={minCost} max={maxCost} value={costRange} onChange={setCostRange} />
+                                        <span className="text-muted-foreground text-sm">Filter by Requisition Value</span>
+                                    </div>
+                                </SheetDescription>
+                            </SheetContent>
+                        </Sheet>
+
+                        <div className="flex items-center gap-2">
+                            {Object.entries(filters).map(([key, value]) =>
+                                value ? (
+                                    <Badge key={key} className="flex items-center gap-1">
+                                        {value}
+                                        <button
+                                            className="rounded-full hover:bg-gray-200"
+                                            onClick={() => updateFilter(key as keyof typeof filters, null)}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </Badge>
+                                ) : null,
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="relative w-72 sm:w-1/4">
+                        <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
+                        <Input
+                            type="text"
+                            placeholder="Search"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </div>
+
                 <TabsContent value="cards">
                     <CardsIndex filteredRequisitions={filteredRequisitions}></CardsIndex>
                 </TabsContent>
