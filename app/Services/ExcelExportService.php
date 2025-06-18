@@ -86,7 +86,7 @@ class ExcelExportService
                         'PO' . $requisition->po_number ?? $po_number,
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
-                        $requisition->notes ?? 'N/A',
+                        $requisition->order_reference ?? '',
                         Carbon::now()->format('d/m/Y'),
                         Carbon::parse($requisition->date_required)->format('d/m/Y'),
                         Carbon::parse($requisition->date_required)->format('d/m/Y'),

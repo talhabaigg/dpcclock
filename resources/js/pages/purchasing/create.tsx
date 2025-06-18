@@ -454,7 +454,8 @@ export default function Create() {
                 <Card className="my-4 p-4">
                     <div className="flex flex-col items-center gap-2 md:flex-row">
                         <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Project</Label>
+                            <Label className="text-sm font-bold">Project</Label>
+
                             <SearchSelect
                                 optionName="Project"
                                 selectedOption={data.project_id}
@@ -537,7 +538,12 @@ export default function Create() {
                             <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Order reference</Label>
+                            <div className="flex justify-between">
+                                {' '}
+                                <Label className="text-sm">Order reference</Label>
+                                <span className="text-muted-foreground text-xs">(Memo field in Premier PO)</span>
+                            </div>
+
                             <Input
                                 placeholder="Order reference"
                                 value={data.order_reference ?? ''}
