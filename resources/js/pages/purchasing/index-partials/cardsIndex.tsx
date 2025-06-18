@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { closestCenter, DndContext, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCenter, DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EyeOff, GripVertical, Hourglass, Loader, Send, Truck, X } from 'lucide-react';
@@ -27,6 +27,7 @@ const allStatuses: StatusKey[] = ['pending', 'sent to premier', 'success', 'sent
 const SortableColumn = ({
     id,
     label,
+    count,
     icon,
     cards,
     onTogglePin,
@@ -35,6 +36,7 @@ const SortableColumn = ({
     id: string;
     label: string;
     icon: React.ReactNode;
+    count: number;
     cards: Requisition[];
     onTogglePin: (id: StatusKey) => void;
     isPinned: boolean;
@@ -52,7 +54,9 @@ const SortableColumn = ({
                 <Badge className="flex items-center gap-1">
                     {icon} {label}
                 </Badge>
+
                 <div className="flex items-center gap-1">
+                    <Badge>{count}</Badge>
                     <Button variant="ghost" size="icon" onClick={() => onTogglePin(id as StatusKey)} title={isPinned ? 'Hide' : 'Pin'}>
                         <EyeOff className={`h-4 w-4 ${isPinned ? 'text-primary' : 'text-muted-foreground'}`} />
                     </Button>
@@ -77,7 +81,7 @@ const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
     const [columnOrder, setColumnOrder] = useState<StatusKey[]>(allStatuses);
     const [hidden, setHidden] = useState<StatusKey[]>([]); // none hidden initially
 
-    const sensors = useSensors(useSensor(PointerSensor));
+    const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor));
 
     useEffect(() => {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -122,12 +126,13 @@ const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
                             .map((statusKey) => {
                                 const { label, icon } = statusMap[statusKey];
                                 const cards = filteredRequisitions.filter((r) => r.status === statusKey);
-
+                                const count = filteredRequisitions.filter((r) => r.status === statusKey).length;
                                 return (
                                     <SortableColumn
                                         key={statusKey}
                                         id={statusKey}
                                         label={label}
+                                        count={count}
                                         icon={icon}
                                         cards={cards}
                                         onTogglePin={togglePin}

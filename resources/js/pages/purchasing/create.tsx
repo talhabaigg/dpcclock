@@ -595,15 +595,17 @@ export default function Create() {
                                 onCellKeyDown={(event) => {
                                     if ((event.event as KeyboardEvent).key === 'Tab') {
                                         const lastRowIndex = rowData.length - 1;
-                                        const lastColIndex = columnDefs.length - 2; // Skip 'total' column
+                                        const lastColIndex = columnDefs.length - 1; // Now target the actual last column
 
-                                        // Type guard to ensure event has 'column'
                                         if (
                                             'column' in event &&
                                             event.rowIndex === lastRowIndex &&
                                             event.column &&
                                             event.column.getColId() === columnDefs[lastColIndex].field
                                         ) {
+                                            // Prevent default tab behavior so it doesn't skip ahead
+                                            event.event.preventDefault();
+
                                             setTimeout(() => {
                                                 const newRow = {
                                                     code: '',
@@ -611,7 +613,7 @@ export default function Create() {
                                                     unit_cost: 0,
                                                     qty: 1,
                                                     total_cost: 0,
-                                                    serial_number: rowData.length + 1, // Increment the line index for the new row
+                                                    serial_number: rowData.length + 1,
                                                     cost_code: '',
                                                     price_list: '',
                                                 };
@@ -619,11 +621,11 @@ export default function Create() {
                                                 const updated = [...rowData, newRow];
                                                 setRowData(updated);
 
-                                                // 🔥 Wait a tiny bit for grid to render the new row, then focus
+                                                // Wait a tick before starting cell edit
                                                 setTimeout(() => {
                                                     event.api.startEditingCell({
                                                         rowIndex: updated.length - 1,
-                                                        colKey: 'code', // Focus on the first editable field
+                                                        colKey: 'code',
                                                     });
                                                 }, 50);
                                             }, 50);
