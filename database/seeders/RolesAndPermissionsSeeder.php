@@ -29,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view timesheet converter',
             'view all requisitions',
             'can process requisitions',
+            'can send requisitions'
         ];
 
         // Create roles if they don't exist
@@ -60,6 +61,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view kiosk',
             'retrieve kiosk token',
             'can process requisitions',
+            'can send requisitions',
         ]);
 
         $backofficeRole = Role::where('name', 'backoffice')->first();

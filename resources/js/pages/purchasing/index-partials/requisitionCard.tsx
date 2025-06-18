@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Link } from '@inertiajs/react';
-import { EllipsisVertical } from 'lucide-react';
+import { CircleCheck, EllipsisVertical, TruckIcon } from 'lucide-react';
 import { Requisition } from './types';
 interface RequisitionCardProps {
     requisition: Requisition;
@@ -20,7 +20,7 @@ interface RequisitionCardProps {
 
 const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
     return (
-        <Card className="p-3">
+        <Card className="p-2 shadow-md">
             <CardTitle className="flex justify-between">
                 <div>{requisition.id}</div>
                 {requisition.po_number ? <>PO{requisition.po_number}</> : 'Not generated'}
@@ -70,39 +70,54 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                     </Accordion>
                 </div>
             </CardDescription>
-            <CardFooter className="flex justify-between p-0">
+            <CardFooter className="-mt-8 flex justify-between p-0">
                 <div className="space-x-2">
                     <Badge> {requisition.supplier.code}</Badge>
                     <Badge variant="secondary">${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</Badge>
                 </div>
 
-                <div className="flex items-center gap-2 sm:hidden">
-                    <Link href={`/requisition/${requisition.id}`}>
-                        <Button>Open</Button>
-                    </Link>
+                <div className="flex items-center">
+                    <div className="flex items-center">
+                        {requisition.status === 'success' && (
+                            <Link href={`/requisition/${requisition.id}/mark-sent-to-supplier`}>
+                                <Button variant="ghost" className="size-8">
+                                    <CircleCheck className="h-24 w-24" />
+                                </Button>
+                            </Link>
+                        )}
+                        {requisition.status === 'sent' && (
+                            <Button variant="ghost" className="size-8" disabled title="Sent to supplier">
+                                <TruckIcon />
+                            </Button>
+                        )}
+                        <div className="flex items-center gap-2 sm:hidden">
+                            <Link href={`/requisition/${requisition.id}`}>
+                                <Button>Open</Button>
+                            </Link>
+                        </div>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild className="hidden rounded-sm p-1 hover:bg-gray-200 sm:block">
+                            <EllipsisVertical size={24} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <Link href={`/requisition/${requisition.id}`}>
+                                <DropdownMenuItem>View </DropdownMenuItem>
+                            </Link>
+                            <Link href={`/requisition/${requisition.id}/copy`}>
+                                <DropdownMenuItem>Copy </DropdownMenuItem>
+                            </Link>{' '}
+                            <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
+                                <DropdownMenuItem>{requisition.is_template ? 'Remove template' : 'Mark template'}</DropdownMenuItem>
+                            </Link>
+                            <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
+                                <DropdownMenuItem> Delete</DropdownMenuItem>
+                            </Link>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
-
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild className="hidden rounded-sm p-1 hover:bg-gray-200 sm:block">
-                        <EllipsisVertical size={24} />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <Link href={`/requisition/${requisition.id}`}>
-                            <DropdownMenuItem>View </DropdownMenuItem>
-                        </Link>
-                        <Link href={`/requisition/${requisition.id}/copy`}>
-                            <DropdownMenuItem>Copy </DropdownMenuItem>
-                        </Link>{' '}
-                        <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
-                            <DropdownMenuItem>{requisition.is_template ? 'Remove template' : 'Mark template'}</DropdownMenuItem>
-                        </Link>
-                        <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
-                            <DropdownMenuItem> Delete</DropdownMenuItem>
-                        </Link>
-                    </DropdownMenuContent>
-                </DropdownMenu>
             </CardFooter>
         </Card>
     );

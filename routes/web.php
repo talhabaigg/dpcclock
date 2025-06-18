@@ -85,6 +85,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/toggle-requisition-template', [PurchasingController::class, 'toggleRequisitionTemplate'])->name('requisition.toggle-template');
         Route::get('/requisition/{id}/delete', [PurchasingController::class, 'destroy'])->name('requisition.delete');
         Route::get('/requisition/{id}/process', [PurchasingController::class, 'process'])->name('requisition.process')->permission('can process requisitions');
+        Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')->permission('can send requisitions');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
 

@@ -321,7 +321,13 @@ class PurchasingController extends Controller
         }
 
     }
-
+    public function markSentToSupplier($id)
+    {
+        $requisition = Requisition::findOrFail($id);
+        $requisition->status = 'sent';
+        $requisition->save();
+        return redirect()->back()->with('success', 'Marked as sent from Premier to Supplier');
+    }
 
     public function edit($id)
     {
