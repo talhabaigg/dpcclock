@@ -8,6 +8,7 @@ import {
     Binary,
     Box,
     Building,
+    CalendarDays,
     Clock,
     Database,
     FileSpreadsheet,
@@ -127,15 +128,17 @@ const reports = [
 ];
 
 const footerNavItems: NavItem[] = [
-    // {
-    //     title: 'Repository',
-    //     href: 'https://github.com/laravel/react-starter-kit',
-    //     icon: Folder,
-    // },
+    {
+        title: 'Calendar',
+        href: '/calendar',
+        icon: CalendarDays,
+        permission: 'view all requisitions',
+    },
     // {
     //     title: 'Documentation',
     //     href: 'https://laravel.com/docs/starter-kits',
     //     icon: BookOpen,
+    //     permission: 'view all requisitions',
     // },
 ];
 

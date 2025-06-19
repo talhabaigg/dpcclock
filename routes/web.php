@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\KioskAuthController;
@@ -115,7 +116,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::put('/kiosks/settings/update', [KioskController::class, 'updateSettings'])->name('kiosks.updateSettings');
 
+        //Report Routes
         Route::get('/reports/req-line-items-desc', [ReportController::class, 'reqLineReport'])->name('reports.reqLineReport');
+
+        //Calendar Routes
+        Route::get('/calendar', [CalendarController::class, 'main'])->name('calendar.main');
 
     });
 
