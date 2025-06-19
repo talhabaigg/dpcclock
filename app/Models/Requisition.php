@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\Traits\LogsActivity;
 
+use Spatie\Activitylog\LogOptions;
 class Requisition extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsActivity;
     protected $fillable = [
         'project_number',
         'supplier_number',
@@ -62,5 +64,12 @@ class Requisition extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
+    }
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnlyDirty() // Log only changed attributes
+            ->logFillable()  // Log changes on all fillable attributes
+            ->useLogName('requisition'); // Optional: customize the log name
     }
 }

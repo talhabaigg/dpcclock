@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Http;
 use App\Services\ExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 
 class PurchasingController extends Controller
 {
@@ -166,8 +167,25 @@ class PurchasingController extends Controller
     public function show($id)
     {
         $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')->withSum('lineItems', 'total_cost')->findOrFail($id);
+        $requisitionItemIds = $requisition->lineItems()->pluck('id');
+        $activities = Activity::query()
+            ->with('causer')
+            ->where(function ($query) use ($requisition, $requisitionItemIds) {
+                $query->where(function ($q) use ($requisition) {
+                    $q->where('subject_type', Requisition::class)
+                        ->where('subject_id', $requisition->id);
+                })->orWhere(function ($q) use ($requisitionItemIds) {
+                    $q->where('subject_type', RequisitionLineItem::class)
+                        ->whereIn('subject_id', $requisitionItemIds);
+                });
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+
+
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
+            'activities' => $activities
         ]);
     }
 
@@ -258,7 +276,14 @@ class PurchasingController extends Controller
 
         $excelService = new ExcelExportService();
         $fileName = $excelService->generateCsv($requisition);
-
+        activity()
+            ->performedOn($requisition)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'po_number' => $requisition->po_number,
+                'file_uploaded' => "upload/{$fileName}",
+            ])
+            ->log("Requisition #{$requisition->id} processed and sent to Premier.");
 
 
         $fileContent = Storage::disk('public')->get($fileName);
@@ -326,6 +351,11 @@ class PurchasingController extends Controller
         $requisition = Requisition::findOrFail($id);
         $requisition->status = 'sent';
         $requisition->save();
+
+        activity()
+            ->performedOn($requisition)
+            ->causedBy(auth()->user())
+            ->log("Requisition #{$requisition->id} was marked as sent to supplier.");
         return redirect()->back()->with('success', 'Marked as sent from Premier to Supplier');
     }
 
@@ -393,6 +423,11 @@ class PurchasingController extends Controller
         $pdf = pdf::loadView('requisition.pdf', [
             'requisition' => Requisition::with(['lineItems', 'location'])->find($requisition->id),
         ]);
+
+        activity()
+            ->performedOn($requisition)
+            ->causedBy(auth()->user())
+            ->log("Requisition #{$requisition->id} was printed.");
         return $pdf->download("{$requisition->id}.pdf");
     }
     public function excelImport(Requisition $requisition)
@@ -535,7 +570,10 @@ class PurchasingController extends Controller
         $poNumber = $matches[1];
 
         $requisition = Requisition::where('po_number', $poNumber)->first();
-
+        activity()
+            ->performedOn($requisition)
+            ->causedBy(auth()->user())
+            ->log("Requisition #{$requisition->id} was received in Premier");
         if (!$requisition) {
             return response()->json([
                 'error' => 'Requisition not found',

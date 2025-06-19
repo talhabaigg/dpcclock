@@ -1,12 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { CircleCheck } from 'lucide-react';
 import { useState } from 'react';
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -31,7 +31,7 @@ const requisitionHeaderTable: {
 ];
 
 export default function RequisitionShow() {
-    const { requisition } = usePage().props as unknown as {
+    const { requisition, activities } = usePage().props as unknown as {
         requisition: {
             id: number;
             project_number: string;
@@ -54,6 +54,7 @@ export default function RequisitionShow() {
                 cost_code: string;
                 price_list: string;
             }[];
+            activities: any[];
         };
     };
     const [sortKey, setSortKey] = useState<string | null>(null);
@@ -152,48 +153,90 @@ export default function RequisitionShow() {
                         </div>
                     </div>
                 </div>
-                <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-full">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('code')}>
-                                    Item Code {sortKey === 'code' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('description')}>
-                                    Description {sortKey === 'description' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('qty')}>
-                                    Qty {sortKey === 'qty' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('unit_cost')}>
-                                    Unit Cost {sortKey === 'unit_cost' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('total_cost')}>
-                                    Total Cost {sortKey === 'total_cost' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('cost_code')}>
-                                    Cost Code {sortKey === 'cost_code' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                                <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('price_list')}>
-                                    Price List {sortKey === 'price_list' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
-                                </TableCell>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {getSortedItems().map((item) => (
-                                <TableRow key={item.id}>
-                                    <TableCell>{item.code}</TableCell>
-                                    <TableCell>{item.description}</TableCell>
-                                    <TableCell className="text-left">{item.qty}</TableCell>
-                                    <TableCell className="text-left">$ {Number(item.unit_cost)?.toFixed(6) || '0.00'}</TableCell>
-                                    <TableCell className="text-left">$ {Number(item.total_cost)?.toFixed(6) || '0.00'}</TableCell>
-                                    <TableCell className="text-left">{item.cost_code || 'N/A'}</TableCell>
-                                    <TableCell className="text-left">{item.price_list || 'N/A'}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Card>
+                <Tabs defaultValue="items" className="w-full">
+                    <TabsList>
+                        <TabsTrigger value="items">Items</TabsTrigger>
+                        <TabsTrigger value="log">Log</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="items">
+                        <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-full">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('code')}>
+                                            Item Code {sortKey === 'code' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('description')}>
+                                            Description{' '}
+                                            {sortKey === 'description' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('qty')}>
+                                            Qty {sortKey === 'qty' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('unit_cost')}>
+                                            Unit Cost{' '}
+                                            {sortKey === 'unit_cost' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('total_cost')}>
+                                            Total Cost{' '}
+                                            {sortKey === 'total_cost' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('cost_code')}>
+                                            Cost Code{' '}
+                                            {sortKey === 'cost_code' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                        <TableCell className="cursor-pointer font-semibold" onClick={() => handleSort('price_list')}>
+                                            Price List{' '}
+                                            {sortKey === 'price_list' && (sortDirection === 'asc' ? '↑' : sortDirection === 'desc' ? '↓' : '')}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {getSortedItems().map((item) => (
+                                        <TableRow key={item.id}>
+                                            <TableCell>{item.code}</TableCell>
+                                            <TableCell>{item.description}</TableCell>
+                                            <TableCell className="text-left">{item.qty}</TableCell>
+                                            <TableCell className="text-left">$ {Number(item.unit_cost)?.toFixed(6) || '0.00'}</TableCell>
+                                            <TableCell className="text-left">$ {Number(item.total_cost)?.toFixed(6) || '0.00'}</TableCell>
+                                            <TableCell className="text-left">{item.cost_code || 'N/A'}</TableCell>
+                                            <TableCell className="text-left">{item.price_list || 'N/A'}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="log">
+                        <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-7xl">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableCell>ID</TableCell>
+                                        <TableCell>Event</TableCell>
+                                        <TableCell>Performed by</TableCell>
+                                        <TableCell>Performed On</TableCell>
+                                        <TableCell>Performed at</TableCell>
+                                        <TableCell>Properties</TableCell>
+                                    </TableRow>
+                                </TableHeader>
+
+                                {activities.map((a) => {
+                                    return (
+                                        <TableRow>
+                                            <TableCell>{a.id}</TableCell>
+                                            <TableCell>{a.event}</TableCell>
+                                            <TableCell>{a.causer.name}</TableCell>
+                                            <TableCell>{a.log_name}</TableCell>
+                                            <TableCell>{new Date(a.created_at).toLocaleString()}</TableCell>
+                                            <TableCell>{JSON.stringify(a.properties, null, 2)}</TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </Table>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </AppLayout>
     );
