@@ -226,7 +226,7 @@ export default function RequisitionShow() {
                                         <TableRow>
                                             <TableCell>{a.id}</TableCell>
                                             <TableCell>{a.event}</TableCell>
-                                            <TableCell>{a.causer.name}</TableCell>
+                                            <TableCell>{a.causer?.name}</TableCell>
                                             <TableCell>{a.log_name}</TableCell>
                                             <TableCell>{new Date(a.created_at).toLocaleString()}</TableCell>
                                             <TableCell>{JSON.stringify(a.properties, null, 2)}</TableCell>
