@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CircleCheck } from 'lucide-react';
+import { ArrowBigUp, CircleCheck } from 'lucide-react';
 import { useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -226,10 +227,72 @@ export default function RequisitionShow() {
                                         <TableRow>
                                             <TableCell>{a.id}</TableCell>
                                             <TableCell>{a.event}</TableCell>
-                                            <TableCell>{a.causer?.name}</TableCell>
+                                            <TableCell className="w-full">
+                                                <div className="flex w-48 flex-row items-center space-x-2">
+                                                    {' '}
+                                                    <UserInfo user={{ ...a.causer }}></UserInfo>
+                                                </div>
+                                            </TableCell>
                                             <TableCell>{a.log_name}</TableCell>
                                             <TableCell>{new Date(a.created_at).toLocaleString()}</TableCell>
-                                            <TableCell>{JSON.stringify(a.properties, null, 2)}</TableCell>
+                                            <TableCell>
+                                                {/* New attributes table */}
+                                                {a.properties?.attributes ? (
+                                                    <Card className="mb-2 p-0">
+                                                        <Table className="rounded-lg">
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    {Object.keys(a.properties.attributes).map((key) => (
+                                                                        <TableHead key={key} className="border-r">
+                                                                            {key}
+                                                                        </TableHead>
+                                                                    ))}
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                <TableRow>
+                                                                    {Object.values(a.properties.attributes).map((value, index) => (
+                                                                        <TableCell className="border-r" key={index}>
+                                                                            {String(value)}
+                                                                        </TableCell>
+                                                                    ))}
+                                                                </TableRow>
+                                                            </TableBody>
+                                                        </Table>
+                                                    </Card>
+                                                ) : (
+                                                    <em>No attributes</em>
+                                                )}
+
+                                                {/* Old values table */}
+                                                {a.properties?.old ? (
+                                                    <>
+                                                        <ArrowBigUp />
+                                                        <Card className="p-0">
+                                                            <Table className="rounded-lg">
+                                                                <TableHeader>
+                                                                    <TableRow>
+                                                                        {Object.keys(a.properties.old).map((key) => (
+                                                                            <TableHead key={key} className="border-r">
+                                                                                {key}
+                                                                            </TableHead>
+                                                                        ))}
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    <TableRow>
+                                                                        {Object.values(a.properties.old).map((value, index) => (
+                                                                            <TableCell className="border-r" key={index}>
+                                                                                {String(value)}
+                                                                            </TableCell>
+                                                                        ))}
+                                                                    </TableRow>
+                                                                </TableBody>
+                                                            </Table>
+                                                        </Card>
+                                                    </>
+                                                ) : null}
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })}
