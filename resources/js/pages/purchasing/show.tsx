@@ -228,10 +228,12 @@ export default function RequisitionShow() {
                                             <TableCell>{a.id}</TableCell>
                                             <TableCell>{a.event}</TableCell>
                                             <TableCell className="w-full">
-                                                <div className="flex w-48 flex-row items-center space-x-2">
-                                                    {' '}
-                                                    <UserInfo user={{ ...a.causer }}></UserInfo>
-                                                </div>
+                                                {a.causer && (
+                                                    <div className="flex w-48 flex-row items-center space-x-2">
+                                                        {' '}
+                                                        <UserInfo user={{ ...a.causer }}></UserInfo>
+                                                    </div>
+                                                )}
                                             </TableCell>
                                             <TableCell>{a.log_name}</TableCell>
                                             <TableCell>{new Date(a.created_at).toLocaleString()}</TableCell>
