@@ -54,8 +54,8 @@ export default function RequisitionShow() {
                 cost_code: string;
                 price_list: string;
             }[];
-            activities: any[];
         };
+        activities: any[];
     };
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);

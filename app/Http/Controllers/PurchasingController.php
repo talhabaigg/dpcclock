@@ -279,6 +279,7 @@ class PurchasingController extends Controller
         activity()
             ->performedOn($requisition)
             ->causedBy(auth()->user())
+            ->event('sent to premier')
             ->withProperties([
                 'po_number' => $requisition->po_number,
                 'file_uploaded' => "upload/{$fileName}",
@@ -354,6 +355,7 @@ class PurchasingController extends Controller
 
         activity()
             ->performedOn($requisition)
+            ->event('sent to supplier')
             ->causedBy(auth()->user())
             ->log("Requisition #{$requisition->id} was marked as sent to supplier.");
         return redirect()->back()->with('success', 'Marked as sent from Premier to Supplier');
@@ -426,7 +428,9 @@ class PurchasingController extends Controller
 
         activity()
             ->performedOn($requisition)
+            ->event('PDF Print')
             ->causedBy(auth()->user())
+
             ->log("Requisition #{$requisition->id} was printed.");
         return $pdf->download("{$requisition->id}.pdf");
     }
