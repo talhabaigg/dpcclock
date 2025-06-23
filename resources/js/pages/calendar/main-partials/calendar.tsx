@@ -13,30 +13,46 @@ import { CandyCane, Volleyball } from 'lucide-react';
 import { useEffect, useState } from 'react';
 const Calendar = () => {
     const [events, setEvents] = useState([
-        { title: 'RDO', start: '2025-06-18', state: 'QLD' },
-        { title: 'Public holiday', start: '2025-06-19', state: 'NSW' },
+        { id: '1', title: 'RDO', start: '2025-06-18', state: 'QLD', end: '' },
+        { id: '2', title: 'Public holiday', start: '2025-06-19', state: 'NSW', end: '' },
     ]);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [newEventDate, setNewEventDate] = useState('');
     const [newEventType, setNewEventType] = useState('');
     const [newState, setNewState] = useState('');
-    const handleCreateEvent = (e: React.FormEvent) => {
+    const handleCreateEvent = (e) => {
         e.preventDefault();
         if (!newEventDate || !newEventType) return;
 
         const title = newEventType === 'rdo' ? 'RDO' : newEventType === 'pub_hol' ? 'Public Holiday' : 'Event';
+        const id = String(events.length + 1); // Simple incremental ID; better use uuid for production
 
-        setEvents((prev) => [...prev, { title, start: newEventDate, state: newState }]);
+        setEvents((prev) => [...prev, { id, title, start: newEventDate, end: '', state: newState }]);
         setNewEventDate('');
         setNewEventType('');
-        setIsDialogOpen(false); // <-- close dialog after submitting
+        setNewState('');
+        setIsDialogOpen(false);
     };
 
     const handleDateClick = (arg: any) => {
         setNewEventDate(arg.dateStr);
         setIsDialogOpen(true);
     };
-
+    const handleEventChange = ({ event: updatedEvent }) => {
+        setEvents((prevEvents) =>
+            prevEvents.map((evt) =>
+                evt.id === updatedEvent.id
+                    ? {
+                          ...evt,
+                          start: updatedEvent.startStr,
+                          end: updatedEvent.endStr || '', // end may be null if single day
+                          state: evt.state, // keep existing state, or update if you want
+                          title: updatedEvent.title, // in case title was changed
+                      }
+                    : evt,
+            ),
+        );
+    };
     useEffect(() => {
         console.log(events);
     }, [events]);
@@ -49,7 +65,7 @@ const Calendar = () => {
                     </DialogTrigger> */}
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Add new event</DialogTitle>
+                            <DialogTitle>Add new event - {new Date(newEventDate).toLocaleDateString('en-AU')}</DialogTitle>
                             <DialogDescription>
                                 <form className="mt-4 space-y-4" onSubmit={handleCreateEvent}>
                                     <div>
@@ -108,6 +124,7 @@ const Calendar = () => {
                         hour12: true,
                     }}
                     eventContent={renderEventContent}
+                    eventChange={handleEventChange}
                     nowIndicator
                     editable
                     selectable
