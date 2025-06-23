@@ -1,13 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { ArrowUpDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Locations',
@@ -46,9 +49,13 @@ type Location = {
 export default function LocationsList() {
     const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
     const isLoading = false;
-    // const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
     const [filter, setFilter] = useState<string | null>(null);
-    const filteredLocations = filter ? locations.filter((location) => location.eh_parent_id === filter) : locations;
+    const { sortedItems: sortedLocations, handleSort, sort } = useSortableData<Location>(locations);
+
+    const filteredLocations = useMemo(() => {
+        return filter ? sortedLocations.filter((location) => location.eh_parent_id === filter) : sortedLocations;
+    }, [sortedLocations, filter]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -73,14 +80,31 @@ export default function LocationsList() {
                 {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
             </div>
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <Card className="mx-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>External ID</TableHead>
-                            <TableHead className="hidden sm:flex">Default Shift Conditions</TableHead>
+                            <TableHead>
+                                <div className="flex items-center">
+                                    {' '}
+                                    <Label>Name</Label>{' '}
+                                    <Button size="sm" variant="ghost" onClick={() => handleSort('name')}>
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TableHead>
+                            <TableHead>
+                                {' '}
+                                <div className="flex items-center">
+                                    {' '}
+                                    <Label>External ID</Label>{' '}
+                                    <Button size="sm" variant="ghost" onClick={() => handleSort('external_id')}>
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TableHead>
+                            <TableHead>Default Shift Conditions</TableHead>
                             <TableHead>Actions</TableHead>
                             {/* <TableHead>Upload CSV</TableHead> */}
                         </TableRow>
@@ -92,7 +116,7 @@ export default function LocationsList() {
 
                                 <TableCell>{location.name}</TableCell>
                                 <TableCell>{location.external_id || 'Not Set'}</TableCell>
-                                <TableCell className="hidden sm:flex">
+                                <TableCell>
                                     <div className="flex flex-wrap gap-2">
                                         {location.worktypes?.length > 0 ? (
                                             <>
@@ -144,8 +168,9 @@ export default function LocationsList() {
                         ))}
                     </TableBody>
                 </Table>
+
                 {/* <PaginationComponent pagination={locations} /> */}
-            </div>
+            </Card>
         </AppLayout>
     );
 }

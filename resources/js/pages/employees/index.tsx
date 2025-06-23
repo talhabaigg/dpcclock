@@ -1,13 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserInfo } from '@/components/user-info';
+import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowUpDown, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 // Define the Employee type
 interface Employee {
     id: number;
@@ -31,12 +34,15 @@ const isLoading = false;
 export default function EmployeesList() {
     const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
-    const filteredEmployees = employees.filter((employee) => employee.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const { sortedItems: sortedEmployees, handleSort, sort } = useSortableData<Employee>(employees); //useSortableData is a custom hook to sort table data
+    const filteredEmployees = useMemo(() => {
+        return searchQuery ? employees.filter((employee) => employee.name.toLowerCase().includes(searchQuery.toLowerCase())) : sortedEmployees;
+    }, [sortedEmployees, searchQuery]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
-            <div className="m-2 flex items-center justify-between gap-2">
+            <div className="items-left m-2 flex flex-col justify-start gap-2 sm:flex-row md:justify-between">
                 <div className="flex items-center">
                     <Link href="/employees/sync" method="get">
                         <Button variant="outline" className="w-32">
@@ -45,7 +51,7 @@ export default function EmployeesList() {
                     </Link>
                     {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
                 </div>
-                <div className="relative w-72 sm:w-1/4">
+                <div className="relative w-full sm:w-1/4">
                     <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                     <Input
                         type="text"
@@ -57,13 +63,37 @@ export default function EmployeesList() {
                 </div>
             </div>
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+            <Card className="mx-auto mb-2 max-w-sm p-0 sm:max-w-full md:mx-2">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>External ID</TableHead>
-                            <TableHead>EH Employee ID</TableHead>
+                            <TableHead>
+                                <div className="flex items-center">
+                                    {' '}
+                                    <Label>Name</Label>{' '}
+                                    <Button size="sm" variant="ghost" onClick={() => handleSort('name')}>
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TableHead>
+                            <TableHead>
+                                <div className="flex items-center">
+                                    {' '}
+                                    <Label>External ID</Label>{' '}
+                                    <Button size="sm" variant="ghost" onClick={() => handleSort('external_id')}>
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TableHead>
+                            <TableHead>
+                                <div className="flex items-center">
+                                    {' '}
+                                    <Label>EH Employee ID</Label>{' '}
+                                    <Button size="sm" variant="ghost" onClick={() => handleSort('eh_employee_id')}>
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TableHead>
                             <TableHead>Work Types</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -97,7 +127,7 @@ export default function EmployeesList() {
                         ))}
                     </TableBody>
                 </Table>
-            </div>
+            </Card>
         </AppLayout>
     );
 }

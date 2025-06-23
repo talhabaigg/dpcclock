@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
@@ -51,7 +52,7 @@ export default function LocationsList() {
                     />
                 </div>
             </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+            <Card className="mx-2 mb-2 max-w-sm p-0 sm:max-w-full">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -95,7 +96,7 @@ export default function LocationsList() {
                         ))}
                     </TableBody>
                 </Table>
-            </div>
+            </Card>
         </AppLayout>
     );
 }

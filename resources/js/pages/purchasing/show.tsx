@@ -6,7 +6,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowBigUp, CircleCheck } from 'lucide-react';
+import { ArrowBigUp, CircleCheck, Cuboid, History } from 'lucide-react';
 import { useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -108,7 +108,7 @@ export default function RequisitionShow() {
                                 {requisitionHeaderTable.map((header) => (
                                     <TableRow key={header.key}>
                                         <TableCell className="font-semibold">{header.title}</TableCell>
-                                        <TableCell className="font-light">
+                                        <TableCell className="font-light break-words whitespace-normal">
                                             {header.key.includes('sum') ? '$ ' : ''}
                                             {header.key === 'po_number' ? 'PO' : ''}
                                             {getNestedValue(requisition, header.key)}
@@ -155,9 +155,15 @@ export default function RequisitionShow() {
                     </div>
                 </div>
                 <Tabs defaultValue="items" className="w-full">
-                    <TabsList>
-                        <TabsTrigger value="items">Items</TabsTrigger>
-                        <TabsTrigger value="log">Log</TabsTrigger>
+                    <TabsList className="w-full">
+                        <TabsTrigger value="items" className="flex flex-1">
+                            <Cuboid className="mr-1 h-4 w-4" />
+                            Items
+                        </TabsTrigger>
+                        <TabsTrigger value="log" className="flex flex-1 items-center space-x-2">
+                            <History className="mr-1 h-4 w-4" />
+                            Log
+                        </TabsTrigger>
                     </TabsList>
                     <TabsContent value="items">
                         <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-full">
