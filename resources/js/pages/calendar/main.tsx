@@ -12,7 +12,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function CostCodesIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Cost Codes" />
+            <Head title="Calendar" />
 
             <Calendar />
         </AppLayout>
