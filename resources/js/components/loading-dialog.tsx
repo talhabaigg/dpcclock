@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/components/ui/dialog';
-import { MoonLoader } from 'react-spinners';
+import { Loader2 } from 'lucide-react';
 import { Label } from './ui/label';
 
 const LoadingDialog = ({ open, setOpen }) => {
@@ -9,7 +9,7 @@ const LoadingDialog = ({ open, setOpen }) => {
                 <DialogHeader>
                     <DialogDescription className="mx-auto">
                         <div className="flex flex-col items-center space-y-2">
-                            <MoonLoader speedMultiplier={0.5} size={30} />
+                            <Loader2 className="animate-spin" />
                             <Label>Loading...</Label>
                         </div>
                     </DialogDescription>
