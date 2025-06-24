@@ -1,3 +1,4 @@
+import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ type Employee = {
 export default function LocationsList() {
     const { worktypes, flash } = usePage<{ worktypes: Employee[]; flash: { success: string; error: string } }>().props;
     const isLoading = false;
+    const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const filteredWorktypes = worktypes.filter((worktype) => worktype.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return (
@@ -36,7 +38,7 @@ export default function LocationsList() {
             <div className="mr-2 flex items-center justify-between gap-2">
                 <div className="m-2 flex items-center gap-2">
                     <Link href={route('worktypes.sync')}>
-                        <Button variant="outline" className="w-32">
+                        <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
                             {isLoading ? 'Syncing...' : 'Sync Worktypes'}
                         </Button>
                     </Link>
@@ -53,6 +55,7 @@ export default function LocationsList() {
                     />
                 </div>
             </div>
+            <LoadingDialog open={open} setOpen={setOpen} />
             <Card className="mx-2 mb-2 max-w-sm p-0 sm:max-w-full">
                 <Table>
                     <TableHeader>

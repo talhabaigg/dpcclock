@@ -1,3 +1,4 @@
+import LoadingDialog from '@/components/loading-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { Settings } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 
 // Define the Kiosk type
 interface Kiosk {
@@ -31,23 +32,25 @@ export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
     const [loading, setLoading] = React.useState(false);
     const getInitials = useInitials();
+    const [open, setOpen] = useState(false);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
 
             <div className="m-2 flex items-center gap-2">
                 <Link href="/kiosks/sync" method="get">
-                    <Button variant="outline" className="w-32">
+                    <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
                         Sync Kiosk
                     </Button>
                 </Link>
                 <Link href="/employees/kiosks/update" method="get">
-                    <Button variant="outline" className="w-full" onClick={() => setLoading(true)} disabled={loading}>
+                    <Button variant="outline" className="w-full" onClick={() => setOpen(true)} disabled={loading}>
                         {loading ? 'Syncing...' : 'Sync Employees with Kiosk'}
                     </Button>
                 </Link>
                 {flash?.success && <div className="text-green-500">{flash.success}</div>}
             </div>
+            <LoadingDialog open={open} setOpen={setOpen} />
             <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
                 {kiosks.map((kiosk) => (
                     <Card key={kiosk.id} className="mb-4 p-4">

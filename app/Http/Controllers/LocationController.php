@@ -132,6 +132,7 @@ class LocationController extends Controller
                 'name' => $location['name'],
                 'eh_parent_id' => $location['parentId'] ?? null,
                 'external_id' => $location['externalId'] ?? null,
+                'state' => $location['state'] ?? null,
             ]);
             // Sync worktypes using shiftConditionIds
             if (!empty($location['defaultShiftConditionIds'])) {

@@ -1,3 +1,4 @@
+import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -34,10 +35,11 @@ const isLoading = false;
 export default function EmployeesList() {
     const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
-    const { sortedItems: sortedEmployees, handleSort, sort } = useSortableData<Employee>(employees); //useSortableData is a custom hook to sort table data
+    const { sortedItems: sortedEmployees, handleSort } = useSortableData<Employee>(employees); //useSortableData is a custom hook to sort table data
     const filteredEmployees = useMemo(() => {
         return searchQuery ? employees.filter((employee) => employee.name.toLowerCase().includes(searchQuery.toLowerCase())) : sortedEmployees;
     }, [sortedEmployees, searchQuery]);
+    const [open, setOpen] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -45,7 +47,7 @@ export default function EmployeesList() {
             <div className="items-left m-2 flex flex-col justify-start gap-2 sm:flex-row md:justify-between">
                 <div className="flex items-center">
                     <Link href="/employees/sync" method="get">
-                        <Button variant="outline" className="w-32">
+                        <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
                             {isLoading ? 'Syncing...' : 'Sync Employees'}
                         </Button>
                     </Link>
@@ -62,6 +64,7 @@ export default function EmployeesList() {
                     />
                 </div>
             </div>
+            <LoadingDialog open={open} setOpen={setOpen} />
 
             <Card className="mx-auto mb-2 max-w-sm p-0 sm:max-w-full md:mx-2">
                 <Table>

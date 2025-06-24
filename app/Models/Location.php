@@ -13,6 +13,7 @@ class Location extends Model
         'eh_location_id',
         'eh_parent_id',
         'external_id',
+        'state'
     ];
 
     public function worktypes()

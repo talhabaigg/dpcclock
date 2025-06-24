@@ -1,3 +1,4 @@
+import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +25,7 @@ type Location = {
     eh_location_id: string;
     external_id: string;
     eh_parent_id: string | null;
+    state: string | null;
     subLocations: Array<{
         id: number;
         name: string;
@@ -49,9 +51,9 @@ type Location = {
 export default function LocationsList() {
     const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
     const isLoading = false;
-
+    const [open, setOpen] = useState(isLoading);
     const [filter, setFilter] = useState<string | null>(null);
-    const { sortedItems: sortedLocations, handleSort, sort } = useSortableData<Location>(locations);
+    const { sortedItems: sortedLocations, handleSort } = useSortableData<Location>(locations); //useSortableData is a custom hook to sort table data
 
     const filteredLocations = useMemo(() => {
         return filter ? sortedLocations.filter((location) => location.eh_parent_id === filter) : sortedLocations;
@@ -62,7 +64,7 @@ export default function LocationsList() {
             <Head title="Locations" />
             <div className="m-2 flex items-center gap-2">
                 <Link href="/locations/sync" method="get">
-                    <Button variant="outline" className="w-32">
+                    <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
                         {isLoading ? 'Syncing...' : 'Sync Locations'}
                     </Button>
                 </Link>
@@ -79,6 +81,7 @@ export default function LocationsList() {
 
                 {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
             </div>
+            <LoadingDialog open={open} setOpen={setOpen} />
 
             <Card className="mx-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
                 <Table>
@@ -93,6 +96,9 @@ export default function LocationsList() {
                                         <ArrowUpDown className="h-3 w-3" />
                                     </Button>
                                 </div>
+                            </TableHead>
+                            <TableHead>
+                                <Label>State</Label>
                             </TableHead>
                             <TableHead>
                                 {' '}
@@ -115,6 +121,7 @@ export default function LocationsList() {
                                 <TableCell>{location.eh_location_id}</TableCell>
 
                                 <TableCell>{location.name}</TableCell>
+                                <TableCell>{location.state && <Badge>{location.state}</Badge>}</TableCell>
                                 <TableCell>{location.external_id || 'Not Set'}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2">
