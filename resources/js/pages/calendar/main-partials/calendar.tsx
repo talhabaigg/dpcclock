@@ -182,11 +182,11 @@ const Calendar = ({ timesheetEvents }) => {
 export default Calendar;
 
 function renderEventContent(eventInfo: any) {
-    const isRDO = eventInfo.event.title === 'RDO';
+    const isRDO = eventInfo.event.extendedProps.type === 'rdo';
     const state = eventInfo.event.extendedProps.state;
     const type = eventInfo.event.extendedProps.type;
     return isRDO ? (
-        <div className="flex flex-col items-center justify-between gap-1 rounded bg-green-300 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row">
+        <div className="flex flex-col items-center justify-between gap-1 rounded bg-yellow-200 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row">
             <div className="flex items-center space-x-2">
                 <Label className="break-words whitespace-normal">{eventInfo.event.title}</Label>
             </div>
@@ -196,7 +196,7 @@ function renderEventContent(eventInfo: any) {
             </div>
         </div>
     ) : (
-        <div className="flex flex-col items-center justify-start gap-1 rounded bg-blue-300 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row sm:justify-between">
+        <div className="flex flex-col items-center justify-start gap-1 rounded bg-red-200 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row sm:justify-between">
             <div className="flex items-center space-x-2">
                 <Label className="break-words whitespace-normal">{eventInfo.event.title}</Label>
             </div>

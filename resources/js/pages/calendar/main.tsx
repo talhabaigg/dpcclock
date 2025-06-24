@@ -40,7 +40,7 @@ export default function EventsIndex({ events, errors, flash }) {
 
         return count;
     }
-    const [activeTab, setActiveTab] = useState('table');
+    const [activeTab, setActiveTab] = useState('calendar');
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Calendar" />
