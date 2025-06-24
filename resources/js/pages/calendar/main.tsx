@@ -1,10 +1,12 @@
 import { Card } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { Calendar1Icon, Table2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Calendar from './main-partials/calendar';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,6 +40,7 @@ export default function EventsIndex({ events, errors, flash }) {
 
         return count;
     }
+    const [activeTab, setActiveTab] = useState('table');
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Calendar" />
@@ -50,10 +53,34 @@ export default function EventsIndex({ events, errors, flash }) {
                     ))}
                 </div>
             )}
-            <Tabs defaultValue="table" className="mx-2">
-                <TabsList>
-                    <TabsTrigger value="table">Table</TabsTrigger>
-                    <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-2">
+                <TabsList className="w-48">
+                    <TabsTrigger value="calendar">
+                        <div>
+                            {activeTab === 'calendar' ? (
+                                <div className="flex min-w-24 flex-row">
+                                    {' '}
+                                    <Calendar1Icon className="mr-1 h-4 w-4" />
+                                    <Label>Calendar</Label>
+                                </div>
+                            ) : (
+                                <Calendar1Icon className="mr-1 h-4 w-4" />
+                            )}
+                        </div>
+                    </TabsTrigger>
+                    <TabsTrigger value="table">
+                        <div>
+                            {activeTab === 'table' ? (
+                                <div className="flex w-full min-w-24 flex-row">
+                                    {' '}
+                                    <Table2 className="mr-1 h-4 w-4" />
+                                    <Label>Table</Label>
+                                </div>
+                            ) : (
+                                <Table2 className="mr-1 h-4 w-4" />
+                            )}
+                        </div>
+                    </TabsTrigger>
                 </TabsList>
                 <TabsContent value="table">
                     <Card className="max-w-sm rounded-md p-0 sm:max-w-full">
