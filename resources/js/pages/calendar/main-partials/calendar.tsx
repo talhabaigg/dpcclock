@@ -3,59 +3,82 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
-import { CandyCane, Volleyball } from 'lucide-react';
+import { useForm } from '@inertiajs/react';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-const Calendar = () => {
-    const [events, setEvents] = useState([
-        { id: '1', title: 'RDO', start: '2025-06-18', state: 'QLD', end: '' },
-        { id: '2', title: 'Public holiday', start: '2025-06-19', state: 'NSW', end: '' },
-    ]);
+const Calendar = ({ timesheetEvents }) => {
+    const [events, setEvents] = useState(timesheetEvents);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [newEventDate, setNewEventDate] = useState('');
-    const [newEventType, setNewEventType] = useState('');
-    const [newState, setNewState] = useState('');
+
+    const { data, processing, post, setData } = useForm({
+        id: '',
+        title: '',
+        start: '',
+        end: '',
+        type: '',
+        state: '',
+    });
+
     const handleCreateEvent = (e) => {
         e.preventDefault();
-        if (!newEventDate || !newEventType) return;
 
-        const title = newEventType === 'rdo' ? 'RDO' : newEventType === 'pub_hol' ? 'Public Holiday' : 'Event';
-        const id = String(events.length + 1); // Simple incremental ID; better use uuid for production
+        post('/timesheet-events/store', {
+            preserveScroll: true,
+            onSuccess: () => {
+                const newEvent = {
+                    title: data.title,
+                    start: data.start,
+                    end: data.end || data.start,
+                    state: data.state,
+                    type: data.type,
+                    id: Date.now(), // Replace with real ID if returned by server
+                };
 
-        setEvents((prev) => [...prev, { id, title, start: newEventDate, end: '', state: newState }]);
-        setNewEventDate('');
-        setNewEventType('');
-        setNewState('');
-        setIsDialogOpen(false);
+                setEvents((prev) => [...prev, newEvent]);
+                setIsDialogOpen(false);
+
+                // Clear form
+                setData({
+                    id: '',
+                    title: '',
+                    start: '',
+                    end: '',
+                    type: '',
+                    state: '',
+                });
+            },
+        });
     };
 
     const handleDateClick = (arg: any) => {
-        setNewEventDate(arg.dateStr);
+        setData('start', arg.dateStr);
         setIsDialogOpen(true);
     };
     const handleEventChange = ({ event: updatedEvent }) => {
-        setEvents((prevEvents) =>
-            prevEvents.map((evt) =>
-                evt.id === updatedEvent.id
-                    ? {
-                          ...evt,
-                          start: updatedEvent.startStr,
-                          end: updatedEvent.endStr || '', // end may be null if single day
-                          state: evt.state, // keep existing state, or update if you want
-                          title: updatedEvent.title, // in case title was changed
-                      }
-                    : evt,
-            ),
-        );
+        const updated = {
+            id: updatedEvent.id,
+            title: updatedEvent.title,
+            start: updatedEvent.startStr,
+            end: updatedEvent.endStr || '',
+            state: updatedEvent.extendedProps.state,
+            type: updatedEvent.extendedProps.type,
+        };
+
+        // 🟢 Update local state for events
+        setEvents((prevEvents) => prevEvents.map((evt) => (evt.id === updated.id ? { ...evt, ...updated } : evt)));
     };
+
     useEffect(() => {
-        console.log(events);
+        console.log('events', events);
     }, [events]);
+
     return (
         <div className="m-2">
             <div className="mx-auto">
@@ -63,49 +86,71 @@ const Calendar = () => {
                     {/* <DialogTrigger asChild>
                         <Button>Add new event</Button>
                     </DialogTrigger> */}
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Add new event - {new Date(newEventDate).toLocaleDateString('en-AU')}</DialogTitle>
-                            <DialogDescription>
-                                <form className="mt-4 space-y-4" onSubmit={handleCreateEvent}>
-                                    <div>
-                                        <Label className="mb-2 flex">Event Type:</Label>
-                                        <ToggleGroup
-                                            variant="outline"
-                                            type="single"
-                                            className="w-full"
-                                            defaultValue={newEventType}
-                                            onValueChange={(val) => setNewEventType(val)}
-                                        >
-                                            <ToggleGroupItem value="rdo" className="w-1/2">
-                                                RDO
-                                            </ToggleGroupItem>
-                                            <ToggleGroupItem value="pub_hol" className="w-1/2">
-                                                Public Holiday
-                                            </ToggleGroupItem>
-                                        </ToggleGroup>
-                                    </div>
-                                    <div>
-                                        <Label className="mb-2 flex">Applicable in region:</Label>
-                                        <RadioGroup defaultValue={newState} onValueChange={(val) => setNewState(val)}>
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="qld" id="qld" />
-                                                <Label htmlFor="qld">Queensland</Label>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="nsw" id="nsw" />
-                                                <Label htmlFor="nsw">New South Wales</Label>
-                                            </div>
-                                        </RadioGroup>
-                                    </div>
 
-                                    <Button type="submit">Create</Button>
-                                </form>
-                            </DialogDescription>
-                        </DialogHeader>
+                    <DialogContent>
+                        {processing ? (
+                            <div className="mx-auto flex items-center">
+                                <Loader2 className="animate-spin" />
+                                <span>Creating...</span>
+                            </div>
+                        ) : (
+                            <DialogHeader>
+                                <DialogTitle>Add new event - {new Date(data.start).toLocaleDateString('en-AU')}</DialogTitle>
+                                <DialogDescription>
+                                    <form className="mt-4 space-y-4" onSubmit={handleCreateEvent}>
+                                        <div>
+                                            <Label className="mb-2 flex">Title</Label>
+                                            <Input onChange={(e) => setData('title', e.currentTarget.value)} />
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <div className="flex-1">
+                                                <Label>From</Label>
+                                                <Input type="date" value={data.start} onChange={(e) => setData('start', e.currentTarget.value)} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <Label>To</Label>{' '}
+                                                <Input type="date" value={data.end} onChange={(e) => setData('end', e.currentTarget.value)} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label className="mb-2 flex">Event Type:</Label>
+                                            <ToggleGroup
+                                                variant="outline"
+                                                type="single"
+                                                className="w-full"
+                                                defaultValue={data.start}
+                                                onValueChange={(val) => setData('type', val)}
+                                            >
+                                                <ToggleGroupItem value="rdo" className="w-1/2">
+                                                    RDO
+                                                </ToggleGroupItem>
+                                                <ToggleGroupItem value="public_holiday" className="w-1/2">
+                                                    Public Holiday
+                                                </ToggleGroupItem>
+                                            </ToggleGroup>
+                                        </div>
+                                        <div>
+                                            <Label className="mb-2 flex">Applicable in region:</Label>
+                                            <RadioGroup defaultValue={data.state} onValueChange={(val) => setData('state', val)}>
+                                                <div className="flex items-center space-x-2">
+                                                    <RadioGroupItem value="qld" id="qld" />
+                                                    <Label htmlFor="qld">Queensland</Label>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <RadioGroupItem value="nsw" id="nsw" />
+                                                    <Label htmlFor="nsw">New South Wales</Label>
+                                                </div>
+                                            </RadioGroup>
+                                        </div>
+
+                                        <Button type="submit">Create</Button>
+                                    </form>
+                                </DialogDescription>
+                            </DialogHeader>
+                        )}
                     </DialogContent>
                 </Dialog>
-                <h1 className="mt-6 mb-2 text-xl font-semibold">Superior Calendar - RDOs and Public Holidays</h1>
+                <h1 className="mt-6 mb-2 text-xl font-semibold">Superior Calendar - RDOs and Public Holidays </h1>
 
                 <FullCalendar
                     plugins={[dayGridPlugin, interactionPlugin]}
@@ -139,23 +184,24 @@ export default Calendar;
 function renderEventContent(eventInfo: any) {
     const isRDO = eventInfo.event.title === 'RDO';
     const state = eventInfo.event.extendedProps.state;
+    const type = eventInfo.event.extendedProps.type;
     return isRDO ? (
         <div className="flex flex-col items-center justify-between gap-1 rounded bg-green-300 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row">
             <div className="flex items-center space-x-2">
-                <Volleyball size={16} />
                 <Label className="break-words whitespace-normal">{eventInfo.event.title}</Label>
             </div>
-            <div>
+            <div className="flex flex-col items-center space-y-1">
+                <Badge className="break-words whitespace-normal">{type.toUpperCase()}</Badge>
                 <Badge variant="secondary">{state.toUpperCase()}</Badge>
             </div>
         </div>
     ) : (
         <div className="flex flex-col items-center justify-start gap-1 rounded bg-blue-300 px-2 py-2 text-sm text-gray-700 shadow-lg sm:flex-row sm:justify-between">
             <div className="flex items-center space-x-2">
-                <CandyCane size={16} />
                 <Label className="break-words whitespace-normal">{eventInfo.event.title}</Label>
             </div>
-            <div>
+            <div className="flex flex-col items-center space-y-1">
+                <Badge className="break-words whitespace-normal">{type.toUpperCase()}</Badge>
                 <Badge variant="secondary">{state.toUpperCase()}</Badge>
             </div>
         </div>

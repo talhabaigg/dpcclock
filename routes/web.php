@@ -6,6 +6,7 @@ use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\TimesheetEventController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -121,6 +122,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         //Calendar Routes
         Route::get('/calendar', [CalendarController::class, 'main'])->name('calendar.main');
+
+        //TimesheetEvent CRUD routes
+        Route::post('/timesheet-events/store', [TimesheetEventController::class, 'store'])->name('timesheetEvents.store');
+        Route::post('/timesheet-events/update', [TimesheetEventController::class, 'update'])->name('timesheetEvents.update');
 
     });
 
