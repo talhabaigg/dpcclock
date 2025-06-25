@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateTimesheetForTodaysEvent;
+use App\Models\Kiosk;
 use Illuminate\Http\Request;
 use \App\Models\TimesheetEvent;
 
@@ -59,6 +61,19 @@ class TimesheetEventController extends Controller
         ]);
 
         return redirect()->back()->with('success', $event->title . ' event was updated');
+    }
+
+    public function generateTimesheetForToday($kiosk)
+    {
+        $today = now()->toDateString();
+        $events = TimesheetEvent::whereDate('start', '<=', $today)
+            ->whereDate('end', '>', $today) // exclusive end date logic
+            ->get();
+        if ($events->count() === 0) {
+            return redirect()->back()->with('error', 'No events found for today');
+        }
+        GenerateTimesheetForTodaysEvent::dispatch($kiosk, $events);
+        return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully');
     }
 
 }

@@ -127,6 +127,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheet-events/store', [TimesheetEventController::class, 'store'])->name('timesheetEvents.store');
         Route::post('/timesheet-events/update', [TimesheetEventController::class, 'update'])->name('timesheetEvents.update');
 
+        //Generate timesheet based on events
+        Route::get('/{kiosk}/timesheet-events/generate', [TimesheetEventController::class, 'generateTimesheetForToday'])->name('timesheetEvents.generateToday');
+
     });
 
     Route::middleware('permission:view kiosk')->group(function () {

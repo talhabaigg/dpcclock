@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
@@ -155,6 +156,30 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                                 Save shift times
                             </Button>
                         </form>
+                    </CardContent>
+                </Card>
+                <Card className="m-2 w-full">
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">Settings</CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <Label>Auto generate timesheets for events</Label>
+                            </div>
+                            <Switch />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="m-2 w-full">
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">Generate timesheet</CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-between">
+                            <div className="w-1/2">
+                                <Label>Generate timesheets for today's event</Label>
+                            </div>
+                            <Link href={`/${kiosk.id}/timesheet-events/generate`}>
+                                <Button>Generate</Button>
+                            </Link>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
