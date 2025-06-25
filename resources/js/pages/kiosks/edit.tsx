@@ -1,11 +1,14 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { Info } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
@@ -72,16 +75,20 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                     ))}
                 </div>
             )}
-            <div className="mx-auto flex max-w-md flex-col justify-between space-y-4 p-4">
+            <div className="mx-auto flex max-w-2xl flex-col justify-between space-y-4 p-4">
                 <Card className="m-2 h-full w-full">
                     <CardHeader className="text-lg font-bold">Select Zones for Employees</CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="w-full space-y-2">
                             {employees.map((employee, index) => (
                                 <div key={employee.id} className="flex items-center justify-between">
-                                    <Label>{employee.name}</Label>
-                                    <div className="min-w-48">
+                                    <div className="flex flex-col space-y-1">
+                                        <Label>{employee.name}</Label>
+                                    </div>
+
+                                    <div className="flex min-w-48 flex-col items-start space-y-1 space-x-1 md:flex-row">
                                         <ToggleGroup
+                                            className="w-full border"
                                             type="single"
                                             value={data.zones[index].zone}
                                             onValueChange={(value) => handleZoneChange(index, value)}
@@ -90,16 +97,30 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                                             <ToggleGroupItem value="2">Zone 2</ToggleGroupItem>
                                             <ToggleGroupItem value="3">Zone 3</ToggleGroupItem>
                                         </ToggleGroup>
-                                        {/* <SearchSelect
-                                            options={[
-                                                { value: '1', label: 'Zone 1' },
-                                                { value: '2', label: 'Zone 2' },
-                                                { value: '3', label: 'Zone 3' },
-                                            ]}
-                                            optionName="Travel Zone"
-                                            selectedOption={data.zones[index].zone}
-                                            onValueChange={(value) => handleZoneChange(index, value)}
-                                        /> */}
+
+                                        <div className="flex w-1/2 items-center justify-between space-x-2">
+                                            {' '}
+                                            <Badge className="py-2" variant="outline">
+                                                Top up <Switch />
+                                            </Badge>
+                                            <HoverCard>
+                                                <HoverCardTrigger>
+                                                    <Info className="h-4 w-4" />
+                                                </HoverCardTrigger>
+                                                <HoverCardContent>
+                                                    <div className="flex flex-col space-y-2">
+                                                        <Badge>
+                                                            <Info className="h-4 w-4" />
+                                                            Info
+                                                        </Badge>
+                                                        <Label className="text-xs">
+                                                            This switch allows the employee to top up their RDO with annual leave balance if
+                                                            available.
+                                                        </Label>
+                                                    </div>
+                                                </HoverCardContent>
+                                            </HoverCard>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
