@@ -9,10 +9,11 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords;
 
     /**
      * The attributes that are mass assignable.
