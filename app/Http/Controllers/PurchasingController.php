@@ -521,7 +521,8 @@ class PurchasingController extends Controller
                         'Item Code' => '',
                         'Line Description' => $lineItem->code . '-' . $lineItem->description ?? 'N/A',
                         'Qty' => $lineItem->qty ?? 0,
-                        'UofM' => 'EA',
+                        'UofM' => ((float) $lineItem->qty != (int) $lineItem->qty) ? 'm' : 'EA',
+
                         'Unit Cost' => $lineItem->unit_cost ?? 0,
                         'Distribution Type' => 'J',
                         'Line Job #' => $requisition->location?->external_id ?? 'N/A',

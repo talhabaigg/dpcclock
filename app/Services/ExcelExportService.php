@@ -97,7 +97,7 @@ class ExcelExportService
                         '',
                         $lineItemValue,
                         $lineItem->qty ?? 1,
-                        'EA',
+                        ((float) $lineItem->qty != (int) $lineItem->qty) ? 'm' : 'EA',
                         $lineItem->unit_cost ?? 0,
                         'J',
                         $requisition->location?->external_id ?? 'N/A',
