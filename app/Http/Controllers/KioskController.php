@@ -108,7 +108,7 @@ class KioskController extends Controller
     {
         $kiosk->load([
             'employees' => function ($query) {
-                $query->select('employees.id', 'name')->withPivot('zone');
+                $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
             }
         ]);
 
@@ -129,6 +129,7 @@ class KioskController extends Controller
             'zones' => 'required|array',
             'zones.*.employee_id' => 'required|exists:employees,id',
             'zones.*.zone' => 'nullable',
+            'zones.*.top_up' => 'boolean', // Assuming you want to handle top-up as well
         ]);
         // dd($data);
 
@@ -138,12 +139,13 @@ class KioskController extends Controller
                 return redirect()->back()->with('error', 'Employee not found.');
             } else {
                 $kiosk->employees()->updateExistingPivot($eh_employee->eh_employee_id, [
-                    'zone' => $entry['zone']
+                    'zone' => $entry['zone'],
+                    'top_up' => $entry['top_up'] ?? false, // Default to false if not provided
                 ]);
             }
         }
 
-        return redirect()->back()->with('success', 'Zones updated successfully.');
+        return redirect()->back()->with('success', 'Zones and top up settings updated successfully.');
     }
 
     public function updateSettings(Request $request)

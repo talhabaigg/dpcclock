@@ -48,14 +48,14 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
             Log::info('Matching event found for kiosk: ' . $kiosk->name);
             $timesheets = [];
             $kiosk->employees->each(function ($employee) use ($event, $kiosk, &$timesheets) {
-                $timesheet = $this->generateTimesheet($employee, $event, $kiosk);
+                $entries = $this->generateTimesheet($employee, $event, $kiosk);
 
-                if ($timesheet) {
-                    $timesheets[] = $timesheet;
+                if (!empty($entries)) {
+                    $timesheets = array_merge($timesheets, $entries);
                 }
             });
         }
-
+        Log::info('Generated Timesheets: ' . json_encode($timesheets, JSON_PRETTY_PRINT));
         if (!empty($timesheets)) {
             $groupedTimesheets = $this->groupTimesheetsByEmployeeId($timesheets);
             Log::info('Grouped Timesheets: ' . json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
@@ -68,6 +68,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
                     Log::error('Failed to sync timesheets for kiosk: ' . $kiosk->name);
                 }
             }
+
         }
     }
 
@@ -86,26 +87,100 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
 
     private function generateTimesheet($employee, $event, $kiosk): array
     {
-        $start = Carbon::today('Australia/Brisbane')->setTime(6, 30, 0);
-        $end = Carbon::today('Australia/Brisbane')->setTime(14, 30, 0);
+        $brisbane = 'Australia/Brisbane';
+        $fullShiftStart = Carbon::today($brisbane)->setTime(6, 30, 0);
+        $fullShiftEnd = Carbon::today($brisbane)->setTime(14, 30, 0);
+        $shiftLengthInHours = 8;
+
+        // Travel zone logic
+        $zone = $employee->pivot->zone;
+        $top_up = $employee->pivot->top_up ?? false;
         $travel = [
             '1' => 2516899,
             '2' => 2516901,
             '3' => 2516902,
         ];
-        $zone = $employee->pivot->zone;
+        $shiftConditionIds = [$zone && isset($travel[$zone]) ? $travel[$zone] : 2516899];
 
+        // Public holiday
+        if ($event->type === 'public_holiday') {
+            return [
+                [
+                    'employeeId' => $employee->eh_employee_id,
+                    'startTime' => $fullShiftStart->format('Y-m-d H:i:s'),
+                    'endTime' => $fullShiftEnd->format('Y-m-d H:i:s'),
+                    'locationId' => $kiosk->eh_location_id,
+                    'workTypeId' => 2471107, // Public Holiday
+                    'shiftConditionIds' => [],
+                ]
+            ];
+        }
 
-        Log::info("Employee {$employee->name} is in zone: {$zone}");
+        $rdoWorkTypeId = 2516504;     // RDO
+        $annualLeaveWorkTypeId = 2471108; // Replace with correct Annual Leave workTypeId
+
+        $rdoBalance = $this->getLeaveBalanceByEmployeeId($employee->eh_employee_id);
+        // $rdoBalance = 4;
+
+        if (!$rdoBalance || $rdoBalance <= 0) {
+            Log::info("No RDO balance for employee {$employee->eh_employee_id}, skipping.");
+            return [];
+        }
+
+        if ($rdoBalance >= $shiftLengthInHours) {
+            return [
+                [
+                    'employeeId' => $employee->eh_employee_id,
+                    'startTime' => $fullShiftStart->format('Y-m-d H:i:s'),
+                    'endTime' => $fullShiftEnd->format('Y-m-d H:i:s'),
+                    'locationId' => $kiosk->eh_location_id,
+                    'workTypeId' => $rdoWorkTypeId,
+                    'shiftConditionIds' => $shiftConditionIds,
+                ]
+            ];
+        }
+
+        // If RDO < 8 hours, split the shift
+        $rdoHours = $rdoBalance;
+
+        $annualLeaveHours = $shiftLengthInHours - $rdoHours;
+
+        $rdoEnd = $fullShiftStart->copy()->addHours($rdoHours);
+        $annualLeaveStart = $rdoEnd->copy();
+        $annualLeaveEnd = $annualLeaveStart->copy()->addHours($annualLeaveHours);
+        if (!$top_up) {
+            return [
+                [
+                    'employeeId' => $employee->eh_employee_id,
+                    'startTime' => $fullShiftStart->format('Y-m-d H:i:s'),
+                    'endTime' => $rdoEnd->format('Y-m-d H:i:s'),
+                    'locationId' => $kiosk->eh_location_id,
+                    'workTypeId' => $rdoWorkTypeId,
+                    'shiftConditionIds' => $shiftConditionIds,
+                ]
+            ];
+        }
+
         return [
-            'employeeId' => $employee->eh_employee_id,
-            'startTime' => $start->format('Y-m-d H:i:s'), // 👈 convert to string with timezone
-            'endTime' => $end->format('Y-m-d H:i:s'),
-            'locationId' => $kiosk->eh_location_id,
-            'workTypeId' => $event->type === 'public_holiday' ? 2471107 : 2516504,
-            'shiftConditionIds' => $event->type === 'rdo' ? [$zone && isset($travel[$zone]) ? $travel[$zone] : 2516899] : '', // Default to 2516899 if zone is not set
+            [
+                'employeeId' => $employee->eh_employee_id,
+                'startTime' => $fullShiftStart->format('Y-m-d H:i:s'),
+                'endTime' => $rdoEnd->format('Y-m-d H:i:s'),
+                'locationId' => $kiosk->eh_location_id,
+                'workTypeId' => $rdoWorkTypeId,
+                'shiftConditionIds' => $shiftConditionIds,
+            ],
+            [
+                'employeeId' => $employee->eh_employee_id,
+                'startTime' => $annualLeaveStart->format('Y-m-d H:i:s'),
+                'endTime' => $annualLeaveEnd->format('Y-m-d H:i:s'),
+                'locationId' => $kiosk->eh_location_id,
+                'workTypeId' => $annualLeaveWorkTypeId,
+                'shiftConditionIds' => [],
+            ]
         ];
     }
+
 
     private function groupTimesheetsByEmployeeId(array $timesheets): array
     {
@@ -138,6 +213,32 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
             Log::info('Timesheets synced failed: ' . $response->body());
             return false; // Request failed
         }
+    }
+
+    private function getLeaveBalanceByEmployeeId($employeeId)
+    {
+        $apiKey = env('PAYROLL_API_KEY');
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/leavebalances");
+
+
+        // Check the status code
+        if ($response->successful()) {
+            // Request was successful (200 or 201)
+            $responseArray = json_decode($response->body(), true);
+            $accruedAmount = collect($responseArray)
+                ->firstWhere('leaveCategoryId', operator: 1778521)['accruedAmount'] ?? null;
+            if (!$accruedAmount) {
+                return 0;
+            }
+            return $accruedAmount;
+        } else {
+            Log::info('leave balance failed: ' . $response->body());
+            return false; // Request failed
+        }
+
     }
 
 }

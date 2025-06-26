@@ -7,17 +7,19 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { Info } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
 import MinuteSelector from '../timesheets/components/minuteSelector';
+import GenerateTimesheetsButton from './edit-partials/generate-timesheets-button';
 export default function Edit({ kiosk, employees, errors, flash }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
             zone: emp.pivot.zone ?? '',
+            top_up: emp.pivot.top_up ?? false,
         })),
     });
 
@@ -101,7 +103,15 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                                         <div className="flex w-1/2 items-center justify-between space-x-2">
                                             {' '}
                                             <Badge className="py-2" variant="outline">
-                                                Top up <Switch />
+                                                Top up{' '}
+                                                <Switch
+                                                    checked={data.zones[index].top_up}
+                                                    onCheckedChange={(checked) => {
+                                                        const updated = [...data.zones];
+                                                        updated[index].top_up = checked;
+                                                        setData('zones', updated);
+                                                    }}
+                                                />
                                             </Badge>
                                             <HoverCard>
                                                 <HoverCardTrigger>
@@ -197,9 +207,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                             <div className="w-1/2">
                                 <Label>Generate timesheets for today's event</Label>
                             </div>
-                            <Link href={`/${kiosk.id}/timesheet-events/generate`}>
-                                <Button>Generate</Button>
-                            </Link>
+                            <GenerateTimesheetsButton kioskId={kiosk.id} />
                         </div>
                     </CardContent>
                 </Card>
