@@ -39,7 +39,23 @@ class SyncKioskEmployees implements ShouldQueue
 
 
                         if (!empty($kioskIds)) {
-                            $employee->kiosks()->syncWithoutDetaching($kioskIds);
+                            // Get current kiosks with pivot data
+                            $existingKiosks = $employee->kiosks()->withPivot(['zone', 'top_up'])->get();
+
+                            // Keep only kiosks the employee should still have
+                            $syncData = [];
+
+                            foreach ($existingKiosks as $kiosk) {
+                                if (in_array($kiosk->eh_kiosk_id, $kioskIds)) {
+                                    $syncData[$kiosk->eh_kiosk_id] = [
+                                        'zone' => $kiosk->pivot->zone,
+                                        'top_up' => $kiosk->pivot->top_up,
+                                    ];
+                                }
+                            }
+
+                            $employee->kiosks()->sync($syncData);
+
                         } else {
                             Log::info("No kiosks found for employee {$employeeId}");
                         }

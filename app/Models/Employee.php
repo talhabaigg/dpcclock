@@ -17,7 +17,7 @@ class Employee extends Model
 
     public function kiosks()
     {
-        return $this->belongsToMany(Kiosk::class, 'employee_kiosk', 'eh_employee_id', 'eh_kiosk_id', 'eh_employee_id', 'eh_kiosk_id')->withPivot('zone');
+        return $this->belongsToMany(Kiosk::class, 'employee_kiosk', 'eh_employee_id', 'eh_kiosk_id', 'eh_employee_id', 'eh_kiosk_id')->withPivot('zone', 'top_up');
     }
 
     public function clocks(): \Illuminate\Database\Eloquent\Relations\HasMany
