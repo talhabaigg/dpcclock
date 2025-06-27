@@ -27,44 +27,58 @@ class EmployeeController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/details");
+
         $employeeData = $response->json();
-        // dd($employeeData);
-        // $workTypeId = Worktype::where('name',$employeeData[12]['workTypes'])->first();
 
-        // dd($employeeData[12]['workTypes']);
-        foreach ($employeeData as $employee) {
-            $workTypeId = isset($employee['workTypes']) ? Worktype::where('name', $employee['workTypes'])->first() : null;
+        // Filter only active employees (no endDate)
+        $employeeData = array_filter($employeeData, fn($employee) => empty($employee['endDate']));
 
-            $employee = Employee::updateOrCreate([
-                'eh_employee_id' => $employee['id'],
-            ], [
-                'name' => $employee['firstName'] . ' ' . $employee['surname'],
-                'external_id' => $employee['externalId'] ?? Str::uuid(),
-                'email' => $employee['emailAddress'],
-                'pin' => 1234,
-            ]);
-            if ($workTypeId) {
-                $employee->worktypes()->sync($workTypeId->id);
-            } else {
-                // Handle the case where the work type is not found
-                // You can choose to skip syncing or create a new work type
-                // For now, we'll just skip syncing
-                continue;
+        $apiEmployeeIds = [];
+
+        foreach ($employeeData as $employeeInfo) {
+            $apiEmployeeIds[] = $employeeInfo['id'];
+
+            // Find or create (does NOT include soft-deleted, so need withTrashed)
+            $employee = Employee::withTrashed()->updateOrCreate(
+                ['eh_employee_id' => $employeeInfo['id']],
+                [
+                    'name' => $employeeInfo['firstName'] . ' ' . $employeeInfo['surname'],
+                    'external_id' => $employeeInfo['externalId'] ?? Str::uuid(),
+                    'email' => $employeeInfo['emailAddress'] ?? null,
+                    'pin' => 1234,
+                ]
+            );
+
+            // Restore if soft deleted
+            if ($employee->trashed()) {
+                $employee->restore();
             }
 
+            // Sync worktypes if any
+            if (!empty($employeeInfo['workTypes'])) {
+                $workType = Worktype::where('name', $employeeInfo['workTypes'])->first();
+                if ($workType) {
+                    $employee->worktypes()->sync([$workType->id]);
+                }
+            }
         }
-        $employees = Employee::all();
+
+        // Soft delete employees not present in current API data
+        Employee::whereNotIn('eh_employee_id', $apiEmployeeIds)
+            ->whereNull('deleted_at') // only active employees
+            ->delete();
 
         if (!Auth::check()) {
             return response()->json([
                 'message' => 'Employees synced successfully from Employment Hero.',
             ], 200);
         }
-        // dd('Synced');
-        return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment hero.');
+
+        return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
     }
+
 
     public function syncEmployeeWorktypes()
     {

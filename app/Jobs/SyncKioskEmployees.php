@@ -1,8 +1,11 @@
 <?php
 
+
 namespace App\Jobs;
 
 use App\Models\Employee;
+use App\Models\User;
+use App\Models\Kiosk;
 use Illuminate\Bus\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
@@ -10,69 +13,69 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\User;
-
 
 class SyncKioskEmployees implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected int $userId;
+
     public function __construct(int $userId)
     {
         $this->userId = $userId;
     }
+
     public function handle(): void
     {
-        Employee::pluck('eh_employee_id')
-            ->chunk(20)
-            ->each(function ($chunk) {
-                foreach ($chunk as $employeeId) {
+        // Chunk employees by eh_employee_id in batches of 20
+        Employee::select('eh_employee_id')
+            ->chunk(20, function ($employees) {
+                foreach ($employees as $employee) {
+                    $employeeId = $employee->eh_employee_id;
+
                     $locationIds = $this->getLocationsforEmployeeId($employeeId);
                     $kioskIds = $this->getKioskIdforLocationIds($locationIds);
 
                     Log::info("Employee ID: {$employeeId} - Kiosk IDs: " . implode(', ', $kioskIds));
 
-                    $employee = Employee::where('eh_employee_id', $employeeId)->first();
+                    $employeeModel = Employee::where('eh_employee_id', $employeeId)->first();
 
-                    if ($employee) {
-
-
-                        if (!empty($kioskIds)) {
-                            // Get current kiosks with pivot data
-                            $existingKiosks = $employee->kiosks()->withPivot(['zone', 'top_up'])->get();
-
-                            // Keep only kiosks the employee should still have
-                            $syncData = [];
-
-                            foreach ($existingKiosks as $kiosk) {
-                                if (in_array($kiosk->eh_kiosk_id, $kioskIds)) {
-                                    $syncData[$kiosk->eh_kiosk_id] = [
-                                        'zone' => $kiosk->pivot->zone,
-                                        'top_up' => $kiosk->pivot->top_up,
-                                    ];
-                                }
-                            }
-
-                            $employee->kiosks()->sync($syncData);
-
-                        } else {
-                            Log::info("No kiosks found for employee {$employeeId}");
-                        }
-                    } else {
-                        Log::info("Employee with ID {$employeeId} not found.");
+                    if (!$employeeModel) {
+                        Log::warning("Employee with ID {$employeeId} not found.");
+                        continue;
                     }
+
+                    if (empty($kioskIds)) {
+                        // No kiosks for this employee — detach all
+                        $employeeModel->kiosks()->detach();
+                        Log::info("Detached all kiosks for employee ID {$employeeId} (no kiosks found).");
+                        continue;
+                    }
+
+                    // Prepare sync data with default pivot fields
+                    $syncData = [];
+                    foreach ($kioskIds as $kioskId) {
+                        $syncData[$kioskId] = [
+                            'zone' => 'default',    // Adjust default zone as needed
+                            'top_up' => false,      // Adjust default top_up as needed
+                        ];
+                    }
+
+                    // Sync kiosks — attach new, detach removed, update existing
+                    $employeeModel->kiosks()->sync($syncData);
+
+                    Log::info("Synced kiosks for employee ID {$employeeId}: " . implode(', ', $kioskIds));
                 }
             });
 
+        // Notify user that sync finished
         $user = User::find($this->userId);
         if ($user) {
             $user->notify(new \App\Notifications\SyncKioskEmployeesFinished());
         }
     }
 
-
-    protected function getLocationsforEmployeeId($employeeId): array
+    protected function getLocationsforEmployeeId(int $employeeId): array
     {
         $apiKey = env('PAYROLL_API_KEY');
 
@@ -102,7 +105,11 @@ class SyncKioskEmployees implements ShouldQueue
 
     protected function getKioskIdforLocationIds(array $locationIds): array
     {
-        return \App\Models\Kiosk::whereIn('eh_location_id', $locationIds)
+        if (empty($locationIds)) {
+            return [];
+        }
+
+        return Kiosk::whereIn('eh_location_id', $locationIds)
             ->pluck('eh_kiosk_id')
             ->toArray();
     }
