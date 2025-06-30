@@ -34,6 +34,7 @@ class PurchasingController extends Controller
         // Group OR conditions properly
         $locationsQuery = Location::where(function ($query) {
             $query->where('eh_parent_id', 1149031)
+                ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
         })
             ->with('worktypes');
@@ -237,13 +238,12 @@ class PurchasingController extends Controller
     {
         return DB::transaction(function () use ($requisition) {
             $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
-            if ($parentId === '1149031') {
-                $companyCode = 'SWC';
-            } elseif ($parentId === '1198645') {
-                $companyCode = 'GREEN';
-            } else {
-                throw new \Exception('Invalid parent ID for PO number generation.');
-            }
+            $companyCodes = [
+                '1149031' => 'SWC',
+                '1198645' => 'GREEN',
+                '1249093' => 'SWCP'
+            ];
+            $companyCode = $companyCodes[$parentId] ?? null;
             $sequence = DB::table('po_num_sequence')->lockForUpdate()->where('company_code', $companyCode)->first();
 
             // Build formatted PO number

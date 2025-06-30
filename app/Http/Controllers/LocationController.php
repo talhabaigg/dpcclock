@@ -21,7 +21,7 @@ class LocationController extends Controller
     public function index()
     {
         // Fetch primary locations
-        $locations = Location::with('worktypes')->where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->get();
+        $locations = Location::with('worktypes')->where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093)->get();
 
         // Fetch sub-locations for each primary location
         foreach ($locations as $location) {

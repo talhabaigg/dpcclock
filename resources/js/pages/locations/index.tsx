@@ -72,6 +72,7 @@ export default function LocationsList() {
                     <SelectFilter
                         options={[
                             { value: '1149031', label: 'SWC' },
+                            { value: '1249093', label: 'SWCP' },
                             { value: '1198645', label: 'Greenline' },
                         ]}
                         filterName={`Filter by Company`}

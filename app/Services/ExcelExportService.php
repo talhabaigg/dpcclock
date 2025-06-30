@@ -20,13 +20,13 @@ class ExcelExportService
         $datetime = now()->format('YmdHis');
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
         Log::info('Parent ID: ' . $parentId);
+        $companyCodes = [
+            '1149031' => 'SWC',
+            '1198645' => 'GREEN',
+            '1249093' => 'SWCP'
+        ];
+        $company = $companyCodes[$parentId] ?? null;
 
-        if ($parentId === '1149031') {
-            $company = 'SWC';
-        }
-        if ($parentId === '1198645') {
-            $company = 'GREEN';
-        }
         $fileName = "PO-{$requisition->po_number}{$datetime}_{$company}.csv";
 
         Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
