@@ -64,7 +64,7 @@ class PurchasingController extends Controller
             'delivery_contact' => 'nullable|string|max:255',
             'requested_by' => 'required|string|max:255',
             'deliver_to' => 'nullable|string|max:255',
-            'order_reference' => 'nullable|string|max:255',
+            'order_reference' => 'nullable|string|max:80',
             'items' => 'required|array|min:1',
             'items.*.code' => 'nullable|string|max:255',
             'items.*.description' => 'required|string',
