@@ -77,6 +77,12 @@ type Requisition = {
 };
 
 type CreateRequisitionProps = {
+    auth: {
+        user: {
+            name: string;
+            phone: string;
+        };
+    };
     suppliers: Supplier[];
     locations: Location[];
     costCodes: CostCode[];
@@ -89,7 +95,7 @@ type CreateRequisitionProps = {
     };
 };
 export default function Create() {
-    const { suppliers, locations, costCodes, requisition, flash } = usePage<CreateRequisitionProps>().props;
+    const { suppliers, locations, costCodes, requisition, flash, auth } = usePage<CreateRequisitionProps>().props;
     const [autoSaving, setAutoSaving] = useState(true);
     const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
     const gridRef = useRef<AgGridReact>(null);
@@ -106,7 +112,7 @@ export default function Create() {
         supplier_id: '',
         date_required: '',
         delivery_contact: '',
-        requested_by: '',
+        requested_by: `${auth.user.name} ${auth.user.phone}`,
         deliver_to: '',
         order_reference: '',
         items: [],
