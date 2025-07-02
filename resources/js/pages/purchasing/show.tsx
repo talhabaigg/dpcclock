@@ -6,7 +6,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowBigUp, CircleCheck, Cuboid, History } from 'lucide-react';
+import { ArrowBigUp, CircleCheck, Cuboid, History, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -150,17 +150,24 @@ export default function RequisitionShow() {
                                     Print to PDF
                                 </Button>
                             </a>
-                            {requisition.status !== 'pending' ? (
-                                <Button className="w-28 bg-green-500 text-xs text-white dark:bg-green-900" size="sm" disabled>
-                                    Processed
-                                </Button>
-                            ) : (
+                            {requisition.status === 'failed' ? (
+                                <Link href={`/requisition/${requisition.id}/process`}>
+                                    <Button className="w-28 text-xs" size="sm" variant="outline">
+                                        <RotateCcw />
+                                        Retry
+                                    </Button>
+                                </Link>
+                            ) : requisition.status === 'pending' ? (
                                 <Link href={`/requisition/${requisition.id}/process`}>
                                     <Button className="w-28 text-xs" size="sm" variant="outline">
                                         <CircleCheck />
-                                        Process
+                                        Send to Premier
                                     </Button>
                                 </Link>
+                            ) : (
+                                <Button className="w-28 bg-green-900 text-xs text-white dark:bg-green-900" size="sm" disabled>
+                                    Sent to Premier
+                                </Button>
                             )}
                         </div>
                     </div>
