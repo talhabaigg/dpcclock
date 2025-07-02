@@ -6,7 +6,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowBigUp, CircleCheck, Cuboid, History, RotateCcw } from 'lucide-react';
+import { ArrowBigUp, CircleCheck, Cuboid, FileSpreadsheet, FileText, History, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -115,9 +115,9 @@ export default function RequisitionShow() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />
 
-            <div className="space-y-2 p-2">
+            <div className="mx-auto space-y-2 p-2 sm:mx-0">
                 <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
-                    <Card className="m-2 w-full p-0 text-sm md:w-1/2 2xl:w-1/3">
+                    <Card className="mx-2 w-full max-w-96 p-0 text-sm sm:max-w-full md:w-1/2 2xl:w-1/3">
                         <Table>
                             <TableHeader>
                                 {requisitionHeaderTable.map((header) => (
@@ -134,49 +134,51 @@ export default function RequisitionShow() {
                         </Table>
                     </Card>
                     <div className="m-2 flex w-full flex-col items-start justify-end gap-2 self-start sm:items-end md:flex-row">
-                        <div className="grid grid-cols-2 space-y-2 space-x-2 sm:grid-cols-1 sm:space-y-0 sm:space-x-2 md:grid-cols-4">
+                        <div className="grid w-full grid-cols-1 space-y-2 space-x-2 sm:max-w-lg sm:space-y-0 sm:space-x-2 md:grid-cols-4">
                             <Link
                                 href={`/requisition/${requisition.id}/edit`}
                                 className={requisition.status === 'processed' ? 'pointer-events-none' : ''}
                             >
-                                <Button className="w-28 text-xs" size="sm" disabled={requisition.status !== 'pending'}>
+                                <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" disabled={requisition.status !== 'pending'}>
                                     Edit
                                 </Button>
                             </Link>
                             <a href={`/requisition/excel/${requisition.id}`}>
-                                <Button className="text-xs sm:w-28" size="sm" variant="outline">
+                                <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
+                                    <FileSpreadsheet />
                                     Download Excel
                                 </Button>
                             </a>
 
                             <a href={`/requisition/pdf/${requisition.id}`}>
-                                <Button className="w-28 text-xs" size="sm" variant="outline">
+                                <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
+                                    <FileText />
                                     Print to PDF
                                 </Button>
                             </a>
                             {requisition.status === 'failed' ? (
                                 <Link href={`/requisition/${requisition.id}/process`}>
-                                    <Button className="w-28 text-xs" size="sm" variant="outline">
+                                    <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
                                         <RotateCcw />
                                         Retry
                                     </Button>
                                 </Link>
                             ) : requisition.status === 'pending' ? (
                                 <Link href={`/requisition/${requisition.id}/process`}>
-                                    <Button className="w-28 text-xs" size="sm" variant="outline">
+                                    <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
                                         <CircleCheck />
                                         Send to Premier
                                     </Button>
                                 </Link>
                             ) : (
-                                <Button className="w-28 bg-green-900 text-xs text-white dark:bg-green-900" size="sm" disabled>
+                                <Button className="w-full max-w-96 bg-green-900 text-xs text-white sm:max-w-32 dark:bg-green-900" size="sm" disabled>
                                     Sent to Premier
                                 </Button>
                             )}
                         </div>
                     </div>
                 </div>
-                <Tabs defaultValue="items" className="w-full">
+                <Tabs defaultValue="items" className="mx-auto w-full max-w-96 sm:mx-2 sm:max-w-full">
                     <TabsList className="w-full">
                         <TabsTrigger value="items" className="flex flex-1">
                             <Cuboid className="mr-1 h-4 w-4" />
@@ -188,7 +190,7 @@ export default function RequisitionShow() {
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="items">
-                        <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-full">
+                        <Card className="m-0 mt-4 max-w-96 p-0 text-sm sm:max-w-full">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -237,7 +239,7 @@ export default function RequisitionShow() {
                         </Card>
                     </TabsContent>
                     <TabsContent value="log">
-                        <Card className="text-smm-2 m-2 mt-4 max-w-96 p-0 sm:max-w-7xl">
+                        <Card className="m-0 mt-4 max-w-96 p-0 text-sm sm:max-w-full">
                             <Table>
                                 <TableHeader>
                                     <TableRow>

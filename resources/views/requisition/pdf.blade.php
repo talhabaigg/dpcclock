@@ -181,7 +181,7 @@
                     <td>{{ $line['code'] }}-
                         {{ $line['description'] }}</td>
 
-                    <td>{{ $line['qty'] }}</td>
+                    <td>{{ number_format($line['qty'], 2) }}</td>
                 </tr>
             @endforeach
 

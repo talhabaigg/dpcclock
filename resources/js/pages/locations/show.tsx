@@ -1,5 +1,6 @@
 import CsvImporterDialog from '@/components/csv-importer';
 import LoadingDialog from '@/components/loading-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -14,7 +16,6 @@ import { CirclePlus, RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
-
 type Location = {
     id: number;
     name: string;
@@ -167,7 +168,7 @@ export default function LocationsList() {
             <div className="m-2 flex items-center gap-2">
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                     <DialogTrigger asChild>
-                        <Button variant="secondary">
+                        <Button variant="secondary" className="mx-auto w-full max-w-96 sm:mx-0 sm:w-full sm:max-w-48">
                             <CirclePlus />
                             Create sub-location
                         </Button>
@@ -192,8 +193,8 @@ export default function LocationsList() {
                 </Dialog>
                 {/* {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '} */}
             </div>
-            <div className="flex flex-row">
-                <Card className="m-2 w-full p-0 md:w-1/2 2xl:w-1/3">
+            <div className="mx-auto flex max-w-96 flex-col space-y-1 sm:m-0 sm:max-w-full sm:flex-row">
+                <Card className="w-full p-0 sm:m-2 md:w-1/2 2xl:w-1/3">
                     <Table>
                         <TableBody>
                             <TableRow>
@@ -210,12 +211,39 @@ export default function LocationsList() {
                             </TableRow>
                             <TableRow>
                                 <TableHead>Shift Conditionss</TableHead>
-                                <TableCell className="w-[100px]">
-                                    {location.worktypes.map((worktype) => (
-                                        <div key={worktype.id} className="flex items-center gap-2">
-                                            <span className="flex-wrap">{worktype.name}</span>
-                                        </div>
-                                    ))}
+                                <TableCell>
+                                    <div className="flex flex-wrap gap-2">
+                                        {location.worktypes?.length > 0 ? (
+                                            <>
+                                                {location.worktypes.slice(0, 1).map((worktype) => (
+                                                    <Badge key={worktype.eh_worktype_id}>{worktype.name}</Badge>
+                                                ))}
+
+                                                {location.worktypes.length > 1 && (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Badge variant="outline" className="text-muted-foreground cursor-pointer">
+                                                                    +{location.worktypes.length - 1} more
+                                                                </Badge>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="max-w-sm p-2">
+                                                                <div className="flex max-w-sm flex-wrap gap-1">
+                                                                    {location.worktypes.slice(1).map((worktype) => (
+                                                                        <Badge key={worktype.eh_worktype_id} variant="secondary">
+                                                                            {worktype.name}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                            </>
+                                        ) : (
+                                            'No default shift conditions'
+                                        )}
+                                    </div>
                                 </TableCell>
                             </TableRow>
                             <TableRow>
@@ -225,7 +253,7 @@ export default function LocationsList() {
                         </TableBody>
                     </Table>
                 </Card>
-                <div className="m-2 w-full">
+                <div className="w-full sm:m-2">
                     <ChartLineLabel
                         chartData={monthlySpending.map((month) => ({
                             month: month.month,
@@ -235,7 +263,7 @@ export default function LocationsList() {
                 </div>
             </div>
             <Tabs defaultValue="sublocations">
-                <TabsList className="ml-2 grid grid-cols-3">
+                <TabsList className="mx-auto mt-2 grid max-w-96 grid-cols-3 sm:m-0 sm:ml-2 sm:max-w-full">
                     <TabsTrigger value="sublocations">
                         <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">SL</span>Sub-locations
                     </TabsTrigger>
@@ -247,7 +275,7 @@ export default function LocationsList() {
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent value="sublocations">
-                    <Card className="m-2 w-full p-0">
+                    <Card className="mx-auto w-full max-w-96 p-0 sm:m-2 sm:max-w-full">
                         <Table className="w-full">
                             <TableHeader>
                                 <TableRow>
@@ -272,14 +300,14 @@ export default function LocationsList() {
                         </Table>
                     </Card>
                 </TabsContent>
-                <TabsContent value="costCodes">
+                <TabsContent value="costCodes" className="mx-auto w-full max-w-96 sm:m-2 sm:max-w-full">
                     <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
-                        <Button className="m-2" variant="secondary" onClick={() => setOpen(true)}>
+                        <Button variant="secondary" onClick={() => setOpen(true)}>
                             <RefreshCcw /> Sync from Premier
                         </Button>
                     </Link>
 
-                    <Card className="mx-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
+                    <Card className="mt-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
                         <Table className="w-full">
                             <TableHeader>
                                 <TableRow>
@@ -307,22 +335,22 @@ export default function LocationsList() {
                         </Table>
                     </Card>
                 </TabsContent>
-                <TabsContent value="pricelist">
-                    <div className="m-2 flex flex-col justify-end gap-2 sm:flex-row">
+                <TabsContent value="pricelist" className="mx-auto w-full max-w-96 sm:m-2 sm:max-w-full">
+                    <div className="flex flex-col justify-end gap-2 sm:m-2 sm:flex-row">
                         {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
                         <Button onClick={() => handleUpload(location.id)} disabled={!selectedFile || processing}>
                             Upload CSV
                         </Button> */}
                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                         <a href={`/material-items/location/${location.id}/download-csv`}>
-                            <Button>Download CSV</Button>
+                            <Button className="w-32">Download CSV</Button>
                         </a>
                     </div>
 
-                    <Card className="m-2">
+                    <Card className="mt-2 p-0 sm:m-2">
                         <Table className="w-full">
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="rounded-t-md">
                                     <TableHead>Code</TableHead>
                                     <TableHead>Description</TableHead>
                                     <TableHead>Unit Cost</TableHead>

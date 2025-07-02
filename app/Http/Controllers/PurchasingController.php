@@ -454,14 +454,16 @@ class PurchasingController extends Controller
         $pdf = pdf::loadView('requisition.pdf', [
             'requisition' => Requisition::with(['lineItems', 'location'])->find($requisition->id),
         ]);
-
+        $now = now()->format('Ymd_His');
+        $poNumber = $requisition->po_number ?? 'NA';
+        $fileName = "PO-{$poNumber}-{$requisition->id}-{$now}.pdf";
         activity()
             ->performedOn($requisition)
             ->event('PDF Print')
             ->causedBy(auth()->user())
 
             ->log("Requisition #{$requisition->id} was printed.");
-        return $pdf->download("{$requisition->id}.pdf");
+        return $pdf->download("{$fileName}.pdf");
     }
     public function excelImport(Requisition $requisition)
     {
