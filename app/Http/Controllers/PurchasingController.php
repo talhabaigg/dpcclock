@@ -76,7 +76,20 @@ class PurchasingController extends Controller
             'items.*.total_cost' => 'nullable|numeric|min:0',
         ]);
 
+        if ($validated['project_id']) {
+            $location = Location::with('costCodes')->findOrFail($validated['project_id']);
+            $validCodes = $location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
 
+            foreach ($validated['items'] as $index => $item) {
+                if (!in_array(strtoupper($item['cost_code']), $validCodes)) {
+                    return back()
+                        ->withErrors([
+                            "items.$index.cost_code" => "The cost code '{$item['cost_code']}' is not valid for this project.",
+                        ])
+                        ->withInput();
+                }
+            }
+        }
         $requisition = Requisition::create([
             'project_number' => $validated['project_id'] ?? 1,
             'supplier_number' => $validated['supplier_id'],

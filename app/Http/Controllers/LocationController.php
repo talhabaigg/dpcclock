@@ -56,9 +56,13 @@ class LocationController extends Controller
     {
         $location->load([
             'worktypes',
+            'costCodes',
             'materialItems',
             'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
         ]);
+
+
+
         $monthlySpending = $this->getMonthlySpending($location);
         // dd($monthlySpending);
 

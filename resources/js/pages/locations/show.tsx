@@ -1,4 +1,5 @@
 import CsvImporterDialog from '@/components/csv-importer';
+import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -38,6 +40,11 @@ type Location = {
             unit_cost_override: number;
         };
     }>;
+    cost_codes: Array<{
+        id: number;
+        code: string;
+        description: string;
+    }>;
 };
 
 // type PaginatedLocations = {
@@ -62,6 +69,7 @@ export default function LocationsList() {
         flash: { success?: string };
         monthlySpending: MonthlySpend[];
     }>().props;
+    console.log(location.cost_codes);
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Locations',
@@ -150,9 +158,12 @@ export default function LocationsList() {
             toast.success(flash.success);
         }
     }, [flash.success]);
+    const isLoading = false;
+    const [open, setOpen] = useState(isLoading);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
+            <LoadingDialog open={open} setOpen={setOpen} />
             <div className="m-2 flex items-center gap-2">
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                     <DialogTrigger asChild>
@@ -221,8 +232,9 @@ export default function LocationsList() {
                 </div>
             </div>
             <Tabs defaultValue="sublocations">
-                <TabsList className="ml-2 grid grid-cols-2">
+                <TabsList className="ml-2 grid grid-cols-3">
                     <TabsTrigger value="sublocations">Sub-locations</TabsTrigger>
+                    <TabsTrigger value="costCodes">Cost Codes</TabsTrigger>
                     <TabsTrigger value="pricelist">Price List</TabsTrigger>
                 </TabsList>
                 <TabsContent value="sublocations">
@@ -247,6 +259,41 @@ export default function LocationsList() {
                                         <TableCell>{splitExternalId(subLocation.external_id).activity}</TableCell>
                                     </TableRow>
                                 ))}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="costCodes">
+                    <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
+                        <Button className="m-2" variant="secondary" onClick={() => setOpen(true)}>
+                            <RefreshCcw /> Sync from Premier
+                        </Button>
+                    </Link>
+
+                    <Card className="mx-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
+                        <Table className="w-full">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Cost Code</TableHead>
+                                    <TableHead>Cost Description</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {location.cost_codes.length > 0 ? (
+                                    location.cost_codes.map((costCode) => (
+                                        <TableRow key={costCode.id}>
+                                            <TableCell>{costCode.code}</TableCell>
+                                            <TableCell>{costCode.description}</TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center">
+                                            No cost codes available for this job.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                <TableRow></TableRow>
                             </TableBody>
                         </Table>
                     </Card>

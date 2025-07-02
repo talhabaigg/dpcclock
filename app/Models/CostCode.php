@@ -30,4 +30,10 @@ class CostCode extends Model
                 ->orderByRaw("CAST(SUBSTRING_INDEX(code, '-', -1) AS UNSIGNED)");
         }
     }
+
+    public function locations()
+    {
+        return $this->belongsToMany(Location::class, 'location_cost_codes');
+
+    }
 }

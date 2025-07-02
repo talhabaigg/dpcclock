@@ -38,4 +38,9 @@ class Location extends Model
             ->withTimestamps();
     }
 
+    public function costCodes()
+    {
+        return $this->belongsToMany(CostCode::class, 'location_cost_codes');
+    }
+
 }

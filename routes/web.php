@@ -5,6 +5,7 @@ use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TimesheetEventController;
 use Illuminate\Support\Facades\Route;
@@ -129,6 +130,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         //Generate timesheet based on events
         Route::get('/{kiosk}/timesheet-events/generate', [TimesheetEventController::class, 'generateTimesheetForToday'])->name('timesheetEvents.generateToday');
+
+        // Location Cost Codes from Premier
+        Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
+
 
     });
 
