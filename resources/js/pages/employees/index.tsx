@@ -10,7 +10,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowUpDown, Search } from 'lucide-react';
+import { ArrowUpDown, RefreshCcw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 // Define the Employee type
 interface Employee {
@@ -47,7 +47,8 @@ export default function EmployeesList() {
             <div className="items-left m-2 flex flex-col justify-start gap-2 sm:flex-row md:justify-between">
                 <div className="flex items-center">
                     <Link href="/employees/sync" method="get">
-                        <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
+                        <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
+                            <RefreshCcw />
                             {isLoading ? 'Syncing...' : 'Sync Employees'}
                         </Button>
                     </Link>

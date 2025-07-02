@@ -16,7 +16,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function EventsIndex({ events, errors, flash }) {
+export default function EventsIndex({ events, flash }) {
     useEffect(() => {
         if (flash.success) {
             toast.success(flash.success);
@@ -44,15 +44,7 @@ export default function EventsIndex({ events, errors, flash }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Calendar" />
-            {errors && typeof errors === 'object' && (
-                <div className="mb-4 text-red-600">
-                    {Object.entries(errors).map(([field, message]) => (
-                        <div key={field}>
-                            <strong>{field}:</strong> {message}
-                        </div>
-                    ))}
-                </div>
-            )}
+
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-2">
                 <TabsList className="w-48">
                     <TabsTrigger value="calendar">

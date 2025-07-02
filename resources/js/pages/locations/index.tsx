@@ -9,7 +9,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, RefreshCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -64,8 +64,8 @@ export default function LocationsList() {
             <Head title="Locations" />
             <div className="m-2 flex items-center gap-2">
                 <Link href="/locations/sync" method="get">
-                    <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
-                        {isLoading ? 'Syncing...' : 'Sync Locations'}
+                    <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
+                        <RefreshCcw /> {isLoading ? 'Syncing...' : 'Sync Locations'}
                     </Button>
                 </Link>
                 <div>

@@ -12,7 +12,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
 import { useForm } from '@inertiajs/react';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 const Calendar = ({ timesheetEvents }) => {
     const [events, setEvents] = useState(timesheetEvents);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -74,10 +74,6 @@ const Calendar = ({ timesheetEvents }) => {
         // 🟢 Update local state for events
         setEvents((prevEvents) => prevEvents.map((evt) => (evt.id === updated.id ? { ...evt, ...updated } : evt)));
     };
-
-    useEffect(() => {
-        console.log('events', events);
-    }, [events]);
 
     return (
         <div className="m-2">

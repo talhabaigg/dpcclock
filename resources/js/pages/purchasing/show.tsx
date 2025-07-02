@@ -58,7 +58,11 @@ export default function RequisitionShow() {
             }[];
         };
         activities: any[];
-        flash: any[];
+        flash: {
+            success?: string;
+            error?: string;
+            message?: string;
+        };
     };
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);

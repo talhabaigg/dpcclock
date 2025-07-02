@@ -69,7 +69,7 @@ export default function LocationsList() {
         flash: { success?: string };
         monthlySpending: MonthlySpend[];
     }>().props;
-    console.log(location.cost_codes);
+
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Locations',

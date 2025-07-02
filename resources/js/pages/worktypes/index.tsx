@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { RefreshCcw, Search } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,8 +38,8 @@ export default function LocationsList() {
             <div className="mr-2 flex items-center justify-between gap-2">
                 <div className="m-2 flex items-center gap-2">
                     <Link href={route('worktypes.sync')}>
-                        <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
-                            {isLoading ? 'Syncing...' : 'Sync Worktypes'}
+                        <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
+                            <RefreshCcw /> {isLoading ? 'Syncing...' : 'Sync Worktypes'}
                         </Button>
                     </Link>
                     {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}

@@ -7,8 +7,8 @@ import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Settings } from 'lucide-react';
-import React, { useState } from 'react';
+import { RefreshCcw, Settings } from 'lucide-react';
+import { useState } from 'react';
 
 // Define the Kiosk type
 interface Kiosk {
@@ -30,7 +30,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
-    const [loading, setLoading] = React.useState(false);
+
     const getInitials = useInitials();
     const [open, setOpen] = useState(false);
     return (
@@ -40,12 +40,13 @@ export default function KiosksList() {
             <div className="m-2 flex items-center gap-2">
                 <Link href="/kiosks/sync" method="get">
                     <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
-                        Sync Kiosk
+                        <RefreshCcw /> Sync Kiosk
                     </Button>
                 </Link>
                 <Link href="/employees/kiosks/update" method="get">
-                    <Button variant="outline" className="w-full" onClick={() => setOpen(true)} disabled={loading}>
-                        {loading ? 'Syncing...' : 'Sync Employees with Kiosk'}
+                    <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
+                        <RefreshCcw />
+                        Sync Employees with Kiosk
                     </Button>
                 </Link>
                 {flash?.success && <div className="text-green-500">{flash.success}</div>}
