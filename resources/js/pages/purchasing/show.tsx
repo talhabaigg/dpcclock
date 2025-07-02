@@ -7,7 +7,8 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ArrowBigUp, CircleCheck, Cuboid, History } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -32,7 +33,7 @@ const requisitionHeaderTable: {
 ];
 
 export default function RequisitionShow() {
-    const { requisition, activities } = usePage().props as unknown as {
+    const { requisition, activities, flash } = usePage().props as unknown as {
         requisition: {
             id: number;
             project_number: string;
@@ -57,6 +58,7 @@ export default function RequisitionShow() {
             }[];
         };
         activities: any[];
+        flash: any[];
     };
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -96,6 +98,15 @@ export default function RequisitionShow() {
             return sortDirection === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
         });
     }
+
+    useEffect(() => {
+        if (flash.error) {
+            toast.error(flash.error);
+        }
+        if (flash.success) {
+            toast.success(flash.success);
+        }
+    }, []);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />

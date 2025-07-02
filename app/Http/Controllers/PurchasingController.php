@@ -76,20 +76,20 @@ class PurchasingController extends Controller
             'items.*.total_cost' => 'nullable|numeric|min:0',
         ]);
 
-        if ($validated['project_id']) {
-            $location = Location::with('costCodes')->findOrFail($validated['project_id']);
-            $validCodes = $location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
+        // if ($validated['project_id']) {
+        //     $location = Location::with('costCodes')->findOrFail($validated['project_id']);
+        //     $validCodes = $location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
 
-            foreach ($validated['items'] as $index => $item) {
-                if (!in_array(strtoupper($item['cost_code']), $validCodes)) {
-                    return back()
-                        ->withErrors([
-                            "items.$index.cost_code" => "The cost code '{$item['cost_code']}' is not valid for this project.",
-                        ])
-                        ->withInput();
-                }
-            }
-        }
+        //     foreach ($validated['items'] as $index => $item) {
+        //         if (!in_array(strtoupper($item['cost_code']), $validCodes)) {
+        //             return back()
+        //                 ->withErrors([
+        //                     "items.$index.cost_code" => "The cost code '{$item['cost_code']}' is not valid for this project.",
+        //                 ])
+        //                 ->withInput();
+        //         }
+        //     }
+        // }
         $requisition = Requisition::create([
             'project_number' => $validated['project_id'] ?? 1,
             'supplier_number' => $validated['supplier_id'],
@@ -277,10 +277,19 @@ class PurchasingController extends Controller
     }
     public function process($id)
     {
-        $requisition = Requisition::with('creator')->findOrFail($id);
+        $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
         if ($requisition->status !== 'pending') {
             return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');
         }
+        $validCostCodes = $requisition->location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
+        foreach ($requisition->lineItems as $item) {
+            if (!in_array(strtoupper($item->cost_code), $validCostCodes)) {
+                return redirect()
+                    ->route('requisition.show', $requisition->id)
+                    ->with('error', "Invalid cost code `{$item->cost_code}` found in line items. Check if the cost code is active in Premier for this job. Sync cost codes from Premier after activitating the code.");
+            }
+        }
+
         $next_num = $this->getPONumber($requisition);
 
         // dd('PO' . $next_num);
