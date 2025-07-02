@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { RefreshCcw } from 'lucide-react';
+import { CirclePlus, RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -167,7 +167,10 @@ export default function LocationsList() {
             <div className="m-2 flex items-center gap-2">
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                     <DialogTrigger asChild>
-                        <Button variant="secondary">Create sub-location</Button>
+                        <Button variant="secondary">
+                            <CirclePlus />
+                            Create sub-location
+                        </Button>
                     </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
@@ -233,9 +236,15 @@ export default function LocationsList() {
             </div>
             <Tabs defaultValue="sublocations">
                 <TabsList className="ml-2 grid grid-cols-3">
-                    <TabsTrigger value="sublocations">Sub-locations</TabsTrigger>
-                    <TabsTrigger value="costCodes">Cost Codes</TabsTrigger>
-                    <TabsTrigger value="pricelist">Price List</TabsTrigger>
+                    <TabsTrigger value="sublocations">
+                        <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">SL</span>Sub-locations
+                    </TabsTrigger>
+                    <TabsTrigger value="costCodes">
+                        <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">CC</span>Cost Codes
+                    </TabsTrigger>
+                    <TabsTrigger value="pricelist">
+                        <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">PL</span>Price List
+                    </TabsTrigger>
                 </TabsList>
                 <TabsContent value="sublocations">
                     <Card className="m-2 w-full p-0">
