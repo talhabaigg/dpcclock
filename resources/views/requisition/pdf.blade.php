@@ -9,10 +9,10 @@
         .invoice-box {
             max-width: 800px;
             margin: auto;
-            padding: 30px;
-            border: 1px solid #eee;
+            padding: 10px;
+
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
-            font-size: 16px;
+            font-size: 12px;
             line-height: 24px;
             font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
             color: #555;
@@ -97,6 +97,13 @@
         .invoice-box.rtl table tr td:nth-child(2) {
             text-align: left;
         }
+
+        .po-number {
+            font-weight: bold;
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 
@@ -115,7 +122,11 @@
                             </td>
 
                             <td>
-                                Requisition #: {{$requisition->id}}<br />
+                                <div class="po-number">
+                                    PO{{ $requisition->po_number }}
+                                </div>
+
+
                                 Required:
                                 {{ \Carbon\Carbon::parse($requisition->date_required)->format('d/m/Y') }}<br />
                                 Requested: {{ \Carbon\Carbon::parse($requisition->created_at)->format('d/m/Y') }}<br />
@@ -131,16 +142,16 @@
 
                         <tr>
                             <td>
+                                Job Name: {{ $requisition->location->name }}<br />
+                                Job Number: {{ $requisition->location->external_id }}<br />
 
-                                Job: {{ $requisition->location->name }}<br />
-                                Site reference: {{ $requisition->location->external_id }}<br />
                             </td>
 
                             <td>
                                 Supplier: {{ $requisition->supplier->name }}<br />
-                                Delivery contact: {{ $requisition->delivery_contact }}<br />
-                                Pickup by: {{ $requisition->pickup_by }}<br />
-                                Requested by: {{ $requisition->requested_by }}
+                                {{ $requisition->delivery_contact ?? 'Delivery contact:' . $requisition->delivery_contact }}<br />
+                                {{ $requisition->pickup_by ?? 'Pickup by:' . $requisition->pickup_by }}<br />
+                                {{ $requisition->requested_by ?? 'Requested by:' . $requisition->requested_by }}<br />
                             </td>
                         </tr>
                     </table>
@@ -148,16 +159,16 @@
             </tr>
 
             <tr class="heading">
-                <td>Delivery address: </br>
+                <td>Delivery address & Instructions: </br>
                 </td>
 
                 <td></td>
             </tr>
 
             <tr class="details">
-                <td> {{ $requisition->deliver_to }}</td>
+                <td> {{ $requisition->deliver_to }} {{ $requisition->order_reference }}</td>
 
-                
+
             </tr>
 
             <tr class="heading">
@@ -175,7 +186,7 @@
             @endforeach
 
 
-           
+
         </table>
     </div>
 </body>
