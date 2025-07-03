@@ -1,6 +1,5 @@
 import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
-import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -28,8 +27,6 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kiosks', href: '/kiosks' }];
 
 export default function KiosksList() {
     const { kiosks, flash } = usePage<{ kiosks: Kiosk[]; flash?: { success?: string } }>().props;
-
-    const getInitials = useInitials();
     const [open, setOpen] = useState(false);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

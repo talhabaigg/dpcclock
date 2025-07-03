@@ -41,3 +41,14 @@ test('users can logout', function () {
     $this->assertGuest();
     $response->assertRedirect('/');
 });
+
+test('users with 2fa enabled cannot login without 2fa code', function () {
+    $user = User::factory()->create(['two_factor_enabled' => true]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $response->assertRedirect(route('otp.show'));
+});
