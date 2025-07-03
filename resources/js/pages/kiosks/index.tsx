@@ -1,14 +1,12 @@
 import LoadingDialog from '@/components/loading-dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { RefreshCcw, Settings } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 import { useState } from 'react';
+import KioskCard from './index-partials/kiosk-card';
 
 // Define the Kiosk type
 interface Kiosk {
@@ -36,89 +34,29 @@ export default function KiosksList() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
-
-            <div className="m-2 flex items-center gap-2">
-                <Link href="/kiosks/sync" method="get">
-                    <Button variant="outline" className="w-32" onClick={() => setOpen(true)}>
-                        <RefreshCcw /> Sync Kiosk
-                    </Button>
-                </Link>
-                <Link href="/employees/kiosks/update" method="get">
-                    <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
-                        <RefreshCcw />
-                        Sync Employees with Kiosk
-                    </Button>
-                </Link>
-                {flash?.success && <div className="text-green-500">{flash.success}</div>}
-            </div>
             <LoadingDialog open={open} setOpen={setOpen} />
-            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mx-auto mt-2 flex flex-col gap-2 sm:mx-2 sm:flex-row sm:items-center">
+                <div className="flex min-w-96 flex-col gap-2 sm:flex-row">
+                    <Link href="/kiosks/sync" method="get">
+                        <Button variant="outline" className="w-full max-w-96 sm:w-32" onClick={() => setOpen(true)}>
+                            <RefreshCcw /> Sync Kiosk
+                        </Button>
+                    </Link>
+                    <Link href="/employees/kiosks/update" method="get">
+                        <Button variant="outline" className="mx-auto w-full max-w-96" onClick={() => setOpen(true)}>
+                            <RefreshCcw />
+                            Sync Employees with Kiosk
+                        </Button>
+                    </Link>
+                </div>
+
+                <div className="mx-auto flex max-w-96 sm:mx-0 sm:max-w-full">
+                    {flash?.success && <div className="text-green-500">{flash.success}</div>}
+                </div>
+            </div>
+            <div className="mx-auto mb-2 grid max-w-96 grid-cols-1 gap-2 space-y-2 space-x-2 sm:m-2 sm:mx-0 sm:max-w-full sm:grid-cols-3 sm:p-2">
                 {kiosks.map((kiosk) => (
-                    <Card key={kiosk.id} className="mb-4 p-4">
-                        <CardTitle>{kiosk.name}</CardTitle>
-
-                        <CardDescription>
-                            <Label
-                                className="block max-w-xs truncate text-sm font-normal"
-                                title={`${kiosk.eh_location_id} - ${kiosk.location?.name?.trim() || 'N/A'}`}
-                            >
-                                {kiosk.eh_location_id} - {kiosk.location?.name?.trim() || 'N/A'}
-                            </Label>
-                            <div className="mt-2 flex items-center justify-between">
-                                <Label>Default Start time</Label>
-                                <Label className="text-muted-foreground">
-                                    {(() => {
-                                        const [hour, minute] = kiosk.default_start_time.split(':');
-                                        const date = new Date();
-                                        date.setHours(Number(hour), Number(minute));
-                                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
-                                    })()}
-                                </Label>
-                            </div>
-                            <div className="mt-2 flex items-center justify-between">
-                                <Label>Default End time</Label>
-                                <Label className="text-muted-foreground">
-                                    {(() => {
-                                        const [hour, minute] = kiosk.default_end_time.split(':');
-                                        const date = new Date();
-                                        date.setHours(Number(hour), Number(minute));
-                                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
-                                    })()}
-                                </Label>
-                            </div>
-                            <div>
-                                {kiosk.employees && kiosk.employees.length > 0 ? (
-                                    <Label className="mt-2 flex items-center gap-2">
-                                        Employees:{' '}
-                                        <div className="flex -space-x-1 overflow-hidden">
-                                            {kiosk.employees.slice(0, 5).map((employee, idx) => (
-                                                <Avatar key={employee.name + idx} className="h-8 w-8 overflow-hidden rounded-full">
-                                                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                                        {getInitials(employee.name)}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                            ))}
-                                        </div>
-                                    </Label>
-                                ) : (
-                                    <Label className="mt-2">No employees assigned</Label>
-                                )}
-                            </div>
-
-                            <div className="mt-4 flex items-center justify-between">
-                                {' '}
-                                <Link href={`/kiosks/${kiosk.id}`}>
-                                    <Button>Open</Button>
-                                </Link>
-                                <Link href={`/kiosks/${kiosk.id}/edit`}>
-                                    <Button variant="outline">
-                                        {' '}
-                                        <Settings />
-                                    </Button>
-                                </Link>
-                            </div>
-                        </CardDescription>
-                    </Card>
+                    <KioskCard kiosk={kiosk}></KioskCard>
                 ))}
             </div>
         </AppLayout>

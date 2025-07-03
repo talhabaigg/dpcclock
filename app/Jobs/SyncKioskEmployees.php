@@ -51,14 +51,24 @@ class SyncKioskEmployees implements ShouldQueue
                         Log::info("Detached all kiosks for employee ID {$employeeId} (no kiosks found).");
                         continue;
                     }
-
+                    $currentKiosks = $employeeModel->kiosks()->withPivot(['zone', 'top_up'])->get()->keyBy('eh_kiosk_id');
                     // Prepare sync data with default pivot fields
                     $syncData = [];
                     foreach ($kioskIds as $kioskId) {
-                        $syncData[$kioskId] = [
-                            'zone' => 'default',    // Adjust default zone as needed
-                            'top_up' => false,      // Adjust default top_up as needed
-                        ];
+                        if ($currentKiosks->has($kioskId)) {
+                            // Preserve existing pivot values
+                            $pivot = $currentKiosks[$kioskId]->pivot;
+                            $syncData[$kioskId] = [
+                                'zone' => $pivot->zone,
+                                'top_up' => $pivot->top_up,
+                            ];
+                        } else {
+                            // Use defaults for new attachments
+                            $syncData[$kioskId] = [
+                                'zone' => 'default',
+                                'top_up' => false,
+                            ];
+                        }
                     }
 
                     // Sync kiosks — attach new, detach removed, update existing
