@@ -45,16 +45,22 @@ export default function EmployeesList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
             <div className="items-left m-2 flex flex-col justify-start gap-2 sm:flex-row md:justify-between">
-                <div className="flex items-center">
+                <div className="mx-auto flex flex-col items-center space-y-2 sm:mx-0 sm:flex-row sm:space-y-0 sm:space-x-2">
                     <Link href="/employees/sync" method="get">
-                        <Button variant="outline" className="w-full" onClick={() => setOpen(true)}>
+                        <Button variant="outline" className="w-96 sm:w-full sm:min-w-full" onClick={() => setOpen(true)}>
                             <RefreshCcw />
                             {isLoading ? 'Syncing...' : 'Sync Employees'}
                         </Button>
                     </Link>
+                    <Link href="/employees/worktypes/sync" method="get">
+                        <Button variant="outline" className="w-96 sm:w-full sm:min-w-full" onClick={() => setOpen(true)}>
+                            <RefreshCcw />
+                            Sync Worktypes
+                        </Button>
+                    </Link>
                     {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
                 </div>
-                <div className="relative w-full sm:w-1/4">
+                <div className="relative mx-auto max-w-96 min-w-96 sm:mx-0 sm:w-1/4">
                     <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                     <Input
                         type="text"
@@ -72,7 +78,7 @@ export default function EmployeesList() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>
-                                <div className="flex items-center">
+                                <div className="flex min-w-48 items-center">
                                     {' '}
                                     <Label>Name</Label>{' '}
                                     <Button size="sm" variant="ghost" onClick={() => handleSort('name')}>
@@ -105,7 +111,7 @@ export default function EmployeesList() {
                         {filteredEmployees.map((employee) => (
                             <TableRow key={employee.id}>
                                 <TableCell className="flex items-center gap-2 font-medium">
-                                    <UserInfo user={{ ...employee, email_verified_at: '', created_at: '', updated_at: '' }}></UserInfo>
+                                    <UserInfo user={{ ...employee, email_verified_at: '', created_at: '', updated_at: '', phone: '' }}></UserInfo>
                                 </TableCell>
 
                                 <TableCell>{employee.external_id?.trim() || 'N/A'}</TableCell>

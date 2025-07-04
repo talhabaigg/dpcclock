@@ -36,12 +36,14 @@ class SendKioskClockedInNotification extends Command
         // Iterate over each kiosk
         foreach ($kiosks as $kiosk) {
             // Retrieve employees from the current kiosk that are clocked in
-            $employees = $kiosk->employees()->whereHas('clocks', function ($query) {
-                $query->whereNull('clock_out'); // Only employees with an active clock-in
+            $employees = $kiosk->employees()->whereHas('clocks', function ($query) use ($kiosk) {
+                $query->whereNull('clock_out')
+                    ->where('kiosk_id', $kiosk->id); // Ensure the clock belongs to this kiosk
             })
                 ->with([
-                    'clocks' => function ($query) {
-                        $query->whereNull('clock_out'); // Only active clock-in records
+                    'clocks' => function ($query) use ($kiosk) {
+                        $query->whereNull('clock_out')
+                            ->where('kiosk_id', $kiosk->id); // Ensure the clock belongs to this kiosk
                     }
                 ])
                 ->get();

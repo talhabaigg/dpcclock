@@ -14,6 +14,7 @@ class UserController extends Controller
     {
         $users = User::with(['roles.permissions'])->get();
         return Inertia::render('users/index', [
+            'roles' => Role::all(),
             'users' => $users,
         ]);
     }
