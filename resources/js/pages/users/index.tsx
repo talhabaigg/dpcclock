@@ -82,9 +82,7 @@ export default function LocationsList() {
                             <TableHead>Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Roles</TableHead>
-
                             <TableHead>Actions</TableHead>
-
                             <TableHead>Joined</TableHead>
                         </TableRow>
                     </TableHeader>

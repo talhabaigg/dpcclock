@@ -105,7 +105,7 @@ class SyncKioskEmployees implements ShouldQueue
                 fn($loc) =>
                 is_array($loc) &&
                 (
-                    in_array($loc['parentId'] ?? null, [1149031, 1198645]) ||
+                    in_array($loc['parentId'] ?? null, [1149031, 1198645, 1249093]) ||
                     in_array($loc['id'] ?? null, [1149031, 1198645])
                 )
             )
