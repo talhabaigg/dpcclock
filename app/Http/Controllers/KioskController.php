@@ -33,10 +33,20 @@ class KioskController extends Controller
     }
     public function index()
     {
-        $kiosks = Kiosk::with('location', 'employees')->get();
+        if (Auth::user()->hasRole('admin')) {
+            $kiosks = Kiosk::with('location', 'employees')->get();
+            return Inertia::render('kiosks/index', [
+                'kiosks' => $kiosks,
+            ]);
+        }
+
+        $kiosks = Auth::user()->managedKiosks()->with('location', 'employees')->get();
         return Inertia::render('kiosks/index', [
             'kiosks' => $kiosks,
         ]);
+
+
+
     }
 
     /**
