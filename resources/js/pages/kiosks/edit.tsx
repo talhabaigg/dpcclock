@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { Info } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -65,6 +65,11 @@ export default function Edit({ kiosk, employees, errors, flash }) {
         { title: 'Kiosks', href: '/kiosks' },
         { title: 'Edit Kiosk', href: `/kiosks/${kiosk.id}/edit` },
     ];
+
+    const handleKioskActiveToggle = (checked) => {
+        router.get(route('kiosk.toggleActive', kiosk.id));
+    };
+    console.log(kiosk.is_active);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -192,6 +197,13 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                 <Card className="m-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">Settings</CardHeader>
                     <CardContent>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <Label>Enable for timesheets</Label>
+                            </div>
+
+                            <Switch checked={kiosk.is_active} onCheckedChange={handleKioskActiveToggle} />
+                        </div>
                         <div className="flex items-center justify-between">
                             <div>
                                 <Label>Auto generate timesheets for events</Label>

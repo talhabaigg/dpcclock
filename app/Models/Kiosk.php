@@ -13,6 +13,7 @@ class Kiosk extends Model
         'name',
         'default_start_time',
         'default_end_time',
+        'is_active',
     ];
 
     public function employees()

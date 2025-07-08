@@ -58,6 +58,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync');
         Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit');
         Route::post('/kiosks/{kiosk}/zones', [KioskController::class, 'updateZones'])->name('kiosks.updateZones')->permission('update travel zones');
+        Route::get('/kiosks/{kiosk}/toggleActive', [KioskController::class, 'toggleActive'])->name('kiosk.toggleActive')->permission('update travel zones');
 
 
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');

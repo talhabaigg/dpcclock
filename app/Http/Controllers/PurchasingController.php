@@ -278,7 +278,7 @@ class PurchasingController extends Controller
     public function process($id)
     {
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
-        if ($requisition->status !== 'pending') {
+        if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
             return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');
         }
         $validCostCodes = $requisition->location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
@@ -390,7 +390,7 @@ class PurchasingController extends Controller
     {
 
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
-        if ($requisition->status !== 'pending' || $requisition->status !== 'failed') {
+        if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();

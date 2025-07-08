@@ -70,6 +70,11 @@ class KioskController extends Controller
      */
     public function show(Kiosk $kiosk)
     {
+        if (!$kiosk->is_active) {
+            return Inertia::render('kiosks/error/kiosk-disabled', [
+                'error' => 'Kiosk is currently active. Please try again later.',
+            ]);
+        }
         // Load employees related to the kiosk
         $kiosk->load('employees');
 
@@ -174,6 +179,16 @@ class KioskController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Kiosk settings updated successfully.');
+    }
+
+    public function toggleActive(Kiosk $kiosk)
+    {
+
+        $kiosk->is_active = !$kiosk->is_active;
+        $kiosk->save();
+
+        // Optionally, you can return a response or redirect
+        return redirect()->back()->with('success', 'Kiosk timesheet enable settings updated successfully.');
     }
     /**
      * Remove the specified resource from storage.
