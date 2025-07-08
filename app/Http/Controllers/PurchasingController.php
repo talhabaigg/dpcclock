@@ -394,7 +394,7 @@ class PurchasingController extends Controller
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();
-        $locations = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->get();
+        $locations = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093)->get();
         $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         return Inertia::render('purchasing/create', [

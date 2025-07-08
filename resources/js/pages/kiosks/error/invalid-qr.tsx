@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react';
 
-export default function ErrorPage() {
+export default function ErrorPage({}) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
             <div className="flex max-w-sm flex-col items-center rounded-2xl bg-white p-6 text-center shadow-lg">
