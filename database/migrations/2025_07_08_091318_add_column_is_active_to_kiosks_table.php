@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('kiosks', function (Blueprint $table) {
-            $table->boolean('is_active')->default(true)->after('location_id')->comment('Indicates if the kiosk is active or not');
+            $table->boolean('is_active')->default(true)->comment('Indicates if the kiosk is active or not');
         });
     }
 
