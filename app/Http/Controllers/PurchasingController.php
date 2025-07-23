@@ -376,6 +376,7 @@ class PurchasingController extends Controller
 
     public function sendApi($id)
     {
+        dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
         if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
             return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');

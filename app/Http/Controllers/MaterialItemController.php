@@ -314,7 +314,7 @@ class MaterialItemController extends Controller
             $query->where('supplier_id', $supplierId);
         }
 
-        $materialItems = $query->limit(10)->get();
+        $materialItems = $query->limit(100)->get();
 
         return response()->json($materialItems);
     }
