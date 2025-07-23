@@ -536,7 +536,7 @@ class PurchasingController extends Controller
             if ($response->failed()) {
                 return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
             }
-            return response()->json($response->json());
+            return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
 
         }
 
