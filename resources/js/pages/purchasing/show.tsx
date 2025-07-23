@@ -134,7 +134,7 @@ export default function RequisitionShow() {
                         </Table>
                     </Card>
                     <div className="m-2 flex w-full flex-col items-start justify-end gap-2 self-start sm:items-end md:flex-row">
-                        <div className="grid w-full grid-cols-1 space-y-2 space-x-2 sm:max-w-lg sm:space-y-0 sm:space-x-2 md:grid-cols-4">
+                        <div className="grid w-full grid-cols-1 space-y-2 space-x-2 sm:max-w-2xl sm:space-y-0 sm:space-x-2 md:grid-cols-5">
                             <Link
                                 href={`/requisition/${requisition.id}/edit`}
                                 className={requisition.status === 'processed' ? 'pointer-events-none' : ''}
@@ -157,19 +157,35 @@ export default function RequisitionShow() {
                                 </Button>
                             </a>
                             {requisition.status === 'failed' ? (
-                                <Link href={`/requisition/${requisition.id}/process`}>
-                                    <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
-                                        <RotateCcw />
-                                        Retry
-                                    </Button>
-                                </Link>
+                                <>
+                                    <Link href={`/requisition/${requisition.id}/api-send`}>
+                                        <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
+                                            <RotateCcw />
+                                            API to Premier
+                                        </Button>
+                                    </Link>
+                                    <Link href={`/requisition/${requisition.id}/process`}>
+                                        <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
+                                            <RotateCcw />
+                                            Retry
+                                        </Button>
+                                    </Link>
+                                </>
                             ) : requisition.status === 'pending' ? (
-                                <Link href={`/requisition/${requisition.id}/process`}>
-                                    <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
-                                        <CircleCheck />
-                                        Send to Premier
-                                    </Button>
-                                </Link>
+                                <>
+                                    <Link href={`/requisition/${requisition.id}/api-send`}>
+                                        <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
+                                            <CircleCheck />
+                                            API to Premier
+                                        </Button>
+                                    </Link>
+                                    <Link href={`/requisition/${requisition.id}/process`}>
+                                        <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
+                                            <CircleCheck />
+                                            Send to Premier
+                                        </Button>
+                                    </Link>
+                                </>
                             ) : (
                                 <Button className="w-full max-w-96 bg-green-900 text-xs text-white sm:max-w-32 dark:bg-green-900" size="sm" disabled>
                                     Sent to Premier
