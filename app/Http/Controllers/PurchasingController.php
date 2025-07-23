@@ -503,21 +503,6 @@ class PurchasingController extends Controller
             $timestamp = now()->format('d/m/Y h:i A');
             $auth = auth()->user()->name;
             $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
-
-            // $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
-            // $recepients = array_unique($recepients); // Ensure unique recipients
-
-            // foreach ($recepients as $recepient) {
-            //     $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-            //         'user_email' => $recepient,
-            //         'requisition_id' => $requisition->id,
-            //         'message' => $messageBody,
-            //     ]);
-
-            //     if ($response->failed()) {
-            //         return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-            //     }
-            // }
             $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
                 'user_email' => $creatorEmail,
                 'requisition_id' => $requisition->id,
@@ -528,14 +513,6 @@ class PurchasingController extends Controller
                 return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
             }
 
-            $requisition->update([
-                'status' => 'sent to premier',
-                'processed_by' => auth()->id(),
-            ]);
-
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
-            }
             return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
 
         }
