@@ -173,6 +173,7 @@ export default function LocationsList() {
                             Create sub-location
                         </Button>
                     </DialogTrigger>
+
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Create sub-location for {location.name}</DialogTitle>

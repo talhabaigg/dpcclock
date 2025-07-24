@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 
 use App\Models\CostCode;
+use App\Services\GetCompanyCodeService;
 use App\Services\PremierAuthenticationService;
+use GeneratePONumberService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Supplier;
@@ -279,27 +281,14 @@ class PurchasingController extends Controller
     public function process($id)
     {
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
-        if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
-            return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');
-        }
-        $validCostCodes = $requisition->location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
-        foreach ($requisition->lineItems as $item) {
-            if (!in_array(strtoupper($item->cost_code), $validCostCodes)) {
-                return redirect()
-                    ->route('requisition.show', $requisition->id)
-                    ->with('error', "Invalid cost code `{$item->cost_code}` found in line items. Check if the cost code is active in Premier for this job. Sync cost codes from Premier after activitating the code.");
-            }
-        }
-
+        $validateService = new \App\Services\ValidateRequisitionService();
+        $generatePONumberService = new \App\Services\GeneratePONumberService();
+        $requisitionService = new \App\Services\RequisitionService();
+        $status = $validateService->validateStatus($requisition);
+        $cc = $validateService->validateCostCodes($requisition);
         if (!$requisition->po_number) {
-            $next_num = $this->getPONumber($requisition);
+            $next_num = $generatePONumberService->generate($requisition);
         }
-
-
-        // dd('PO' . $next_num);
-
-
-
         $excelService = new ExcelExportService();
         $fileName = $excelService->generateCsv($requisition);
         activity()
@@ -312,62 +301,9 @@ class PurchasingController extends Controller
             ])
             ->log("Requisition #{$requisition->id} processed and sent to Premier.");
 
-
-        $fileContent = Storage::disk('public')->get($fileName);
-        // For testing: return the Excel file as a download
-        // dd('excel generated', $fileContent);
-        // Upload to SFTP
-        // $uploaded = true;
-
-        $uploaded = Storage::disk('premier_sftp')->put("upload/{$fileName}", $fileContent);
-
+        $uploaded = $requisitionService->sendExcelFileToSFTP($fileName);
         if ($uploaded) {
-            $creator = $requisition->creator;
-            $creatorEmail = $creator->email ?? null;
-            // dd($creatorEmail);
-            if (!$creatorEmail) {
-                return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
-            }
-
-            $timestamp = now()->format('d/m/Y h:i A');
-            $auth = auth()->user()->name;
-            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
-
-            // $recepients = [$creatorEmail, 'talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au', 'kylie@superiorgroup.com.au', 'robyn.homann@superiorgroup.com.au'];
-            // $recepients = array_unique($recepients); // Ensure unique recipients
-
-            // foreach ($recepients as $recepient) {
-            //     $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-            //         'user_email' => $recepient,
-            //         'requisition_id' => $requisition->id,
-            //         'message' => $messageBody,
-            //     ]);
-
-            //     if ($response->failed()) {
-            //         return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-            //     }
-            // }
-            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-                'user_email' => $creatorEmail,
-                'requisition_id' => $requisition->id,
-                'message' => $messageBody,
-            ]);
-
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-            }
-
-            $requisition->update([
-                'status' => 'sent to premier',
-                'processed_by' => auth()->id(),
-            ]);
-
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('success', 'Failed to send notification.');
-            }
-
-            return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
-
+            $requisitionService->notifyRequisitionProcessed($requisition);
         } else {
             dd('SFTP upload failed');
         }
@@ -378,150 +314,27 @@ class PurchasingController extends Controller
     {
         dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
-        if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
-            return redirect()->route('requisition.index')->with('error', 'Requisition is not in pending status.');
-        }
-        $validCostCodes = $requisition->location->costCodes->pluck('code')->map(fn($c) => strtoupper($c))->toArray();
-        foreach ($requisition->lineItems as $item) {
-            if (!in_array(strtoupper($item->cost_code), $validCostCodes)) {
-                return redirect()
-                    ->route('requisition.show', $requisition->id)
-                    ->with('error', "Invalid cost code `{$item->cost_code}` found in line items. Check if the cost code is active in Premier for this job. Sync cost codes from Premier after activitating the code.");
-            }
-        }
-
+        $validateService = new \App\Services\ValidateRequisitionService();
+        $generatePONumberService = new \App\Services\GeneratePONumberService();
+        $requisitionService = new \App\Services\RequisitionService();
+        $validateService->validateStatus($requisition);
+        $validateService->validateCostCodes($requisition);
         if (!$requisition->po_number) {
-            $next_num = $this->getPONumber($requisition);
+            $generatePONumberService->generate($requisition);
         }
-        activity()
-            ->performedOn($requisition)
-            ->causedBy(auth()->user())
-            ->event('api request sent to premier')
-            ->withProperties([
-                'po_number' => $requisition->po_number,
-
-            ])
-            ->log("Requisition #{$requisition->id} processed and sent to Premier.");
-
         $authService = new PremierAuthenticationService();
         $token = $authService->getAccessToken();
-        // dd('Token', $token);
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
-        $companyCodes = [
-            '1149031' => 'SWC',
-            '1198645' => 'GREEN',
-            '1249093' => 'SWCP'
-        ];
-        $company = $companyCodes[$parentId] ?? null;
-
-        $payload = [
-            "Company" => $company,
-            "APSubledger" => "AP",
-            "PurchaseOrderNumber" => "PO" . $requisition->po_number,
-            "PurchaseOrderType" => "PO",
-            "Job" => $requisition->location?->external_id ?? "N/A",
-            "Memo" => $requisition->notes ?? "N/A",
-            "RequestedBy" => $requisition->requested_by ?? "N/A",
-            "PurchaseOrderDate" => now()->toDateString(),
-            "RequiredDate" => isset($requisition->date_required) ? Carbon::parse($requisition->date_required)->format('Y-m-d') : now()->format('Y-m-d'),
-            "PromisedDate" => isset($requisition->date_required)
-                ? Carbon::parse($requisition->date_required)->format('Y-m-d')
-                : now()->format('Y-m-d'),
-            "BlanketExpiryDate" => null,
-            "SendDate" => isset($requisition->date_required)
-                ? Carbon::parse($requisition->date_required)->format('Y-m-d')
-                : now()->format('Y-m-d'),
-            "PurchaseOrderReference" => $requisition->order_reference ?? "N/A",
-            "Vendor" => $requisition->supplier?->code ?? "N/A",
-            "VendorReferenceNumber" => null,
-            "ShipToType" => "JOB",
-            "ShipTo" => $requisition->location?->external_id ?? "N/A",
-            "ShipToAddress" => $requisition->location?->address ?? "N/A",
-            "Attention" => $requisition->delivery_contact ?? "N/A",
-            "FOBShipVia" => null,
-            "PurchaseOrderLines" => $requisition->lineItems->map(function ($lineItem, $index) use ($company) {
-                $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
-                return [
-                    "POLineNumber" => $index + 1,
-                    "Item" => null,
-                    "Description" => $lineItemValue,
-                    "Quantity" => $lineItem->qty ?? 0,
-                    "UnitOfMeasure" => ((float) $lineItem->qty != (int) $lineItem->qty) ? "m" : "EA",
-                    "UnitCost" => $lineItem->unit_cost ?? 0,
-                    "POLineCompany" => $company,
-                    "POLineDistributionType" => "J",
-                    "POLineJob" => $lineItem->requisition->location?->external_id ?? "N/A",
-                    "JobCostType" => "MAT",
-                    "JobCostItem" => $lineItem->cost_code ?? "N/A",
-                    "JobCostDepartment" => null,
-                    "JobCostLocation" => null,
-                    "InventorySubledger" => null,
-                    "Warehouse" => null,
-                    "WarehouseLocation" => null,
-                    "GLAccount" => null,
-                    "GLSubAccount" => null,
-                    "Division" => null,
-                    "TaxGroup" => "GST",
-                    "Discount" => 0,
-                    "DiscountPercent" => 0,
-                    "DateRequired" => isset($lineItem->date_required) ? Carbon::parse($lineItem->date_required)->format('Y-m-d') : now()->format('Y-m-d'),
-                    "PromisedDate" => isset($lineItem->date_required) ? Carbon::parse($lineItem->date_required)->format('Y-m-d') : now()->format('Y-m-d'),
-                ];
-            })->toArray(),
-        ];
-
-        $base_url = env('PREMIER_SWAGGER_API_URL');
-        $response = Http::withToken($token)
-            ->acceptJson()
-            ->post($base_url . '/api/PurchaseOrder/CreatePurchaseOrder', $payload);
-
-        if ($response->failed()) {
-            $requisition->status = 'failed';
-            $requisition->save();
-            activity()
-                ->performedOn($requisition)
-                ->event('api request failed')
-                ->causedBy(auth()->user())
-                ->log("Requisition #{$requisition->id} API request failed with error: " . $response->body());
-            return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send API request to Premier. Please check the logs for more details.' . $response->body());
-        } else {
-            $requisition->status = 'success';
-            $requisition->processed_by = auth()->id();
-            $requisition->save();
-            activity()
-                ->performedOn($requisition)
-                ->event('api request successful')
-                ->causedBy(auth()->user())
-                ->log("Requisition #{$requisition->id} API request successful.");
-
-            $creator = $requisition->creator;
-            $creatorEmail = $creator->email ?? null;
-            // dd($creatorEmail);
-            if (!$creatorEmail) {
-                return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
-            }
-
-            $timestamp = now()->format('d/m/Y h:i A');
-            $auth = auth()->user()->name;
-            $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
-            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
-                'user_email' => $creatorEmail,
-                'requisition_id' => $requisition->id,
-                'message' => $messageBody,
-            ]);
-
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
-            }
-
-            return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
-
-        }
-
-
-
-
+        $companyService = new GetCompanyCodeService();
+        $companyCode = $companyService->getCompanyCode($parentId);
+        $payload = $requisitionService->generateRequisitionPayload($requisition, $companyCode);
+        $requisitionService->sendRequisitionToPremierViaAPI($requisition, $payload);
     }
+
+
+
+
+
     public function markSentToSupplier($id)
     {
         $requisition = Requisition::findOrFail($id);
