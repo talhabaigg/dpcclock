@@ -63,19 +63,24 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
     };
 
     return (
-        <div className="flex items-center justify-start">
+        <div className="flex max-w-96 min-w-96 items-center justify-start sm:min-w-[250px]">
             <Button onClick={goToPrevious} variant="outline" className="rounded-r-none">
                 <ChevronLeft />
             </Button>
             <div className="flex flex-col items-center space-y-2">
                 <Popover open={open} onOpenChange={handleOpenChange}>
                     <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={open} className="w-[250px] justify-between rounded-none">
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={open}
+                            className="w-full min-w-72 justify-between rounded-none sm:min-w-[250px]"
+                        >
                             {value ? employees.find((emp) => emp.value === value)?.label : 'Select an Employee'}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[250px] p-0">
+                    <PopoverContent className="min-w-72 p-0 sm:min-w-[250px]">
                         <Command>
                             <CommandInput placeholder="Search employee..." />
                             <CommandList className="max-h-60 overflow-auto">

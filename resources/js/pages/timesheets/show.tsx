@@ -103,7 +103,7 @@ export default function TimesheetManagement() {
             <Head title="Timesheets" />
             <div className="m-4 flex flex-col gap-2">
                 <Label className="text-3xl">Timesheet Management</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center space-y-2 sm:flex-row sm:gap-2 sm:space-y-0">
                     <SearchEmployee
                         onEmployeeChange={handleEmployeeChange}
                         initialEmployeeId={selectedEmployeeId} // Pass initial value

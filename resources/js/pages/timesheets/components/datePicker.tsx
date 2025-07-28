@@ -30,7 +30,7 @@ export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (w
     };
 
     return (
-        <div className="flex flex-row items-center">
+        <div className="flex max-w-96 min-w-96 flex-row items-center sm:max-w-[250px]">
             <Button variant="outline" onClick={handlePrevious} className="rounded-r-none">
                 <ChevronLeft />
             </Button>
@@ -38,7 +38,7 @@ export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (w
                 <PopoverTrigger asChild>
                     <Button
                         variant={'outline'}
-                        className={cn('w-[250px] justify-start rounded-none text-left font-normal', !date && 'text-muted-foreground')}
+                        className={cn('w-72 justify-start rounded-none text-left font-normal sm:w-[250px]', !date && 'text-muted-foreground')}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {date ? format(date, 'PPP') : <span>Week ending date</span>}

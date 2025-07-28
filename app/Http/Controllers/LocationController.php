@@ -56,7 +56,7 @@ class LocationController extends Controller
     {
         $location->load([
             'worktypes',
-            'costCodes',
+            'costCodes' => fn($query) => $query->orderByRaw('CAST(code AS UNSIGNED)'),
             'materialItems',
             'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
         ]);

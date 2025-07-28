@@ -2,10 +2,11 @@ import CsvImporterDialog from '@/components/csv-importer';
 import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -264,7 +265,7 @@ export default function LocationsList() {
                 </div>
             </div>
             <Tabs defaultValue="sublocations">
-                <TabsList className="mx-auto mt-2 grid max-w-96 grid-cols-3 sm:m-0 sm:ml-2 sm:max-w-full">
+                <TabsList className="mx-auto mt-2 grid h-24 max-w-96 grid-cols-2 sm:m-0 sm:ml-2 sm:h-12 sm:max-w-full sm:grid-cols-4">
                     <TabsTrigger value="sublocations">
                         <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">SL</span>Sub-locations
                     </TabsTrigger>
@@ -273,6 +274,9 @@ export default function LocationsList() {
                     </TabsTrigger>
                     <TabsTrigger value="pricelist">
                         <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">PL</span>Price List
+                    </TabsTrigger>
+                    <TabsTrigger value="dpc">
+                        <span className="mr-2 rounded-sm border p-0.5 text-xs text-[0.625rem] dark:text-gray-400">DPC</span>Digital Prod Control
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent value="sublocations">
@@ -376,6 +380,34 @@ export default function LocationsList() {
                                 )}
                             </TableBody>
                         </Table>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="dpc" className="mx-auto w-full max-w-96 sm:m-2 sm:max-w-full">
+                    <Card className="w-1/3 space-y-0 px-2 py-4">
+                        <CardContent className="space-y-1">
+                            <div className="flex flex-2 flex-row items-center justify-between">
+                                <Label className="mr-auto flex-1">Est Hours</Label>
+                                <Label className="ml-auto flex-1 text-right">1893.0</Label>
+                            </div>
+                            <div className="flex flex-2 flex-row items-center justify-between">
+                                <Label className="mr-auto flex-1">Earned Hours</Label>
+                                <Label className="ml-auto flex-1 text-right">1893.0</Label>
+                            </div>
+                            <div className="flex flex-2 flex-row items-center justify-between">
+                                <Label className="mr-auto flex-1">Used Hours</Label>
+                                <Label className="ml-auto flex-1 text-right">1893.0</Label>
+                            </div>
+
+                            <Separator />
+                            <div className="flex flex-2 flex-row items-center justify-between">
+                                <Label className="flex-1">Remaining Hours</Label>
+                                <Label className="ml-auto flex-1 text-right">1829.0</Label>
+                            </div>
+                            <div className="flex flex-2 flex-row items-center justify-between">
+                                <Label className="flex-1">@$82.90 rate</Label>
+                                <Label className="ml-auto flex-1 text-right">1829.0</Label>
+                            </div>
+                        </CardContent>
                     </Card>
                 </TabsContent>
             </Tabs>

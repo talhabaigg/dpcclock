@@ -252,7 +252,10 @@ class MaterialItemController extends Controller
         }
 
         $uniqueLocationIds = array_unique($locationIds);
-
+        $dataToInsert = collect($dataToInsert)
+            ->unique(fn($item) => $item['location_id'] . '-' . $item['material_item_id'])
+            ->values()
+            ->toArray();
         DB::transaction(function () use ($uniqueLocationIds, $dataToInsert) {
             // Delete old pricing only for relevant locations
             DB::table('location_item_pricing')

@@ -22,7 +22,7 @@ const TimesheetSummaryCard: React.FC<TimesheetSummaryCardProps> = ({ name, times
         }
     };
     return (
-        <Card className="max-w-2xl">
+        <Card className="max-w-96 sm:max-w-2xl">
             {name ? (
                 <>
                     <CardHeader>
