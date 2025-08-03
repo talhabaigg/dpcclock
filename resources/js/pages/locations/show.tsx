@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CirclePlus, RefreshCcw } from 'lucide-react';
+import { CirclePlus, Edit, RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -306,11 +306,18 @@ export default function LocationsList() {
                     </Card>
                 </TabsContent>
                 <TabsContent value="costCodes" className="mx-auto w-full max-w-96 sm:m-2 sm:max-w-full">
-                    <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
-                        <Button variant="secondary" onClick={() => setOpen(true)}>
-                            <RefreshCcw /> Sync from Premier
-                        </Button>
-                    </Link>
+                    <div className="flex flex-col justify-between gap-2 sm:m-2 sm:flex-row">
+                        <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
+                            <Button variant="secondary" onClick={() => setOpen(true)}>
+                                <RefreshCcw /> Sync from Premier
+                            </Button>
+                        </Link>
+                        <Link href={`/location/${location.id}/cost-codes/edit`}>
+                            <Button variant="secondary" className="ml-2">
+                                <Edit /> Edit Variation Ratios
+                            </Button>
+                        </Link>
+                    </div>
 
                     <Card className="mt-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
                         <Table className="w-full">

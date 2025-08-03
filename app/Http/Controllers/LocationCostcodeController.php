@@ -7,6 +7,7 @@ use Http;
 use Illuminate\Http\Request;
 use App\Models\Location;
 use App\Services\PremierAuthenticationService;
+use Inertia\Inertia;
 class LocationCostcodeController extends Controller
 {
     public function sync(Location $location)
@@ -51,5 +52,16 @@ class LocationCostcodeController extends Controller
             ]);
             throw new \Exception('Premier API call failed.');
         }
+    }
+
+    public function edit(Location $location)
+    {
+        $costCodes = $location->costCodes()->get();
+
+
+        return Inertia::render('locations/costCodeEdit', [
+            'location' => $location,
+            'costCodes' => $costCodes,
+        ]);
     }
 }

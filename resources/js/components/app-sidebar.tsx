@@ -11,6 +11,7 @@ import {
     CalendarDays,
     Clock,
     Database,
+    File,
     FileSpreadsheet,
     Folder,
     FoldHorizontal,
@@ -77,6 +78,12 @@ const mainNavItems: NavItem[] = [
         href: '/requisition/all',
         icon: Folder,
         permission: 'manage timesheets',
+    },
+    {
+        title: 'Variations',
+        href: '/variations',
+        icon: File,
+        permission: 'view timesheet converter',
     },
 ];
 

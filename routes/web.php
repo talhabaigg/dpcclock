@@ -8,6 +8,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TimesheetEventController;
+use App\Http\Controllers\VariationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -135,8 +136,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Location Cost Codes from Premier
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
-
-
+        Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
+        // Variation routes
+        Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
+        Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
     });
 
     Route::middleware('permission:view kiosk')->group(function () {
