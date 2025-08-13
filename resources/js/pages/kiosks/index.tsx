@@ -36,7 +36,7 @@ export default function KiosksList() {
         localStorage.setItem('companySelected', value);
     };
     const filteredLocations = useMemo(() => {
-        return filter ? kiosks.filter((kiosk) => kiosk.location.eh_parent_id === filter) : kiosks;
+        return filter ? kiosks.filter((kiosk) => kiosk.location?.eh_parent_id === filter) : kiosks;
     }, [kiosks, filter]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

@@ -285,7 +285,13 @@ class PurchasingController extends Controller
         $generatePONumberService = new \App\Services\GeneratePONumberService();
         $requisitionService = new \App\Services\RequisitionService();
         $status = $validateService->validateStatus($requisition);
+        if ($status instanceof \Illuminate\Http\RedirectResponse) {
+            return $status; // Stop processing and redirect
+        }
         $cc = $validateService->validateCostCodes($requisition);
+        if ($cc instanceof \Illuminate\Http\RedirectResponse) {
+            return $cc; // Stop processing and redirect
+        }
         if (!$requisition->po_number) {
             $next_num = $generatePONumberService->generate($requisition);
         }
@@ -312,7 +318,7 @@ class PurchasingController extends Controller
 
     public function sendApi($id)
     {
-        // dd('please use other method - temporarily disabled to fix bug');
+        dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
         $validateService = new \App\Services\ValidateRequisitionService();
         $generatePONumberService = new \App\Services\GeneratePONumberService();

@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CirclePlus, Edit, RefreshCcw } from 'lucide-react';
+import { CirclePlus, Edit, RefreshCcw, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -313,18 +313,19 @@ export default function LocationsList() {
                             </Button>
                         </Link>
                         <Link href={`/location/${location.id}/cost-codes/edit`}>
-                            <Button variant="secondary" className="ml-2">
+                            <Button variant="secondary" className="mx-2">
                                 <Edit /> Edit Variation Ratios
                             </Button>
                         </Link>
                     </div>
 
-                    <Card className="mt-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
+                    <Card className="mx-2 mt-2 mb-2 max-w-sm rounded-md border p-0 sm:max-w-full">
                         <Table className="w-full">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Cost Code</TableHead>
                                     <TableHead>Cost Description</TableHead>
+                                    <TableHead>Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -333,6 +334,13 @@ export default function LocationsList() {
                                         <TableRow key={costCode.id}>
                                             <TableCell>{costCode.code}</TableCell>
                                             <TableCell>{costCode.description}</TableCell>
+                                            <TableCell>
+                                                <Link href={`/locations/${location.id}/cost-codes/${costCode.id}/delete`}>
+                                                    <Button size="sm" variant="ghost">
+                                                        <Trash className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 ) : (

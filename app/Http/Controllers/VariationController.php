@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -31,9 +32,12 @@ class VariationController extends Controller
         }
 
         $locations = $locationsQuery->get();
+
+        $costCodes = CostCode::orderBy('code')->get();
         // Logic to show the create variation form
         return Inertia::render('variation/create', [
             'locations' => $locations,
+            'costCodes' => $costCodes,
         ]);
     }
 }

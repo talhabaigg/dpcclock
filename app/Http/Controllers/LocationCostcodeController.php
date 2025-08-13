@@ -64,4 +64,14 @@ class LocationCostcodeController extends Controller
             'costCodes' => $costCodes,
         ]);
     }
+
+    public function delete(Location $location, $id)
+    {
+        $costCode = $location->costCodes()->find($id);
+        if ($costCode) {
+            $location->costCodes()->detach($costCode);
+            return redirect()->back()->with('success', 'Cost code deleted successfully.');
+        }
+        return redirect()->back()->with('error', 'Cost code not found.');
+    }
 }

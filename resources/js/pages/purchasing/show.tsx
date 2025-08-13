@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -6,7 +7,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowBigUp, CircleCheck, Cuboid, FileSpreadsheet, FileText, History, RotateCcw } from 'lucide-react';
+import { AlertCircleIcon, ArrowBigUp, CircleCheck, Cuboid, FileSpreadsheet, FileText, History, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -114,7 +115,17 @@ export default function RequisitionShow() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />
-
+            {flash.error && (
+                <Alert variant="destructive">
+                    <AlertCircleIcon />
+                    <AlertTitle>Errors found in PO</AlertTitle>
+                    <AlertDescription>
+                        {flash.error}
+                        <br />
+                        Please review the requisition and correct any issues before proceeding.
+                    </AlertDescription>
+                </Alert>
+            )}
             <div className="mx-auto space-y-2 p-2 sm:mx-0">
                 <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
                     <Card className="mx-2 w-full max-w-96 p-0 text-sm sm:max-w-full md:w-1/2 2xl:w-1/3">
