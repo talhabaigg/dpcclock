@@ -73,7 +73,7 @@ class RequisitionService
             "ShipTo" => $requisition->location?->external_id ?? "N/A",
             "ShipToAddress" => $requisition->location?->address ?? "N/A",
             "Attention" => $requisition->delivery_contact ?? "N/A",
-            "FOBShipVia" => null,
+            "FOBShipVia" => "",
             "PurchaseOrderLines" => $requisition->lineItems->map(function ($lineItem, $index) use ($companyCode) {
                 $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
                 return [

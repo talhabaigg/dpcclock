@@ -141,6 +141,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Variation routes
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
+        Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
     });
 
     Route::middleware('permission:view kiosk')->group(function () {

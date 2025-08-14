@@ -2,11 +2,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import { CostCode } from '../purchasing/types';
+import VariationLineTable from './partials/variationLineTable';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Variations',
@@ -50,10 +51,10 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                 cost_item: '',
                 cost_type: '',
                 description: '',
-                qty: '',
-                unit_cost: '',
-                total_cost: '',
-                revenue: '',
+                qty: 1,
+                unit_cost: 0,
+                total_cost: 0,
+                revenue: 0,
             },
         ],
     });
@@ -66,10 +67,10 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                 cost_item: '',
                 cost_type: '',
                 description: '',
-                qty: '',
-                unit_cost: '',
-                total_cost: '',
-                revenue: '',
+                qty: 1,
+                unit_cost: 0,
+                total_cost: 0,
+                revenue: 0,
             },
         ]);
     };
@@ -81,11 +82,65 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
         );
     };
 
+    const handleSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        post('/variations/store', {
+            onSuccess: () => {
+                // Optionally redirect or show a success message
+            },
+            onError: (errors) => {
+                console.error('Submission errors:', errors);
+            },
+        });
+    };
+
+    const [genType, setGenType] = useState('');
+    const [genAmount, setGenAmount] = useState('');
+    const generateOnCosts = () => {
+        if (!genType || !genAmount) {
+            alert('Please select a type and enter an amount.');
+            return;
+        }
+        if (genType === 'Direct Labour') {
+            // Define cost items and percentage multipliers
+            const onCostData = [
+                { cost_item: '01-01', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
+                { cost_item: '02-01', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
+                { cost_item: '02-05', percent: 0.03, description: 'Wages & Apprentices Oncosts: Bert' },
+                { cost_item: '02-10', percent: 0.02, description: 'Wages & Apprentices Oncosts: Bewt' },
+                { cost_item: '02-15', percent: 0.04, description: 'Wages & Apprentices Oncosts: Cipq' },
+                { cost_item: '02-20', percent: 0.01, description: 'Wages & Apprentices Oncosts: Payrolltax' },
+                { cost_item: '02-25', percent: 0.01, description: 'Wages & Apprentices Oncosts: Workcover' },
+            ];
+
+            const baseAmount = parseFloat(genAmount);
+
+            const newLines = onCostData.map((item, index) => {
+                const lineAmount = +(baseAmount * item.percent).toFixed(2); // 2 decimal rounding
+                return {
+                    line_number: data.line_items.length + index + 1,
+                    cost_item: item.cost_item,
+                    cost_type: 'LAB',
+                    description: item.description,
+                    qty: 1,
+                    unit_cost: lineAmount,
+                    total_cost: lineAmount,
+                    revenue: 0,
+                };
+            });
+
+            setData('line_items', [...data.line_items, ...newLines]);
+        }
+    };
+
+    useEffect(() => {
+        console.log('Data updated:', data);
+    }, [data]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="m-2 flex flex-col items-center justify-between gap-2">
                 <div className="mx-auto max-w-96 min-w-full sm:max-w-full">
-                    <div className="mx-auto flex max-w-96 flex-1 flex-col gap-4 sm:max-w-full sm:flex-row">
+                    <div className="mx-2 flex max-w-96 flex-1 flex-col gap-4 sm:max-w-full sm:flex-row">
                         <Select value={data.job_id} onValueChange={(value) => setData('job_id', value)}>
                             <SelectTrigger className="flex-1">
                                 <SelectValue placeholder="Select job" />
@@ -125,118 +180,25 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                         />
                         <input type="date" value={data.date} onChange={(e) => setData('date', e.target.value)} className="flex-1" />
                     </div>
-                    <Table className="m-2 min-w-full">
-                        <TableHeader>
-                            <TableRow>
-                                <TableCell className="border-r">Line #</TableCell>
-                                <TableCell>Cost Item</TableCell>
-                                <TableCell>Cost Type</TableCell>
-                                <TableCell>Description</TableCell>
-                                <TableCell>Qty</TableCell>
-                                <TableCell>Unit Cost</TableCell>
-                                <TableCell>Total Cost</TableCell>
-                                <TableCell>Revenue</TableCell>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {data.line_items.map((item, index) => (
-                                <TableRow key={index}>
-                                    <TableCell className="border-r">
-                                        <Input className="border-0 shadow-none" value={item.line_number} readOnly />
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Select>
-                                            <SelectTrigger className="w-full border-0 shadow-none">
-                                                <SelectValue placeholder="Select cost item" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {costCodes.map((code) => (
-                                                    <SelectItem key={code.id} value={code.description}>
-                                                        <div className="flex flex-col">
-                                                            <Badge className="mr-2">{code.code}</Badge>
-                                                            {code.description}
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Select>
-                                            <SelectTrigger className="w-full border-0 shadow-none">
-                                                <SelectValue placeholder="Select cost type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {CostTypes.map((code) => (
-                                                    <SelectItem key={code.id} value={code.description}>
-                                                        <div className="flex flex-col">
-                                                            <Badge className="mr-2">{code.value}</Badge>
-                                                            {code.description}
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Input
-                                            className="border-0 shadow-none hover:border-none"
-                                            value={item.description}
-                                            onChange={(e) => {
-                                                const newItems = [...data.line_items];
-                                                newItems[index].description = e.target.value;
-                                                setData('line_items', newItems);
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Input
-                                            className="border-0 shadow-none"
-                                            value={item.qty}
-                                            onChange={(e) => {
-                                                const newItems = [...data.line_items];
-                                                newItems[index].qty = e.target.value;
-                                                setData('line_items', newItems);
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Input
-                                            className="border-0 shadow-none"
-                                            value={item.unit_cost}
-                                            onChange={(e) => {
-                                                const newItems = [...data.line_items];
-                                                newItems[index].unit_cost = e.target.value;
-                                                setData('line_items', newItems);
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="border-r">
-                                        <Input
-                                            className="border-0 shadow-none"
-                                            value={item.total_cost}
-                                            onChange={(e) => {
-                                                const newItems = [...data.line_items];
-                                                newItems[index].total_cost = e.target.value;
-                                                setData('line_items', newItems);
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            className="border-0 shadow-none"
-                                            value={item.revenue}
-                                            onChange={(e) => {
-                                                const newItems = [...data.line_items];
-                                                newItems[index].revenue = e.target.value;
-                                                setData('line_items', newItems);
-                                            }}
-                                        />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2">
+                        <Input type="number" value={genAmount} onChange={(e) => setGenAmount(e.target.value)} placeholder="Enter Amount" />
+                        <Select value={genType} onValueChange={(value) => setGenType(value)}>
+                            <SelectTrigger className="w-full text-xs">
+                                <SelectValue placeholder="Select Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {['Direct Labour', 'Foreman', 'Leading Hand', 'Labourer', 'Site Admin'].map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        <div className="flex flex-row text-xs">
+                                            <Badge className="mr-2 text-[10px]">{type}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button onClick={generateOnCosts}>Generate On Costs</Button>
+                    </div>
+                    <VariationLineTable data={data} costCodes={costCodes} CostTypes={CostTypes} setData={setData} />
                 </div>
 
                 <div className="mx-auto flex w-full max-w-96 min-w-full flex-col justify-between sm:max-w-full sm:flex-row">
@@ -252,7 +214,9 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                             Delete Row
                         </Button>
                     </div>
-                    <Button className="mx-auto w-full max-w-96 sm:w-auto">Save</Button>
+                    <Button className="mx-auto w-full max-w-96 sm:w-auto" onClick={handleSubmit}>
+                        Save
+                    </Button>
                 </div>
             </div>
         </AppLayout>
