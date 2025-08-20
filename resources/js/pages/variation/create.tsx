@@ -104,13 +104,13 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
         if (genType === 'Direct Labour') {
             // Define cost items and percentage multipliers
             const onCostData = [
-                { cost_item: '01-01', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
-                { cost_item: '02-01', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
-                { cost_item: '02-05', percent: 0.03, description: 'Wages & Apprentices Oncosts: Bert' },
-                { cost_item: '02-10', percent: 0.02, description: 'Wages & Apprentices Oncosts: Bewt' },
-                { cost_item: '02-15', percent: 0.04, description: 'Wages & Apprentices Oncosts: Cipq' },
-                { cost_item: '02-20', percent: 0.01, description: 'Wages & Apprentices Oncosts: Payrolltax' },
-                { cost_item: '02-25', percent: 0.01, description: 'Wages & Apprentices Oncosts: Workcover' },
+                { cost_item: '01-01', cost_type: 'LAB', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
+                { cost_item: '02-01', cost_type: 'LOC', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
+                { cost_item: '02-05', cost_type: 'LOC', percent: 0.03, description: 'Wages & Apprentices Oncosts: Bert' },
+                { cost_item: '02-10', cost_type: 'LOC', percent: 0.02, description: 'Wages & Apprentices Oncosts: Bewt' },
+                { cost_item: '02-15', cost_type: 'LOC', percent: 0.04, description: 'Wages & Apprentices Oncosts: Cipq' },
+                { cost_item: '02-20', cost_type: 'LOC', percent: 0.01, description: 'Wages & Apprentices Oncosts: Payrolltax' },
+                { cost_item: '02-25', cost_type: 'LOC', percent: 0.01, description: 'Wages & Apprentices Oncosts: Workcover' },
             ];
 
             const baseAmount = parseFloat(genAmount);
@@ -120,7 +120,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                 return {
                     line_number: data.line_items.length + index + 1,
                     cost_item: item.cost_item,
-                    cost_type: 'LAB',
+                    cost_type: item.cost_type,
                     description: item.description,
                     qty: 1,
                     unit_cost: lineAmount,
@@ -130,6 +130,8 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
             });
 
             setData('line_items', [...data.line_items, ...newLines]);
+            setGenType('');
+            setGenAmount('');
         }
     };
 
