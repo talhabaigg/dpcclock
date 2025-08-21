@@ -43,7 +43,19 @@ class LocationCostcodeController extends Controller
                 }
                 return null;
             })->filter()->values()->toArray();
-            $location->costCodes()->sync($data);
+            // dd($data);
+            // $location->costCodes()->sync($data);
+            // dd('synced');
+            // Get existing cost codes for this location
+            $existingIds = $location->costCodes()->pluck('cost_code_id')->toArray();
+
+            // Filter out codes that already exist
+            $newData = collect($data)->filter(fn($item) => !in_array($item['cost_code_id'], $existingIds))->values()->toArray();
+
+            // Attach only the new ones
+            if (!empty($newData)) {
+                $location->costCodes()->attach($newData);
+            }
             return redirect()->back()->with('success', 'Cost codes synced successfully.');
         } else {
             logger()->error('Failed to fetch cost items', [
@@ -63,6 +75,33 @@ class LocationCostcodeController extends Controller
             'location' => $location,
             'costCodes' => $costCodes,
         ]);
+    }
+
+    public function update(Location $location)
+    {
+        $data = request()->validate([
+            'costCodes' => 'required|array',
+            'costCodes.*.id' => 'required|exists:cost_codes,id',
+            'costCodes.*.variation_ratio' => 'required|numeric|min:0 |max:200',
+            'costCodes.*.dayworks_ratio' => 'required|numeric|min:0',
+        ]);
+
+        // Transform into the format sync() wants
+        $syncData = collect($data['costCodes'])
+            ->mapWithKeys(function ($code) {
+                return [
+                    $code['id'] => [
+                        'variation_ratio' => $code['variation_ratio'],
+                        'dayworks_ratio' => $code['dayworks_ratio'],
+                    ]
+                ];
+            })
+            ->toArray();
+
+        $location->costCodes()->sync($syncData);
+
+
+        return redirect()->back()->with('success', 'Cost codes updated successfully.');
     }
 
     public function delete(Location $location, $id)

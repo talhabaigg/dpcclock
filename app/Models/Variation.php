@@ -18,11 +18,16 @@ class Variation extends Model
         'created_by',
         'updated_by',
         'deleted_by',
-        'project_id',
+        'location_id',
     ];
 
     public function lineItems()
     {
         return $this->hasMany(VariationLineItem::class);
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class);
     }
 }

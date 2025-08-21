@@ -21,7 +21,7 @@ return new class extends Migration {
             $table->string('updated_by')->nullable(); // Track who updated the variation
             $table->string('deleted_by')->nullable(); // Track who deleted the variation
             $table->softDeletes(); // Soft delete support
-            $table->foreignId('project_id')->constrained()->onDelete('cascade'); //
+            $table->foreignId('location_id')->constrained('locations')->onDelete('cascade');
             $table->timestamps();
         });
     }

@@ -138,10 +138,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
         Route::get('/locations/{location}/cost-codes/{id}/delete', [LocationCostcodeController::class, 'delete'])->name('locationCostcodes.delete')->role('admin');
+        Route::put('/location/{location}/cost-codes/update', [LocationCostcodeController::class, 'update'])->name('locationCostcodes.update');
         // Variation routes
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
         Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
+        Route::get('/variations/{id}/download/pdf', [VariationController::class, 'download'])->name('variations.download');
     });
 
     Route::middleware('permission:view kiosk')->group(function () {
