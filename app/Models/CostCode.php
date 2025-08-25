@@ -10,7 +10,8 @@ class CostCode extends Model
     use \Illuminate\Database\Eloquent\Factories\HasFactory;
     protected $fillable = [
         'code',
-        'description'
+        'description',
+        'cost_type_id'
     ];
 
     public function materialItems()
@@ -35,5 +36,10 @@ class CostCode extends Model
     {
         return $this->belongsToMany(Location::class, 'location_cost_codes');
 
+    }
+
+    public function costType()
+    {
+        return $this->belongsTo(CostType::class);
     }
 }

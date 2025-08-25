@@ -91,6 +91,14 @@ class VariationController extends Controller
         return redirect()->route('variations.index');
     }
 
+    public function destroy($id)
+    {
+        $variation = Variation::findOrFail($id);
+        $variation->delete();
+
+        return redirect()->route('variations.index')->with('success', 'Variation deleted successfully.');
+    }
+
     public function download($id)
     {
 

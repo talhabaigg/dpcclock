@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { CirclePlus, Download } from 'lucide-react';
+import { CirclePlus, Download, Trash } from 'lucide-react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Variations',
@@ -30,12 +30,14 @@ const VariationIndex = ({ variations }) => {
                 <Card className="4xl:max-w-4xl mx-auto mt-4 max-w-sm p-1 text-sm sm:max-w-full">
                     <div className="flex h-full flex-1 flex-col gap-4 rounded-xl">
                         <Table>
-                            <TableHeader>
-                                <TableHead className="">VAR #</TableHead>
-                                <TableHead className=""> Date</TableHead>
-                                <TableHead className="">Description</TableHead>
-                                <TableHead className="">Type</TableHead>
-                                <TableHead className="">Actions</TableHead>
+                            <TableHeader className="rounded-t-xl hover:rounded-t-xl">
+                                <TableRow>
+                                    <TableHead>VAR #</TableHead>
+                                    <TableHead className=""> Date</TableHead>
+                                    <TableHead className="">Description</TableHead>
+                                    <TableHead className="">Type</TableHead>
+                                    <TableHead className="">Actions</TableHead>
+                                </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {variations.map((variation) => (
@@ -43,13 +45,21 @@ const VariationIndex = ({ variations }) => {
                                         <TableCell>
                                             <Badge>{variation.co_number}</Badge>
                                         </TableCell>
-                                        <TableCell>{variation.co_date}</TableCell>
+                                        <TableCell>{new Date(variation.co_date).toLocaleDateString('en-GB')}</TableCell>
                                         <TableCell>{variation.description}</TableCell>
                                         <TableCell>{variation.type}</TableCell>
-                                        <TableCell>
+                                        <TableCell className="space-x-1">
                                             <a href={`/variations/${variation.id}/download/pdf`}>
-                                                <Button title="Download as PDF">
+                                                <Button title="Download as Excel" variant="outline">
                                                     <Download />
+                                                </Button>
+                                            </a>
+                                            <a
+                                                href={`/variations/${variation.id}`}
+                                                onClick={() => confirm('Are you sure you want to delete this variation?')}
+                                            >
+                                                <Button title="Delete Variation" variant="outline">
+                                                    <Trash />
                                                 </Button>
                                             </a>
                                         </TableCell>

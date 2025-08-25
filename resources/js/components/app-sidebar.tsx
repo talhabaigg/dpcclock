@@ -114,6 +114,12 @@ const documents = [
                 icon: Binary,
                 permission: 'view all requisitions',
             },
+            {
+                name: 'Cost Types',
+                url: '/cost-types',
+                icon: Binary,
+                permission: 'view all requisitions',
+            },
         ],
     },
 ];

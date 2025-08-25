@@ -7,20 +7,19 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CostCode } from '../purchasing/types';
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Cost Codes',
-        href: '/cost-codes',
+        title: 'Cost Types',
+        href: '/cost-types',
     },
 ];
 
-export default function CostCodesIndex() {
-    const { costcodes, flash } = usePage<{ costcodes: CostCode[]; flash: { success?: string } }>().props;
+export default function CostTypesIndex({ costTypes }) {
+    const { flash } = usePage<{ flash: { success?: string } }>().props;
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
-    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'cost_type_code']);
+    const [csvImportHeaders] = useState<string[]>(['code', 'description']);
 
     const handleUpload = () => {
         if (!selectedFile) return;
@@ -28,7 +27,7 @@ export default function CostCodesIndex() {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        router.post('/cost-codes/upload', formData, {
+        router.post('/cost-types/upload', formData, {
             forceFormData: true,
             onSuccess: () => setSelectedFile(null),
         });
@@ -56,7 +55,7 @@ export default function CostCodesIndex() {
     }, [flash.success]);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Cost Codes" />
+            <Head title="Cost Types" />
             <div className="mt-2 mr-2 flex justify-end gap-2">
                 {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
                 <Button onClick={handleUpload} disabled={!selectedFile || processing}>
@@ -64,7 +63,7 @@ export default function CostCodesIndex() {
                     Upload CSV
                 </Button> */}
                 <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
-                <a href="/cost-codes/download">
+                <a href="/cost-types/download">
                     <Button>
                         {' '}
                         <Download />
@@ -78,17 +77,15 @@ export default function CostCodesIndex() {
                         <TableRow>
                             <TableHead>Code</TableHead>
                             <TableHead>Description</TableHead>
-                            <TableHead>Cost Type</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {/* Assuming you have a costCodes prop with the data */}
+                        {/* Assuming you have a costTypes prop with the data */}
                         {/* Replace this with your actual data rendering logic */}
-                        {costcodes.map((costCode) => (
-                            <TableRow key={costCode.id}>
-                                <TableCell>{costCode.code}</TableCell>
-                                <TableCell>{costCode.description}</TableCell>
-                                <TableCell>{costCode.cost_type?.code}</TableCell>
+                        {costTypes.map((costType) => (
+                            <TableRow key={costType.id}>
+                                <TableCell>{costType.code}</TableCell>
+                                <TableCell>{costType.description}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

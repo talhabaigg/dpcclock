@@ -1,5 +1,7 @@
+import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
@@ -95,14 +97,17 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
             },
         });
     };
-
+    const [open, setOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
     const generateOnCosts = () => {
         if (!genAmount || !data.location_id) {
             alert('Please select a type and enter an amount.');
             return;
         }
-
+        setOpen(true);
+        setTimeout(() => {
+            setOpen(false);
+        }, 3000);
         // Define cost items and percentage multipliers
         const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
 
@@ -148,9 +153,11 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
     useEffect(() => {
         console.log('Data updated:', data);
     }, [data]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="m-2 flex flex-col items-center justify-between gap-2">
+                <LoadingDialog open={open} setOpen={setOpen} />
                 {Object.keys(errors).length > 0 && (
                     <Alert variant="destructive" className="mx-2 max-w-96 sm:max-w-1/2">
                         <AlertTitle>There were some errors with your submission:</AlertTitle>
@@ -165,54 +172,53 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                 )}
                 <div className="mx-auto max-w-96 min-w-full sm:max-w-full">
                     <div className="mx-2 flex max-w-96 flex-1 flex-col gap-4 sm:max-w-full sm:flex-row">
-                        <Select value={data.location_id} onValueChange={(value) => setData('location_id', value)}>
-                            <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Select location" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {locations.map((location) => (
-                                    <SelectItem key={location.id} value={String(location.id)}>
-                                        {location.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Card className="mx-auto flex w-full max-w-96 min-w-96 flex-col p-2 sm:max-w-full sm:flex-row">
+                            <Select value={data.location_id} onValueChange={(value) => setData('location_id', value)}>
+                                <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder="Select location" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {locations.map((location) => (
+                                        <SelectItem key={location.id} value={String(location.id)}>
+                                            {location.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={data.type} onValueChange={(value) => setData('type', value)}>
-                            <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {['dayworks', 'variations'].map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Input
-                            value={data.co_number}
-                            onChange={(e) => setData('co_number', e.target.value)}
-                            className="flex-1"
-                            placeholder="Enter CO Number"
-                        />
-                        <Input
-                            value={data.description}
-                            onChange={(e) => setData('description', e.target.value)}
-                            className="flex-1"
-                            placeholder="Enter Description"
-                        />
-                        <input type="date" value={data.date} onChange={(e) => setData('date', e.target.value)} className="flex-1" />
-                    </div>
-                    <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2">
-                        <Input
-                            type="number"
-                            value={genAmount}
-                            onChange={(e) => setGenAmount(e.target.value)}
-                            placeholder="Enter Amount"
-                            className="max-w-48"
-                        />
-                        {/* <Select value={genType} onValueChange={(value) => setGenType(value)}>
+                            <Select value={data.type} onValueChange={(value) => setData('type', value)}>
+                                <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {['dayworks', 'variations'].map((type) => (
+                                        <SelectItem key={type} value={type}>
+                                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Input
+                                value={data.co_number}
+                                onChange={(e) => setData('co_number', e.target.value)}
+                                className="flex-1"
+                                placeholder="Enter CO Number"
+                            />
+                            <Input
+                                value={data.description}
+                                onChange={(e) => setData('description', e.target.value)}
+                                className="flex-1"
+                                placeholder="Enter Description"
+                            />
+                            <input type="date" value={data.date} onChange={(e) => setData('date', e.target.value)} className="flex-1" />
+                            <Input
+                                type="number"
+                                value={genAmount}
+                                onChange={(e) => setGenAmount(e.target.value)}
+                                placeholder="Enter Amount"
+                                className="max-w-48"
+                            />
+                            {/* <Select value={genType} onValueChange={(value) => setGenType(value)}>
                             <SelectTrigger className="w-full text-xs">
                                 <SelectValue placeholder="Select Type" />
                             </SelectTrigger>
@@ -226,25 +232,24 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                                 ))}
                             </SelectContent>
                         </Select> */}
-                        <Button onClick={generateOnCosts}>Generate Labour</Button>
+                            <Button onClick={generateOnCosts}>Generate Labour</Button>
+                        </Card>
                     </div>
-                    <VariationLineTable data={data} costCodes={costCodes} CostTypes={CostTypes} setData={setData} />
+                    <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2"></div>
+                    <Card className="mx-2 max-w-96 p-0 sm:max-w-full">
+                        <VariationLineTable data={data} costCodes={costCodes} CostTypes={CostTypes} setData={setData} />
+                    </Card>
                 </div>
-
-                <div className="mx-auto flex w-full max-w-96 min-w-full flex-col justify-between sm:max-w-full sm:flex-row">
-                    <div className="flex flex-col space-y-1 space-x-2 sm:flex-row">
-                        <Button onClick={addRow} className="mx-auto w-full max-w-96 sm:w-auto">
+                <div className="flex w-full max-w-96 flex-row sm:max-w-full">
+                    <div className="space-x-2">
+                        <Button onClick={addRow} className="">
                             Add Row
                         </Button>
-                        <Button
-                            variant="secondary"
-                            onClick={() => deleteRow(data.line_items.length - 1)}
-                            className="mx-auto w-full max-w-96 sm:w-auto"
-                        >
+                        <Button variant="secondary" onClick={() => deleteRow(data.line_items.length - 1)} className="">
                             Delete Row
                         </Button>
                     </div>
-                    <Button className="mx-auto w-full max-w-96 sm:w-auto" onClick={handleSubmit}>
+                    <Button className="ml-auto" onClick={handleSubmit}>
                         Save
                     </Button>
                 </div>

@@ -3,6 +3,7 @@
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
@@ -119,6 +120,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/cost-codes/upload', [CostcodeController::class, 'upload'])->name('costcodes.upload');
         Route::get('/cost-codes/download', [CostcodeController::class, 'download'])->name('costcodes.download');
 
+
+        Route::get('/cost-types', [CostTypeController::class, 'index'])->name('costtypes.index');
+        Route::post('/cost-types/upload', [CostTypeController::class, 'upload'])->name('costtypes.upload');
+        Route::get('/cost-types/download', [CostTypeController::class, 'download'])->name('costtypes.download');
+
         Route::put('/kiosks/settings/update', [KioskController::class, 'updateSettings'])->name('kiosks.updateSettings');
 
         //Report Routes
@@ -143,6 +149,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
         Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
+        Route::get('/variations/{id}', [VariationController::class, 'destroy'])->name('variations.destroy');
         Route::get('/variations/{id}/download/pdf', [VariationController::class, 'download'])->name('variations.download');
     });
 
