@@ -244,8 +244,11 @@ class ClockController extends Controller
 
             if ($firstEntry) {
                 // For the first entry, find the existing clock with null clock_out
+                $clockOutTime = Carbon::parse($entry['clockOut'], 'Australia/Brisbane');
+
                 $clock = Clock::where('eh_employee_id', $eh_employee_id->eh_employee_id)
                     ->whereNull('clock_out')
+                    ->whereDate('clock_in', $clockOutTime->toDateString()) // only same day
                     ->first();
 
                 if ($clock) {

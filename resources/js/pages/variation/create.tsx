@@ -113,7 +113,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
 
         const onCostData = costData.map((code) => ({
             cost_item: code.code,
-            cost_type: 'MAT',
+            cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
             percent: code.pivot.variation_ratio / 100 || 0,
             description: code.description,
         }));

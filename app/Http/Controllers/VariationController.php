@@ -48,7 +48,7 @@ class VariationController extends Controller
         // dd($locations);
 
 
-        $costCodes = CostCode::orderBy('code')->get();
+        $costCodes = CostCode::with('costType')->orderBy('code')->get();
         // Logic to show the create variation form
         return Inertia::render('variation/create', [
             'locations' => $locations,

@@ -30,6 +30,8 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                 onValueChange={(value) => {
                                     const newItems = [...data.line_items];
                                     newItems[index].cost_item = value;
+                                    newItems[index].cost_type = costCodes.find((code) => code.code === value)?.cost_type?.code || '';
+                                    console.log(newItems[index].cost_type);
                                     setData('line_items', newItems);
                                 }}
                             >
@@ -39,7 +41,7 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                 <SelectContent>
                                     {costCodes.map((code) => (
                                         <SelectItem key={code.id} value={code.code}>
-                                            <div className="flex flex-row text-xs">
+                                            <div className="flex flex-row items-center text-xs">
                                                 <Badge className="mr-2 text-[10px]">{code.code}</Badge>
                                                 {code.description}
                                             </div>
@@ -63,7 +65,7 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                 <SelectContent>
                                     {CostTypes.map((code) => (
                                         <SelectItem key={code.id} value={code.value}>
-                                            <div className="flex flex-row text-xs">
+                                            <div className="flex flex-row items-center text-xs">
                                                 <Badge className="mr-2 text-[10px]">{code.value}</Badge>
                                                 {code.description}
                                             </div>
