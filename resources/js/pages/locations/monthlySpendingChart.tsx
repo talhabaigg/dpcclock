@@ -1,11 +1,10 @@
 'use client';
 
 import { TrendingDown, TrendingUp } from 'lucide-react';
-import { CartesianGrid, LabelList, Line, LineChart, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { ResponsiveContainer } from 'recharts';
 
 export const description = 'A line chart with a label';
 
@@ -57,13 +56,47 @@ export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
     return (
         <Card className="">
             <CardHeader>
-                <CardTitle>Ordering trend</CardTitle>
+                <CardTitle>Ordering trend from the portal</CardTitle>
                 <CardDescription>
                     {chartData.map((d) => new Date(d.month).toLocaleString('en-GB', { month: 'short', year: 'numeric' })).join(', ')}
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig} className="aspect-auto h-[150px] max-w-md 2xl:max-w-full">
+                    <AreaChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={8}
+                            tickFormatter={
+                                (value) => new Date(`${value}-01`).toLocaleString('en-GB', { month: 'short' }) // or 'long' for full name
+                            }
+                        />
+                        <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+                        <Area
+                            name="Total"
+                            dataKey="value"
+                            type="natural"
+                            stroke="var(--color-mobile)"
+                            strokeWidth={2}
+                            activeDot={{
+                                r: 6,
+                            }}
+                        >
+                            {/* <LabelList
+                                position="top"
+                                offset={12}
+                                className="fill-foreground"
+                                fontSize={12}
+                                formatter={(val) => `$${val.toFixed(2)}`}
+                            /> */}
+                            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+                        </Area>
+                    </AreaChart>
+                </ChartContainer>
+                {/* <ChartContainer config={chartConfig} className="aspect-auto h-[150px] max-w-md 2xl:max-w-full">
                     <ResponsiveContainer width="50%" height={200}>
                         <LineChart accessibilityLayer data={chartData} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
                             <CartesianGrid vertical={false} />
@@ -77,6 +110,7 @@ export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
                                 }
                             />
                             <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+
                             <Line
                                 name="Total"
                                 dataKey="value"
@@ -100,7 +134,7 @@ export function ChartLineLabel({ chartData }: ChartLineLabelProps) {
                             </Line>
                         </LineChart>
                     </ResponsiveContainer>
-                </ChartContainer>
+                </ChartContainer> */}
             </CardContent>
             <CardFooter className="flex-col items-start gap-2 text-sm">
                 {insight ? (
