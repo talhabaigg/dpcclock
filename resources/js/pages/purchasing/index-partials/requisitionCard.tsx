@@ -11,14 +11,18 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
+import { useInitials } from '@/hooks/use-initials';
 import { Link } from '@inertiajs/react';
 import { CircleCheck, EllipsisVertical, TruckIcon } from 'lucide-react';
+import AddNoteButton from './addNoteButton';
+import LatestNoteButton from './latestNoteButton';
 import { Requisition } from './types';
 interface RequisitionCardProps {
     requisition: Requisition;
 }
 
 const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
+    const getInitials = useInitials();
     return (
         <Card className="p-2 shadow-md">
             <CardTitle className="flex justify-between">
@@ -31,6 +35,13 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                     <Label>Project</Label>
                     <Label className="">{requisition.location.name}</Label>
                 </div>
+
+                {requisition.notes.length > 0 && (
+                    <div className="mt-2">
+                        <LatestNoteButton requisition={requisition} />
+                    </div>
+                )}
+
                 <div>
                     <Accordion type="single" collapsible className="p-0">
                         <AccordionItem value="item-1">
@@ -77,6 +88,9 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                 </div>
 
                 <div className="flex items-center">
+                    <div className="mr-1">
+                        <AddNoteButton requisition_id={requisition.id} />
+                    </div>
                     <div className="flex items-center">
                         {requisition.status === 'success' && (
                             <Link href={`/requisition/${requisition.id}/mark-sent-to-supplier`}>
@@ -96,6 +110,7 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                             </Link>
                         </div>
                     </div>
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild className="hidden rounded-sm p-1 hover:bg-gray-200 sm:block">
                             <EllipsisVertical size={24} />

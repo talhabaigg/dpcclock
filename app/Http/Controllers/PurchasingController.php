@@ -29,6 +29,7 @@ class PurchasingController extends Controller
 {
     public function create()
     {
+
         $user = auth()->user();
 
         $suppliers = Supplier::all();
@@ -153,10 +154,11 @@ class PurchasingController extends Controller
 
     public function index()
     {
+
         $user = auth()->user();
 
         if ($user->hasPermissionTo('view all requisitions')) {
-            $requisitions = Requisition::with('supplier', 'creator', 'location')
+            $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
                 ->withSum('lineItems', 'total_cost')
                 ->orderByDesc('id')
                 ->get();
@@ -170,11 +172,13 @@ class PurchasingController extends Controller
 
 
 
-        $requisitions = Requisition::with('supplier', 'creator', 'location')
+        $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes')
             ->withSum('lineItems', 'total_cost')
             ->whereIn('project_number', $location_ids)
             ->orderByDesc('id')
             ->get();
+
+
 
         return Inertia::render('purchasing/index', [
             'requisitions' => $requisitions,

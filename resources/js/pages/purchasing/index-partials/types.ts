@@ -12,4 +12,5 @@ export interface Requisition {
     deliver_to: string | null;
     creator: { name: string } | null;
     created_at: string;
+    notes?: { id: number; note: string; created_at: string; user: { name: string } }[];
 };

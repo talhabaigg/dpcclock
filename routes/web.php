@@ -8,6 +8,7 @@ use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\TimesheetEventController;
 use App\Http\Controllers\VariationController;
 use Illuminate\Support\Facades\Route;
@@ -95,6 +96,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')->permission('can send requisitions');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
+
+        //Requisition notes
+        Route::post('/requisition/{id}/notes', [RequisitionNoteController::class, 'store'])->name('requisition.addNote');
 
 
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');

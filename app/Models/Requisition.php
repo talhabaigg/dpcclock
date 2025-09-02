@@ -72,4 +72,9 @@ class Requisition extends Model
             ->logFillable()  // Log changes on all fillable attributes
             ->useLogName('requisition'); // Optional: customize the log name
     }
+
+    public function notes()
+    {
+        return $this->hasMany(RequisitionNote::class);
+    }
 }

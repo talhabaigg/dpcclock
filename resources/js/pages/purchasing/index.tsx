@@ -50,6 +50,7 @@ const tableHeader = [
 
 export default function RequisitionList() {
     const { requisitions, flash } = usePage<{ requisitions: Requisition[]; flash: { success: string; error: string } }>().props;
+    console.log(requisitions);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOnlyTemplates, setFilterOnlyTemplates] = useState(false);
     const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') ?? 'table');
