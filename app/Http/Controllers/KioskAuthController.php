@@ -28,7 +28,7 @@ class KioskAuthController extends Controller
     public function showPinPage($kioskId, $employeeId): Response
     {
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
-        $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
 
         return Inertia::render('kiosks/auth/pin', [

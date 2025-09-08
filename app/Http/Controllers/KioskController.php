@@ -76,7 +76,7 @@ class KioskController extends Controller
             ]);
         }
         // Load employees related to the kiosk
-        $kiosk->load('employees');
+        $kiosk->load('employees', 'relatedKiosks');
 
         // Append clocked_in status to each employee based on the kiosk
         $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
@@ -124,8 +124,11 @@ class KioskController extends Controller
         $kiosk->load([
             'employees' => function ($query) {
                 $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
-            }
+            },
+            'relatedKiosks'
         ]);
+
+
 
         return Inertia::render('kiosks/edit', [
             'kiosk' => $kiosk,

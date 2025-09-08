@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Info } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
             top_up: emp.pivot.top_up ?? false,
         })),
     });
+    console.log(kiosk);
 
     useEffect(() => {
         if (flash.success) {
@@ -210,6 +211,23 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                             </div>
                             <Switch />
                         </div>
+                    </CardContent>
+                </Card>
+                <Card className="m-2 w-full">
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">
+                        Related Kiosks <Button>Add</Button>
+                    </CardHeader>
+                    <CardContent>
+                        {kiosk.related_kiosks?.length === 0 && <div>No related kiosks</div>}
+                        {kiosk.related_kiosks?.length > 0 && (
+                            <div className="flex flex-col space-y-2">
+                                {kiosk.related_kiosks.map((related) => (
+                                    <Link key={related.id} href={`/kiosks/${related.id}`}>
+                                        <Badge className="py-2">{related.name}</Badge>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
                 <Card className="m-2 w-full">

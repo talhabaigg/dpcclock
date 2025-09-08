@@ -38,4 +38,11 @@ class Kiosk extends Model
         return $this->belongsToMany(User::class, 'kiosk_user');
     }
 
+    public function relatedKiosks()
+    {
+        return $this->belongsToMany(Kiosk::class, 'related_kiosks', 'parent_kiosk_id', 'child_kiosk_id');
+    }
+
+
+
 }

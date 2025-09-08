@@ -1,4 +1,6 @@
-import { router, usePage } from '@inertiajs/react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import EmployeeList from './employeeList';
 import EmployeeSearch from './employeeSearch';
@@ -52,6 +54,19 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar - Scrollable */}
                 <div className="sm:w=1/2 flex w-full flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
+                    {kiosk.related_kiosks && kiosk.related_kiosks.length > 0 && (
+                        <div className="m-2 flex flex-col justify-between space-y-2 space-x-2 p-2">
+                            <Label>Related Kiosks:</Label>
+                            {kiosk.related_kiosks.map((relatedKiosk: any) => (
+                                <Link key={relatedKiosk.id} href={`/kiosks/${relatedKiosk.id}`}>
+                                    <Button variant="default" className="w-full font-bold">
+                                        {relatedKiosk.name}
+                                    </Button>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                    {/* Search Bar */}
                     <div className="m-2 flex items-center justify-end space-x-2 p-2">
                         <EmployeeSearch value={search} onChange={setSearch} placeholder="Search" />
                     </div>
