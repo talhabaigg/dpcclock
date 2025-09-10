@@ -68,7 +68,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                                             key={k.id}
                                             value={String(k.id)}
                                             asChild={k.id !== kiosk.id}
-                                            className="data-[state=active]:bg-primary w-1/2 truncate overflow-hidden text-ellipsis data-[state=active]:text-white"
+                                            className="data-[state=active]:bg-primary w-full truncate overflow-hidden text-ellipsis data-[state=active]:text-white sm:w-1/2"
                                         >
                                             {k.id === kiosk.id ? (
                                                 // Active tab: primary color will come from shadcn via data-[state=active]
