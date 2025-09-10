@@ -5,10 +5,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'; // 👈 Loader icon
+import { Check, ChevronsUpDown, Loader2, Star } from 'lucide-react'; // 👈 Loader icon
 import { useEffect, useState } from 'react';
 
-export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
+export function ComboboxDemo({ value, onValueChange, selectedSupplier, selectedLocation }) {
     const [open, setOpen] = useState(true);
     const [search, setSearch] = useState('');
     const [items, setItems] = useState([]);
@@ -22,12 +22,18 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
                 setLoading(false);
                 return;
             }
+            if (!selectedLocation) {
+                alert('Please select a location first.');
+                setLoading(false);
+                return;
+            }
 
             try {
                 const response = await axios.get('/material-items', {
                     params: {
                         search,
                         supplier_id: selectedSupplier,
+                        location_id: selectedLocation,
                     },
                 });
 
@@ -35,9 +41,11 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
                     value: item.id.toString(),
                     label: item.code,
                     description: item.description,
+                    is_favourite: item.is_favourite,
                 }));
 
                 setItems(mapped);
+                console.log('Fetched items:', mapped);
             } catch (err) {
                 alert('Failed to fetch items. Please try again later. ' + err.message);
                 setItems([]);
@@ -89,9 +97,13 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier }) {
                                                 setOpen(false);
                                             }}
                                         >
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">{item.label}</span>
-                                                <span className="text-muted-foreground text-xs">{item.description}</span>
+                                            <div className="flex w-full flex-row items-center justify-between">
+                                                <div className="flex flex-col">
+                                                    <div> {item.label}</div>
+                                                    <span className="text-muted-foreground text-xs">{item.description}</span>
+                                                </div>
+
+                                                {item.is_favourite ? <Star className="-mr-6 ml-2 h-4 w-4 fill-yellow-500 text-yellow-500" /> : null}
                                             </div>
                                             <Check className={cn('ml-auto', value === item.value ? 'opacity-100' : 'opacity-0')} />
                                         </CommandItem>

@@ -123,6 +123,8 @@ export default function Create() {
     //     console.log('saving data', data);
     // }, [data]);
     const [selectedSupplier, setSelectedSupplier] = useState(data.supplier_id);
+    const [selectedLocation, setSelectedLocation] = useState(data.project_id);
+
     useEffect(() => {
         if (requisition) {
             setData({
@@ -153,6 +155,10 @@ export default function Create() {
     const handleSupplierChange = (value) => {
         setSelectedSupplier(value);
         setData('supplier_id', value);
+    };
+    const handleLocationChange = (value) => {
+        setSelectedLocation(value);
+        setData('project_id', value);
     };
 
     const handleSubmit = (e) => {
@@ -223,6 +229,7 @@ export default function Create() {
             },
             cellEditorParams: {
                 selectedSupplier,
+                selectedLocation,
             },
             onCellValueChanged: async (e) => {
                 const itemCode = e.data.code;
@@ -465,7 +472,7 @@ export default function Create() {
                             <SearchSelect
                                 optionName="Project"
                                 selectedOption={data.project_id}
-                                onValueChange={(val) => setData('project_id', val)}
+                                onValueChange={handleLocationChange}
                                 options={locations.map((location) => ({
                                     value: String(location.id),
                                     label: location.name,

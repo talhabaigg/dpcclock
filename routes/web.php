@@ -7,6 +7,7 @@ use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
+use App\Http\Controllers\LocationFavouriteMaterialItemsController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\TimesheetEventController;
@@ -149,6 +150,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
         Route::get('/locations/{location}/cost-codes/{id}/delete', [LocationCostcodeController::class, 'delete'])->name('locationCostcodes.delete')->role('admin');
         Route::put('/location/{location}/cost-codes/update', [LocationCostcodeController::class, 'update'])->name('locationCostcodes.update');
+
+        // Favourite Material Items for Locations
+        Route::post('/location/{location}/favourite-materials/upload', [LocationFavouriteMaterialItemsController::class, 'uploadFavouriteMaterials'])->name('location.favourite-materials.upload');
+        Route::get('/location/{location}/favourite-materials/download-csv', [LocationFavouriteMaterialItemsController::class, 'downloadFavouriteMaterials'])->name('location.favourite-materials.download');
         // Variation routes
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');

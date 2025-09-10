@@ -43,4 +43,9 @@ class Location extends Model
         return $this->belongsToMany(CostCode::class, 'location_cost_codes')->withPivot('variation_ratio', 'dayworks_ratio');
     }
 
+    public function favouriteMaterials()
+    {
+        return $this->belongsToMany(MaterialItem::class, 'location_favourite_materials')->withTimestamps();
+    }
+
 }

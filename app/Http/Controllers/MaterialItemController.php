@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MaterialItem;
+use Cache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -300,27 +301,49 @@ class MaterialItemController extends Controller
     public function getMaterialItems(Request $request)
     {
         $supplierId = $request->input('supplier_id');
+        $locationId = $request->input('location_id');
+        $search = $request->input('search');
 
-        $query = MaterialItem::query();
+        // Build cache key (unique per filter combination)
+        $cacheKey = "material_items:supplier_{$supplierId}:location_{$locationId}:search_" . md5($search ?? '');
 
-        // Wrap search + supplier filter inside the same where block
-        if ($request->has('search') && $request->has('supplier_id')) {
-            $search = $request->input('search');
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($supplierId, $locationId, $search) {
+            $query = MaterialItem::query()
+                ->select('material_items.id', 'material_items.code', 'material_items.description');
 
-            $query->where('supplier_id', $supplierId)
-                ->where(function ($q) use ($search) {
+            // Supplier filter
+            if ($supplierId) {
+                $query->where('supplier_id', $supplierId);
+            }
+
+            // Search filter
+            if ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('code', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
-        } elseif ($request->has('supplier_id')) {
-            // No search, just filter by supplier
-            $query->where('supplier_id', $supplierId);
-        }
+            }
 
-        $materialItems = $query->limit(100)->get();
+            // Favourites handling
+            if ($locationId) {
+                $query->leftJoin('location_favourite_materials as favs', function ($join) use ($locationId) {
+                    $join->on('favs.material_item_id', '=', 'material_items.id')
+                        ->where('favs.location_id', '=', $locationId);
+                })
+                    ->addSelect(DB::raw('CASE WHEN favs.id IS NULL THEN 0 ELSE 1 END as is_favourite'));
 
-        return response()->json($materialItems);
+                // Only apply ordering if search is NOT provided
+                if (!$search) {
+                    $query->orderByDesc('is_favourite');
+                }
+            }
+
+            return $query->limit(100)->get();
+        });
     }
+
+
+
 
     public function getMaterialItemById($id, $locationId)
     {
