@@ -43,8 +43,8 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
         .sort((a, b) => a.name.localeCompare(b.name));
     const allKiosks = [
         kiosk, // current one
-        ...kiosk.related_kiosks,
-    ].sort((a, b) => a.name.localeCompare(b.name)); // consistent order
+        ...(kiosk.related_kiosks ?? []), // fallback if null/undefined
+    ].sort((a, b) => a.name.localeCompare(b.name));
     return (
         <div className="flex h-screen flex-col">
             {/* Top Bar */}
