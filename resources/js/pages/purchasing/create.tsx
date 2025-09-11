@@ -1,9 +1,11 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { SearchSelect } from '@/components/search-select';
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription } from '@/components/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -14,7 +16,7 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { AlertCircleIcon, X } from 'lucide-react';
+import { AlertCircleIcon, Info, ShieldQuestion, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
@@ -492,7 +494,24 @@ export default function Create() {
                             </Select> */}
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Supplier</Label>
+                            <Label className="flex flex-row items-center text-sm">
+                                Supplier{' '}
+                                <span className="ml-1 flex items-center">
+                                    {' '}
+                                    <HoverCard>
+                                        <HoverCardTrigger>(*)</HoverCardTrigger>
+                                        <HoverCardContent>
+                                            <div className="flex flex-col space-y-2">
+                                                <Badge>
+                                                    <Info className="h-4 w-4" />
+                                                    Info
+                                                </Badge>
+                                                <Label className="text-xs">This field is required.</Label>
+                                            </div>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                </span>
+                            </Label>
                             <div className="w-full">
                                 <SearchSelect
                                     optionName="supplier"
@@ -535,7 +554,26 @@ export default function Create() {
                             /> */}
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Delivery Contact</Label>
+                            <Label className="flex flex-row items-center text-sm">
+                                Delivery Contact{' '}
+                                <span className="ml-1 flex items-center">
+                                    {' '}
+                                    <HoverCard>
+                                        <HoverCardTrigger>
+                                            <ShieldQuestion className="h-4 w-4" />
+                                        </HoverCardTrigger>
+                                        <HoverCardContent>
+                                            <div className="flex flex-col space-y-2">
+                                                <Badge>
+                                                    <ShieldQuestion className="h-4 w-4" />
+                                                    Info
+                                                </Badge>
+                                                <Label className="text-xs">This field is only printed on pdf and not sent to Premier.</Label>
+                                            </div>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                </span>
+                            </Label>
                             <Input
                                 placeholder="Delivery Contact"
                                 value={data.delivery_contact ?? ''}
@@ -547,7 +585,26 @@ export default function Create() {
                             <Input placeholder="Requested by" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Deliver to</Label>
+                            <Label className="flex flex-row items-center text-sm">
+                                Deliver to{' '}
+                                <span className="ml-1 flex items-center">
+                                    {' '}
+                                    <HoverCard>
+                                        <HoverCardTrigger>
+                                            <ShieldQuestion className="h-4 w-4" />
+                                        </HoverCardTrigger>
+                                        <HoverCardContent>
+                                            <div className="flex flex-col space-y-2">
+                                                <Badge>
+                                                    <ShieldQuestion className="h-4 w-4" />
+                                                    Info
+                                                </Badge>
+                                                <Label className="text-xs">This field is only printed on pdf and not sent to Premier.</Label>
+                                            </div>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                </span>
+                            </Label>
                             <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
                         </div>
                         <div className="flex w-full flex-col md:w-1/2">

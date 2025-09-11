@@ -69,6 +69,7 @@ export default function RequisitionList() {
     const [filters, setFilters] = useState({
         supplier: null,
         status: null,
+        location: null,
         deliver_to: null,
         creator: null,
         contact: null,
@@ -88,6 +89,7 @@ export default function RequisitionList() {
         )
         .filter((req) => {
             return (
+                (!filters.location || req.location?.name === filters.location) &&
                 (!filters.supplier || req.supplier?.name === filters.supplier) &&
                 (!filters.status || req.status === filters.status) &&
                 (!filters.deliver_to || req.deliver_to === filters.deliver_to) &&
@@ -140,6 +142,7 @@ export default function RequisitionList() {
     }, [flash.success, flash.error]);
 
     const filterDefinitions = [
+        { key: 'location', label: 'Location', getOptions: () => requisitions.map((r) => r.location?.name) },
         { key: 'supplier', label: 'Supplier', getOptions: () => requisitions.map((r) => r.supplier?.name) },
         { key: 'status', label: 'Status', getOptions: () => requisitions.map((r) => r.status) },
         { key: 'deliver_to', label: 'Deliver To', getOptions: () => requisitions.map((r) => r.deliver_to) },
@@ -217,6 +220,7 @@ export default function RequisitionList() {
                                                 variant="link"
                                                 onClick={() => {
                                                     setFilters({
+                                                        location: null,
                                                         supplier: null,
                                                         status: null,
                                                         deliver_to: null,
