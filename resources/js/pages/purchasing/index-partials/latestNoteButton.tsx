@@ -5,18 +5,19 @@ import { DialogTrigger } from '@radix-ui/react-dialog';
 import NotesDialog from './notesDialog';
 const LatestNoteButton = ({ requisition }) => {
     const getInitials = useInitials();
+    const note = requisition?.notes?.slice(-1)[0];
     return (
         <Dialog>
             <DialogTrigger asChild>
                 <div className="flex flex-row rounded-md border p-2 shadow-sm hover:shadow-md">
                     <Avatar>
                         <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                            {getInitials(requisition.notes?.slice(-1)[0].creator?.name)}
+                            {getInitials(note?.creator?.name || 'N/A')}
                         </AvatarFallback>
                     </Avatar>
                     <div>
-                        <div className="ml-2">{requisition.notes?.slice(-1)[0].note}</div>
-                        <div className="ml-2 text-xs">{new Date(requisition.notes?.slice(-1)[0].created_at).toLocaleString('en-AU')}</div>
+                        <div className="ml-2">{note?.note}</div>
+                        <div className="ml-2 text-xs">{new Date(note?.created_at).toLocaleString('en-AU')}</div>
                     </div>
                 </div>
             </DialogTrigger>
