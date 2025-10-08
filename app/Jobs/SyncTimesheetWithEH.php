@@ -53,7 +53,7 @@ class SyncTimesheetWithEH implements ShouldQueue
             }
 
             $this->markClocksAsSynced($chunk, $clockMap);
-            User::role('admin')->first()?->notify(new SyncedTimesheetsWithEH());
+            //User::role('admin')->first()?->notify(new SyncedTimesheetsWithEH());
 
         }
 
