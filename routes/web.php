@@ -66,6 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
+        Route::get('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy');
 
         Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
         Route::resource('worktypes', WorktypeController::class)->names('worktypes');
@@ -160,6 +161,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
         Route::get('/variations/{id}', [VariationController::class, 'destroy'])->name('variations.destroy');
         Route::get('/variations/{id}/download/pdf', [VariationController::class, 'download'])->name('variations.download');
+
+        Route::get('/php-limits', fn() => response()->json([
+            'sapi' => php_sapi_name(),
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'post_max_size' => ini_get('post_max_size'),
+            'memory_limit' => ini_get('memory_limit'),
+        ]));
     });
 
     Route::middleware('permission:view kiosk')->group(function () {

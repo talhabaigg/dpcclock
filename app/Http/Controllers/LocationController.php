@@ -122,32 +122,68 @@ class LocationController extends Controller
     public function sync()
     {
         $apiKey = env('PAYROLL_API_KEY');
+
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
 
-        $locationData = $response->json();
-        // dd($locationData);
-        // $locationData = array_slice($locationData, 0, length: 1);
-
-
-        foreach ($locationData as $location) {
-            $locationModel = Location::updateOrCreate([
-                'eh_location_id' => $location['id'],
-            ], [
-                'name' => $location['name'],
-                'eh_parent_id' => $location['parentId'] ?? null,
-                'external_id' => $location['externalId'] ?? null,
-                'state' => $location['state'] ?? null,
-            ]);
-            // Sync worktypes using shiftConditionIds
-            if (!empty($location['defaultShiftConditionIds'])) {
-                $worktypeIds = Worktype::whereIn('eh_worktype_id', $location['defaultShiftConditionIds'])->pluck('id')->toArray();
-                $locationModel->worktypes()->sync($worktypeIds);
-            }
+        if ($response->failed()) {
+            return back()->with('error', 'Failed to connect to Employment Hero API.');
         }
-        return redirect()->back()->with('success', 'Locations synced successfully from Employment Hero.');
+
+        $locationData = $response->json();
+        if (!is_array($locationData) || empty($locationData)) {
+            return back()->with('error', 'Failed to fetch locations from Employment Hero.');
+        }
+
+        $remoteIds = collect($locationData)
+            ->pluck('id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $restoredCount = 0;
+        $deletedCount = 0;
+
+        DB::transaction(function () use ($locationData, $remoteIds, &$restoredCount, &$deletedCount) {
+
+            // Restore previously deleted ones that now exist in EH
+            $restoredCount = Location::onlyTrashed()
+                ->whereIn('eh_location_id', $remoteIds)
+                ->restore();
+
+            // Upsert + sync worktypes
+            foreach ($locationData as $loc) {
+                $model = Location::updateOrCreate(
+                    ['eh_location_id' => $loc['id']],
+                    [
+                        'name' => $loc['name'] ?? null,
+                        'eh_parent_id' => $loc['parentId'] ?? null,
+                        'external_id' => $loc['externalId'] ?? null,
+                        'state' => $loc['state'] ?? null,
+                    ]
+                );
+
+                if (!empty($loc['defaultShiftConditionIds']) && is_array($loc['defaultShiftConditionIds'])) {
+                    $worktypeIds = Worktype::whereIn('eh_worktype_id', $loc['defaultShiftConditionIds'])
+                        ->pluck('id')
+                        ->all();
+                    $model->worktypes()->sync($worktypeIds);
+                }
+            }
+
+            // Soft-delete locations missing from EH
+            $deletedCount = Location::whereNotIn('eh_location_id', $remoteIds)
+                ->whereNull('deleted_at')
+                ->update(['deleted_at' => now()]);
+        });
+
+        return back()->with(
+            'success',
+            "Locations synced successfully — Restored: {$restoredCount}, Deleted: {$deletedCount}."
+        );
     }
+
 
 
     public function createSubLocation(Request $request)

@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import { AlertCircleIcon, BadgeCheckIcon } from 'lucide-react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { AlertCircleIcon, BadgeCheckIcon, TrashIcon } from 'lucide-react';
 import React from 'react';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
@@ -238,7 +238,7 @@ export default function EditTimesheet() {
                                 {isSynced ? (
                                     <div className="absolute inset-0 z-10 cursor-not-allowed" onClick={() => toast.warning('Locked for editing.')} />
                                 ) : (
-                                    <div></div>
+                                    <></>
                                 )}
                                 <TableCell className="border-r-2">
                                     {clock.status ? (
@@ -247,7 +247,12 @@ export default function EditTimesheet() {
                                             {clock.status}
                                         </Badge>
                                     ) : (
-                                        <></>
+                                        <>
+                                            {' '}
+                                            <Link href={route('clocks.destroy', clock.id)} method="delete" as="button">
+                                                <TrashIcon />
+                                            </Link>
+                                        </>
                                     )}
                                 </TableCell>
                                 <TableCell className="border-r-2">
@@ -282,12 +287,16 @@ export default function EditTimesheet() {
                                 </TableCell>
                                 <TableCell className="border-r-2">
                                     {' '}
-                                    <LocationSelector
-                                        locations={locations}
-                                        selectedLocation={clock.location}
-                                        onChange={(val) => updateLocationField(clock.id, val)} // pass actual value
-                                        disabled={isSynced}
-                                    />
+                                    {locations ? (
+                                        <LocationSelector
+                                            locations={locations}
+                                            selectedLocation={clock.location}
+                                            onChange={(val) => updateLocationField(clock.id, val)} // pass actual value
+                                            disabled={isSynced}
+                                        />
+                                    ) : (
+                                        <div className="text-gray-500">No Location</div>
+                                    )}
                                 </TableCell>
                                 <TableCell className="border-r-2">
                                     {' '}

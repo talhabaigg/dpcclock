@@ -83,7 +83,7 @@ export default function Clockout() {
         const defaultClockOutTime = dayjs(`${clockInTime.format('YYYY-MM-DD')}T${kiosk.default_end_time}`);
 
         if (now < defaultClockOutTime) {
-            const roundedMinutes = Math.ceil(now.minute() / 30) * 30;
+            const roundedMinutes = Math.round(now.minute() / 30) * 30;
             const clockOut = now.minute(roundedMinutes % 60).second(0);
             const clockOutTime = roundedMinutes === 60 ? clockOut.add(1, 'hour').minute(0) : clockOut;
 

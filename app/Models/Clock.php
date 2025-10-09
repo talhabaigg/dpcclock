@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Clock extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'eh_kiosk_id',
         'eh_employee_id',

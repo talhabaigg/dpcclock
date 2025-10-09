@@ -40,7 +40,7 @@ type Location = {
     }>;
 };
 export default function LocationsList() {
-    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string } }>().props;
+    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string; error?: string } }>().props;
     const isLoading = false;
     const [open, setOpen] = useState(isLoading);
     const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('companySelected') ?? null);
@@ -82,6 +82,13 @@ export default function LocationsList() {
                             <AlertCircle />
                             <AlertTitle>Success!</AlertTitle>
                             <AlertDescription>{flash.success}</AlertDescription>
+                        </Alert>
+                    )}
+                    {flash.error && (
+                        <Alert variant="default">
+                            <AlertCircle />
+                            <AlertTitle>Error!</AlertTitle>
+                            <AlertDescription>{flash.error}</AlertDescription>
                         </Alert>
                     )}
                 </div>

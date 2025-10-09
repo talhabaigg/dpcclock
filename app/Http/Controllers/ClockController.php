@@ -208,7 +208,13 @@ class ClockController extends Controller
      */
     public function destroy(Clock $clock)
     {
-        //
+        if ($clock->status === 'synced') {
+            return redirect()->back()->with('error', 'Cannot delete a synced clock entry.');
+        }
+
+        $clock->delete();
+
+        return redirect()->back()->with('success', 'Clock entry deleted successfully.');
     }
 
     //retrieve ongoing clocked in clock and add clockout and generated entries from kiosk

@@ -34,6 +34,19 @@ class SyncKioskEmployees implements ShouldQueue
                     $employeeId = $employee->eh_employee_id;
 
                     $locationIds = $this->getLocationsforEmployeeId($employeeId);
+
+                    if (is_null($locationIds)) {
+                        // API failed or returned bad data — skip this employee entirely
+                        Log::warning("Skipped employee {$employeeId}: API returned null or invalid.");
+                        return; // skip detach
+                    }
+
+                    if (empty($locationIds)) {
+                        // API call was valid, but employee genuinely has no locations
+                        $employeeModel->kiosks()->detach();
+                        Log::info("Detached all kiosks for employee {$employeeId} (no locations).");
+                        return;
+                    }
                     $kioskIds = $this->getKioskIdforLocationIds($locationIds);
 
                     Log::info("Employee ID: {$employeeId} - Kiosk IDs: " . implode(', ', $kioskIds));
@@ -85,33 +98,53 @@ class SyncKioskEmployees implements ShouldQueue
         }
     }
 
-    protected function getLocationsforEmployeeId(int $employeeId): array
+    protected function getLocationsforEmployeeId(int $employeeId): ?array
     {
         $apiKey = env('PAYROLL_API_KEY');
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/location");
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/location");
 
-        $json = $response->json();
+            // If API call failed or returned invalid JSON
+            if (!$response->successful()) {
+                Log::error("API error for employee {$employeeId}: HTTP {$response->status()} - " . $response->body());
+                return null; // means API failure → skip
+            }
 
-        if (!is_array($json)) {
-            Log::error("Unexpected response for employee {$employeeId}: " . $response->body());
-            return [];
-        }
+            $json = $response->json();
 
-        return collect($json)
-            ->filter(
-                fn($loc) =>
-                is_array($loc) &&
-                (
-                    in_array($loc['parentId'] ?? null, [1149031, 1198645, 1249093]) ||
-                    in_array($loc['id'] ?? null, [1149031, 1198645])
+            // If response is null, string, or not an array → invalid
+            if (!is_array($json)) {
+                Log::error("Invalid API response for employee {$employeeId}: " . $response->body());
+                return null; // means invalid → skip
+            }
+
+            // ✅ Genuine empty array → means employee has no locations
+            if (empty($json)) {
+                return []; // means "detach all"
+            }
+
+            // Otherwise, filter to only include approved location IDs
+            return collect($json)
+                ->filter(
+                    fn($loc) =>
+                    is_array($loc) &&
+                    (
+                        in_array($loc['parentId'] ?? null, [1149031, 1198645, 1249093]) ||
+                        in_array($loc['id'] ?? null, [1149031, 1198645])
+                    )
                 )
-            )
-            ->pluck('id')
-            ->toArray();
+                ->pluck('id')
+                ->toArray();
+
+        } catch (\Throwable $e) {
+            Log::error("Exception for employee {$employeeId}: " . $e->getMessage());
+            return null; // means API failure → skip
+        }
     }
+
 
     protected function getKioskIdforLocationIds(array $locationIds): array
     {
