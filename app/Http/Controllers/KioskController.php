@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\EmployeeClockedEvent;
 use App\Models\User;
+use Carbon\Carbon;
 use Inertia\Inertia;
 use App\Models\Clock;
 use App\Models\Kiosk;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Redirect;
 use App\Services\KioskService;
+use Session;
 
 
 class KioskController extends Controller
@@ -88,10 +90,10 @@ class KioskController extends Controller
                 ->whereNull('clock_out'); // Only consider clock-ins from today
 
             // Log the exact query for debugging
-            Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
-                'query' => $clockedInQuery->toSql(),
-                'bindings' => $clockedInQuery->getBindings()
-            ]);
+            // Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
+            //     'query' => $clockedInQuery->toSql(),
+            //     'bindings' => $clockedInQuery->getBindings()
+            // ]);
 
             $employee->clocked_in = $clockedInQuery->exists();
             return $employee;
@@ -273,5 +275,29 @@ class KioskController extends Controller
         ]);
     }
 
+    public function validateKioskAdminPin(Request $request)
+    {
+        $validatedPin = $request->validate([
+            'pin' => 'required|string|min:4|max:4',
+            'kioskId' => 'required|exists:kiosks,id',
+        ]);
+        // dd($validatedPin);
+        if ($validatedPin['pin'] === '3695') {
+            // Store an "admin mode" token in session that expires in 10 minutes
 
+            Session::put('kiosk_admin_mode', [
+                'active' => true,
+                'expires_at' => now()->addMinutes(10),
+            ]);
+
+            $adminMode = Session::get('kiosk_admin_mode');
+            Log::info('Kiosk admin mode activated', ['admin_mode' => $adminMode]);
+            return redirect()
+                ->route('kiosks.show', $validatedPin['kioskId'])
+                ->with('success', 'Pin validated successfully.');
+
+        }
+
+        return response()->json(['message' => 'Invalid pin.'], 403);
+    }
 }

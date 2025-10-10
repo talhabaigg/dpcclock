@@ -2,6 +2,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import KioskSettingMenu from './KioskSettingMenu';
 import EmployeeList from './employeeList';
 import EmployeeSearch from './employeeSearch';
 import KioskTokenDialog from './qrcode';
@@ -51,7 +52,10 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             <div className="flex h-16 w-full items-center justify-between bg-black px-4 shadow-md">
                 <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
                 <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
-                <KioskTokenDialog kioskId={kiosk.id} />
+                <div className="flex items-center space-x-2">
+                    <KioskSettingMenu kioskId={kiosk.id} />
+                    <KioskTokenDialog kioskId={kiosk.id} />
+                </div>
             </div>
 
             {/* Layout container */}

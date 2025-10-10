@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,6 +17,7 @@ use App\Models\Location;
 use App\Models\User;
 use Illuminate\Support\Facades\Cookie;
 use App\Services\KioskService;
+use Session;
 
 class KioskAuthController extends Controller
 {
@@ -25,8 +27,28 @@ class KioskAuthController extends Controller
     {
         $this->kioskService = $kioskService;
     }
+
+    private function isAdminModeActive(): bool
+    {
+        $adminSession = Session::get('kiosk_admin_mode');
+
+        if (!$adminSession || empty($adminSession['active'])) {
+            return false;
+        }
+
+        // Check if session expired
+        if (now()->greaterThan(Carbon::parse($adminSession['expires_at']))) {
+            Session::forget('kiosk_admin_mode');
+            return false;
+        }
+
+        return true;
+    }
     public function showPinPage($kioskId, $employeeId): Response
     {
+        $adminMode = Session::get('kiosk_admin_mode');
+        dd($adminMode);
+
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
