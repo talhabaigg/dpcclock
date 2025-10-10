@@ -35,7 +35,7 @@ class KioskController extends Controller
     {
         if (Auth::user()->hasRole('admin')) {
             $kiosks = Kiosk::with('location', 'employees')->get();
-            dd($kiosks);
+
             return Inertia::render('kiosks/index', [
                 'kiosks' => $kiosks,
             ]);
