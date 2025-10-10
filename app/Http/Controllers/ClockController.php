@@ -92,18 +92,25 @@ class ClockController extends Controller
             ->where('eh_employee_id', $employeeId)
             ->whereDate('clock_in', $parsedDate)
             ->get();
-        $kiosks = Kiosk::select('eh_kiosk_id', 'name')->get(); //kiosks for kioskSelector
+        $kiosks = Kiosk::with('location')->select('eh_kiosk_id', 'name', 'eh_location_id')->get(); //kiosks for kioskSelector
+        foreach ($kiosks as $kiosk) {
+            $kiosk->locations = Location::where('eh_parent_id', $kiosk->eh_location_id)->pluck('external_id')->toArray();
+
+        }
+
 
 
         foreach ($clocks as $clock) {
             $kiosk = $clock->kiosk;
             $parent_location = $kiosk?->location->eh_location_id;
 
+
             if ($parent_location) {
                 $locations = Location::where('eh_parent_id', $parent_location)->pluck('external_id')->toArray();
                 $clock->locations = $locations ?? $kiosk?->location->external_id; //locations added for Location selector unique for each line to keep kiosks separate
             }
         }
+        $locations = Location::pluck('external_id')->toArray(); //all locations for validation if no kiosk selected
         // dd($clocks);
         return Inertia::render('timesheets/edit2', [
             'clocks' => $clocks,

@@ -46,6 +46,8 @@ type Clock = {
 type Kiosk = {
     eh_kiosk_id: number;
     name: string;
+    eh_location_id: number;
+    locations?: Location[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -192,6 +194,11 @@ export default function EditTimesheet() {
         form.post(`${route('clock.edit.summary.post')}?date=${selectedDate}`);
     };
 
+    const sublocationsForSelectedKiosk = (kioskId: number | '') => {
+        const kiosk = kiosks.find((k) => k.eh_kiosk_id === kioskId);
+        return kiosk?.locations ?? [];
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Timesheet" />
@@ -218,7 +225,7 @@ export default function EditTimesheet() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableCell className="col-span-1 bg-gray-50 dark:bg-gray-900"></TableCell>
+                        <TableHead className="col-span-1 bg-gray-50 dark:bg-gray-900"></TableHead>
                         <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Status</TableHead>
                         <TableHead className="col-span-1 border-r-2 bg-gray-50 dark:bg-gray-900">Start time</TableHead>
                         <TableHead className="border-r-2 bg-gray-50 dark:bg-gray-900">End time</TableHead>
@@ -238,7 +245,7 @@ export default function EditTimesheet() {
                                 {isSynced ? (
                                     <div className="absolute inset-0 z-10 cursor-not-allowed" onClick={() => toast.warning('Locked for editing.')} />
                                 ) : (
-                                    <></>
+                                    <div />
                                 )}
                                 <TableCell className="border-r-2">
                                     {clock.status ? (
@@ -247,14 +254,13 @@ export default function EditTimesheet() {
                                             {clock.status}
                                         </Badge>
                                     ) : (
-                                        <>
-                                            {' '}
-                                            <Link href={route('clocks.destroy', clock.id)} method="delete" as="button">
-                                                <TrashIcon />
-                                            </Link>
-                                        </>
+                                        <Badge variant="default" className="">
+                                            <BadgeCheckIcon />
+                                            Pending
+                                        </Badge>
                                     )}
                                 </TableCell>
+
                                 <TableCell className="border-r-2">
                                     {' '}
                                     <div className="flex w-full flex-row">
@@ -285,24 +291,22 @@ export default function EditTimesheet() {
                                         />
                                     </div>
                                 </TableCell>
+
                                 <TableCell className="border-r-2">
                                     {' '}
-                                    {locations ? (
-                                        <LocationSelector
-                                            locations={locations}
-                                            selectedLocation={clock.location}
-                                            onChange={(val) => updateLocationField(clock.id, val)} // pass actual value
-                                            disabled={isSynced}
-                                        />
-                                    ) : (
-                                        <div className="text-gray-500">No Location</div>
-                                    )}
+                                    <LocationSelector
+                                        locations={sublocationsForSelectedKiosk(clock.eh_kiosk_id)}
+                                        selectedLocation={clock.location}
+                                        onChange={(val) => updateLocationField(clock.id, val)}
+                                        disabled={isSynced}
+                                        allLocations={locations}
+                                    />
                                 </TableCell>
                                 <TableCell className="border-r-2">
                                     {' '}
                                     <KioskSelector
                                         kiosks={kiosks}
-                                        selectedKiosk={clock.eh_kiosk_id ? Number(clock.eh_kiosk_id) : undefined}
+                                        selectedKiosk={Number(clock.eh_kiosk_id) || ''}
                                         onChange={(val) => updateKioskField(clock.id, val)}
                                         disabled={isSynced}
                                     />
@@ -330,6 +334,11 @@ export default function EditTimesheet() {
                                         disabled={isSynced || (isLaserAlreadySelectedElsewhere(clock.id) && clock.laser_allowance !== '1')}
                                         onCheckedChange={(checked) => updateLaserAllowance(clock.id, !!checked)}
                                     />
+                                </TableCell>
+                                <TableCell>
+                                    <Link href={route('clocks.destroy', clock.id)} method="delete" as="button">
+                                        <TrashIcon />
+                                    </Link>
                                 </TableCell>
                             </TableRow>
                         );
