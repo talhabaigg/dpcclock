@@ -89,12 +89,12 @@ export default function Clockout() {
 
             const duration = clockOutTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
-            alert('Clock out is before default clock out time, Duration: ' + duration);
+            // alert('Clock out is before default clock out time, Duration: ' + duration);
         }
 
         if (now > defaultClockOutTime) {
             const duration = defaultClockOutTime.diff(clockInTime, 'hours', true);
-            alert('Clock out is after default clock out time, Duration: ' + duration);
+            // alert('Clock out is after default clock out time, Duration: ' + duration);
             setHoursWorked(parseFloat(duration.toFixed(2)));
         }
     }, [clockedIn.clock_in, kiosk.default_end_time]);
