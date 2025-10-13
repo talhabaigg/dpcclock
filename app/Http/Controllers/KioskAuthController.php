@@ -47,7 +47,7 @@ class KioskAuthController extends Controller
     public function showPinPage($kioskId, $employeeId): Response
     {
         $adminMode = Session::get('kiosk_admin_mode');
-        dd($adminMode);
+        // dd($adminMode);
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
