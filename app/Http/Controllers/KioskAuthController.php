@@ -46,45 +46,33 @@ class KioskAuthController extends Controller
     }
     public function showPinPage($kioskId, $employeeId): Response
     {
-        $adminMode = Session::get('kiosk_admin_mode');
-        // dd($adminMode);
+        $adminMode = $this->isAdminModeActive();
+
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
 
+        if ($adminMode) {
+            // dd('admin mode active');
+            return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
+        }
+        // dd('reached');
         return Inertia::render('kiosks/auth/pin', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
             'employee' => $employee,
             'kiosk' => $kiosk,
             'employees' => $employees,
+            'adminMode' => $adminMode,
         ]);
     }
 
-
-    public function validatePin($kioskId, $employeeId, Request $request)
+    private function renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn)
     {
-        $employee = Employee::findOrFail($employeeId);
-        $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
-        $pin = $request->input('pin');
 
-        if (env('APP_ENV') === 'local') {
-            $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-            if (!$localPinCheck) {
-                return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
-            }
-
-        } else {
-            $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-            if (!$ehPinCheck) {
-                return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
-            }
-        }
-
-        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
-        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
-
+        $adminMode = $this->isAdminModeActive();
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
             return Inertia::render('kiosks/clocking/out', [
@@ -95,13 +83,15 @@ class KioskAuthController extends Controller
                 'employees' => $employees,
                 'locations' => $locations,
                 'clockedIn' => $clockedIn,
+                'adminMode' => $adminMode,
             ]);
         }
 
         // If employee is not clocked in, show the clock-in page
+
         $location = $kiosk->location;
         $locations = Location::where('eh_parent_id', $location->eh_location_id)->pluck('external_id')->toArray();
-
+        // dd('reached here');
         return Inertia::render('kiosks/clocking/in', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
@@ -109,7 +99,45 @@ class KioskAuthController extends Controller
             'kiosk' => $kiosk,
             'employees' => $employees,
             'locations' => $locations,
+            'adminMode' => $adminMode,
         ]);
+    }
+
+
+    public function validatePin($kioskId, $employeeId, Request $request)
+    {
+        $employee = Employee::findOrFail($employeeId);
+        $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
+
+        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+        $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
+
+
+        if (env('APP_ENV') === 'local') {
+            $pin = $request->input('pin');
+            $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+            if (!$localPinCheck) {
+                return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+            }
+
+        } else {
+            $pin = $request->input('pin');
+            $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
+            if (!$ehPinCheck) {
+                return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
+            }
+        }
+
+
+
+        if ($clockedIn) {
+            $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
+            return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
+        }
+
+        return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
+        // If employee is not clocked in, show the clock-in page
+
     }
 
     private function verifyLocalPin($kioskId, $employeeId, $pin)

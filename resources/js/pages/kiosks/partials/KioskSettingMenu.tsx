@@ -6,8 +6,17 @@ import { Delete, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
-const KioskSettingMenu = ({ kioskId }) => {
-    const form = useForm({ pin: '', kioskId: null });
+
+interface KioskSettingMenuProps {
+    kioskId: number;
+    adminMode: boolean | undefined;
+}
+const KioskSettingMenu = ({ kioskId, adminMode }: KioskSettingMenuProps) => {
+    console.log('KioskSettingMenu adminMode:', adminMode);
+    const form = useForm<{ pin: string; kioskId: number }>({
+        pin: '',
+        kioskId, // set once; no need to re-set in useEffect
+    });
     const [showProcessing, setShowProcessing] = useState(false);
     const handleNumClick = (num: string) => {
         if (form.data.pin.length < 4) {
@@ -18,21 +27,29 @@ const KioskSettingMenu = ({ kioskId }) => {
         if (e) e.preventDefault();
 
         if (form.data.pin.length === 4) {
-            setShowProcessing(true); // Show the loading dialog
+            setShowProcessing(true);
 
-            setTimeout(() => {
-                form.post(route('kiosk.validate-admin-pin'), {
-                    onFinish: () => setShowProcessing(false), // Hide processing after request finishes
-                });
-            }); // Delay submission by 2 seconds
+            // Ensure kioskId is present at submit time (belt & braces)
+            form.transform((data) => ({
+                ...data,
+                kioskId: Number(kioskId),
+            }));
+
+            // Post immediately (recommended). If you truly want delay, add ", 2000".
+            // setTimeout(() => {
+            form.post(route('kiosk.validate-admin-pin'), {
+                onFinish: () => {
+                    setShowProcessing(false);
+                    form.reset('pin');
+                    setOpen(false);
+                },
+            });
+            // }, 2000);
         }
     };
     useEffect(() => {
         if (form.data.pin.length === 4) {
-            form.setData('kioskId', kioskId);
             handleSubmit();
-            form.setData('pin', '');
-            setOpen(false);
         }
     }, [form.data.pin]);
 
@@ -42,46 +59,48 @@ const KioskSettingMenu = ({ kioskId }) => {
             <DropdownMenuTrigger className="rounded-full bg-gray-900 p-2 hover:bg-gray-700">
                 <Settings className="text-white" />
             </DropdownMenuTrigger>
+
             <DropdownMenuContent>
                 <DropdownMenuLabel>Settings</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-
-                <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogTrigger className="ml-2 text-sm">Switch to Admin Mode</DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Enter Admin PIN</DialogTitle>
-                            <DialogDescription>4 digit Admin PIN to switch to Admin Mode.</DialogDescription>
-                            <div className="flex flex-col items-center justify-center">
-                                {showProcessing ? (
-                                    <div className="flex flex-col items-center justify-center">
-                                        <div className="mb-4 text-lg font-medium">Processing...</div>
-                                        <div className="loader" />
-                                    </div>
-                                ) : (
-                                    <>
-                                        {' '}
-                                        <div className="mb-2 flex items-center space-x-2">
-                                            <PinInputBox pin={form.data.pin} />
-                                            <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon">
-                                                <Delete />
-                                            </Button>
+                {!adminMode && (
+                    <Dialog open={open} onOpenChange={setOpen}>
+                        <DialogTrigger className="ml-2 text-sm">Switch to Admin Mode</DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Enter Admin PIN</DialogTitle>
+                                <DialogDescription>4 digit Admin PIN to switch to Admin Mode.</DialogDescription>
+                                <div className="flex flex-col items-center justify-center">
+                                    {showProcessing ? (
+                                        <div className="flex flex-col items-center justify-center">
+                                            <div className="mb-4 text-lg font-medium">Processing...</div>
+                                            <div className="loader" />
                                         </div>
-                                        <PinNumpad
-                                            onClick={(key) => {
-                                                if (key === 'C') {
-                                                    form.setData('pin', '');
-                                                } else {
-                                                    handleNumClick(key);
-                                                }
-                                            }}
-                                        />
-                                    </>
-                                )}
-                            </div>
-                        </DialogHeader>
-                    </DialogContent>
-                </Dialog>
+                                    ) : (
+                                        <>
+                                            {' '}
+                                            <div className="mb-2 flex items-center space-x-2">
+                                                <PinInputBox pin={form.data.pin} />
+                                                <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon">
+                                                    <Delete />
+                                                </Button>
+                                            </div>
+                                            <PinNumpad
+                                                onClick={(key) => {
+                                                    if (key === 'C') {
+                                                        form.setData('pin', '');
+                                                    } else {
+                                                        handleNumClick(key);
+                                                    }
+                                                }}
+                                            />
+                                        </>
+                                    )}
+                                </div>
+                            </DialogHeader>
+                        </DialogContent>
+                    </Dialog>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

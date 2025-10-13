@@ -281,7 +281,7 @@ class KioskController extends Controller
             'pin' => 'required|string|min:4|max:4',
             'kioskId' => 'required|exists:kiosks,id',
         ]);
-        // dd($validatedPin);
+
         if ($validatedPin['pin'] === '3695') {
             // Store an "admin mode" token in session that expires in 10 minutes
 
@@ -295,9 +295,18 @@ class KioskController extends Controller
             return redirect()
                 ->route('kiosks.show', $validatedPin['kioskId'])
                 ->with('success', 'Pin validated successfully.');
-
         }
 
         return response()->json(['message' => 'Invalid pin.'], 403);
+    }
+
+    public function disableAdminMode($kioskId)
+    {
+        // Clear the admin mode session
+        Session::forget('kiosk_admin_mode');
+
+        return redirect()
+            ->route('kiosks.show', $kioskId)
+            ->with('success', 'Admin mode disabled successfully.');
     }
 }

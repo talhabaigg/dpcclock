@@ -19,7 +19,8 @@ interface Kiosk {
 }
 
 export default function ClockIn() {
-    const { employees, kiosk, employee } = usePage<{ employees: Employee[]; kiosk: Kiosk; employee: Employee }>().props;
+    const { employees, kiosk, employee, adminMode } = usePage<{ employees: Employee[]; kiosk: Kiosk; employee: Employee; adminMode: boolean }>()
+        .props;
     const form = useForm({
         kioskId: kiosk.id,
         employeeId: employee.id,
@@ -92,7 +93,7 @@ export default function ClockIn() {
     return isMobile ? (
         content
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}
         </KioskLayout>
     );

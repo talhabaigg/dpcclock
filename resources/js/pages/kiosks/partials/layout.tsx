@@ -1,6 +1,8 @@
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link, router, usePage } from '@inertiajs/react';
+import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskSettingMenu from './KioskSettingMenu';
 import EmployeeList from './employeeList';
@@ -19,9 +21,10 @@ interface KioskLayoutProps {
     employees: Array<any>;
     kiosk: Kiosk;
     selectedEmployee?: any;
+    adminMode: boolean | undefined;
 }
 
-export default function KioskLayout({ children, employees, kiosk, selectedEmployee }: KioskLayoutProps) {
+export default function KioskLayout({ children, employees, kiosk, selectedEmployee, adminMode }: KioskLayoutProps) {
     const [search, setSearch] = useState<string>('');
     const { auth } = usePage().props as unknown as { auth: { user: any } };
 
@@ -53,7 +56,15 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
                 <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
                 <div className="flex items-center space-x-2">
-                    <KioskSettingMenu kioskId={kiosk.id} />
+                    {adminMode && (
+                        <Link href={`/kiosks/${kiosk.id}/disable-admin-mode`}>
+                            <Button className="flex items-center p-2 text-sm" variant="default">
+                                <X className="text-white" /> Disable Admin Mode
+                            </Button>
+                        </Link>
+                    )}
+
+                    <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} />
                     <KioskTokenDialog kioskId={kiosk.id} />
                 </div>
             </div>

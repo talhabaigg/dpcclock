@@ -23,12 +23,15 @@ interface Kiosk {
 }
 
 export default function ShowPin() {
-    const { employees, kiosk, employee, flash } = usePage<{
+    const { employees, kiosk, employee, flash, adminMode } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
         flash: { success?: string; error?: string };
+        adminMode: boolean;
     }>().props;
+
+    console.log('ShowPin adminMode:', adminMode);
     // Use Inertia form state
     const form = useForm({ pin: '' });
     const [showProcessing, setShowProcessing] = useState(false);
@@ -132,7 +135,7 @@ export default function ShowPin() {
     return isMobile ? (
         content
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}
         </KioskLayout>
     );
