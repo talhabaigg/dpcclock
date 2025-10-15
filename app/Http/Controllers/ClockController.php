@@ -737,4 +737,37 @@ class ClockController extends Controller
             'employeeName' => $employeeName,
         ]);
     }
+
+    public function updateStartTimeForEmployees(Kiosk $kioskId, Request $request)
+    {
+        dd($request->all());
+        $data = $request->validate([
+            'employeeIds' => ['required', 'array', 'min:1'],
+            'employeeIds.*' => ['integer'],
+            'startTime' => ['required', 'regex:/^(2[0-3]|[01]\d):([0-5]\d)(?::([0-5]\d))?$/'], // HH:mm or HH:mm:ss
+        ]);
+        dd($data);
+        $newStartTime = strlen($data['startTime']) === 5
+            ? $data['startTime'] . ':00'
+            : $data['startTime'];
+
+        $updated = 0;
+        DB::transaction(function () use ($kioskId, $data, $newStartTime, &$updated) {
+            $clocks = Clock::where('eh_kiosk_id', $kioskId->eh_kiosk_id)
+                ->whereIn('eh_employee_id', $data['employeeIds'])
+                ->whereDate('clock_in', today())           // limit to today (remove if you need historical)
+                ->whereNull('clock_out')                   // only active clocks
+                ->get();
+
+            foreach ($clocks as $clock) {
+                $clock->clock_in = Carbon::parse($clock->clock_in)
+                    ->setTimeFromTimeString($newStartTime);
+                $clock->save();
+                $updated++;
+            }
+        });
+
+
+        return redirect()->back()->with('success', 'Start times updated successfully for selected employees.');
+    }
 }

@@ -21,10 +21,12 @@ export default function Kiosk() {
         employees: initialEmployees,
         flash,
         kiosk,
+        adminMode,
     } = usePage<{
         employees: Employee[];
         flash: { success?: string; error?: string };
         kiosk: Kiosk;
+        adminMode: boolean;
     }>().props;
 
     const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
@@ -53,7 +55,7 @@ export default function Kiosk() {
     }, [flash, kiosk.id]);
 
     return (
-        <KioskLayout employees={employees} kiosk={kiosk}>
+        <KioskLayout employees={employees} kiosk={kiosk} adminMode={adminMode}>
             <div>
                 {flashMessage.success && (
                     <div className="alert alert-success">

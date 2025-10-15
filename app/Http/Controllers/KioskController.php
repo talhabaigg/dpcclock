@@ -79,31 +79,37 @@ class KioskController extends Controller
                 'error' => 'Kiosk is currently active. Please try again later.',
             ]);
         }
+
+        $adminMode = $this->kioskService->isAdminModeActive();
+
         // Load employees related to the kiosk
         $kiosk->load('employees', 'relatedKiosks');
-
+        $employees = $this->kioskService->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
         // Append clocked_in status to each employee based on the kiosk
-        $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
-            $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
-                ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
-                ->whereDate('clock_in', now()->toDateString()) // Check if clock-in date is today
-                ->whereNull('clock_out'); // Only consider clock-ins from today
+        // $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
+        //     $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
+        //         ->where('eh_kiosk_id', $kiosk->eh_kiosk_id) // Ensure it's the same kiosk
+        //         ->whereDate('clock_in', now()->toDateString()) // Check if clock-in date is today
+        //         ->whereNull('clock_out'); // Only consider clock-ins from today
 
-            // Log the exact query for debugging
-            // Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
-            //     'query' => $clockedInQuery->toSql(),
-            //     'bindings' => $clockedInQuery->getBindings()
-            // ]);
+        //     // Log the exact query for debugging
+        //     // Log::info("Checking clock-in status for Employee ID: {$employee->eh_employee_id}, Kiosk ID: {$kiosk->eh_kiosk_id}", [
+        //     //     'query' => $clockedInQuery->toSql(),
+        //     //     'bindings' => $clockedInQuery->getBindings()
+        //     // ]);
 
-            $employee->clocked_in = $clockedInQuery->exists();
-            return $employee;
-        });
+        //     $employee->clocked_in = $clockedInQuery->exists();
+        //     return $employee;
+        // });
+
+
 
         broadcast(new EmployeeClockedEvent($kiosk->id, $employees))->toOthers();
 
         return Inertia::render('kiosks/show', [
             'kiosk' => $kiosk,
             'employees' => $employees, // Use modified employee list with clocked_in
+            'adminMode' => $adminMode,
         ]);
     }
 

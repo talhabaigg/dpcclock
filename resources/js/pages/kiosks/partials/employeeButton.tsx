@@ -8,6 +8,7 @@ interface Employee {
     pin: string;
     eh_employee_id: string;
     clocked_in: boolean;
+    clock_in_time?: string;
 }
 type Props = {
     emp: Employee;
@@ -31,7 +32,7 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
                 </Avatar>
                 <div className="flex flex-col">
                     {emp.name}
-                    {emp.clocked_in && <span className="text-green-500">Clocked In</span>}
+                    {emp.clocked_in && <span className="text-green-500">Clocked In at {emp.clock_in_time}</span>}
                 </div>
             </Button>
         </>

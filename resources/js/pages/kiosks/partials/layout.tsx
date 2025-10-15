@@ -58,13 +58,13 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 <div className="flex items-center space-x-2">
                     {adminMode && (
                         <Link href={`/kiosks/${kiosk.id}/disable-admin-mode`}>
-                            <Button className="flex items-center p-2 text-sm" variant="default">
-                                <X className="text-white" /> Disable Admin Mode
+                            <Button className="flex max-w-16 items-center p-2 text-sm sm:max-w-full" variant="default">
+                                <X className="text-white" /> Exit <span className="hidden sm:block">Admin Mode</span>
                             </Button>
                         </Link>
                     )}
 
-                    <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} />
+                    <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} />
                     <KioskTokenDialog kioskId={kiosk.id} />
                 </div>
             </div>

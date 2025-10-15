@@ -28,31 +28,16 @@ class KioskAuthController extends Controller
         $this->kioskService = $kioskService;
     }
 
-    private function isAdminModeActive(): bool
-    {
-        $adminSession = Session::get('kiosk_admin_mode');
 
-        if (!$adminSession || empty($adminSession['active'])) {
-            return false;
-        }
-
-        // Check if session expired
-        if (now()->greaterThan(Carbon::parse($adminSession['expires_at']))) {
-            Session::forget('kiosk_admin_mode');
-            return false;
-        }
-
-        return true;
-    }
     public function showPinPage($kioskId, $employeeId): Response
     {
-        $adminMode = $this->isAdminModeActive();
+        $adminMode = $this->kioskService->isAdminModeActive();
 
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
-        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+        $employees = $this->kioskService->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
 
         if ($adminMode) {
             // dd('admin mode active');
@@ -72,7 +57,7 @@ class KioskAuthController extends Controller
     private function renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn)
     {
 
-        $adminMode = $this->isAdminModeActive();
+        $adminMode = $this->kioskService->isAdminModeActive();
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
             return Inertia::render('kiosks/clocking/out', [

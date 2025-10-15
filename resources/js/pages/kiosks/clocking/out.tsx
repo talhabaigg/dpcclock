@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
@@ -14,6 +15,7 @@ import LevelSelector from '../components/levelSelector';
 import TaskHoursAndAllowances from '../components/TaskHoursAndAllowances';
 import TaskLevelDisplay from '../components/TaskLevelDisplay';
 import KioskLayout from '../partials/layout';
+dayjs.extend(customParseFormat);
 interface Employee {
     id: number;
     name: string;
@@ -36,12 +38,13 @@ interface TaskAllocation {
 }
 
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn } = usePage<{
+    const { employees, kiosk, employee, locations, clockedIn, adminMode } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
         locations: any[];
         clockedIn: { clock_in: string };
+        adminMode: boolean;
     }>().props;
 
     const { setData, post, processing } = useForm<{
@@ -73,6 +76,7 @@ export default function Clockout() {
         },
     ]);
     const [hoursAllocated, setHoursAllocated] = useState(0);
+    const [selectedEndTime, setSelectedEndTime] = useState('');
     const [laserAllowance, setLaserAllowance] = useState(false);
 
     useEffect(() => {
@@ -81,7 +85,15 @@ export default function Clockout() {
         const clockInTime = dayjs(clockedIn.clock_in);
         const now = dayjs();
         const defaultClockOutTime = dayjs(`${clockInTime.format('YYYY-MM-DD')}T${kiosk.default_end_time}`);
+        if (selectedEndTime) {
+            console.log('Selected end time: ' + selectedEndTime);
+            const endTime = dayjs(selectedEndTime, 'HH:mm');
 
+            const duration = endTime.diff(clockInTime, 'hours', true);
+            setHoursWorked(parseFloat(duration.toFixed(2)));
+            console.log('Selected end time, Duration: ' + duration);
+            return;
+        }
         if (now < defaultClockOutTime) {
             const roundedMinutes = Math.round(now.minute() / 30) * 30;
             const clockOut = now.minute(roundedMinutes % 60).second(0);
@@ -97,7 +109,7 @@ export default function Clockout() {
             // alert('Clock out is after default clock out time, Duration: ' + duration);
             setHoursWorked(parseFloat(duration.toFixed(2)));
         }
-    }, [clockedIn.clock_in, kiosk.default_end_time]);
+    }, [clockedIn.clock_in, kiosk.default_end_time, selectedEndTime]);
 
     useEffect(() => {
         const totalHours = taskAllocations.reduce((sum, task) => sum + task.hours, 0);
@@ -198,12 +210,57 @@ export default function Clockout() {
         };
     }, []);
 
+    const AvailableEndTimes = () => {
+        const times = [];
+        const now = dayjs();
+
+        // Round to nearest 30 minutes
+        const minute = now.minute();
+        const nearestHalfHour = Math.round(minute / 30) * 30;
+        const rounded = now.minute(nearestHalfHour).second(0);
+
+        // Generate 4 options: current rounded time and 3 previous 30-min intervals
+        for (let i = 0; i < 4; i++) {
+            const timeOption = rounded.subtract(i * 30, 'minute').format('HH:mm');
+            times.push(timeOption);
+        }
+
+        return times;
+    };
+
     const content = (
         <div className="my-4 flex w-full flex-col items-center justify-center space-y-4">
             <h2 className="text-center text-xl font-bold sm:text-2xl">Clock Out for {employee.name}</h2>
             <p className="text-center text-sm sm:text-base">
                 Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
+            <div className="flex w-full flex-col items-center px-4">
+                <Label className="mb-2 block flex-1 font-semibold">Select End Time</Label>
+                <div className="flex w-full flex-col justify-between space-y-2 space-x-2 sm:flex-row">
+                    {AvailableEndTimes().map((time) => (
+                        <Button
+                            key={time}
+                            onClick={() => setSelectedEndTime(time)}
+                            className="w-full"
+                            variant={selectedEndTime === time ? 'default' : 'outline'}
+                        >
+                            {time}
+                        </Button>
+                    ))}
+                </div>
+                {/* <Select onValueChange={setSelectedEndTime} value={selectedEndTime} defaultValue="">
+                    <SelectTrigger className="flex flex-1 justify-between">
+                        <SelectValue placeholder="Select End Time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {AvailableEndTimes().map((time) => (
+                            <SelectItem key={time} value={time.toString()}>
+                                {time}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select> */}
+            </div>
             {processing && (
                 <KioskDialogBox isOpen={processing} title="Please wait" description="Please wait..." onClose={() => {}}>
                     <div className="flex items-center justify-center space-x-2">
@@ -320,7 +377,7 @@ export default function Clockout() {
     return isMobile ? (
         content
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}
         </KioskLayout>
     );
