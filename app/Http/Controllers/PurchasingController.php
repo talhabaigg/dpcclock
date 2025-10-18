@@ -322,7 +322,7 @@ class PurchasingController extends Controller
 
     public function sendApi($id)
     {
-        dd('please use other method - temporarily disabled to fix bug');
+        // dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
         $validateService = new \App\Services\ValidateRequisitionService();
         $generatePONumberService = new \App\Services\GeneratePONumberService();

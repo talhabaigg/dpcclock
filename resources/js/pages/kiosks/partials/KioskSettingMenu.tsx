@@ -60,7 +60,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
 
     const [selectedHour, setSelectedHour] = useState('09');
     const [selectedMinute, setSelectedMinute] = useState('00');
-    const { data, setData, post, processing, errors } = useForm({
+    const updateStartTimeForm = useForm({
         employeeIds: [] as number[],
         startTime: '',
     });
@@ -76,19 +76,16 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
         }
         const newStartTime = `${selectedHour}:${selectedMinute}:00`;
 
-        setData({
-            employeeIds: selectedEmployeeIds,
-            startTime: `${selectedHour}:${selectedMinute}:00`, // or HH:mm and let server normalize
-        });
-        console.log(data);
+        const startTime = newStartTime;
 
         const url = route('clocks.updateStartTimeForEmployees', { kioskId });
-
-        post(url, {
-            onSuccess: () => {
-                setData({ employeeIds: [], startTime: '' });
-            },
-        });
+        updateStartTimeForm.transform((d) => ({
+            ...d,
+            employeeIds: selectedEmployeeIds,
+            startTime,
+        }));
+        updateStartTimeForm.post(url, { onSuccess: () => updateStartTimeForm.reset('employeeIds', 'startTime') });
+        setUpdateStartDialogOpen(false);
     };
 
     return (

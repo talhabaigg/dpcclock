@@ -740,13 +740,13 @@ class ClockController extends Controller
 
     public function updateStartTimeForEmployees(Kiosk $kioskId, Request $request)
     {
-        dd($request->all());
+        // dd($request->all());
         $data = $request->validate([
             'employeeIds' => ['required', 'array', 'min:1'],
             'employeeIds.*' => ['integer'],
             'startTime' => ['required', 'regex:/^(2[0-3]|[01]\d):([0-5]\d)(?::([0-5]\d))?$/'], // HH:mm or HH:mm:ss
         ]);
-        dd($data);
+        // dd($data);
         $newStartTime = strlen($data['startTime']) === 5
             ? $data['startTime'] . ':00'
             : $data['startTime'];
@@ -768,6 +768,6 @@ class ClockController extends Controller
         });
 
 
-        return redirect()->back()->with('success', 'Start times updated successfully for selected employees.');
+        return redirect()->route('kiosks.show', $kioskId)->with('success', 'Start times updated successfully for selected employees.');
     }
 }
