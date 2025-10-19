@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\EmployeeClockedEvent;
 use App\Models\User;
 use Carbon\Carbon;
+use Hash;
 use Inertia\Inertia;
 use App\Models\Clock;
 use App\Models\Kiosk;
@@ -283,27 +284,32 @@ class KioskController extends Controller
 
     public function validateKioskAdminPin(Request $request)
     {
-        $validatedPin = $request->validate([
-            'pin' => 'required|string|min:4|max:4',
-            'kioskId' => 'required|exists:kiosks,id',
+        $validated = $request->validate([
+            'pin' => ['required', 'string', 'size:4'],
+            'kioskId' => ['required', 'exists:kiosks,id'], // ensure this is the correct PK
         ]);
 
-        if ($validatedPin['pin'] === '3695') {
-            // Store an "admin mode" token in session that expires in 10 minutes
-
-            Session::put('kiosk_admin_mode', [
-                'active' => true,
-                'expires_at' => now()->addMinutes(10),
-            ]);
-
-            $adminMode = Session::get('kiosk_admin_mode');
-            Log::info('Kiosk admin mode activated', ['admin_mode' => $adminMode]);
-            return redirect()
-                ->route('kiosks.show', $validatedPin['kioskId'])
-                ->with('success', 'Pin validated successfully.');
+        $user = Auth::user();
+        if (!$user || !$user->admin_pin) {
+            return Redirect::back()->withErrors(['pin' => 'Admin PIN not set.']);
         }
 
-        return response()->json(['message' => 'Invalid pin.'], 403);
+        // Stored as bcrypt hash
+        if (!Hash::check($validated['pin'], $user->admin_pin)) {
+            // Return a 422-style error so Inertia shows it nicely
+            return Redirect::back()->withErrors(['pin' => 'Invalid PIN.']);
+        }
+
+        // Success: enable admin mode for 10 minutes
+        Session::put('kiosk_admin_mode', [
+            'active' => true,
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        Log::info('Kiosk admin mode activated', ['user_id' => $user->id]);
+
+        return Redirect::route('kiosks.show', $validated['kioskId'])
+            ->with('success', 'Pin validated successfully.');
     }
 
     public function disableAdminMode($kioskId)
@@ -315,4 +321,5 @@ class KioskController extends Controller
             ->route('kiosks.show', $kioskId)
             ->with('success', 'Admin mode disabled successfully.');
     }
+
 }

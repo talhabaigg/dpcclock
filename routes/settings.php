@@ -15,6 +15,19 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');
 
+    Route::get('settings/kiosk-admin-pin', function () {
+        return Inertia::render('settings/kiosk-admin-pin');
+    })->name('kiosk-admin-pin');
+
+    Route::put('settings/kiosk-admin-pin', function () {
+        $user = auth()->user();
+        $data = request()->validate([
+            'new_pin' => 'nullable|string|min:4|max:10',
+        ]);
+        $user->admin_pin = Hash::make($data['new_pin']);
+        $user->save();
+        return redirect()->route('kiosk-admin-pin')->with('success', 'Kiosk Admin PIN updated successfully.');
+    })->name('admin-kiosk-pin.update');
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
