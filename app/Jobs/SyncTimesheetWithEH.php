@@ -45,10 +45,10 @@ class SyncTimesheetWithEH implements ShouldQueue
 
             $result = $this->sync($chunkData);
             if (!$result) {
-                Log::error('Failed to sync timesheets with EH.', [
-                    'chunk' => $chunk,
-                    'response' => $result,
-                ]);
+                // Log::error('Failed to sync timesheets with EH.', [
+                //     'chunk' => $chunk,
+                //     'response' => $result,
+                // ]);
                 continue; // Skip to the next chunk if the sync fails
             }
 
@@ -154,6 +154,10 @@ class SyncTimesheetWithEH implements ShouldQueue
             // Request was successful (200 or 201)
             return true;
         } else {
+            Log::error('Timesheet sync request failed.', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
             return false; // Request failed
         }
     }
