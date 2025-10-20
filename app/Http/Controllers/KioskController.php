@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Events\EmployeeClockedEvent;
+use App\Models\TimesheetEvent;
 use App\Models\User;
 use Carbon\Carbon;
+use Event;
 use Hash;
 use Inertia\Inertia;
 use App\Models\Clock;
@@ -139,11 +141,15 @@ class KioskController extends Controller
             'relatedKiosks'
         ]);
 
+        $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>', now())->get();
+
+
 
 
         return Inertia::render('kiosks/edit', [
             'kiosk' => $kiosk,
             'employees' => $kiosk->employees,
+            'events' => $events,
         ]);
     }
 

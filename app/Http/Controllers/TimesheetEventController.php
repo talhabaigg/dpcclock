@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateTimesheetForGivenEvent;
 use App\Jobs\GenerateTimesheetForTodaysEvent;
 use App\Models\Kiosk;
 use Illuminate\Http\Request;
@@ -74,6 +75,18 @@ class TimesheetEventController extends Controller
         }
         GenerateTimesheetForTodaysEvent::dispatch($kiosk, $events);
         return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully');
+    }
+
+    public function generateTimesheets(Request $request, $eventId, $kioskId)
+    {
+        $employees = $request->input('employeeIds', []);
+        // dd($employees, $eventId, $kioskId);
+        $event = TimesheetEvent::find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error', 'Event not found');
+        }
+        GenerateTimesheetForGivenEvent::dispatch($kioskId, $event, collect($employees));
+        return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully for event: ' . $event->title);
     }
 
 }

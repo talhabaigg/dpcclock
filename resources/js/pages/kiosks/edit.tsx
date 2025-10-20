@@ -13,8 +13,8 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
 import MinuteSelector from '../timesheets/components/minuteSelector';
-import GenerateTimesheetsButton from './edit-partials/generate-timesheets-button';
-export default function Edit({ kiosk, employees, errors, flash }) {
+import GenerateTimesheetsAvailableEventsCard from './edit-partials/generate-timesheets-available-events-card';
+export default function Edit({ kiosk, employees, errors, flash, events }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
@@ -70,7 +70,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
     const handleKioskActiveToggle = (checked) => {
         router.get(route('kiosk.toggleActive', kiosk.id));
     };
-    console.log(kiosk.is_active);
+    console.log(kiosk.eh_kiosk_id);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -230,7 +230,7 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                         )}
                     </CardContent>
                 </Card>
-                <Card className="m-2 w-full">
+                {/* <Card className="m-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">Generate timesheet</CardHeader>
                     <CardContent>
                         <div className="flex items-center justify-between">
@@ -240,7 +240,8 @@ export default function Edit({ kiosk, employees, errors, flash }) {
                             <GenerateTimesheetsButton kioskId={kiosk.id} />
                         </div>
                     </CardContent>
-                </Card>
+                </Card> */}
+                <GenerateTimesheetsAvailableEventsCard events={events} employees={employees} kioskId={Number(kiosk.eh_kiosk_id)} />
             </div>
         </AppLayout>
     );

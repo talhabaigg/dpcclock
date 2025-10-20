@@ -56,8 +56,6 @@ class SyncTimesheetWithEH implements ShouldQueue
             //User::role('admin')->first()?->notify(new SyncedTimesheetsWithEH());
 
         }
-
-
     }
 
     private function getClocksToSync()

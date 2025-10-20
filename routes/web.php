@@ -147,7 +147,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         //Generate timesheet based on events
         Route::get('/{kiosk}/timesheet-events/generate', [TimesheetEventController::class, 'generateTimesheetForToday'])->name('timesheetEvents.generateToday');
-
+        Route::post('/timesheet-events/{eventId}/{kioskId}/generate-timesheets', [TimesheetEventController::class, 'generateTimesheets'])->name('events.generateTimesheets');
         // Location Cost Codes from Premier
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
