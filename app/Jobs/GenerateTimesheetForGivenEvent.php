@@ -77,11 +77,11 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
             foreach ($timesheetChunks as $chunk) {
                 $chunkData = ['timesheets' => $chunk];
 
-                // if ($this->sync($chunkData)) {
-                //     Log::info('Timesheets synced successfully for event: ' . $event->title);
-                // } else {
-                //     Log::error('Failed to sync timesheets for event: ' . $event->title);
-                // }
+                if ($this->sync($chunkData)) {
+                    Log::info('Timesheets synced successfully for event: ' . $event->title);
+                } else {
+                    Log::error('Failed to sync timesheets for event: ' . $event->title);
+                }
             }
 
         }
