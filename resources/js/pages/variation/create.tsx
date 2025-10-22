@@ -1,8 +1,10 @@
 import LoadingDialog from '@/components/loading-dialog';
+import { SearchSelect } from '@/components/search-select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
@@ -171,9 +173,19 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                     </Alert>
                 )}
                 <div className="mx-auto max-w-96 min-w-full sm:max-w-full">
-                    <div className="mx-2 flex max-w-96 flex-1 flex-col gap-4 sm:max-w-full sm:flex-row">
-                        <Card className="mx-auto flex w-full max-w-96 min-w-96 flex-col p-2 sm:max-w-full sm:flex-row">
-                            <Select value={data.location_id} onValueChange={(value) => setData('location_id', value)}>
+                    <div className="mx-2 flex max-w-96 flex-1 flex-col justify-between gap-4 sm:max-w-full sm:flex-row">
+                        <Card className="mx-right flex w-full max-w-96 min-w-96 flex-col -space-y-4 p-2 sm:max-w-md">
+                            <div className="flex flex-1 flex-col">
+                                <Label className="mr-auto py-1">Location</Label>
+                                <SearchSelect
+                                    selectedOption={data.location_id}
+                                    onValueChange={(value) => setData('location_id', value)}
+                                    options={locations.map((location) => ({ value: String(location.id), label: location.name }))}
+                                    optionName="Location"
+                                />
+                            </div>
+
+                            {/* <Select value={data.location_id} onValueChange={(value) => setData('location_id', value)}>
                                 <SelectTrigger className="flex-1">
                                     <SelectValue placeholder="Select location" />
                                 </SelectTrigger>
@@ -184,40 +196,51 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
+                            <div className="flex flex-1 flex-col">
+                                <Label className="mr-auto py-1">Type</Label>
+                                <Select value={data.type} onValueChange={(value) => setData('type', value)}>
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {['dayworks', 'variations'].map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-1 flex-col">
+                                <Label className="mr-auto py-2">CO Number</Label>
+                                <Input
+                                    value={data.co_number}
+                                    onChange={(e) => setData('co_number', e.target.value)}
+                                    className="flex-1"
+                                    placeholder="Enter CO Number"
+                                />
+                            </div>
 
-                            <Select value={data.type} onValueChange={(value) => setData('type', value)}>
-                                <SelectTrigger className="flex-1">
-                                    <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {['dayworks', 'variations'].map((type) => (
-                                        <SelectItem key={type} value={type}>
-                                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                value={data.co_number}
-                                onChange={(e) => setData('co_number', e.target.value)}
-                                className="flex-1"
-                                placeholder="Enter CO Number"
-                            />
-                            <Input
-                                value={data.description}
-                                onChange={(e) => setData('description', e.target.value)}
-                                className="flex-1"
-                                placeholder="Enter Description"
-                            />
-                            <input type="date" value={data.date} onChange={(e) => setData('date', e.target.value)} className="flex-1" />
-                            <Input
-                                type="number"
-                                value={genAmount}
-                                onChange={(e) => setGenAmount(e.target.value)}
-                                placeholder="Enter Amount"
-                                className="max-w-48"
-                            />
+                            <div className="flex flex-1 flex-col">
+                                <Label className="mr-auto py-2">Description</Label>
+                                <Input
+                                    value={data.description}
+                                    onChange={(e) => setData('description', e.target.value)}
+                                    className="flex-1"
+                                    placeholder="Enter Description"
+                                />
+                            </div>
+                            <div className="flex flex-1 flex-col">
+                                <Label className="mr-auto py-2">Date</Label>
+                                <input
+                                    type="date"
+                                    value={data.date}
+                                    onChange={(e) => setData('date', e.target.value)}
+                                    className="w-full rounded-md border px-2 text-gray-500 focus:shadow-sm focus:ring-2"
+                                />
+                            </div>
+
                             {/* <Select value={genType} onValueChange={(value) => setGenType(value)}>
                             <SelectTrigger className="w-full text-xs">
                                 <SelectValue placeholder="Select Type" />
@@ -232,9 +255,17 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                                 ))}
                             </SelectContent>
                         </Select> */}
-                            <Button onClick={generateOnCosts}>Generate Labour</Button>
+                        </Card>
+                        <Card className="flex -space-y-4 p-2">
+                            <CardTitle>Generate Labour Oncosts</CardTitle>
+                            <CardDescription className="mb-2 font-bold">Enter the amount to generate labour with split oncosts</CardDescription>
+                            <Input type="number" value={genAmount} onChange={(e) => setGenAmount(e.target.value)} placeholder="Enter Amount" />
+                            <Button onClick={generateOnCosts} variant="outline">
+                                Generate Labour
+                            </Button>
                         </Card>
                     </div>
+
                     <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2"></div>
                     <Card className="mx-2 max-w-96 p-0 sm:max-w-full">
                         <VariationLineTable data={data} costCodes={costCodes} CostTypes={CostTypes} setData={setData} />

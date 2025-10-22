@@ -1,8 +1,9 @@
-import { Badge } from '@/components/ui/badge';
+import { SearchSelect } from '@/components/search-select';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { CircleDollarSign } from 'lucide-react';
+import SearchSelectWithBadgeItem from './SearchSelectWithBadgeItem';
 const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
     return (
         <Table className="m-2 max-w-96 min-w-full sm:max-w-full">
@@ -24,8 +25,19 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                         <TableCell className="max-w-16 border-r p-0">
                             <Label className="ml-2 border-0 shadow-none">{item.line_number} </Label>
                         </TableCell>
-                        <TableCell className="border-r p-0">
-                            <Select
+                        <TableCell className="w-64 max-w-64 border-r p-0 p-2">
+                            <SearchSelectWithBadgeItem
+                                options={costCodes}
+                                value={item.cost_item}
+                                optionName="cost item"
+                                onValueChange={(value) => {
+                                    const newItems = [...data.line_items];
+                                    newItems[index].cost_item = value;
+                                    newItems[index].cost_type = costCodes.find((code) => code.code === value)?.cost_type?.code || '';
+                                    setData('line_items', newItems);
+                                }}
+                            />
+                            {/* <Select
                                 value={item.cost_item}
                                 onValueChange={(value) => {
                                     const newItems = [...data.line_items];
@@ -48,10 +60,21 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </TableCell>
-                        <TableCell className="border-r p-0">
-                            <Select
+                        <TableCell className="mx-2 border-r p-0 px-2">
+                            <SearchSelect
+                                selectedOption={item.cost_type}
+                                onValueChange={(value) => {
+                                    const newItems = [...data.line_items];
+                                    newItems[index].cost_type = value;
+                                    setData('line_items', newItems);
+                                }}
+                                options={CostTypes.map((costType) => ({ value: costType.value, label: costType.description }))}
+                                optionName="Cost Type"
+                            />
+
+                            {/* <Select
                                 value={item.cost_type}
                                 onValueChange={(value) => {
                                     const newItems = [...data.line_items];
@@ -72,16 +95,15 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                            </Select> */}
                         </TableCell>
-                        <TableCell className="border-r p-0 text-[xs]">
-                            <input
-                                type="text"
-                                className="ml-2 w-full border-0 py-2 shadow-none focus:outline-0"
+                        <TableCell className="max-w-52 border-r text-[xs]">
+                            <Textarea
+                                rows={4}
                                 value={item.description}
                                 onInput={(e) => {
                                     const newItems = [...data.line_items];
-                                    newItems[index].description = (e.target as HTMLInputElement).value;
+                                    newItems[index].description = (e.target as HTMLTextAreaElement).value;
                                     setData('line_items', newItems);
                                 }}
                             />
