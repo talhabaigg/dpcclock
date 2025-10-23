@@ -161,8 +161,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
         Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
+        Route::get('/variations/sync', [VariationController::class, 'loadVariationsFromPremier'])->name('variations.sync');
         Route::get('/variations/{id}', [VariationController::class, 'destroy'])->name('variations.destroy');
-        Route::get('/variations/{id}/download/pdf', [VariationController::class, 'download'])->name('variations.download');
+        Route::get('/variations/{id}/download/excel', [VariationController::class, 'download'])->name('variations.download');
+        Route::get('/variations/{variation}/send-to-premier', [VariationController::class, 'sendToPremier'])->name('variations.send');
+        Route::get('/variations/{variation}/duplicate', [VariationController::class, 'duplicate'])->name('variations.duplicate');
+
 
         Route::get('/php-limits', fn() => response()->json([
             'sapi' => php_sapi_name(),

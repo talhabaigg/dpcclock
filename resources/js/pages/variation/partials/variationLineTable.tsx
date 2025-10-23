@@ -1,31 +1,31 @@
 import { SearchSelect } from '@/components/search-select';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { CircleDollarSign } from 'lucide-react';
 import SearchSelectWithBadgeItem from './SearchSelectWithBadgeItem';
 const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
     return (
-        <Table className="m-2 max-w-96 min-w-full sm:max-w-full">
+        <Table className="">
             <TableHeader>
                 <TableRow>
-                    <TableCell className="border-r">Line #</TableCell>
-                    <TableCell className="border-r">Cost Item</TableCell>
-                    <TableCell className="border-r">Cost Type</TableCell>
-                    <TableCell className="border-r">Description</TableCell>
-                    <TableCell className="border-r">Qty</TableCell>
-                    <TableCell className="border-r">Unit Cost</TableCell>
-                    <TableCell className="border-r">Total Cost</TableCell>
-                    <TableCell>Revenue</TableCell>
+                    <TableCell className="border-r text-center">Line #</TableCell>
+                    <TableCell className="border-r text-center">Cost Item</TableCell>
+                    <TableCell className="border-r text-center">Cost Type</TableCell>
+                    <TableCell className="border-r text-center">Description</TableCell>
+                    <TableCell className="border-r text-center">Qty</TableCell>
+                    <TableCell className="border-r text-center">Unit Cost</TableCell>
+                    <TableCell className="border-r text-center">Total Cost</TableCell>
+                    <TableCell className="text-center">Revenue</TableCell>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {data.line_items.map((item, index) => (
                     <TableRow key={index}>
                         <TableCell className="max-w-16 border-r p-0">
-                            <Label className="ml-2 border-0 shadow-none">{item.line_number} </Label>
+                            <Label className="mx-auto ml-2 border-0 shadow-none">{item.line_number} </Label>
                         </TableCell>
-                        <TableCell className="w-64 max-w-64 border-r p-0 p-2">
+                        <TableCell className="w-64 max-w-64 border-r p-2">
                             <SearchSelectWithBadgeItem
                                 options={costCodes}
                                 value={item.cost_item}
@@ -99,7 +99,9 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                         </TableCell>
                         <TableCell className="max-w-52 border-r text-[xs]">
                             <Textarea
-                                rows={4}
+                                className="h-auto min-h-[32px] py-1 leading-tight"
+                                placeholder="Enter description"
+                                rows={2}
                                 value={item.description}
                                 onInput={(e) => {
                                     const newItems = [...data.line_items];
@@ -108,59 +110,74 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                 }}
                             />
                         </TableCell>
-                        <TableCell className="max-w-16 border-r p-0">
-                            <input
-                                type="number"
-                                className="mx-2 ml-2 w-full border-0 py-2 pr-2 shadow-none focus:outline-0"
-                                value={item.qty}
-                                onInput={(e) => {
-                                    const newItems = [...data.line_items];
-                                    newItems[index].qty = (e.target as HTMLInputElement).value;
-                                    newItems[index].total_cost = parseFloat((e.target as HTMLInputElement).value) * item.unit_cost;
-                                    setData('line_items', newItems);
-                                }}
-                            />
-                        </TableCell>
-                        <TableCell className="max-w-32 border-r p-0">
+                        <TableCell className="border-r p-0">
                             <div className="flex flex-row items-center">
-                                {' '}
-                                <CircleDollarSign className="mx-2 ml-2 h-6 w-6" />
-                                <input
-                                    type="number"
-                                    className="mx-2 ml-2 w-full border-0 py-2 pr-2 shadow-none focus:outline-0"
-                                    value={item.unit_cost}
-                                    onInput={(e) => {
-                                        const newItems = [...data.line_items];
-                                        newItems[index].unit_cost = (e.target as HTMLInputElement).value;
-                                        newItems[index].total_cost = parseFloat((e.target as HTMLInputElement).value) * item.qty;
-                                        setData('line_items', newItems);
-                                    }}
-                                />
+                                <div className="relative mx-auto">
+                                    <Input
+                                        disabled={item.cost_type === 'REV'}
+                                        id="product_precio"
+                                        placeholder="0.00"
+                                        className="w-40 pr-10"
+                                        value={item.qty}
+                                        onInput={(e) => {
+                                            const newItems = [...data.line_items];
+                                            newItems[index].qty = (e.target as HTMLInputElement).value;
+                                            newItems[index].total_cost = parseFloat((e.target as HTMLInputElement).value) * item.unit_cost;
+                                            setData('line_items', newItems);
+                                        }}
+                                    />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-xs">EA</div>
+                                </div>
+                            </div>{' '}
+                        </TableCell>
+                        <TableCell className="border-r p-0">
+                            <div className="flex flex-row items-center">
+                                <div className="relative mx-auto">
+                                    <Input
+                                        disabled={item.cost_type === 'REV'}
+                                        id="product_precio"
+                                        placeholder="0.00"
+                                        className="w-40 pr-10"
+                                        value={item.unit_cost}
+                                        onInput={(e) => {
+                                            const newItems = [...data.line_items];
+                                            newItems[index].unit_cost = (e.target as HTMLInputElement).value;
+                                            newItems[index].total_cost = parseFloat((e.target as HTMLInputElement).value) * item.qty;
+                                            setData('line_items', newItems);
+                                        }}
+                                    />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">$</div>
+                                </div>{' '}
                             </div>
                         </TableCell>
 
-                        <TableCell className="max-w-32 border-r p-0">
+                        <TableCell className="border-r p-0">
                             <div className="flex flex-row items-center">
-                                <CircleDollarSign className="mx-2 ml-2 h-6 w-6" />
-                                <input
-                                    type="number"
-                                    className="mx-2 ml-2 w-full border-0 py-2 pr-2 shadow-none focus:outline-0"
-                                    value={item.total_cost}
-                                    onInput={(e) => {
-                                        const newItems = [...data.line_items];
-                                        newItems[index].total_cost = (e.target as HTMLInputElement).value;
-                                        setData('line_items', newItems);
-                                    }}
-                                />
+                                <div className="relative mx-auto">
+                                    <Input
+                                        disabled={item.cost_type === 'REV'}
+                                        id="product_precio"
+                                        placeholder="0.00"
+                                        className="w-40 pr-10"
+                                        value={item.total_cost}
+                                        onInput={(e) => {
+                                            const newItems = [...data.line_items];
+                                            newItems[index].total_cost = (e.target as HTMLInputElement).value;
+                                            setData('line_items', newItems);
+                                        }}
+                                    />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">$</div>
+                                </div>
                             </div>
                         </TableCell>
                         <TableCell className="border-r p-0">
                             <div className="flex flex-row items-center">
-                                <>
-                                    <CircleDollarSign className="mx-2 ml-2 h-6 w-6" />
-                                    <input
-                                        type="number"
-                                        className="mx-2 ml-2 w-full border-0 py-2 pr-2 shadow-none focus:outline-0"
+                                <div className="relative mx-2 sm:mx-auto">
+                                    <Input
+                                        id="product_precio"
+                                        placeholder="0.00"
+                                        className="w-40 pr-10"
+                                        disabled={item.cost_type !== 'REV'}
                                         value={item.revenue}
                                         onInput={(e) => {
                                             const newItems = [...data.line_items];
@@ -168,7 +185,8 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                             setData('line_items', newItems);
                                         }}
                                     />
-                                </>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">$</div>
+                                </div>
                             </div>
                         </TableCell>
                     </TableRow>

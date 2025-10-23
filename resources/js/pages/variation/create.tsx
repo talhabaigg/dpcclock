@@ -259,7 +259,13 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                         <Card className="flex -space-y-4 p-2">
                             <CardTitle>Generate Labour Oncosts</CardTitle>
                             <CardDescription className="mb-2 font-bold">Enter the amount to generate labour with split oncosts</CardDescription>
-                            <Input type="number" value={genAmount} onChange={(e) => setGenAmount(e.target.value)} placeholder="Enter Amount" />
+                            <Input
+                                type="number"
+                                value={genAmount}
+                                onChange={(e) => setGenAmount(e.target.value)}
+                                placeholder="Enter Amount"
+                                className="mt-auto"
+                            />
                             <Button onClick={generateOnCosts} variant="outline">
                                 Generate Labour
                             </Button>

@@ -6,14 +6,22 @@ use App\Models\CostCode;
 use App\Models\Location;
 use App\Models\Variation;
 use App\Services\GetCompanyCodeService;
+use App\Services\PremierAuthenticationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class VariationController extends Controller
 {
     public function index()
     {
-        $variations = Variation::with('lineItems')->get();
+        $variations = Variation::with('lineItems', 'location')->get();
+
+        foreach ($variations as $variation) {
+            $variation->total_cost = $variation->lineItems->sum('total_cost');
+            $variation->total_revenue = $variation->lineItems->sum('revenue');
+        }
         // Logic to retrieve variations
         return Inertia::render('variation/index', [
             'variations' => $variations,
@@ -174,6 +182,96 @@ class VariationController extends Controller
 
         fclose($handle);
         exit;
+    }
+
+    public function LoadVariationsFromPremier()
+    {
+        Log::info('LoadVariationsFromPremier called');
+        $authService = new PremierAuthenticationService();
+        $token = $authService->getAccessToken();
+        $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+        $base_url = env('PREMIER_SWAGGER_API_URL');
+
+        $jobNumber = 'QTMP00';
+        $queryParams = [
+            'parameter.company' => $companyId,
+
+            'parameter.pageSize' => 1000,
+        ];
+        $response = Http::withToken($token)
+            ->acceptJson()
+            ->get($base_url . '/api/ChangeOrder/GetChangeOrders', $queryParams);
+        Log::info('response', $response->json());
+        if ($response->successful()) {
+            $data = $response->json('Data');
+            Log::info('Premier Variations Data:', $data);
+            dd($data);
+        }
+        return redirect()->back()->with('error', 'Failed to fetch variations from Premier');
+
+    }
+
+    public function sendToPremier(Variation $variation)
+    {
+        $authService = new PremierAuthenticationService();
+        $token = $authService->getAccessToken();
+        $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+        $base_url = env('PREMIER_SWAGGER_API_URL');
+        // dd($variation->co_date);
+        $lineItems = $variation->lineItems->map(function ($item) {
+            return [
+                'LineNumber' => $item->line_number,
+                'JobCostItem' => $item->cost_item,
+                'JobCostType' => $item->cost_type,
+                'LineDescription' => $item->description,
+                'Quantity' => $item->qty,
+                'UnitCost' => $item->unit_cost,
+                'Amount' => $item->total_cost,
+            ];
+        })->toArray();
+
+        $data = [
+            // Construct the data payload as per Premier's API requirements
+            'Company' => $companyId,
+            'JobSubledger' => 'SWCJOB',
+            'Job' => $variation->location->external_id,
+            'ChangeOrderNumber' => $variation->co_number,
+            'Description' => $variation->description,
+            'ChangeOrderDate' => $variation->co_date,
+            'ChangeOrderLines' => $lineItems,
+        ];
+
+        $response = Http::withToken($token)
+            ->acceptJson()
+            ->post($base_url . '/api/ChangeOrder/CreateChangeOrders', $data);
+        if ($response->successful()) {
+            $variation->status = "sent";
+            $variation->save();
+            Log::info('Variation sent to Premier successfully.', $response->json());
+            return redirect()->back()->with('success', 'Variation sent to Premier successfully.');
+        } else {
+            Log::error('Failed to send variation to Premier.', [
+                'response' => $response->
+                    json()
+            ]);
+            return redirect()->back()->with('error', 'Failed to send variation to Premier.');
+        }
+    }
+
+    public function duplicate(Variation $variation)
+    {
+        $newVariation = $variation->replicate();
+        $newVariation->co_number = $variation->co_number . '-COPY';
+        $newVariation->status = 'pending';
+        $newVariation->save();
+
+        foreach ($variation->lineItems as $lineItem) {
+            $newLineItem = $lineItem->replicate();
+            $newLineItem->variation_id = $newVariation->id;
+            $newLineItem->save();
+        }
+
+        return redirect()->route('variations.index')->with('success', 'Variation duplicated successfully.');
     }
 
 }
