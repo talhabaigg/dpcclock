@@ -1,3 +1,4 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import LoadingDialog from '@/components/loading-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
+import { format } from 'date-fns';
 import { useEffect, useState } from 'react';
 import { CostCode } from '../purchasing/types';
 import VariationLineTable from './partials/variationLineTable';
@@ -217,7 +219,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                                 <Input
                                     value={data.co_number}
                                     onChange={(e) => setData('co_number', e.target.value)}
-                                    className="flex-1"
+                                    className="flex-1 p-2"
                                     placeholder="Enter CO Number"
                                 />
                             </div>
@@ -227,18 +229,22 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                                 <Input
                                     value={data.description}
                                     onChange={(e) => setData('description', e.target.value)}
-                                    className="flex-1"
+                                    className="flex-1 p-2"
                                     placeholder="Enter Description"
                                 />
                             </div>
                             <div className="flex flex-1 flex-col">
                                 <Label className="mr-auto py-2">Date</Label>
-                                <input
+                                <DatePickerDemo
+                                    value={data.date ? new Date(data.date) : undefined}
+                                    onChange={(date) => setData('date', date ? format(date, 'yyyy-MM-dd') : '')}
+                                />
+                                {/* <input
                                     type="date"
                                     value={data.date}
                                     onChange={(e) => setData('date', e.target.value)}
                                     className="w-full rounded-md border px-2 text-gray-500 focus:shadow-sm focus:ring-2"
-                                />
+                                /> */}
                             </div>
 
                             {/* <Select value={genType} onValueChange={(value) => setGenType(value)}>

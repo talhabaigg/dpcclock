@@ -1,8 +1,8 @@
+import InputSearch from '@/components/inputSearch';
 import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserInfo } from '@/components/user-info';
@@ -10,7 +10,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowUpDown, RefreshCcw, Search } from 'lucide-react';
+import { ArrowUpDown, RefreshCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 // Define the Employee type
 interface Employee {
@@ -61,14 +61,15 @@ export default function EmployeesList() {
                     {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}
                 </div>
                 <div className="relative mx-auto max-w-96 min-w-96 sm:mx-0 sm:w-1/4">
-                    <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
+                    <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name" />
+                    {/* <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
                     <Input
                         type="text"
                         placeholder="Search by name"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
-                    />
+                    /> */}
                 </div>
             </div>
             <LoadingDialog open={open} setOpen={setOpen} />

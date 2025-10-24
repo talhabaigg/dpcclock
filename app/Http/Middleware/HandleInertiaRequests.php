@@ -56,7 +56,18 @@ class HandleInertiaRequests extends Middleware
             'ziggy' => fn(): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
-            ]
+            ],
+            'notifications' => fn() => $request->user() ? [
+                'unreadCount' => $request->user()->unreadNotifications()->count(),
+                // keep it small; fetch the full list on a notifications page/API
+                'latest' => $request->user()->notifications()->latest()->limit(5)->get()
+                    ->map(fn($n) => [
+                        'id' => $n->id,
+                        'data' => $n->data,
+                        'read_at' => $n->read_at,
+                        'created_at' => $n->created_at,
+                    ]),
+            ] : ['unreadCount' => 0, 'latest' => []],
         ];
     }
 }

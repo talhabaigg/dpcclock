@@ -178,6 +178,11 @@ class LocationController extends Controller
                 ->update(['deleted_at' => now()]);
         });
 
+        $user = auth()->user();
+        $status = 'success';
+        $message = 'Location synchronization completed successfully.';
+        $user->notify(new \App\Notifications\LocationSyncNotification($status, $message));
+
         return back()->with(
             'success',
             "Locations synced successfully — Restored: {$restoredCount}, Deleted: {$deletedCount}."
