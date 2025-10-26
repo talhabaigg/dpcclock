@@ -2,11 +2,10 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
-import { usePage } from '@inertiajs/react';
-import { Bell, Trash } from 'lucide-react';
-import { Badge } from './ui/badge';
+import { Link, usePage } from '@inertiajs/react';
+import { Bell } from 'lucide-react';
+import AppNotificationDisplay from './app-notification-display';
 import { Button } from './ui/button';
-import { Card, CardContent, CardTitle } from './ui/card';
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const props = usePage().props as any;
     const notifications = props.notifications;
@@ -42,26 +41,18 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                         <SheetDescription>All your notifications will appear here.</SheetDescription>
                     </SheetHeader>
 
-                    {notifications.length === 0 ? (
+                    {notifications.latest.length === 0 ? (
                         <p className="text-muted-foreground py-4 text-center text-sm">No new notifications</p>
                     ) : (
-                        <ul>
-                            {notifications.latest.map((notification) => (
-                                <Card key={notification.id} className="mx-2 mt-2 border-b px-4 py-2 last:border-2">
-                                    <CardTitle className="flex items-center">
-                                        {notification.data.type}{' '}
-                                        <Button className="ml-auto" variant="outline">
-                                            <Trash />
-                                        </Button>
-                                    </CardTitle>
-                                    <CardContent>{notification.data.message}</CardContent>
-                                    <div className="flex items-center justify-between">
-                                        <Badge>{notification.data.status}</Badge>
-                                        <p className="text-xs">{new Date(notification.created_at).toLocaleString()}</p>
-                                    </div>
-                                </Card>
-                            ))}
-                        </ul>
+                        <>
+                            <div className="-my-6 flex items-center justify-start">
+                                <Link href={route('notifications.markAllRead')}>
+                                    <Button variant="link">Mark all as read</Button>
+                                </Link>
+                            </div>
+
+                            <AppNotificationDisplay notifications={notifications.latest} />
+                        </>
                     )}
                 </SheetContent>
             </Sheet>

@@ -122,12 +122,14 @@ class LocationController extends Controller
     public function sync()
     {
         $apiKey = env('PAYROLL_API_KEY');
+        // $apiKey = 'PAYROLL_API_KEY';
 
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
 
         if ($response->failed()) {
+            auth()->user()->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to connect to Employment Hero API.'));
             return back()->with('error', 'Failed to connect to Employment Hero API.');
         }
 
@@ -180,12 +182,12 @@ class LocationController extends Controller
 
         $user = auth()->user();
         $status = 'success';
-        $message = 'Location synchronization completed successfully.';
+        $message = "Locations synced successfully, {$restoredCount} restored, {$deletedCount} deleted.";
         $user->notify(new \App\Notifications\LocationSyncNotification($status, $message));
 
         return back()->with(
             'success',
-            "Locations synced successfully — Restored: {$restoredCount}, Deleted: {$deletedCount}."
+            $message
         );
     }
 

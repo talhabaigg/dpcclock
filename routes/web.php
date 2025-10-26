@@ -30,6 +30,11 @@ use App\Http\Controllers\SupplierController;
 Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
+Route::get('/notifications/mark-all-read', function () {
+    $user = auth()->user();
+    $user->unreadNotifications->markAsRead();
+    return redirect()->back();
+})->name('notifications.markAllRead');
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])
     ->name('requisition.updateStatusFromBuildMetrix');
