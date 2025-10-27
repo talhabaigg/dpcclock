@@ -172,15 +172,15 @@ export default function RequisitionShow() {
                                     <Link href={`/requisition/${requisition.id}/api-send`}>
                                         <Button className="w-full text-xs sm:max-w-32" size="sm" variant="outline">
                                             <RotateCcw />
-                                            API to Premier
+                                            Retry
                                         </Button>
                                     </Link>
-                                    <Link href={`/requisition/${requisition.id}/process`}>
+                                    {/* <Link href={`/requisition/${requisition.id}/process`}>
                                         <Button className="w-full max-w-96 text-xs sm:max-w-32" size="sm" variant="outline">
                                             <RotateCcw />
                                             Retry
                                         </Button>
-                                    </Link>
+                                    </Link> */}
                                 </>
                             ) : requisition.status === 'pending' ? (
                                 <>
