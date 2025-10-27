@@ -56,7 +56,7 @@ class RequisitionService
             "PurchaseOrderNumber" => "PO" . $requisition->po_number,
             "PurchaseOrderType" => "PO",
             "Job" => $requisition->location?->external_id ?? "N/A",
-            "Memo" => "",
+            "Memo" => $requisition->order_reference ?? "",
             "RequestedBy" => $requisition->requested_by ?? "N/A",
             "PurchaseOrderDate" => now()->toDateString(),
             "RequiredDate" => isset($requisition->date_required) ? Carbon::parse($requisition->date_required)->format('Y-m-d') : now()->format('Y-m-d'),
