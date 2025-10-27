@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostCode;
+use DB;
 use Http;
 use Illuminate\Http\Request;
 use App\Models\Location;
 use App\Services\PremierAuthenticationService;
 use Inertia\Inertia;
+use Log;
 class LocationCostcodeController extends Controller
 {
     public function sync(Location $location)
@@ -113,4 +115,77 @@ class LocationCostcodeController extends Controller
         }
         return redirect()->back()->with('error', 'Cost code not found.');
     }
+
+    public function downloadCostCodeRatios($locationId)
+    {
+        $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
+
+        $location = Location::findOrFail($locationId);
+        $fileName = 'location_cost_code_ratios_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
+        $filePath = storage_path("app/{$fileName}");
+
+        $handle = fopen($filePath, 'w');
+        fputcsv($handle, ['job_number', 'cost_code', 'description', 'variation_ratio', 'dayworks_ratio']);
+        $items = $location->costCodes()->get();
+
+        $filteredItems = $items->filter(function ($item) use ($acceptable_prefixes) {
+            foreach ($acceptable_prefixes as $prefix) {
+                if (str_starts_with($item->code, $prefix)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        $filteredItems = $filteredItems->sortBy('code');
+
+        foreach ($filteredItems as $item) {
+            fputcsv($handle, [
+                $location->external_id,
+                "'" . $item->code,// 👈 prevents Excel auto-conversion
+                $item->description,
+                $item->pivot->variation_ratio,
+                $item->pivot->dayworks_ratio,
+            ]);
+        }
+
+
+        fclose($handle);
+
+        return response()->download($filePath)->deleteFileAfterSend(true);
+    }
+
+    public function upload(Request $request, Location $location)
+    {
+
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt',
+        ]);
+
+        $path = $request->file('file')->getRealPath();
+        $rows = array_map('str_getcsv', file($path));
+        $header = array_map('trim', array_shift($rows));
+        $dataToInsert = [];
+
+        foreach ($rows as $row) {
+            $data = array_combine($header, $row);
+            $dataToInsert[] = $data;
+        }
+
+        foreach ($dataToInsert as $data) {
+            $costCode = CostCode::where('code', ltrim($data['cost_code'], "'"))->first();
+            if ($costCode) {
+                $location->costCodes()->syncWithoutDetaching([
+                    $costCode->id => [
+                        'variation_ratio' => $data['variation_ratio'],
+                        'dayworks_ratio' => $data['dayworks_ratio'],
+                    ]
+                ]);
+            }
+        }
+
+        return back()->with('success', "Uploaded cost code ratios successfully.");
+    }
+
+
 }

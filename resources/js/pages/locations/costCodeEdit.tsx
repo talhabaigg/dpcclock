@@ -9,6 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
 import { CheckCircle } from 'lucide-react';
+import RatioUploader from './partials.tsx/ratioUploader';
 
 interface CostCode {
     id: number;
@@ -66,6 +67,17 @@ export default function CostCodeEdit({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="p-2">
+                <div className="flex flex-col justify-end gap-2 sm:m-2 sm:flex-row">
+                    <RatioUploader locationId={location.id} />
+
+                    <Button
+                        className="w-32"
+                        type="button"
+                        onClick={() => window.open(`/location/${location.id}/cost-code-ratios/download-csv`, '_blank')}
+                    >
+                        Download CSV
+                    </Button>
+                </div>
                 <form onSubmit={handleSubmit}>
                     <Card>
                         {flash.success && (
@@ -90,8 +102,11 @@ export default function CostCodeEdit({
                                 </AlertDescription>
                             </Alert>
                         )}
-                        <CardHeader>Edit Ratios for Cost Codes {location.name}</CardHeader>
+                        <CardHeader className="flex items-center justify-between">
+                            <div>Edit Ratios for Cost Codes {location.name}</div>
+                        </CardHeader>
                         <CardContent>
+                            <span> </span>
                             <div className="flex justify-between">
                                 <Label>Cost Item</Label>
                                 <div className="flex space-x-2">

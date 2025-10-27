@@ -123,18 +123,19 @@ class LocationController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         // $apiKey = 'PAYROLL_API_KEY';
-
+        $user = auth()->user();
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
 
         if ($response->failed()) {
-            auth()->user()->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to connect to Employment Hero API.'));
+            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to connect to Employment Hero API. Message: ' . $response->body()));
             return back()->with('error', 'Failed to connect to Employment Hero API.');
         }
 
         $locationData = $response->json();
         if (!is_array($locationData) || empty($locationData)) {
+            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to fetch locations from Employment Hero. Message: ' . $response->body()));
             return back()->with('error', 'Failed to fetch locations from Employment Hero.');
         }
 

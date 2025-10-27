@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Http;
+use Log;
 use Storage;
 class RequisitionService
 {
@@ -55,7 +56,7 @@ class RequisitionService
             "PurchaseOrderNumber" => "PO" . $requisition->po_number,
             "PurchaseOrderType" => "PO",
             "Job" => $requisition->location?->external_id ?? "N/A",
-            "Memo" => $requisition->notes ?? "N/A",
+            "Memo" => "",
             "RequestedBy" => $requisition->requested_by ?? "N/A",
             "PurchaseOrderDate" => now()->toDateString(),
             "RequiredDate" => isset($requisition->date_required) ? Carbon::parse($requisition->date_required)->format('Y-m-d') : now()->format('Y-m-d'),
@@ -114,6 +115,7 @@ class RequisitionService
         $authService = new PremierAuthenticationService();
         $token = $authService->getAccessToken();
         $base_url = env('PREMIER_SWAGGER_API_URL');
+        Log::info($payload);
         $response = Http::withToken($token)
             ->acceptJson()
             ->post($base_url . '/api/PurchaseOrder/CreatePurchaseOrder', $payload);

@@ -157,7 +157,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
         Route::get('/locations/{location}/cost-codes/{id}/delete', [LocationCostcodeController::class, 'delete'])->name('locationCostcodes.delete')->role('admin');
+        Route::get('/location/{location}/cost-code-ratios/download-csv', [LocationCostcodeController::class, 'downloadCostCodeRatios'])->name('location.cost-code-ratios.download');
+        Route::post('/location/{location}/cost-code-ratios/upload', [LocationCostcodeController::class, 'upload'])->name('locationCostcodes.upload');
         Route::put('/location/{location}/cost-codes/update', [LocationCostcodeController::class, 'update'])->name('locationCostcodes.update');
+
 
         // Favourite Material Items for Locations
         Route::post('/location/{location}/favourite-materials/upload', [LocationFavouriteMaterialItemsController::class, 'uploadFavouriteMaterials'])->name('location.favourite-materials.upload');
