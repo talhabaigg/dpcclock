@@ -25,6 +25,11 @@ class VariationController extends Controller
             $location->total_variation_revenue = $variation->lineItems->sum('revenue');
         }
 
+        foreach ($location->variations as $variation) {
+            $variation->total_variation_cost = $variation->lineItems->sum('total_cost');
+            $variation->total_variation_revenue = $variation->lineItems->sum('revenue');
+        }
+
 
         return Inertia::render('variation/location-variations', [
             'location' => $location,
@@ -45,21 +50,50 @@ class VariationController extends Controller
             foreach ($data as $item) {
                 $variation = Variation::updateOrCreate(
                     [
-                        'co_number' => $item['ChangeOrderNumber'],
+                        'premier_co_id' => $item['ChangeOrderID'],
                     ],
                     [
+                        'co_number' => $item['ChangeOrderNumber'],
                         'location_id' => $location->id,
                         'type' => $item['ChangeTypeCode'] ?? 'N/A',
                         'description' => $item['Description'],
                         'co_date' => $item['CODate'],
                         'status' => $item['COStatus'],
+                        'premier_co_id' => $item['ChangeOrderID'],
                     ]
                 );
 
                 $lines = $variationService->getChangeOrderLines($item['ChangeOrderID'], $companyId, $token);
                 if ($lines->ok()) {
                     $lineData = $lines->json('Data');
-                    Log::info('Line Data:', $lineData);
+                    // Log::info('Line Data:', ['lineData' => json_encode($lineData, JSON_PRETTY_PRINT)]);
+                    $latestLineNumbers = collect($lineData)
+                        ->pluck('LineNumber')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->toArray();
+
+                    foreach ($lineData as $line) {
+                        $variation->lineItems()->updateOrCreate(
+                            ['line_number' => $line['LineNumber']],
+
+                            [
+
+                                'description' => $line['CostItemDescription'],
+                                'qty' => $line['Quantity'] ?? 1,
+                                'unit_cost' => $line['UnitCost'] ?? 0,
+                                'total_cost' => $line['Cost'] ?? 0,
+                                'revenue' => $line['Revenue'] ?? 0,
+                                'cost_item' => $line['CostItemCode'],
+                                'cost_type' => $line['CostTypeCode'],
+                            ]
+                        );
+                    }
+
+                    $variation->lineItems()
+                        ->whereNotIn('line_number', $latestLineNumbers)
+                        ->delete();
                 }
             }
         } else {

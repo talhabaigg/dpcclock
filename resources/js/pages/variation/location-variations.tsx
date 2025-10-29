@@ -109,11 +109,15 @@ const LocationVariations = ({ location, flash }) => {
                                             </TableCell>
                                             <TableCell>{location.name}</TableCell>
                                             <TableCell>{new Date(variation.co_date).toLocaleDateString('en-GB')}</TableCell>
-                                            <TableCell>{variation.status}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline">{variation.status}</Badge>
+                                            </TableCell>
                                             <TableCell>{variation.description}</TableCell>
-                                            <TableCell>{variation.type}</TableCell>
-                                            <TableCell>${location.total_variation_cost?.toFixed(2)}</TableCell>
-                                            <TableCell>${location.total_variation_revenue?.toFixed(2)}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline">{variation.type}</Badge>
+                                            </TableCell>
+                                            <TableCell>${variation.total_variation_cost?.toFixed(2)}</TableCell>
+                                            <TableCell>${variation.total_variation_revenue?.toFixed(2)}</TableCell>
                                             <TableCell className="space-x-1">
                                                 <a href={`/variations/${variation.id}/download/excel`}>
                                                     <Button title="Download as Excel" variant="outline" className="cursor-pointer">

@@ -19,6 +19,7 @@ class Variation extends Model
         'updated_by',
         'deleted_by',
         'location_id',
+        'premier_co_id',
     ];
 
     public function lineItems()
