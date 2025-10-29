@@ -50,4 +50,9 @@ class Location extends Model
         return $this->belongsToMany(MaterialItem::class, 'location_favourite_materials')->withTimestamps();
     }
 
+    public function variations()
+    {
+        return $this->hasMany(Variation::class);
+    }
+
 }

@@ -3,6 +3,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -10,7 +18,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowUpDown, RefreshCcw } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, CirclePlus, EllipsisVertical, Eye, RefreshCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -172,6 +180,46 @@ export default function LocationsList() {
                                     <Link href={`locations/${location.id}`}>
                                         <Button>Open</Button>
                                     </Link>
+                                </TableCell>
+                                <TableCell className="hidden w-16 text-right sm:table-cell">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                                <span className="sr-only">Open menu</span>
+                                                <EllipsisVertical size={24} />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <Link href={`locations/${location.id}`}>
+                                                <DropdownMenuItem>
+                                                    <span>
+                                                        <Eye size={16} />
+                                                    </span>
+                                                    View{' '}
+                                                </DropdownMenuItem>
+                                            </Link>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel>Variations</DropdownMenuLabel>
+                                            <Link href={`locations/${location.id}/variations`}>
+                                                <DropdownMenuItem>
+                                                    <span>
+                                                        <CirclePlus size={16} />
+                                                    </span>
+                                                    Create
+                                                </DropdownMenuItem>
+                                            </Link>
+                                            <Link href={`locations/${location.id}/variations`}>
+                                                <DropdownMenuItem>
+                                                    <span>
+                                                        <Eye size={16} />
+                                                    </span>
+                                                    View
+                                                </DropdownMenuItem>
+                                            </Link>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </TableCell>
                             </TableRow>
                         ))}

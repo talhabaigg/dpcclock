@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\Variation;
 use App\Services\GetCompanyCodeService;
 use App\Services\PremierAuthenticationService;
+use App\Services\VariationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Http;
@@ -14,6 +15,72 @@ use Illuminate\Support\Facades\Log;
 
 class VariationController extends Controller
 {
+    public function locationVariations(Location $location)
+    {
+        $location->load('variations.lineItems');
+
+
+        foreach ($location->variations as $variation) {
+            $location->total_variation_cost = $variation->lineItems->sum('total_cost');
+            $location->total_variation_revenue = $variation->lineItems->sum('revenue');
+        }
+
+
+        return Inertia::render('variation/location-variations', [
+            'location' => $location,
+        ]);
+    }
+
+    public function loadVariationsFromPremier(Location $location)
+    {
+        $authService = new PremierAuthenticationService();
+        $token = $authService->getAccessToken();
+        $companyService = new GetCompanyCodeService();
+        $companyId = $companyService->getCompanyCode($location->eh_parent_id);
+
+        $variationService = new VariationService();
+        $response = $variationService->getChangeOrders($location, $companyId, $token);
+        if ($response->ok()) {
+            $data = $response->json('Data');
+            foreach ($data as $item) {
+                $variation = Variation::updateOrCreate(
+                    [
+                        'co_number' => $item['ChangeOrderNumber'],
+                    ],
+                    [
+                        'location_id' => $location->id,
+                        'type' => $item['ChangeTypeCode'] ?? 'N/A',
+                        'description' => $item['Description'],
+                        'co_date' => $item['CODate'],
+                        'status' => $item['COStatus'],
+                    ]
+                );
+
+                $lines = $variationService->getChangeOrderLines($item['ChangeOrderID'], $companyId, $token);
+                if ($lines->ok()) {
+                    $lineData = $lines->json('Data');
+                    Log::info('Line Data:', $lineData);
+                }
+            }
+        } else {
+            Log::error('Failed to fetch variations from Premier', [
+                'response' => $response->json(),
+            ]);
+
+
+            return redirect()
+                ->back()
+                ->with('error', [
+                    'message' => 'Failed to fetch variations from Premier.',
+                    'response' => is_array($response->json()) || is_object($response->json())
+                        ? json_encode($response->json(), JSON_PRETTY_PRINT)
+                        : $response->json(),
+                ]);
+        }
+
+        return redirect()->back()->with('success', 'Variations synced from Premier successfully.');
+
+    }
     public function index()
     {
         $variations = Variation::with('lineItems', 'location')->get();
@@ -184,32 +251,32 @@ class VariationController extends Controller
         exit;
     }
 
-    public function LoadVariationsFromPremier()
-    {
-        Log::info('LoadVariationsFromPremier called');
-        $authService = new PremierAuthenticationService();
-        $token = $authService->getAccessToken();
-        $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
-        $base_url = env('PREMIER_SWAGGER_API_URL');
+    // public function LoadVariationsFromPremier()
+    // {
+    //     Log::info('LoadVariationsFromPremier called');
+    //     $authService = new PremierAuthenticationService();
+    //     $token = $authService->getAccessToken();
+    //     $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+    //     $base_url = env('PREMIER_SWAGGER_API_URL');
 
-        $jobNumber = 'QTMP00';
-        $queryParams = [
-            'parameter.company' => $companyId,
+    //     $jobNumber = 'QTMP00';
+    //     $queryParams = [
+    //         'parameter.company' => $companyId,
 
-            'parameter.pageSize' => 1000,
-        ];
-        $response = Http::withToken($token)
-            ->acceptJson()
-            ->get($base_url . '/api/ChangeOrder/GetChangeOrders', $queryParams);
-        Log::info('response', $response->json());
-        if ($response->successful()) {
-            $data = $response->json('Data');
-            Log::info('Premier Variations Data:', $data);
-            dd($data);
-        }
-        return redirect()->back()->with('error', 'Failed to fetch variations from Premier');
+    //         'parameter.pageSize' => 1000,
+    //     ];
+    //     $response = Http::withToken($token)
+    //         ->acceptJson()
+    //         ->get($base_url . '/api/ChangeOrder/GetChangeOrders', $queryParams);
+    //     Log::info('response', $response->json());
+    //     if ($response->successful()) {
+    //         $data = $response->json('Data');
+    //         Log::info('Premier Variations Data:', $data);
+    //         dd($data);
+    //     }
+    //     return redirect()->back()->with('error', 'Failed to fetch variations from Premier');
 
-    }
+    // }
 
     public function sendToPremier(Variation $variation)
     {

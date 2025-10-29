@@ -59,11 +59,9 @@ class LocationController extends Controller
             'costCodes' => fn($query) => $query->orderByRaw('CAST(code AS UNSIGNED)'),
             'materialItems',
             'favouriteMaterials',
+            'variations',
             'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
         ]);
-
-
-
 
         $monthlySpending = $this->getMonthlySpending($location);
         // dd($monthlySpending);
