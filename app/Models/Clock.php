@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Str;
+use App\Models\Worktype;
 
 class Clock extends Model
 {
@@ -54,7 +55,7 @@ class Clock extends Model
 
     public function worktype()
     {
-        return $this->belongsTo(WorkType::class, 'eh_worktype_id', 'eh_worktype_id')
+        return $this->belongsTo(Worktype::class, 'eh_worktype_id', 'eh_worktype_id')
             ->withDefault(['name' => 'N/A']);
     }
 }
