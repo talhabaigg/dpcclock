@@ -10,6 +10,7 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
                 <TableHeader className="bg-gray-50 dark:bg-black">
                     <TableRow className="border-b">
                         <TableHead className="border">Status</TableHead>
+                        <TableHead className="border">Work type</TableHead>
                         <TableHead className="border">Start Time</TableHead>
                         <TableHead className="border">End Time</TableHead>
                         <TableHead className="border">Level/Activity</TableHead>
@@ -34,6 +35,7 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
                                         <span className="text-xs text-gray-500">No Status</span>
                                     )}
                                 </TableCell>
+                                <TableCell>{entry.worktype?.name}</TableCell>
                                 <TableCell className="border">
                                     {new Date(entry.clock_in).toLocaleTimeString([], {
                                         hour: '2-digit',

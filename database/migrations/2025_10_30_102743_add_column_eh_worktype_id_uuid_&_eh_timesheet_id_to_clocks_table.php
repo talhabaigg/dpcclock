@@ -21,7 +21,9 @@ return new class extends Migration {
                 ->where('id', $clock->id)
                 ->update(['uuid' => (string) Str::uuid()]);
         });
-
+        Schema::table('clocks', function (Blueprint $table) {
+            $table->uuid('uuid')->nullable(false)->change();
+        });
     }
     /**
      * Reverse the migrations.

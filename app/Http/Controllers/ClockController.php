@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Clock;
+use App\Services\TimesheetService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Kiosk;
@@ -216,9 +217,13 @@ class ClockController extends Controller
      */
     public function destroy(Clock $clock)
     {
-        if ($clock->status === 'synced') {
+        if ($clock->status === 'synced' || $clock->eh_timesheet_id !== null) {
             return redirect()->back()->with('error', 'Cannot delete a synced clock entry.');
+        } else if ($clock->status === 'Processed') {
+            return redirect()->back()->with('error', 'Cannot delete a processed clock entry.');
         }
+
+
 
         $clock->delete();
 
@@ -815,15 +820,17 @@ class ClockController extends Controller
                 'laser_allowance' => '2518041',
                 'setout_allowance' => '2518045', // Example, if you add more
             ];
+            $start = isset($timesheet['startTime']) ? Carbon::parse($timesheet['startTime'], $tz) : null;
+            $end = isset($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null;
+            $match = !empty($timesheet['id'])
+                ? ['eh_timesheet_id' => $timesheet['id']]
+                : ['eh_employee_id' => $employeeId, 'clock_in' => optional($start)->toDateTimeString()];
             $clock = Clock::updateOrCreate(
-                [
-                    'clock_in' => Carbon::parse($timesheet['startTime'], $tz),
-
-                ],
+                $match,
                 [
                     'eh_employee_id' => $employeeId,
-                    'clock_in' => Carbon::parse($timesheet['startTime'], $tz),
-                    'clock_out' => isset($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null,
+                    'clock_in' => $start,
+                    'clock_out' => $end,
                     'eh_location_id' => $timesheet['locationId'] ?? null,
                     'eh_kiosk_id' => $kioskId,
                     'eh_worktype_id' => $timesheet['workTypeId'] ?? null,
@@ -840,5 +847,22 @@ class ClockController extends Controller
         }
 
         return redirect()->back()->with('success', 'Timesheet synced successfully for the selected week.');
+    }
+
+    public function approveAllTimesheets($employeeId, $weekEnding)
+    {
+        $tz = 'Australia/Brisbane';
+        $weekEnd = Carbon::createFromFormat('d-m-Y', $weekEnding, $tz)->endOfDay();
+        $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
+
+        $clocks = Clock::where('eh_employee_id', $employeeId)
+            ->whereBetween('clock_in', [$weekStart, $weekEnd])
+            ->whereNull('eh_timesheet_id')->get();
+        foreach ($clocks as $clock) {
+            $clock->status = 'Approved';
+            $clock->save();
+        }
+
+        return redirect()->back()->with('success', 'All timesheets approved for the selected week.');
     }
 }

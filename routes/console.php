@@ -8,7 +8,7 @@ use App\Console\Commands\BackupDatabase;
 
 
 Schedule::command('app:sync-timesheets')
-    ->hourly()
+    ->everyFifteenMinutes()
     ->timezone('Australia/Brisbane');
 Schedule::command('app:backup-database')->dailyAt('23:00')->timezone('Australia/Brisbane');
 Schedule::command('app:send-kiosk-clocked-in-notification')->hourly()

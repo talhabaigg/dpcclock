@@ -73,6 +73,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/kiosks/{kioskId}/disable-admin-mode', [KioskController::class, 'disableAdminMode'])->name('kiosks.disable-admin-mode');
         Route::post('/validate-kiosk-admin-pin', [KioskController::class, 'validateKioskAdminPin'])->name('kiosk.validate-admin-pin');
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
+
         Route::get('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy');
 
         Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
@@ -89,6 +90,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
 
         Route::get('/timesheets/{employeeId}/{weekEnding}/sync/eh', [ClockController::class, 'syncTimesheet'])->name('timesheets.sync')->permission('can process requisitions');
+        Route::get('/timesheets/{employeeId}/{weekEnding}/approve-all', [ClockController::class, 'approveAllTimesheets'])->name('timesheets.approve-all');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
 

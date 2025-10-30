@@ -63,7 +63,8 @@ class SyncTimesheetWithEH implements ShouldQueue
         return Clock::with(['kiosk', 'employee.worktypes', 'employee.kiosks', 'location.worktypes'])
             ->where(function ($query) {
                 $query->whereNull('status')
-                    ->orWhere('status', '!=', 'synced');
+                    ->orWhere('status', '!=', 'synced')
+                    ->orWhere('eh_timesheet_id', null);
             })
             ->get();
     }
@@ -85,9 +86,11 @@ class SyncTimesheetWithEH implements ShouldQueue
                 "employeeId" => $employeeId,
                 "startTime" => $clock->clock_in,
                 "endTime" => $clock->clock_out,
+                "externalId" => $clock->uuid,
                 "locationId" => $clock->location->eh_location_id ?? null,
                 "shiftConditionIds" => $shiftConditionIds,
                 "workTypeId" => $workTypeId,
+                "status" => $clock->status ?? 'Submitted',
             ];
 
             $clockMap[$employeeId][] = $clock->id;

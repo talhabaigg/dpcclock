@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { RefreshCcw } from 'lucide-react';
+import { CircleCheck, RefreshCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import TimesheetTable from './components/nestedTable';
@@ -104,11 +104,16 @@ export default function TimesheetManagement() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Timesheets" />
             <div className="m-4 flex flex-col gap-2">
-                <div className="mb-4 flex items-center justify-start gap-4">
+                <div className="mb-4 flex items-center justify-start gap-2">
                     <Label className="text-3xl">Timesheet Management</Label>
                     <Link href={`/timesheets/${selectedEmployeeId}/${selectedWeekEnding}/sync/eh`}>
                         <Button size="sm" variant="outline">
                             <RefreshCcw /> Sync
+                        </Button>
+                    </Link>
+                    <Link href={`/timesheets/${selectedEmployeeId}/${selectedWeekEnding}/approve-all`}>
+                        <Button size="sm" variant="outline" title="Approve all timesheets on this page">
+                            <CircleCheck /> Approve all
                         </Button>
                     </Link>
                 </div>
