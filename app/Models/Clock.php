@@ -55,6 +55,6 @@ class Clock extends Model
     public function worktype()
     {
         return $this->belongsTo(WorkType::class, 'eh_worktype_id', 'eh_worktype_id')
-            ->withDefault(); // 👈 This makes it optional
+            ->withDefault(['name' => 'N/A']);
     }
 }

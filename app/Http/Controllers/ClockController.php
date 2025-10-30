@@ -89,8 +89,11 @@ class ClockController extends Controller
         $employeeId = $request->query('employeeId');
 
         $parsedDate = Carbon::createFromFormat('d/m/Y', $date, 'Australia/Brisbane')->format('Y-m-d');
-
-        $clocks = Clock::with(['kiosk.location', 'location', 'worktype'])
+        $relations = ['kiosk.location', 'location'];
+        if (class_exists(\App\Models\Worktype::class)) {
+            $relations[] = 'worktype';
+        }
+        $clocks = Clock::with($relations)
             ->where('eh_employee_id', $employeeId)
             ->whereDate('clock_in', $parsedDate)
             ->get();
