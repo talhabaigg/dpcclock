@@ -64,9 +64,10 @@ class RequisitionService
                 ? Carbon::parse($requisition->date_required)->format('Y-m-d')
                 : now()->format('Y-m-d'),
             "BlanketExpiryDate" => null,
-            "SendDate" => isset($requisition->date_required)
-                ? Carbon::parse($requisition->date_required)->format('Y-m-d')
-                : now()->format('Y-m-d'),
+            "SendDate" => "",
+            // "SendDate" => isset($requisition->date_required)
+            //     ? Carbon::parse($requisition->date_required)->format('Y-m-d')
+            //     : now()->format('Y-m-d'),
             "PurchaseOrderReference" => $requisition->order_reference ?? "N/A",
             "Vendor" => $requisition->supplier?->code ?? "N/A",
             "VendorReferenceNumber" => null,

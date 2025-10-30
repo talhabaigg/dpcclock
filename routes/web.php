@@ -90,7 +90,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
 
         Route::get('/timesheets/{employeeId}/{weekEnding}/sync/eh', [ClockController::class, 'syncTimesheet'])->name('timesheets.sync')->permission('can process requisitions');
-        Route::get('/timesheets/{employeeId}/{weekEnding}/approve-all', [ClockController::class, 'approveAllTimesheets'])->name('timesheets.approve-all');
+        Route::get('/timesheets/{employeeId}/{weekEnding}/approve-all', [ClockController::class, 'approveAllTimesheets'])->name('timesheets.approve-all')->permission('can process requisitions');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
 
 

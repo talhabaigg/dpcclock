@@ -64,7 +64,7 @@ class SyncTimesheetWithEH implements ShouldQueue
             ->where(function ($query) {
                 $query->whereNull('status')
                     ->orWhere('status', '!=', 'synced')
-                    ->orWhere('eh_timesheet_id', null);
+                    ->where('eh_timesheet_id', null);
             })
             ->get();
     }
@@ -75,22 +75,34 @@ class SyncTimesheetWithEH implements ShouldQueue
         $clockMap = [];
 
         foreach ($clocks as $clock) {
-            if (!$clock->clock_out)
+            if (!$clock->clock_out) {
                 continue;
+            }
+
+            // ✅ guard: ensure employee exists
+            if (!$clock->employee) {
+                Log::warning('Clock has no related employee; skipping.', [
+                    'clock_id' => $clock->id,
+                    'eh_employee_id' => $clock->eh_employee_id,
+                ]);
+                continue;
+            }
 
             $employeeId = $clock->eh_employee_id;
             $shiftConditionIds = $this->getShiftConditionIds($clock);
-            $workTypeId = optional($clock->employee->worktypes->first())->eh_worktype_id;
+
+            // ✅ null-safe when reading employee worktype
+            $workTypeId = $clock->employee?->worktypes?->first()?->eh_worktype_id;
 
             $timesheets[$employeeId][] = [
-                "employeeId" => $employeeId,
-                "startTime" => $clock->clock_in,
-                "endTime" => $clock->clock_out,
-                "externalId" => $clock->uuid,
-                "locationId" => $clock->location->eh_location_id ?? null,
-                "shiftConditionIds" => $shiftConditionIds,
-                "workTypeId" => $workTypeId,
-                "status" => $clock->status ?? 'Submitted',
+                'employeeId' => $employeeId,
+                'startTime' => $clock->clock_in,
+                'endTime' => $clock->clock_out,
+                'externalId' => $clock->uuid,
+                'locationId' => $clock->location?->eh_location_id,
+                'shiftConditionIds' => $shiftConditionIds,
+                'workTypeId' => $workTypeId,
+                'status' => $clock->status ?? 'Submitted',
             ];
 
             $clockMap[$employeeId][] = $clock->id;
@@ -99,9 +111,12 @@ class SyncTimesheetWithEH implements ShouldQueue
         return [$timesheets, $clockMap];
     }
 
+
     private function getShiftConditionIds($clock)
     {
-        $shiftConditionIds = $clock->location?->worktypes->pluck('eh_worktype_id')->toArray() ?? [];
+        // location worktypes -> IDs (null-safe)
+        $shiftConditionIds = $clock->location?->worktypes
+                ?->pluck('eh_worktype_id')->toArray() ?? [];
 
         $zoneShiftConditionIds = [
             '1' => '2516899',
@@ -109,17 +124,21 @@ class SyncTimesheetWithEH implements ShouldQueue
             '3' => '2516902',
         ];
 
-        $zone = $clock->employee->kiosks
-            ->where('eh_kiosk_id', $clock->eh_kiosk_id)
-            ->first()
-            ?->pivot
-                ?->zone;
+        // ✅ null-safe chain for employee → kiosks → pivot → zone
+        $zone = $clock->employee?->kiosks
+                ?->firstWhere('eh_kiosk_id', $clock->eh_kiosk_id)
+            ?->pivot?->zone;
 
         if ($zone && isset($zoneShiftConditionIds[$zone])) {
-            $shiftConditionIds = array_filter($shiftConditionIds, fn($id) => !in_array($id, $zoneShiftConditionIds));
+            // remove any previously included zone codes first
+            $shiftConditionIds = array_filter(
+                $shiftConditionIds,
+                fn($id) => !in_array($id, $zoneShiftConditionIds, true)
+            );
             $shiftConditionIds[] = $zoneShiftConditionIds[$zone];
         }
 
+        // Add allowances if toggled
         $allowances = [
             'insulation_allowance' => '2518038',
             'laser_allowance' => '2518041',
@@ -145,6 +164,7 @@ class SyncTimesheetWithEH implements ShouldQueue
     {
         $apiKey = env('PAYROLL_API_KEY');
         // Send POST request to the API with correct headers and JSON data
+        Log::info(json_encode($chunkData, JSON_PRETTY_PRINT));
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON

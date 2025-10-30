@@ -779,15 +779,12 @@ class ClockController extends Controller
 
     public function syncTimesheet($employeeId, $weekEnding)
     {
-        // weekEnding comes in as 'd-m-Y' (e.g. '27-10-2025')
         $tz = 'Australia/Brisbane';
         $weekEnd = Carbon::createFromFormat('d-m-Y', $weekEnding, $tz)->endOfDay();
         $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
 
-        // OData expects PascalCase property names and datetime'...'
         $from = $weekStart->format('Y-m-d\TH:i:s');
         $to = $weekEnd->format('Y-m-d\TH:i:s');
-
         $filter = "EmployeeId eq {$employeeId} and StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
 
         $apiKey = env('PAYROLL_API_KEY');
@@ -798,7 +795,7 @@ class ClockController extends Controller
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
                     '$filter' => $filter,
                     '$orderby' => 'StartTime',
-                    '$top' => 100,   // implement paging with $skip if you expect >100 rows
+                    '$top' => 100,
                     '$skip' => 0,
                 ]);
 
@@ -807,47 +804,83 @@ class ClockController extends Controller
             return [];
         }
 
-        $data = $response->json();
-        foreach ($data as $timesheet) {
+        $allowancesMap = [
+            'insulation_allowance' => '2518038',
+            'laser_allowance' => '2518041',
+            'setout_allowance' => '2518045',
+        ];
+
+        foreach ($response->json() as $timesheet) {
             Log::info(json_encode($timesheet, JSON_PRETTY_PRINT));
-            $location = Location::where('eh_location_id', $timesheet['locationId'])->first();
-            $parentLocation = $location ? Location::where('eh_location_id', $location->eh_parent_id)->first() : null;
-            $kioskfromSubLocationId = $parentLocation ? Kiosk::where('eh_location_id', $parentLocation->eh_location_id)->first() : null;
-            $kioskFromParentLocationId = $location ? Kiosk::where('eh_location_id', $location->eh_location_id)->first() : null;
-            $kioskId = intval($kioskfromSubLocationId->eh_kiosk_id ?? $kioskFromParentLocationId->eh_kiosk_id ?? 0);
-            $allowances = [
-                'insulation_allowance' => '2518038',
-                'laser_allowance' => '2518041',
-                'setout_allowance' => '2518045', // Example, if you add more
+
+            $start = !empty($timesheet['startTime']) ? Carbon::parse($timesheet['startTime'], $tz) : null;
+            $end = !empty($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null;
+
+            // Resolve location/kiosk (your existing logic)
+            $location = !empty($timesheet['locationId'])
+                ? Location::where('eh_location_id', $timesheet['locationId'])->first()
+                : null;
+
+            $parentLocation = $location
+                ? Location::where('eh_location_id', $location->eh_parent_id)->first()
+                : null;
+
+            $kioskFromSub = $parentLocation
+                ? Kiosk::where('eh_location_id', $parentLocation->eh_location_id)->first()
+                : null;
+
+            $kioskFromSelf = $location
+                ? Kiosk::where('eh_location_id', $location->eh_location_id)->first()
+                : null;
+
+            $kioskId = (int) ($kioskFromSub->eh_kiosk_id ?? $kioskFromSelf->eh_kiosk_id ?? 0);
+
+            // --- KEY CHANGE: find existing by EH id OR uuid first ---
+            $ehId = $timesheet['id'] ?? null;
+            $externalId = isset($timesheet['externalId']) ? trim((string) $timesheet['externalId']) : null;
+
+            $clock = Clock::query()
+                ->when($ehId, fn($q) => $q->orWhere('eh_timesheet_id', $ehId))
+                ->when($externalId, fn($q) => $q->orWhere('uuid', $externalId))
+                ->first();
+
+            // Optional: last-resort fallback if both ids missing
+            if (!$clock && !$ehId && !$externalId && $start) {
+                $clock = Clock::where('eh_employee_id', $employeeId)
+                    ->where('clock_in', $start->toDateTimeString())
+                    ->first();
+            }
+
+            // Build the update payload
+            $payload = [
+                'eh_employee_id' => $employeeId,
+                'clock_in' => $start?->toDateTimeString(),
+                'clock_out' => $end?->toDateTimeString(),
+                'eh_location_id' => $timesheet['locationId'] ?? null,
+                'eh_kiosk_id' => $kioskId ?: null,
+                'eh_worktype_id' => $timesheet['workTypeId'] ?? null,
+                // Set both IDs, preserving existing if missing from API
+                'eh_timesheet_id' => $ehId ?? $clock?->eh_timesheet_id,
+                'uuid' => $externalId ?? $clock?->uuid ?? \Str::uuid()->toString(),
+                'hours_worked' => ($start && $end) ? $start->diffInHours($end) : null,
+                'status' => $timesheet['status'] ?? null,
+                'insulation_allowance' => in_array($allowancesMap['insulation_allowance'], $timesheet['shiftConditionIds'] ?? [], true),
+                'laser_allowance' => in_array($allowancesMap['laser_allowance'], $timesheet['shiftConditionIds'] ?? [], true),
+                'setout_allowance' => in_array($allowancesMap['setout_allowance'], $timesheet['shiftConditionIds'] ?? [], true),
             ];
-            $start = isset($timesheet['startTime']) ? Carbon::parse($timesheet['startTime'], $tz) : null;
-            $end = isset($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null;
-            $match = !empty($timesheet['id'])
-                ? ['eh_timesheet_id' => $timesheet['id']]
-                : ['eh_employee_id' => $employeeId, 'clock_in' => optional($start)->toDateTimeString()];
-            $clock = Clock::updateOrCreate(
-                $match,
-                [
-                    'eh_employee_id' => $employeeId,
-                    'clock_in' => $start,
-                    'clock_out' => $end,
-                    'eh_location_id' => $timesheet['locationId'] ?? null,
-                    'eh_kiosk_id' => $kioskId,
-                    'eh_worktype_id' => $timesheet['workTypeId'] ?? null,
-                    'eh_timesheet_id' => $timesheet['id'] ?? null,
-                    'hours_worked' => isset($timesheet['endTime'])
-                        ? Carbon::parse($timesheet['startTime'], $tz)->diffInHours(Carbon::parse($timesheet['endTime'], $tz))
-                        : null,
-                    'status' => $timesheet['status'] ?? null,
-                    'insulation_allowance' => in_array($allowances['insulation_allowance'], $timesheet['shiftConditionIds'] ?? []),
-                    'laser_allowance' => in_array($allowances['laser_allowance'], $timesheet['shiftConditionIds'] ?? []),
-                    'setout_allowance' => in_array($allowances['setout_allowance'], $timesheet['shiftConditionIds'] ?? []),
-                ]
-            );
+
+            if ($clock) {
+                $clock->fill($payload)->save();
+            } else {
+                // choose the strongest match key available for creation
+                $create = $payload;
+                Clock::create($create);
+            }
         }
 
         return redirect()->back()->with('success', 'Timesheet synced successfully for the selected week.');
     }
+
 
     public function approveAllTimesheets($employeeId, $weekEnding)
     {
