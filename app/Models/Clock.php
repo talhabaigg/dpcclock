@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Str;
 
 class Clock extends Model
 {
@@ -19,12 +20,23 @@ class Clock extends Model
         'laser_allowance',
         'setout_allowance',
         'status',
+        'eh_worktype_id',
+        'eh_timesheet_id',
+        'uuid',
     ];
     protected $casts = [
         'insulation_allowance' => 'boolean',
         'laser_allowance' => 'boolean',
         'setout_allowance' => 'boolean',
     ];
+    protected static function booted(): void
+    {
+        static::creating(function (Clock $clock) {
+            if (empty($clock->uuid)) {
+                $clock->uuid = (string) Str::uuid();
+            }
+        });
+    }
     public function employee()
     {
         return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id');
@@ -38,5 +50,10 @@ class Clock extends Model
     public function location()
     {
         return $this->belongsTo(Location::class, 'eh_location_id', 'eh_location_id');
+    }
+
+    public function worktype()
+    {
+        return $this->belongsTo(WorkType::class, 'eh_worktype_id', 'eh_worktype_id');
     }
 }

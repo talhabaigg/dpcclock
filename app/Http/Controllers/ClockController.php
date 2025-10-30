@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use App\Models\Worktype;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Log;
 class ClockController extends Controller
 {
     /**
@@ -88,7 +89,7 @@ class ClockController extends Controller
 
         $parsedDate = Carbon::createFromFormat('d/m/Y', $date, 'Australia/Brisbane')->format('Y-m-d');
 
-        $clocks = Clock::with(['kiosk.location', 'location'])
+        $clocks = Clock::with(['kiosk.location', 'location', 'worktype'])
             ->where('eh_employee_id', $employeeId)
             ->whereDate('clock_in', $parsedDate)
             ->get();
@@ -726,7 +727,7 @@ class ClockController extends Controller
         $startDate = $endDate->copy()->subDays(6)->startOfDay();
         $employeeName = Employee::where('eh_employee_id', $employeeId)->value('name');
         $timesheets = Clock::where('eh_employee_id', $employeeId)
-            ->with('location', 'kiosk')
+            ->with('location', 'kiosk', 'worktype')
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
         // dd($timesheets);
@@ -769,5 +770,75 @@ class ClockController extends Controller
 
 
         return redirect()->route('kiosks.show', $kioskId)->with('success', 'Start times updated successfully for selected employees.');
+    }
+
+    public function syncTimesheet($employeeId, $weekEnding)
+    {
+        // weekEnding comes in as 'd-m-Y' (e.g. '27-10-2025')
+        $tz = 'Australia/Brisbane';
+        $weekEnd = Carbon::createFromFormat('d-m-Y', $weekEnding, $tz)->endOfDay();
+        $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
+
+        // OData expects PascalCase property names and datetime'...'
+        $from = $weekStart->format('Y-m-d\TH:i:s');
+        $to = $weekEnd->format('Y-m-d\TH:i:s');
+
+        $filter = "EmployeeId eq {$employeeId} and StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
+
+        $apiKey = env('PAYROLL_API_KEY');
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Accept' => 'application/json',
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
+                    '$filter' => $filter,
+                    '$orderby' => 'StartTime',
+                    '$top' => 100,   // implement paging with $skip if you expect >100 rows
+                    '$skip' => 0,
+                ]);
+
+        if ($response->failed()) {
+            Log::error('Timesheet sync failed', ['status' => $response->status(), 'body' => $response->body()]);
+            return [];
+        }
+
+        $data = $response->json();
+        foreach ($data as $timesheet) {
+            Log::info(json_encode($timesheet, JSON_PRETTY_PRINT));
+            $location = Location::where('eh_location_id', $timesheet['locationId'])->first();
+            $parentLocation = $location ? Location::where('eh_location_id', $location->eh_parent_id)->first() : null;
+            $kioskfromSubLocationId = $parentLocation ? Kiosk::where('eh_location_id', $parentLocation->eh_location_id)->first() : null;
+            $kioskFromParentLocationId = $location ? Kiosk::where('eh_location_id', $location->eh_location_id)->first() : null;
+            $kioskId = intval($kioskfromSubLocationId->eh_kiosk_id ?? $kioskFromParentLocationId->eh_kiosk_id ?? 0);
+            $allowances = [
+                'insulation_allowance' => '2518038',
+                'laser_allowance' => '2518041',
+                'setout_allowance' => '2518045', // Example, if you add more
+            ];
+            $clock = Clock::updateOrCreate(
+                [
+                    'clock_in' => Carbon::parse($timesheet['startTime'], $tz),
+
+                ],
+                [
+                    'eh_employee_id' => $employeeId,
+                    'clock_in' => Carbon::parse($timesheet['startTime'], $tz),
+                    'clock_out' => isset($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null,
+                    'eh_location_id' => $timesheet['locationId'] ?? null,
+                    'eh_kiosk_id' => $kioskId,
+                    'eh_worktype_id' => $timesheet['workTypeId'] ?? null,
+                    'eh_timesheet_id' => $timesheet['id'] ?? null,
+                    'hours_worked' => isset($timesheet['endTime'])
+                        ? Carbon::parse($timesheet['startTime'], $tz)->diffInHours(Carbon::parse($timesheet['endTime'], $tz))
+                        : null,
+                    'status' => $timesheet['status'] ?? null,
+                    'insulation_allowance' => in_array($allowances['insulation_allowance'], $timesheet['shiftConditionIds'] ?? []),
+                    'laser_allowance' => in_array($allowances['laser_allowance'], $timesheet['shiftConditionIds'] ?? []),
+                    'setout_allowance' => in_array($allowances['setout_allowance'], $timesheet['shiftConditionIds'] ?? []),
+                ]
+            );
+        }
+
+        return redirect()->back()->with('success', 'Timesheet synced successfully for the selected week.');
     }
 }

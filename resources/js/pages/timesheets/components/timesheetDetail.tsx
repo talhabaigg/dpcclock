@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Check } from 'lucide-react';
@@ -23,7 +24,15 @@ export default function TimesheetDetailTable({ entries }: { entries: any[] }) {
                         <TableRow key={entry.id ?? i} className="border-b">
                             <>
                                 <TableCell className="border">
-                                    {entry.status === 'synced' && <span className="text-green-500">Synced</span>}
+                                    {entry.status ? (
+                                        entry.status === 'synced' ? (
+                                            <span className="text-green-500">Synced</span>
+                                        ) : (
+                                            <Badge variant="outline">{entry.status}</Badge>
+                                        )
+                                    ) : (
+                                        <span className="text-xs text-gray-500">No Status</span>
+                                    )}
                                 </TableCell>
                                 <TableCell className="border">
                                     {new Date(entry.clock_in).toLocaleTimeString([], {

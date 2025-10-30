@@ -1,7 +1,9 @@
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { RefreshCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import TimesheetTable from './components/nestedTable';
@@ -102,7 +104,15 @@ export default function TimesheetManagement() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Timesheets" />
             <div className="m-4 flex flex-col gap-2">
-                <Label className="text-3xl">Timesheet Management</Label>
+                <div className="mb-4 flex items-center justify-start gap-4">
+                    <Label className="text-3xl">Timesheet Management</Label>
+                    <Link href={`/timesheets/${selectedEmployeeId}/${selectedWeekEnding}/sync/eh`}>
+                        <Button size="sm" variant="outline">
+                            <RefreshCcw /> Sync
+                        </Button>
+                    </Link>
+                </div>
+
                 <div className="flex flex-col items-center space-y-2 sm:flex-row sm:gap-2 sm:space-y-0">
                     <SearchEmployee
                         onEmployeeChange={handleEmployeeChange}

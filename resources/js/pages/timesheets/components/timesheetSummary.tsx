@@ -9,14 +9,26 @@ export default function TimesheetSummaryRow({
     dateKey,
     isExpanded,
     toggleRow,
+    hasSick,
+    hasAL,
 }: {
     timesheet: any;
     dateKey: string;
     isExpanded: boolean;
     toggleRow: (date: string) => void;
+    hasSick: boolean | undefined;
+    hasAL: boolean | undefined;
 }) {
     return (
-        <TableRow>
+        <TableRow
+            className={
+                hasSick
+                    ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-700 dark:hover:bg-yellow-500'
+                    : hasAL
+                      ? 'bg-green-100 hover:bg-green-200 dark:bg-green-700 dark:hover:bg-green-500'
+                      : ''
+            }
+        >
             <TableCell className="border border-gray-200">
                 <button onClick={() => toggleRow(dateKey)} className="flex items-center gap-1">
                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}

@@ -58,24 +58,36 @@ export default function TimesheetTable({
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {merged.map((timesheet) => {
-                    const dateKey = new Date(timesheet.clock_in).toLocaleDateString('en-GB');
-                    const isExpanded = expandedRows[dateKey];
+                {merged
+                    .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
+                    .map((timesheet) => {
+                        const dateKey = new Date(timesheet.clock_in).toLocaleDateString('en-GB');
 
-                    return (
-                        <React.Fragment key={dateKey}>
-                            <TimesheetSummaryRow timesheet={timesheet} dateKey={dateKey} isExpanded={isExpanded} toggleRow={toggleRow} />
+                        const hasSick = timesheet.entries.some((ts) => ts.eh_worktype_id === 2471109);
+                        const hasAL = timesheet.entries.some((ts) => ts.eh_worktype_id === 2471108);
+                        const isExpanded = expandedRows[dateKey];
 
-                            {isExpanded && (
-                                <TableRow>
-                                    <TableCell colSpan={7}>
-                                        <TimesheetDetailTable entries={groupedTimesheets[dateKey]} />
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </React.Fragment>
-                    );
-                })}
+                        return (
+                            <React.Fragment key={dateKey}>
+                                <TimesheetSummaryRow
+                                    timesheet={timesheet}
+                                    dateKey={dateKey}
+                                    isExpanded={isExpanded}
+                                    toggleRow={toggleRow}
+                                    hasSick={hasSick}
+                                    hasAL={hasAL}
+                                />
+
+                                {isExpanded && (
+                                    <TableRow>
+                                        <TableCell colSpan={7}>
+                                            <TimesheetDetailTable entries={groupedTimesheets[dateKey]} />
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
             </TableBody>
         </Table>
     );
