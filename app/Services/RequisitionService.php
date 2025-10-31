@@ -64,7 +64,7 @@ class RequisitionService
                 ? Carbon::parse($requisition->date_required)->format('Y-m-d')
                 : now()->format('Y-m-d'),
             "BlanketExpiryDate" => null,
-            "SendDate" => "",
+            "SendDate" => null,
             // "SendDate" => isset($requisition->date_required)
             //     ? Carbon::parse($requisition->date_required)->format('Y-m-d')
             //     : now()->format('Y-m-d'),
