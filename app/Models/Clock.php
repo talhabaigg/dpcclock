@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Traits\LogsActivity;
 use Str;
 use App\Models\Worktype;
-
+use Spatie\Activitylog\LogOptions;
 class Clock extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
     protected $fillable = [
         'eh_kiosk_id',
         'eh_employee_id',
@@ -57,5 +58,13 @@ class Clock extends Model
     {
         return $this->belongsTo(Worktype::class, 'eh_worktype_id', 'eh_worktype_id')
             ->withDefault(['name' => 'N/A']);
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnlyDirty() // Log only changed attributes
+            ->logFillable()  // Log changes on all fillable attributes
+            ->useLogName('clock'); // Optional: customize the log name
     }
 }

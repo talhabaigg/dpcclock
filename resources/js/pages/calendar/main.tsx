@@ -1,11 +1,12 @@
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
-import { Calendar1Icon, Table2 } from 'lucide-react';
+import { Head, Link } from '@inertiajs/react';
+import { Calendar1Icon, Table2, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Calendar from './main-partials/calendar';
@@ -97,6 +98,13 @@ export default function EventsIndex({ events, flash }) {
                                             <TableCell>{event.end}</TableCell>
                                             <TableCell>{getWorkingDays(event.start, event.end)}</TableCell>
                                             <TableCell>{event.type}</TableCell>
+                                            <TableCell>
+                                                <Link href={`/timesheet-events/${event.id}`}>
+                                                    <Button size="icon">
+                                                        <Trash />
+                                                    </Button>
+                                                </Link>
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })}

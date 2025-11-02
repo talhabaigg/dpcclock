@@ -152,6 +152,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         //TimesheetEvent CRUD routes
         Route::post('/timesheet-events/store', [TimesheetEventController::class, 'store'])->name('timesheetEvents.store');
         Route::post('/timesheet-events/update', [TimesheetEventController::class, 'update'])->name('timesheetEvents.update');
+        Route::get('/timesheet-events/{event}', [TimesheetEventController::class, 'destroy'])->name('timesheetEvents.destroy');
 
         //Generate timesheet based on events
         Route::get('/{kiosk}/timesheet-events/generate', [TimesheetEventController::class, 'generateTimesheetForToday'])->name('timesheetEvents.generateToday');

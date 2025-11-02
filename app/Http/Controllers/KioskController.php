@@ -141,7 +141,7 @@ class KioskController extends Controller
             'relatedKiosks'
         ]);
 
-        $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>', now())->get();
+        $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>=', now())->get();
 
 
 

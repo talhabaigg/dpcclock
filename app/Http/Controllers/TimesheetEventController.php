@@ -89,4 +89,11 @@ class TimesheetEventController extends Controller
         return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully for event: ' . $event->title);
     }
 
+    public function destroy(TimesheetEvent $event)
+    {
+        $eventTitle = $event->title;
+        $event->delete();
+        return redirect()->back()->with('success', "Event '$eventTitle' deleted successfully.");
+    }
+
 }
