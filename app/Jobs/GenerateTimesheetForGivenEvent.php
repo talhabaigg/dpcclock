@@ -12,6 +12,7 @@ use Log;
 use Carbon\Carbon;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
+use RateLimiter;
 
 class GenerateTimesheetForGivenEvent implements ShouldQueue
 {
@@ -37,7 +38,6 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
      */
     public function handle(): void
     {
-
         $kiosk = Kiosk::where('eh_kiosk_id', $this->kioskId)->first();
         $kiosk->load('employees', 'location');
 
@@ -48,35 +48,40 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         $event = $this->event;
 
         if ($kiosk->location?->state !== strtoupper($event->state)) {
-
             Log::warning('State mismatch ' . $kiosk->location?->state . ' != ' . strtoupper($event->state));
             return;
         }
 
-
         $timesheets = [];
-        $selected_employees = $this->employees;
-        $selected_employees = $selected_employees->toArray();
+        $selected_employees = $this->employees->toArray();
+
         $kiosk->employees->each(function ($employee) use ($event, $kiosk, &$timesheets, $selected_employees) {
             if (!in_array($employee->eh_employee_id, $selected_employees)) {
                 return;
             }
+
+            // Throttle per-employee (covers any API the generate step might do).
+            $this->enforceRateLimit();
+
             $entries = $this->generateTimesheet($employee, $event, $kiosk);
-            sleep(1);
 
             if (!empty($entries)) {
                 $timesheets = array_merge($timesheets, $entries);
             }
         });
 
-
         Log::info('Generated Timesheets: ' . json_encode($timesheets, JSON_PRETTY_PRINT));
+
         if (!empty($timesheets)) {
             $groupedTimesheets = $this->groupTimesheetsByEmployeeId($timesheets);
-
             Log::info('Grouped Timesheets: ' . json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
+
             $timesheetChunks = array_chunk($groupedTimesheets, 100, true);
+
             foreach ($timesheetChunks as $chunk) {
+                // Throttle between batch posts too
+                $this->enforceRateLimit();
+
                 $chunkData = ['timesheets' => $chunk];
 
                 if ($this->sync($chunkData)) {
@@ -85,7 +90,6 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                     Log::error('Failed to sync timesheets for event: ' . $event->title);
                 }
             }
-
         }
     }
 
@@ -201,48 +205,67 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
     private function sync($chunkData): bool
     {
+        $this->enforceRateLimit(); // ensure ≤ 1 req/sec
+
         $apiKey = env('PAYROLL_API_KEY');
-        // Send POST request to the API with correct headers and JSON data
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
-            'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+            'Content-Type' => 'Application/Json',
+        ])
+            // retry up to 5 times; start at 1.5s and grow x2 on each 429
+            ->retry(5, 1500, function ($exception, $request) {
+                return optional($exception->response())->status() === 429;
+            }, throw: false)
+            ->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
 
-        // Check the status code
         if ($response->successful()) {
-            // Request was successful (200 or 201)
             Log::info('Timesheets synced successfully: ' . $response->body());
             return true;
         } else {
             Log::info('Timesheets synced failed: ' . $response->body());
-            return false; // Request failed
+            return false;
         }
     }
 
     private function getLeaveBalanceByEmployeeId($employeeId)
     {
+        $this->enforceRateLimit(); // ensure ≤ 1 req/sec
+
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
             'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
-            'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/leavebalances");
+            'Content-Type' => 'Application/Json',
+        ])
+            ->retry(5, 1500, function ($exception, $request) {
+                return optional($exception->response())->status() === 429;
+            }, throw: false)
+            ->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/leavebalances");
 
-
-        // Check the status code
         if ($response->successful()) {
-            // Request was successful (200 or 201)
             $responseArray = json_decode($response->body(), true);
             $accruedAmount = collect($responseArray)
-                ->firstWhere('leaveCategoryId', operator: 1778521)['accruedAmount'] ?? null;
-            if (!$accruedAmount) {
-                return 0;
-            }
-            return $accruedAmount;
+                ->firstWhere('leaveCategoryId', 1778521)['accruedAmount'] ?? null;
+
+            return $accruedAmount ?: 0;
         } else {
             Log::info('leave balance failed: ' . $response->body());
-            return false; // Request failed
+            return false;
+        }
+    }
+    private function enforceRateLimit(): void
+    {
+        /** @var RateLimiter $limiter */
+        $limiter = app(RateLimiter::class);
+        $key = 'kp-api-req-per-sec';
+
+        // If we've already hit in the last second, wait until it opens
+        $wait = $limiter->availableIn($key);
+        if ($wait > 0) {
+            sleep($wait);
         }
 
+        // Record a hit with a 1-second decay
+        $limiter->hit($key, 1);
     }
 
 }
