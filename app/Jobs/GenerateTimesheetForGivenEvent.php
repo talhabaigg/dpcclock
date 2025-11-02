@@ -62,6 +62,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                 return;
             }
             $entries = $this->generateTimesheet($employee, $event, $kiosk);
+            sleep(1);
 
             if (!empty($entries)) {
                 $timesheets = array_merge($timesheets, $entries);
@@ -72,7 +73,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         Log::info('Generated Timesheets: ' . json_encode($timesheets, JSON_PRETTY_PRINT));
         if (!empty($timesheets)) {
             $groupedTimesheets = $this->groupTimesheetsByEmployeeId($timesheets);
-            sleep(1);
+
             Log::info('Grouped Timesheets: ' . json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
             $timesheetChunks = array_chunk($groupedTimesheets, 100, true);
             foreach ($timesheetChunks as $chunk) {
