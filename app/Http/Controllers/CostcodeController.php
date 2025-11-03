@@ -81,4 +81,10 @@ class CostcodeController extends Controller
 
         return redirect()->back()->with('success', 'Cost Codes imported successfully.');
     }
+
+    public function destroy(CostCode $costcode)
+    {
+        $costcode->delete();
+        return redirect()->back()->with('success', 'Cost Code deleted successfully.');
+    }
 }

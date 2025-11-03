@@ -89,6 +89,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/timesheets/edit', [ClockController::class, 'editTimesheet'])->name('clock.edit.summary');
         Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
 
+        Route::get('/timesheets/review', [ClockController::class, 'reviewTimesheets'])->name('timesheets.review')->permission('can process requisitions');
+
         Route::get('/timesheets/{employeeId}/{weekEnding}/sync/eh', [ClockController::class, 'syncTimesheet'])->name('timesheets.sync')->permission('can process requisitions');
         Route::get('/timesheets/{employeeId}/{weekEnding}/approve-all', [ClockController::class, 'approveAllTimesheets'])->name('timesheets.approve-all')->permission('can process requisitions');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
@@ -135,6 +137,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/cost-codes', [CostcodeController::class, 'index'])->name('costcodes.index');
         Route::post('/cost-codes/upload', [CostcodeController::class, 'upload'])->name('costcodes.upload');
         Route::get('/cost-codes/download', [CostcodeController::class, 'download'])->name('costcodes.download');
+        Route::delete('/cost-codes/{costcode}', [CostcodeController::class, 'destroy'])->name('costcodes.destroy')->permission('costcode.delete');
 
 
         Route::get('/cost-types', [CostTypeController::class, 'index'])->name('costtypes.index');

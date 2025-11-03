@@ -1,10 +1,11 @@
+import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import CsvImporterDialog from '@/components/csv-importer';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Download } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
@@ -16,7 +17,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function CostCodesIndex() {
-    const { costcodes, flash } = usePage<{ costcodes: CostCode[]; flash: { success?: string } }>().props;
+    const { costcodes, flash } = usePage<{ costcodes: CostCode[]; flash: { success?: string; error?: { message: string; response: string } } }>()
+        .props;
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
@@ -57,7 +59,9 @@ export default function CostCodesIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cost Codes" />
-            <div className="mt-2 mr-2 flex justify-end gap-2">
+            {flash.success && <SuccessAlertFlash message={flash.success} />}
+            {flash.error && <ErrorAlertFlash error={flash.error} />}
+            <div className="mt-2 mr-2 flex items-center justify-end gap-2">
                 {/* <Input type="file" accept=".csv" onChange={handleFileChange} />
                 <Button onClick={handleUpload} disabled={!selectedFile || processing}>
                     <Upload />
@@ -79,6 +83,7 @@ export default function CostCodesIndex() {
                             <TableHead>Code</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Cost Type</TableHead>
+                            <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -89,6 +94,18 @@ export default function CostCodesIndex() {
                                 <TableCell>{costCode.code}</TableCell>
                                 <TableCell>{costCode.description}</TableCell>
                                 <TableCell>{costCode.cost_type?.code}</TableCell>
+                                <TableCell>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            if (confirm(`Are you sure you want to delete cost code ${costCode.code}?`)) {
+                                                router.delete(`/cost-codes/${costCode.id}`);
+                                            }
+                                        }}
+                                    >
+                                        <Trash2 />
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

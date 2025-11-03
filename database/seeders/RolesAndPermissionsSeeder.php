@@ -29,7 +29,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'view timesheet converter',
             'view all requisitions',
             'can process requisitions',
-            'can send requisitions'
+            'can send requisitions',
+            'costcode.create',
+            'costcode.read',
+            'costcode.update',
+            'costcode.delete'
         ];
 
         // Create roles if they don't exist

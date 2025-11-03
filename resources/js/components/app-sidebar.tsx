@@ -54,12 +54,12 @@ const mainNavItems: NavItem[] = [
         icon: Hammer,
         permission: 'manage worktypes',
     },
-    {
-        title: 'Timesheets',
-        href: '/timesheets',
-        icon: Hourglass,
-        permission: 'manage timesheets',
-    },
+    // {
+    //     title: 'Timesheets',
+    //     href: '/timesheets',
+    //     icon: Hourglass,
+    //     permission: 'manage timesheets',
+    // },
 
     {
         title: 'Timesheet Converter',
@@ -90,6 +90,28 @@ const mainNavItems: NavItem[] = [
 // const textIcon = (text: string) => () => (
 //     <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-500 text-sm font-medium text-white">{text}</span>
 // );
+
+const timesheets = [
+    {
+        name: 'Timesheets',
+        icon: Clock,
+        permission: 'manage timesheets',
+        subItems: [
+            {
+                name: 'Manage',
+                url: '/timesheets',
+                icon: Hourglass,
+                permission: 'view all requisitions',
+            },
+            {
+                name: 'Review',
+                url: '/timesheets/review',
+                icon: Hourglass,
+                permission: 'view all requisitions',
+            },
+        ],
+    },
+];
 const documents = [
     {
         name: 'Data',
@@ -175,6 +197,7 @@ export function AppSidebar() {
     const permissions: string[] = props?.auth?.permissions ?? [];
 
     const filteredMainNavItems = mainNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
     return (
@@ -193,6 +216,7 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={filteredMainNavItems} />
+                <NavDocuments items={filteredTimesheets} />
                 <NavDocuments items={filteredDocuments} />
                 <NavDocuments items={filteredReports} />
             </SidebarContent>

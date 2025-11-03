@@ -80,6 +80,17 @@ class ClockController extends Controller
         //
     }
 
+    public function reviewTimesheets(Request $request)
+    {
+        $weekEnding = $request->query('weekEnding', Carbon::now('Australia/Brisbane')->endOfWeek(Carbon::FRIDAY)->format('d-m-Y'));
+        $weekStarting = Carbon::createFromFormat('d-m-Y', $weekEnding, 'Australia/Brisbane')->subDays(6)->format('d-m-Y');
+        dd($weekStarting, $weekEnding);
+        return Inertia::render('timesheets/review', [
+            'weekEnding' => $weekEnding,
+            'weekStarting' => $weekStarting,
+        ]);
+    }
+
 
     //show the edit page for query date and employee id - takes single date editing
 
