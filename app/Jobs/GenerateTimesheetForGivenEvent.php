@@ -12,7 +12,7 @@ use Log;
 use Carbon\Carbon;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
-use RateLimiter;
+use Illuminate\Support\Facades\RateLimiter;
 
 class GenerateTimesheetForGivenEvent implements ShouldQueue
 {
@@ -254,18 +254,16 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
     }
     private function enforceRateLimit(): void
     {
-        /** @var RateLimiter $limiter */
-        $limiter = app(RateLimiter::class);
-        $key = 'kp-api-req-per-sec';
+        $key = 'kp-api-last-request';
+        $now = microtime(true);
+        $last = cache($key);
 
-        // If we've already hit in the last second, wait until it opens
-        $wait = $limiter->availableIn($key);
-        if ($wait > 0) {
-            sleep($wait);
+        if ($last && ($now - $last) < 1) {
+            usleep((1 - ($now - $last)) * 1_000_000); // wait remaining time
         }
 
-        // Record a hit with a 1-second decay
-        $limiter->hit($key, 1);
+        cache([$key => microtime(true)], now()->addSeconds(1));
     }
+
 
 }
