@@ -246,7 +246,7 @@ class MaterialItemController extends Controller
             $dataToInsert[] = [
                 'location_id' => $location->id,
                 'material_item_id' => $material->id,
-                'unit_cost_override' => $data['unit_cost'],
+                'unit_cost_override' => floatval($data['unit_cost']),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

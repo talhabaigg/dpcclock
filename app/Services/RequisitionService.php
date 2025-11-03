@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CostCode;
 use Carbon\Carbon;
 use Http;
 use Log;
@@ -78,6 +79,8 @@ class RequisitionService
             "FOBShipVia" => "",
             "PurchaseOrderLines" => $requisition->lineItems->map(function ($lineItem, $index) use ($companyCode) {
                 $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
+                $costCode = CostCode::with('costType')->where('code', $lineItem->cost_code)->first();
+                $costType = $costCode?->costType?->code ?? "MAT";
                 return [
                     "POLineNumber" => $index + 1,
                     "Item" => null,
@@ -88,7 +91,7 @@ class RequisitionService
                     "POLineCompany" => $companyCode,
                     "POLineDistributionType" => "J",
                     "POLineJob" => $lineItem->requisition->location?->external_id ?? "N/A",
-                    "JobCostType" => "MAT",
+                    "JobCostType" => $costType,
                     "JobCostItem" => $lineItem->cost_code ?? "N/A",
                     "JobCostDepartment" => null,
                     "JobCostLocation" => null,
