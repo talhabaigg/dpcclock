@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Clock;
 use App\Services\TimesheetService;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Kiosk;
@@ -82,12 +83,105 @@ class ClockController extends Controller
 
     public function reviewTimesheets(Request $request)
     {
-        $weekEnding = $request->query('weekEnding', Carbon::now('Australia/Brisbane')->endOfWeek(Carbon::FRIDAY)->format('d-m-Y'));
-        $weekStarting = Carbon::createFromFormat('d-m-Y', $weekEnding, 'Australia/Brisbane')->subDays(6)->format('d-m-Y');
-        dd($weekStarting, $weekEnding);
+        $tz = 'Australia/Brisbane';
+        $defaultWE = Carbon::now($tz)->endOfWeek(Carbon::FRIDAY)->format('d-m-Y');
+        $weekEndingInput = $request->query('weekEnding', $defaultWE);
+        // Parse to Carbon and get week window (Sat–Fri)
+        try {
+            $weekEnd = Carbon::createFromFormat('d-m-Y', $weekEndingInput, $tz)->endOfDay();
+        } catch (\Throwable $e) {
+            $weekEnd = Carbon::createFromFormat('d-m-Y', $defaultWE, $tz)->endOfDay();
+        }
+        $weekStart = $weekEnd->copy()->subDays(6)->startOfDay();
+
+
+        $selectedLocation = $request->query('location', null);
+        $kiosks = Kiosk::with('location')->get();
+
+        $locations = $kiosks
+            ->pluck('location')           // Kiosk location (may be null)
+            ->filter()
+            ->map(function ($loc) {
+                // Prefer parent if present
+                $parent = $loc->parent ?: $loc;
+
+                // Null-safe value fields; keep it simple array, not Eloquent model
+                return [
+                    'id' => $parent->id ?? null,
+                    'label' => $parent->name ?? 'Unknown',
+                    'value' => $parent->eh_location_id ?? null,
+                ];
+            })
+            ->filter(fn($x) => $x['id'] !== null && $x['value'] !== null)
+            ->unique('id')   // prevent duplicates when multiple kiosks share a parent
+            ->values()
+            ->all();
+
+        $subLocations = Location::where('eh_parent_id', $selectedLocation)
+            ->pluck('eh_location_id')
+            ->toArray();
+
+        $clocksQuery = Clock::query();
+        $clocks = $clocksQuery
+            ->with(['employee', 'workType', 'location.parentLocation'])
+            ->whereBetween('clock_in', [$weekStart->toDateTimeString(), $weekEnd->toDateTimeString()])
+            // ->where(function ($query) use ($subLocations, $selectedLocation) {
+            //     if (!empty($subLocations)) {
+            //         $query->whereIn('eh_location_id', $subLocations);
+            //     } elseif ($selectedLocation) {
+            //         $query->where('eh_location_id', $selectedLocation);
+            //     }
+            // })
+            // ->with(['employee','kiosk','location']) // uncomment if needed in UI
+            ->get();
+
+        $days = collect(CarbonPeriod::create($weekStart, $weekEnd))
+            ->map(fn($d) => $d->format('Y-m-d'))
+            ->values();
+        // dd($days);
+
+        $byEmployee = $clocks
+            ->groupBy('eh_employee_id')
+            ->map(function ($empClocks, $empId) use ($days) {
+                // Prepare empty day map
+                $dayMap = $days->mapWithKeys(fn($d) => [$d => []])->toArray();
+
+                foreach ($empClocks as $clock) {
+                    $d = Carbon::parse($clock->clock_in)->format('Y-m-d');
+                    // Push the whole clock (or transform to what your UI needs)
+                    $dayMap[$d][] = $clock;
+                }
+
+                // You can expose basic employee info too
+                $emp = $empClocks->first()->employee ?? null;
+
+                return [
+                    'employee_id' => $empId,
+                    'employee_name' => $emp->name ?? null,
+                    'days' => $dayMap, // every day key exists; blank array when none
+                ];
+            })
+            ->values();
+
+        $kiosk = Kiosk::with('employees')->where('eh_location_id', $selectedLocation)->first();
+        $employees = $kiosk->employees ?? collect();
+        $employees->map(function ($employee) use ($byEmployee) {
+            $empData = $byEmployee->firstWhere('employee_id', $employee->eh_employee_id);
+            $employee->timesheet = $empData ?? null;
+            $employee->total_hours_week = $empData ? array_sum(array_map(function ($dayClocks) {
+                return array_sum(array_map(function ($clock) {
+                    return $clock->hours_worked ?? 0;
+                }, $dayClocks));
+            }, $empData['days'])) : 0;
+        });
+
         return Inertia::render('timesheets/review', [
-            'weekEnding' => $weekEnding,
-            'weekStarting' => $weekStarting,
+            'weekEnding' => $weekEndingInput,
+            'weekStarting' => $weekStart,
+            'locations' => $locations,
+            'selectedLocation' => $selectedLocation,
+            'days' => $days,
+            'employees' => $employees,
         ]);
     }
 

@@ -17,7 +17,7 @@ const ErrorAlertFlash = ({ error }: { error: { message: string; response?: strin
     return (
         <Alert
             variant="destructive"
-            className="m-2 mx-auto mt-1 max-w-96 justify-start gap-2 p-2 text-sm sm:mx-2 sm:max-w-2xl sm:flex-row md:justify-between"
+            className="m-2 mx-auto mt-1 max-w-96 justify-start gap-2 border-red-700 p-2 text-sm sm:mx-2 sm:max-w-2xl sm:flex-row md:justify-between"
         >
             <AlertCircleIcon />
             {error.message && <AlertDescription className="whitespace-pre-wrap">{error.message}</AlertDescription>}

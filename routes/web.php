@@ -74,7 +74,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/validate-kiosk-admin-pin', [KioskController::class, 'validateKioskAdminPin'])->name('kiosk.validate-admin-pin');
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
 
-        Route::get('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy');
+        Route::delete('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy');
 
         Route::get('/worktypes/sync', [WorktypeController::class, 'syncWorktypes'])->name('worktypes.sync');
         Route::resource('worktypes', WorktypeController::class)->names('worktypes');

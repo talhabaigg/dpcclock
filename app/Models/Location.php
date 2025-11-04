@@ -55,4 +55,10 @@ class Location extends Model
         return $this->hasMany(Variation::class);
     }
 
+    public function parentLocation()
+    {
+        return $this->belongsTo(Location::class, 'eh_parent_id', 'eh_location_id');
+    }
+
+
 }
