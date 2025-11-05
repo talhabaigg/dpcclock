@@ -1,9 +1,11 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
+import { RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import ReviewTimesheetGrid from './components/reviewTimeshetGrid';
@@ -44,15 +46,37 @@ const ReviewTimesheets = ({ weekEnding, selectedEmployeeId, locations, selectedL
             <Head title="Timesheets" />
             {flash.success && <SuccessAlertFlash message={flash.success} />}
             {flash.error && <ErrorAlertFlash error={{ message: flash.error, response: null }} />}
-            <div className="m-2 flex flex-row space-x-2">
-                <div className="flex flex-row items-center space-x-2 rounded-md border-2 border-blue-500 p-2">
-                    <Badge className="bg-blue-500"></Badge>
+            <div className="m-2 flex justify-between">
+                <div className="flex flex-row space-x-2">
+                    <div className="flex flex-row items-center space-x-2 rounded-md border-2 border-blue-500 p-2">
+                        <Badge className="bg-blue-500"></Badge>
 
-                    <span className="text-xs text-blue-500">Sick Leave</span>
+                        <span className="text-xs text-blue-500">Sick Leave</span>
+                    </div>
+                    <div className="flex flex-row items-center space-x-2 rounded-md border-2 border-green-500 p-2">
+                        <Badge className="bg-green-500"></Badge>
+                        <span className="text-xs text-green-800 dark:text-green-200">Annual Leave</span>
+                    </div>
                 </div>
-                <div className="flex flex-row items-center space-x-2 rounded-md border-2 border-green-500 p-2">
-                    <Badge className="bg-green-500"></Badge>
-                    <span className="text-xs text-green-800 dark:text-green-200">Annual Leave</span>
+                <div>
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            console.log('Syncing timesheets...');
+                            const employeeIds = employees.map((emp) => emp.eh_employee_id);
+                            const weekEnding = formatDMY(weekEndingDate) || '';
+                            const locationId = locationValue || '';
+
+                            router.visit('/timesheets/sync/eh/all', {
+                                method: 'get',
+                                data: { employeeIds, weekEnding, locationId },
+                                preserveScroll: true,
+                            });
+                        }}
+                    >
+                        <RefreshCcw className="mr-2 h-4 w-4" />
+                        Sync Timesheets
+                    </Button>
                 </div>
             </div>
 

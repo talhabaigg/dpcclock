@@ -986,6 +986,30 @@ class ClockController extends Controller
         return redirect()->back()->with('success', 'Timesheet synced successfully for the selected week.');
     }
 
+    public function syncTimesheetsForAll(Request $request)
+    {
+        $tz = 'Australia/Brisbane';
+        $employeeIds = $request->query('employeeIds', []);
+        $weekEnd = Carbon::createFromFormat('d-m-Y', $request->query('weekEnding'), $tz)->endOfDay();
+        $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
+        $from = $weekStart->format('Y-m-d\TH:i:s');
+        $to = $weekEnd->format('Y-m-d\TH:i:s');
+        $filter = "StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
+        $apiKey = env('PAYROLL_API_KEY');
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Accept' => 'application/json',
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
+                    '$filter' => $filter,
+                    '$orderby' => 'StartTime',
+                    '$top' => 100,
+                    '$skip' => 0,
+                ]);
+        Log::info('Bulk Timesheet Sync Response', ['response' => $response->json()]);
+        dd($employeeIds, $response->json());
+    }
+
 
     public function approveAllTimesheets($employeeId, $weekEnding)
     {
