@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { CirclePlus } from 'lucide-react';
 import SearchSelectWithBadgeItem from './SearchSelectWithBadgeItem';
 const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
     return (
@@ -15,6 +16,7 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                     <TableCell className="border-r text-center">Description</TableCell>
                     <TableCell className="border-r text-center">Qty</TableCell>
                     <TableCell className="border-r text-center">Unit Cost</TableCell>
+                    <TableCell className="border-r text-center">Wastage %</TableCell>
                     <TableCell className="border-r text-center">Total Cost</TableCell>
                     <TableCell className="text-center">Revenue</TableCell>
                 </TableRow>
@@ -34,6 +36,7 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                     const newItems = [...data.line_items];
                                     newItems[index].cost_item = value;
                                     newItems[index].cost_type = costCodes.find((code) => code.code === value)?.cost_type?.code || '';
+                                    newItems[index].waste_ratio = costCodes.find((code) => code.code === value)?.pivot?.waste_ratio || '';
                                     setData('line_items', newItems);
                                 }}
                             />
@@ -142,12 +145,36 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                         onInput={(e) => {
                                             const newItems = [...data.line_items];
                                             newItems[index].unit_cost = (e.target as HTMLInputElement).value;
-                                            newItems[index].total_cost = parseFloat((e.target as HTMLInputElement).value) * item.qty;
+
+                                            newItems[index].total_cost =
+                                                parseFloat((e.target as HTMLInputElement).value) * item.qty +
+                                                0.02 * parseFloat((e.target as HTMLInputElement).value) * item.qty +
+                                                0.2 * item.qty * (item.waste_ratio ? parseFloat(item.waste_ratio) / 100 : 0);
                                             setData('line_items', newItems);
                                         }}
                                     />
                                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">$</div>
                                 </div>{' '}
+                            </div>
+                        </TableCell>
+                        <TableCell className="border-r p-0">
+                            <div className="flex flex-row items-center">
+                                <div className="relative mx-auto flex items-center">
+                                    <CirclePlus className="mr-2 w-4" />
+                                    <Input
+                                        disabled={true}
+                                        id="product_precio"
+                                        placeholder="0.00"
+                                        className="w-40 pr-10"
+                                        value={item.waste_ratio}
+                                        onInput={(e) => {
+                                            const newItems = [...data.line_items];
+                                            newItems[index].waste_ratio = (e.target as HTMLInputElement).value;
+                                            setData('line_items', newItems);
+                                        }}
+                                    />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">%</div>
+                                </div>
                             </div>
                         </TableCell>
 

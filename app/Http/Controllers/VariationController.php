@@ -131,22 +131,15 @@ class VariationController extends Controller
 
     public function create()
     {
-        $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
-
         $user = auth()->user();
         $locationsQuery = Location::with([
-            'costCodes' => function ($query) use ($acceptable_prefixes) {
-                $query->where(function ($q) use ($acceptable_prefixes) {
-                    foreach ($acceptable_prefixes as $prefix) {
-                        $q->orWhere('code', 'like', $prefix . '%');
-                    }
-                });
-            }
+            'costCodes'
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
                 ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
         });
+
 
         if ($user->hasRole('manager')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');

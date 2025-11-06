@@ -42,7 +42,7 @@ class Location extends Model
 
     public function costCodes()
     {
-        return $this->belongsToMany(CostCode::class, 'location_cost_codes')->withPivot('variation_ratio', 'dayworks_ratio');
+        return $this->belongsToMany(CostCode::class, 'location_cost_codes')->withPivot('variation_ratio', 'dayworks_ratio', 'waste_ratio', 'prelim_type');
     }
 
     public function favouriteMaterials()

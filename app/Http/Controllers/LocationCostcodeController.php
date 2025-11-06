@@ -86,6 +86,8 @@ class LocationCostcodeController extends Controller
             'costCodes.*.id' => 'required|exists:cost_codes,id',
             'costCodes.*.variation_ratio' => 'required|numeric|min:0 |max:200',
             'costCodes.*.dayworks_ratio' => 'required|numeric|min:0',
+            'costCodes.*.waste_ratio' => 'nullable|numeric|min:0 |max:200',
+            'costCodes.*.prelim_type' => 'nullable|string',
         ]);
 
         // Transform into the format sync() wants
@@ -95,6 +97,8 @@ class LocationCostcodeController extends Controller
                     $code['id'] => [
                         'variation_ratio' => $code['variation_ratio'],
                         'dayworks_ratio' => $code['dayworks_ratio'],
+                        'waste_ratio' => $code['waste_ratio'],
+                        'prelim_type' => $code['prelim_type'],
                     ]
                 ];
             })
@@ -118,26 +122,26 @@ class LocationCostcodeController extends Controller
 
     public function downloadCostCodeRatios($locationId)
     {
-        $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
+        // $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
 
         $location = Location::findOrFail($locationId);
         $fileName = 'location_cost_code_ratios_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
         $filePath = storage_path("app/{$fileName}");
 
         $handle = fopen($filePath, 'w');
-        fputcsv($handle, ['job_number', 'cost_code', 'description', 'variation_ratio', 'dayworks_ratio']);
+        fputcsv($handle, ['job_number', 'cost_code', 'description', 'variation_ratio', 'dayworks_ratio', 'waste_ratio', 'prelim_type']);
         $items = $location->costCodes()->get();
 
-        $filteredItems = $items->filter(function ($item) use ($acceptable_prefixes) {
-            foreach ($acceptable_prefixes as $prefix) {
-                if (str_starts_with($item->code, $prefix)) {
-                    return true;
-                }
-            }
-            return false;
-        });
+        // $filteredItems = $items->filter(function ($item) use ($acceptable_prefixes) {
+        //     foreach ($acceptable_prefixes as $prefix) {
+        //         if (str_starts_with($item->code, $prefix)) {
+        //             return true;
+        //         }
+        //     }
+        //     return false;
+        // });
 
-        $filteredItems = $filteredItems->sortBy('code');
+        $filteredItems = $items->sortBy('code');
 
         foreach ($filteredItems as $item) {
             fputcsv($handle, [
@@ -171,14 +175,17 @@ class LocationCostcodeController extends Controller
             $data = array_combine($header, $row);
             $dataToInsert[] = $data;
         }
+        // dd($dataToInsert);
 
         foreach ($dataToInsert as $data) {
             $costCode = CostCode::where('code', ltrim($data['cost_code'], "'"))->first();
             if ($costCode) {
                 $location->costCodes()->syncWithoutDetaching([
                     $costCode->id => [
-                        'variation_ratio' => $data['variation_ratio'],
-                        'dayworks_ratio' => $data['dayworks_ratio'],
+                        'variation_ratio' => floatval($data['variation_ratio']) ?? null,
+                        'dayworks_ratio' => floatval($data['dayworks_ratio']) ?? null,
+                        'waste_ratio' => floatval($data['waste_ratio']) ?? null,
+                        'prelim_type' => $data['prelim_type'] ?? null,
                     ]
                 ]);
             }

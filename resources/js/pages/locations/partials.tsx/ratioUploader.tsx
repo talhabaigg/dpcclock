@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { useState } from 'react';
 
 const RatioUploader = ({ locationId }: { locationId: number }) => {
-    const [favImportHeaders] = useState<string[]>(['job_number', 'cost_code', 'variation_ratio', 'dayworks_ratio']);
+    const [favImportHeaders] = useState<string[]>(['job_number', 'cost_code', 'variation_ratio', 'dayworks_ratio', 'waste_ratio', 'prelim_type']);
 
     const handleCsvSubmit = (mappedData: any[]) => {
         // Build rows in header order

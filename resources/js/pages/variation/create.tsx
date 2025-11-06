@@ -103,7 +103,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
     };
     const [open, setOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
-    const generateOnCosts = () => {
+    const generatePrelimLabour = () => {
         if (!genAmount || !data.location_id) {
             alert('Please select a type and enter an amount.');
             return;
@@ -119,8 +119,12 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
             cost_item: code.code,
             cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
             percent: code.pivot.variation_ratio / 100 || 0,
+            prelim_type: code.pivot.prelim_type || '',
             description: code.description,
         }));
+
+        const PrelimLab = onCostData.filter((item) => item.prelim_type === 'LAB');
+        console.log('Prelim Lab:', PrelimLab);
 
         console.log('On Cost Data:', onCostData);
         // const onCostData = [
@@ -135,7 +139,61 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
 
         const baseAmount = parseFloat(genAmount);
 
-        const newLines = onCostData.map((item, index) => {
+        const newLines = PrelimLab.map((item, index) => {
+            const lineAmount = +(baseAmount * item.percent).toFixed(2); // 2 decimal rounding
+            return {
+                line_number: data.line_items.length + index + 1,
+                cost_item: item.cost_item,
+                cost_type: item.cost_type,
+                description: item.description,
+                qty: 1,
+                unit_cost: lineAmount,
+                total_cost: lineAmount,
+                revenue: 0,
+            };
+        });
+
+        setData('line_items', [...data.line_items, ...newLines]);
+
+        setGenAmount('');
+    };
+    const generatePrelimMaterial = () => {
+        if (!genAmount || !data.location_id) {
+            alert('Please select a type and enter an amount.');
+            return;
+        }
+        setOpen(true);
+        setTimeout(() => {
+            setOpen(false);
+        }, 3000);
+        // Define cost items and percentage multipliers
+        const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
+
+        const onCostData = costData.map((code) => ({
+            cost_item: code.code,
+            cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
+            percent: code.pivot.variation_ratio / 100 || 0,
+            prelim_type: code.pivot.prelim_type || '',
+            description: code.description,
+        }));
+
+        const PrelimMat = onCostData.filter((item) => item.prelim_type === 'MAT');
+        console.log('Prelim Mat:', PrelimMat);
+
+        console.log('On Cost Data:', onCostData);
+        // const onCostData = [
+        //     { cost_item: '01-01', cost_type: 'LAB', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
+        //     { cost_item: '02-01', cost_type: 'LOC', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
+        //     { cost_item: '02-05', cost_type: 'LOC', percent: 0.03, description: 'Wages & Apprentices Oncosts: Bert' },
+        //     { cost_item: '02-10', cost_type: 'LOC', percent: 0.02, description: 'Wages & Apprentices Oncosts: Bewt' },
+        //     { cost_item: '02-15', cost_type: 'LOC', percent: 0.04, description: 'Wages & Apprentices Oncosts: Cipq' },
+        //     { cost_item: '02-20', cost_type: 'LOC', percent: 0.01, description: 'Wages & Apprentices Oncosts: Payrolltax' },
+        //     { cost_item: '02-25', cost_type: 'LOC', percent: 0.01, description: 'Wages & Apprentices Oncosts: Workcover' },
+        // ];
+
+        const baseAmount = parseFloat(genAmount);
+
+        const newLines = PrelimMat.map((item, index) => {
             const lineAmount = +(baseAmount * item.percent).toFixed(2); // 2 decimal rounding
             return {
                 line_number: data.line_items.length + index + 1,
@@ -262,20 +320,40 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
                             </SelectContent>
                         </Select> */}
                         </Card>
-                        <Card className="flex -space-y-4 p-2">
-                            <CardTitle>Generate Labour Oncosts</CardTitle>
-                            <CardDescription className="mb-2 font-bold">Enter the amount to generate labour with split oncosts</CardDescription>
-                            <Input
-                                type="number"
-                                value={genAmount}
-                                onChange={(e) => setGenAmount(e.target.value)}
-                                placeholder="Enter Amount"
-                                className="mt-auto"
-                            />
-                            <Button onClick={generateOnCosts} variant="outline">
-                                Generate Labour
-                            </Button>
-                        </Card>
+                        <div>
+                            <Card className="flex -space-y-4 p-2">
+                                <CardTitle>Generate Prelim Labour</CardTitle>
+                                <CardDescription className="mb-2 font-bold">
+                                    Enter the amount to generate labour lines with preliminaries
+                                </CardDescription>
+                                <Input
+                                    type="number"
+                                    value={genAmount}
+                                    onChange={(e) => setGenAmount(e.target.value)}
+                                    placeholder="Enter Amount"
+                                    className="mt-auto"
+                                />
+                                <Button onClick={generatePrelimLabour} variant="outline">
+                                    Generate
+                                </Button>
+                            </Card>
+                            <Card className="flex -space-y-4 p-2">
+                                <CardTitle>Generate Prelim Material</CardTitle>
+                                <CardDescription className="mb-2 font-bold">
+                                    Enter the amount to generate material lines with preliminaries
+                                </CardDescription>
+                                <Input
+                                    type="number"
+                                    value={genAmount}
+                                    onChange={(e) => setGenAmount(e.target.value)}
+                                    placeholder="Enter Amount"
+                                    className="mt-auto"
+                                />
+                                <Button onClick={generatePrelimMaterial} variant="outline">
+                                    Generate
+                                </Button>
+                            </Card>
+                        </div>
                     </div>
 
                     <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2"></div>
