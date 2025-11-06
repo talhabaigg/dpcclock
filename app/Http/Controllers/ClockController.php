@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\LoadTimesheetsFromEH;
 use App\Models\Clock;
 use App\Services\TimesheetService;
 use Carbon\CarbonPeriod;
@@ -988,26 +989,27 @@ class ClockController extends Controller
 
     public function syncTimesheetsForAll(Request $request)
     {
-        $tz = 'Australia/Brisbane';
-        $employeeIds = $request->query('employeeIds', []);
-        $weekEnd = Carbon::createFromFormat('d-m-Y', $request->query('weekEnding'), $tz)->endOfDay();
-        $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
-        $from = $weekStart->format('Y-m-d\TH:i:s');
-        $to = $weekEnd->format('Y-m-d\TH:i:s');
-        $filter = "StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
-        $apiKey = env('PAYROLL_API_KEY');
+        // $tz = 'Australia/Brisbane';
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
-            'Accept' => 'application/json',
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
-                    '$filter' => $filter,
-                    '$orderby' => 'StartTime',
-                    '$top' => 100,
-                    '$skip' => 0,
-                ]);
-        Log::info('Bulk Timesheet Sync Response', ['response' => $response->json()]);
-        dd($employeeIds, $response->json());
+        // $weekEnd = Carbon::createFromFormat('d-m-Y', $request->query('weekEnding'), $tz)->endOfDay();
+        // $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
+        // $from = $weekStart->format('Y-m-d\TH:i:s');
+        // $to = $weekEnd->format('Y-m-d\TH:i:s');
+        // $filter = "StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
+        // $apiKey = env('PAYROLL_API_KEY');
+
+        // $response = Http::withHeaders([
+        //     'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+        //     'Accept' => 'application/json',
+        // ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
+        //             '$filter' => $filter,
+        //             '$orderby' => 'StartTime',
+        //         ]);
+        $weekEnding = $request->query('weekEnding');
+        $loadJob = LoadTimesheetsFromEH::dispatch($weekEnding);
+        return redirect()->back()->with('success', 'Timesheet sync job dispatched for the selected week.');
+        // Log::info('Bulk Timesheet Sync Response', ['response' => $response->json()]);
+
     }
 
 
