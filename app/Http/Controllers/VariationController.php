@@ -133,7 +133,7 @@ class VariationController extends Controller
     {
         $user = auth()->user();
         $locationsQuery = Location::with([
-            'costCodes'
+            'costCodes.costType'
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
                 ->orWhere('eh_parent_id', 1249093)
@@ -188,7 +188,20 @@ class VariationController extends Controller
             'co_date' => $validated['date'],
         ]);
 
-        $variation->lineItems()->createMany($validated['line_items']);
+        $lineItems = collect($validated['line_items'])->map(function ($item) {
+            return [
+                'line_number' => $item['line_number'],
+                'cost_item' => $item['cost_item'],
+                'cost_type' => $item['cost_type'],
+                'description' => $item['description'],
+                'qty' => 1,
+                'unit_cost' => $item['total_cost'],
+                'total_cost' => $item['total_cost'],
+                'revenue' => $item['revenue'],
+            ];
+        })->toArray();
+
+        $variation->lineItems()->createMany($lineItems);
 
         return redirect()->route('variations.index');
     }

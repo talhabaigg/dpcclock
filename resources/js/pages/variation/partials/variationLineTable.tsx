@@ -145,11 +145,10 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData }) => {
                                         onInput={(e) => {
                                             const newItems = [...data.line_items];
                                             newItems[index].unit_cost = (e.target as HTMLInputElement).value;
-
+                                            const wasteRatio = newItems[index].waste_ratio ? parseFloat(newItems[index].waste_ratio) / 100 : 0;
                                             newItems[index].total_cost =
                                                 parseFloat((e.target as HTMLInputElement).value) * item.qty +
-                                                0.02 * parseFloat((e.target as HTMLInputElement).value) * item.qty +
-                                                0.2 * item.qty * (item.waste_ratio ? parseFloat(item.waste_ratio) / 100 : 0);
+                                                parseFloat((e.target as HTMLInputElement).value) * item.qty * wasteRatio;
                                             setData('line_items', newItems);
                                         }}
                                     />

@@ -103,6 +103,16 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
     };
     const [open, setOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
+    const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
+    const waste_ratio = costData.find((code) => code.pivot?.waste_ratio)?.pivot.waste_ratio || 0;
+
+    useEffect(() => {
+        if (data.location_id) {
+            console.log('Cost Data updated:', costData);
+        }
+    }, [data.location_id, costData]);
+
+    console.log(waste_ratio);
     const generatePrelimLabour = () => {
         if (!genAmount || !data.location_id) {
             alert('Please select a type and enter an amount.');
@@ -124,9 +134,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
         }));
 
         const PrelimLab = onCostData.filter((item) => item.prelim_type === 'LAB');
-        console.log('Prelim Lab:', PrelimLab);
 
-        console.log('On Cost Data:', onCostData);
         // const onCostData = [
         //     { cost_item: '01-01', cost_type: 'LAB', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
         //     { cost_item: '02-01', cost_type: 'LOC', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
@@ -358,7 +366,7 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
 
                     <div className="m-2 flex max-w-96 flex-col space-x-2 sm:max-w-full sm:flex-row sm:space-y-2"></div>
                     <Card className="mx-2 max-w-96 p-0 sm:max-w-full">
-                        <VariationLineTable data={data} costCodes={costCodes} CostTypes={CostTypes} setData={setData} />
+                        <VariationLineTable data={data} costCodes={costData} CostTypes={CostTypes} setData={setData} />
                     </Card>
                 </div>
                 <div className="flex w-full max-w-96 flex-row sm:max-w-full">
