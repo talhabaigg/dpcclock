@@ -98,12 +98,12 @@ class LoadTimesheetsFromEH implements ShouldQueue
                 'setout_allowance' => in_array($allowancesMap['setout_allowance'], $data['shiftConditionIds'] ?? [], true),
             ];
             $clock = Clock::query()
-                ->when($ehId, fn($q) => $q->orWhere('eh_timesheet_id', $ehId))
+                ->when($eh_timesheet_id, fn($q) => $q->orWhere('eh_timesheet_id', $eh_timesheet_id))
                 ->when($externalId, fn($q) => $q->orWhere('uuid', $externalId))
                 ->first();
 
             // Optional: last-resort fallback if both ids missing
-            if (!$clock && !$ehId && !$externalId && $clock_in) {
+            if (!$clock && !$eh_timesheet_id && !$externalId && $clock_in) {
                 $clock = Clock::where('eh_employee_id', $ehId)
                     ->where('clock_in', $clock_in->toDateTimeString())
                     ->first();
@@ -123,7 +123,7 @@ class LoadTimesheetsFromEH implements ShouldQueue
     private function determineKioskId($locationId, $kiosks, $locations)
     {
         $location = $locations->firstWhere('eh_location_id', $locationId); // Load location model from eh id
-        $parentLocation = $locations->firstWhere('eh_location_id', $location->eh_parent_id); // Load parent location model from eh id
+        $parentLocation = $locations->firstWhere('eh_location_id', $location?->eh_parent_id); // Load parent location model from eh id
         $kioskFromSub = $parentLocation ? $kiosks->firstWhere('eh_location_id', $location->id) : null; // Load kiosk from parent location if exists
         $kioskFromSelf = $location ? $kiosks->firstWhere('eh_location_id', $location->id) : null; // Load kiosk from self location if exists
 
