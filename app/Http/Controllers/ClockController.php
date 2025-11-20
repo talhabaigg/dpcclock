@@ -60,16 +60,32 @@ class ClockController extends Controller
         $clockIn = $now->lessThanOrEqualTo($defaultStart)
             ? $defaultStart
             : $now->copy()->setMinutes(round($now->minute / 30) * 30)->second(0);
+        $existingOpenClock = Clock::where('eh_employee_id', $employee->eh_employee_id)
+            ->whereNull('clock_out')
+            ->whereDate('clock_in', $clockIn->toDateString())
+            ->orderBy('clock_in', 'desc')
+            ->first();
+        if ($existingOpenClock) {
+            return redirect()
+                ->route('kiosks.show', $data['kioskId'])
+                ->with(
+                    'info',
+                    'You are already clocked in since ' . $existingOpenClock->clock_in->format('g:i A')
+                );
+        }
 
-        Clock::create([
-            'eh_kiosk_id' => $kiosk->eh_kiosk_id,
-            'eh_employee_id' => $employee->eh_employee_id,
-            'clock_in' => $clockIn,
-        ]);
+        $clock = Clock::firstOrCreate(
+            [
+                'eh_kiosk_id' => $kiosk->eh_kiosk_id,
+                'eh_employee_id' => $employee->eh_employee_id,
+                'clock_in' => $clockIn,
+            ],
+            [] // no extra attributes for now
+        );
 
         return redirect()
             ->route('kiosks.show', $data['kioskId'])
-            ->with('success', 'Clocked in successfully at ' . $clockIn->format('g:i A'));
+            ->with('success', 'Clocked in successfully at ' . $clock->clock_in->format('g:i A'));
     }
 
 
