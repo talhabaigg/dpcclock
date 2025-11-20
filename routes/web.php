@@ -68,6 +68,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit');
         Route::post('/kiosks/{kiosk}/zones', [KioskController::class, 'updateZones'])->name('kiosks.updateZones')->permission('update travel zones');
         Route::get('/kiosks/{kiosk}/toggleActive', [KioskController::class, 'toggleActive'])->name('kiosk.toggleActive')->permission('update travel zones');
+        Route::post('/kiosks/{kiosk}/add-employees', [KioskController::class, 'addEmployeesToKiosk'])->name('kiosks.addEmployees');
 
         Route::post('/kiosks/{kioskId}/update-start-time', [ClockController::class, 'updateStartTimeForEmployees'])->name('clocks.updateStartTimeForEmployees');
         Route::get('/kiosks/{kioskId}/disable-admin-mode', [KioskController::class, 'disableAdminMode'])->name('kiosks.disable-admin-mode');

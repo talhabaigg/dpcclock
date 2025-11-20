@@ -13,8 +13,9 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
 import MinuteSelector from '../timesheets/components/minuteSelector';
+import AddEmployeesToKiosk from './edit-partials/add-employees-kiosk-dialog';
 import GenerateTimesheetsAvailableEventsCard from './edit-partials/generate-timesheets-available-events-card';
-export default function Edit({ kiosk, employees, errors, flash, events }) {
+export default function Edit({ kiosk, employees, errors, flash, events, allEmployees }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
@@ -22,7 +23,6 @@ export default function Edit({ kiosk, employees, errors, flash, events }) {
             top_up: emp.pivot.top_up ?? false,
         })),
     });
-    console.log(kiosk);
 
     useEffect(() => {
         if (flash.success) {
@@ -70,7 +70,7 @@ export default function Edit({ kiosk, employees, errors, flash, events }) {
     const handleKioskActiveToggle = (checked) => {
         router.get(route('kiosk.toggleActive', kiosk.id));
     };
-    console.log(kiosk.eh_kiosk_id);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Kiosks" />
@@ -85,7 +85,19 @@ export default function Edit({ kiosk, employees, errors, flash, events }) {
             )}
             <div className="mx-auto flex max-w-2xl flex-col justify-between space-y-4 p-4">
                 <Card className="m-2 h-full w-full">
-                    <CardHeader className="text-lg font-bold">Select Zones for Employees</CardHeader>
+                    <CardHeader className="text-lg font-bold">
+                        <div className="flex w-full justify-between">
+                            Select Zones for Employees
+                            <span className="ml-auto">
+                                <AddEmployeesToKiosk
+                                    existingEmployeeIds={employees.map((emp) => emp.id)}
+                                    allEmployees={allEmployees}
+                                    kioskId={kiosk.id}
+                                />
+                            </span>{' '}
+                        </div>
+                    </CardHeader>
+
                     <CardContent>
                         <form onSubmit={handleSubmit} className="w-full space-y-2">
                             {employees.map((employee, index) => (

@@ -134,6 +134,7 @@ class KioskController extends Controller
      */
     public function edit(Kiosk $kiosk)
     {
+        $allEmployees = Employee::all();
         $kiosk->load([
             'employees' => function ($query) {
                 $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
@@ -150,12 +151,27 @@ class KioskController extends Controller
             'kiosk' => $kiosk,
             'employees' => $kiosk->employees,
             'events' => $events,
+            'allEmployees' => $allEmployees,
         ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
+    public function addEmployeesToKiosk(Request $request, Kiosk $kiosk)
+    {
+        $data = $request->validate([
+            'employeeIds' => 'required|array',
+            'employeeIds.*' => 'exists:employees,id',
+        ]);
+
+        $employeeEhIds = Employee::whereIn('id', $data['employeeIds'])->pluck('eh_employee_id')->toArray();
+
+        // Attach the employees to the kiosk without detaching existing ones
+        $kiosk->employees()->syncWithoutDetaching($employeeEhIds);
+
+        return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Employees added to kiosk successfully.');
+    }
 
 
     public function updateZones(Request $request, Kiosk $kiosk)
