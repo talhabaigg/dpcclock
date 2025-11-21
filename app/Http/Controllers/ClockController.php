@@ -1039,8 +1039,10 @@ class ClockController extends Controller
             ->whereBetween('clock_in', [$weekStart, $weekEnd])
             ->whereNull('eh_timesheet_id')->get();
         foreach ($clocks as $clock) {
-            $clock->status = 'Approved';
-            $clock->save();
+            if ($clock->eh_timesheet_id === null) {
+                $clock->status = 'Approved';
+                $clock->save();
+            }
         }
 
         return redirect()->back()->with('success', 'All timesheets approved for the selected week.');

@@ -14,7 +14,6 @@ import {
     File,
     FileSpreadsheet,
     Folder,
-    FoldHorizontal,
     Hammer,
     Hourglass,
     LayoutGrid,
@@ -61,12 +60,12 @@ const mainNavItems: NavItem[] = [
     //     permission: 'manage timesheets',
     // },
 
-    {
-        title: 'Timesheet Converter',
-        href: '/timesheets-converter',
-        icon: FoldHorizontal,
-        permission: 'view timesheet converter',
-    },
+    // {
+    //     title: 'Timesheet Converter',
+    //     href: '/timesheets-converter',
+    //     icon: FoldHorizontal,
+    //     permission: 'view timesheet converter',
+    // },
     {
         title: 'Users',
         href: '/users',

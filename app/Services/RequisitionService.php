@@ -124,6 +124,10 @@ class RequisitionService
             ->acceptJson()
             ->post($base_url . '/api/PurchaseOrder/CreatePurchaseOrder', $payload);
 
+
+        $poid = $response->json('Data.0.POID') ?? null;
+        Log::info('Premier API Response: ' . $response->body());
+        Log::info('Extracted POID: ' . $poid);
         if ($response->failed()) {
             $requisition->status = 'failed';
             $requisition->save();
@@ -135,6 +139,7 @@ class RequisitionService
             return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send API request to Premier. Please check the logs for more details.' . $response->body());
         } else {
             $requisition->status = 'success';
+            $requisition->premier_po_id = $poid;
             $requisition->processed_by = auth()->id();
             $requisition->save();
             activity()

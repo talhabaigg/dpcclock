@@ -22,6 +22,7 @@ class Requisition extends Model
         'status',
         'is_template',
         'order_reference',
+        'premier_po_id',
     ];
 
     protected static function booted()
