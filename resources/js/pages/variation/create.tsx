@@ -44,26 +44,38 @@ const CostTypes = [
     { value: 'REV', description: 'Revenue' },
 ];
 
-const VariationCreate = ({ locations, costCodes }: { locations: Location[]; costCodes: CostCode[] }) => {
+const VariationCreate = ({ locations, costCodes, variation }: { locations: Location[]; costCodes: CostCode[]; variation?: any }) => {
     const { data, setData, post, processing, errors } = useForm({
-        location_id: '',
-        type: 'dayworks',
-        co_number: '',
-        description: '',
-        amount: '',
-        date: new Date().toISOString().split('T')[0], // Default to today's date
-        line_items: [
-            {
-                line_number: 1,
-                cost_item: '',
-                cost_type: '',
-                description: '',
-                qty: 1,
-                unit_cost: 0,
-                total_cost: 0,
-                revenue: 0,
-            },
-        ],
+        location_id: variation ? String(variation.location_id) : '',
+        type: variation ? variation.type : 'dayworks',
+        co_number: variation ? variation.co_number : '',
+        description: variation ? variation.description : '',
+        amount: variation ? variation.amount : '',
+        date: variation ? variation.co_date : new Date().toISOString().split('T')[0], // Default to today's date
+        line_items: variation
+            ? variation.line_items.map((item: any) => ({
+                  line_number: item.line_number,
+                  cost_item: item.cost_item,
+                  cost_type: item.cost_type,
+                  description: item.description,
+                  qty: item.qty,
+                  unit_cost: item.unit_cost,
+                  total_cost: item.total_cost,
+                  revenue: item.revenue,
+              }))
+            : [
+                  {
+                      line_number: 1,
+                      cost_item: '',
+                      cost_type: '',
+                      description: '',
+                      qty: 1,
+                      unit_cost: 0,
+                      total_cost: 0,
+                      revenue: 0,
+                  },
+              ],
+        //
     });
     console.log(locations);
 
@@ -92,6 +104,17 @@ const VariationCreate = ({ locations, costCodes }: { locations: Location[]; cost
 
     const handleSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (variation.id) {
+            post(`/variations/${variation.id}/update`, {
+                onSuccess: () => {
+                    // Optionally redirect or show a success message
+                },
+                onError: (errors) => {
+                    console.error('Submission errors:', errors);
+                },
+            });
+            return;
+        }
         post('/variations/store', {
             onSuccess: () => {
                 // Optionally redirect or show a success message

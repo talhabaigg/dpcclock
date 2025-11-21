@@ -3,13 +3,14 @@ import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { AlertCircleIcon, CircleCheck, CirclePlus, Copy, Download, Pencil, RefreshCcw, Send, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
+
 const LocationVariations = ({ location, flash }) => {
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -56,6 +57,44 @@ const LocationVariations = ({ location, flash }) => {
                     <AlertTitle className="mt-1 text-green-700">{flash.success}</AlertTitle>
                 </Alert>
             )}
+            <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card mt-5 ml-4 grid max-w-96 grid-cols-1 gap-4 px-2 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:mt-1 sm:ml-0 sm:max-w-full sm:grid-cols-5 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+                <Card className="@container/card w-full sm:max-w-sm">
+                    <CardHeader>
+                        <CardDescription>Total Approved Variations [Rev]</CardDescription>
+                        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                            $
+                            {variations
+                                .reduce((total, variation) => {
+                                    if (variation.type === 'APPROVED') {
+                                        return total + (variation.total_variation_revenue || 0);
+                                    }
+                                    return total;
+                                }, 0)
+                                .toFixed(2)}
+                        </CardTitle>
+                        <CardAction>{/* badge, etc. */}</CardAction>
+                    </CardHeader>
+                </Card>
+
+                <Card className="@container/card w-full sm:max-w-sm">
+                    <CardHeader>
+                        <CardDescription>Total Pending Variations [Rev]</CardDescription>
+                        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                            $
+                            {variations
+                                .reduce((total, variation) => {
+                                    if (variation.type === 'PENDING') {
+                                        return total + (variation.total_variation_revenue || 0);
+                                    }
+                                    return total;
+                                }, 0)
+                                .toFixed(2)}
+                        </CardTitle>
+                        <CardAction>{/* badge, etc. */}</CardAction>
+                    </CardHeader>
+                </Card>
+            </div>
+
             <div className="items-left m-2 flex flex-col justify-start gap-2 sm:flex-row md:justify-between">
                 <div className="relative mx-auto max-w-96 min-w-96 space-x-1 sm:mx-0 sm:w-1/4">
                     <Button variant="outline">
@@ -149,10 +188,18 @@ const LocationVariations = ({ location, flash }) => {
                                                     </Button>
                                                 </Link>
                                                 <Link
-                                                    disabled={variation.status === 'sent'}
+                                                    disabled={
+                                                        variation.status === 'sent' ||
+                                                        variation.status === 'Approved' ||
+                                                        variation.premier_co_id !== null
+                                                    }
                                                     href={`/variations/${variation.id}/edit`}
                                                     onClick={(e) => {
-                                                        if (variation.status === 'sent') {
+                                                        if (
+                                                            variation.status === 'sent' ||
+                                                            variation.status === 'Approved' ||
+                                                            variation.premier_co_id !== null
+                                                        ) {
                                                             e.preventDefault();
                                                             alert('This variation has already been sent to Premier.');
                                                         } else {
@@ -163,7 +210,11 @@ const LocationVariations = ({ location, flash }) => {
                                                     <Button
                                                         title="Edit Variation"
                                                         variant="outline"
-                                                        disabled={variation.status === 'sent'}
+                                                        disabled={
+                                                            variation.status === 'sent' ||
+                                                            variation.status === 'Approved' ||
+                                                            variation.premier_co_id !== null
+                                                        }
                                                         className="cursor-pointer"
                                                     >
                                                         <Pencil />
@@ -172,7 +223,11 @@ const LocationVariations = ({ location, flash }) => {
                                                 <Link
                                                     href={`/variations/${variation.id}/send-to-premier`}
                                                     onClick={(e) => {
-                                                        if (variation.status === 'sent') {
+                                                        if (
+                                                            variation.status === 'sent' ||
+                                                            variation.status === 'Approved' ||
+                                                            variation.premier_co_id !== null
+                                                        ) {
                                                             e.preventDefault();
                                                             alert('This variation has already been sent to Premier.');
                                                         } else {
@@ -180,7 +235,16 @@ const LocationVariations = ({ location, flash }) => {
                                                         }
                                                     }}
                                                 >
-                                                    <Button title="Send to Premier" variant="outline" disabled={variation.status === 'sent'}>
+                                                    <Button
+                                                        title="Send to Premier"
+                                                        variant="outline"
+                                                        disabled={
+                                                            variation.status === 'sent' ||
+                                                            variation.status === 'Approved' ||
+                                                            variation.premier_co_id !== null
+                                                        }
+                                                        className="cursor-pointer"
+                                                    >
                                                         <Send />
                                                     </Button>
                                                 </Link>

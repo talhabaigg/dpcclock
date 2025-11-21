@@ -108,7 +108,7 @@ const VariationIndex = ({ variations }) => {
                                                     </Button>
                                                 </Link>
                                                 <Link
-                                                    disabled={variation.status === 'sent'}
+                                                    disabled={variation.status === 'sent' || variation.status === 'Approved'}
                                                     href={`/variations/${variation.id}/edit`}
                                                     onClick={(e) => {
                                                         if (variation.status === 'sent') {
@@ -122,7 +122,7 @@ const VariationIndex = ({ variations }) => {
                                                     <Button
                                                         title="Edit Variation"
                                                         variant="outline"
-                                                        disabled={variation.status === 'sent'}
+                                                        disabled={variation.status === 'sent' || variation.status === 'Approved'}
                                                         className="cursor-pointer"
                                                     >
                                                         <Pencil />
@@ -139,7 +139,12 @@ const VariationIndex = ({ variations }) => {
                                                         }
                                                     }}
                                                 >
-                                                    <Button title="Send to Premier" variant="outline" disabled={variation.status === 'sent'}>
+                                                    <Button
+                                                        title="Send to Premier"
+                                                        variant="outline"
+                                                        disabled={variation.status === 'sent' || variation.status === 'Approved'}
+                                                        className="cursor-pointer"
+                                                    >
                                                         <Send />
                                                     </Button>
                                                 </Link>

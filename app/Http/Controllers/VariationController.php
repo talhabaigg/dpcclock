@@ -158,6 +158,30 @@ class VariationController extends Controller
         ]);
     }
 
+    public function edit($id)
+    {
+        $variation = Variation::with('lineItems', 'location')->findOrFail($id);
+        $user = auth()->user();
+        $locationsQuery = Location::with([
+            'costCodes.costType'
+        ])->where(function ($query) {
+            $query->where('eh_parent_id', 1149031)
+                ->orWhere('eh_parent_id', 1249093)
+                ->orWhere('eh_parent_id', 1198645);
+        });
+        if ($user->hasRole('manager')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
+        }
+        $locations = $locationsQuery->get();
+        $costCodes = CostCode::with('costType')->orderBy('code')->get();
+        return Inertia::render('variation/create', [
+            'locations' => $locations,
+            'costCodes' => $costCodes,
+            'variation' => $variation,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -187,6 +211,55 @@ class VariationController extends Controller
 
             'co_date' => $validated['date'],
         ]);
+
+        $lineItems = collect($validated['line_items'])->map(function ($item) {
+            return [
+                'line_number' => $item['line_number'],
+                'cost_item' => $item['cost_item'],
+                'cost_type' => $item['cost_type'],
+                'description' => $item['description'],
+                'qty' => 1,
+                'unit_cost' => $item['total_cost'],
+                'total_cost' => $item['total_cost'],
+                'revenue' => $item['revenue'],
+            ];
+        })->toArray();
+
+        $variation->lineItems()->createMany($lineItems);
+
+        return redirect()->route('variations.index');
+    }
+
+    public function update(Request $request, Variation $variation)
+    {
+        $validated = $request->validate([
+            'location_id' => 'required|exists:locations,id',
+            'type' => 'required|string',
+            'co_number' => 'required|string',
+            'description' => 'required|string',
+
+            'date' => 'required|date',
+            'line_items' => 'required|array',
+            'line_items.*.line_number' => 'required',
+            'line_items.*.cost_item' => 'required|string',
+            'line_items.*.cost_type' => 'required|string',
+            'line_items.*.description' => 'required|string',
+            'line_items.*.qty' => 'required',
+            'line_items.*.unit_cost' => 'required|numeric|min:0',
+            'line_items.*.total_cost' => 'required|numeric|min:0',
+            'line_items.*.revenue' => 'required|numeric|min:0',
+        ]);
+
+        $variation->update([
+            'location_id' => $validated['location_id'],
+            'type' => $validated['type'],
+            'co_number' => $validated['co_number'],
+            'description' => $validated['description'],
+
+            'co_date' => $validated['date'],
+        ]);
+
+        $variation->lineItems()->delete();
 
         $lineItems = collect($validated['line_items'])->map(function ($item) {
             return [

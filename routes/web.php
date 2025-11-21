@@ -174,10 +174,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Favourite Material Items for Locations
         Route::post('/location/{location}/favourite-materials/upload', [LocationFavouriteMaterialItemsController::class, 'uploadFavouriteMaterials'])->name('location.favourite-materials.upload');
         Route::get('/location/{location}/favourite-materials/download-csv', [LocationFavouriteMaterialItemsController::class, 'downloadFavouriteMaterials'])->name('location.favourite-materials.download');
+
         // Variation routes
         Route::get('/locations/{location}/variations', [VariationController::class, 'locationVariations'])->name('locations.variations');
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');
+        Route::get('/variations/{variation}/edit', [VariationController::class, 'edit'])->name('variations.edit');
+        Route::post('/variations/{variation}/update', [VariationController::class, 'update'])->name('variations.update');
         Route::post('/variations/store', [VariationController::class, 'store'])->name('variations.store');
         Route::get('/locations/{location}/variations/sync', [VariationController::class, 'loadVariationsFromPremier'])->name('variations.sync');
         Route::get('/variations/{id}', [VariationController::class, 'destroy'])->name('variations.destroy');
