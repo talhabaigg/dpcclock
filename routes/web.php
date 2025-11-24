@@ -113,6 +113,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
 
+        Route::get('/location/{locationId}/purchase-orders/sync-premier', [PurchasingController::class, 'getPurchaseOrdersForLocation'])->name('location.purchase-orders');
+
         //Requisition notes
         Route::post('/requisition/{id}/notes', [RequisitionNoteController::class, 'store'])->name('requisition.addNote');
 

@@ -625,6 +625,29 @@ class PurchasingController extends Controller
         ]);
     }
 
+    public function getPurchaseOrdersForLocation($locationId)
+    {
+
+        $location = Location::findOrFail($locationId);
+
+        $requisitionService = new \App\Services\RequisitionService();
+        $purchaseOrders = $requisitionService->loadPurchaseOrderIdsForLocation($locationId);
+
+        foreach ($purchaseOrders->json('Data') as $index => $po) {
+            $po_number = preg_replace('/^PO/', '', $po['PONumber']);
+            $requisition = Requisition::where('po_number', $po_number)->first();
+            if ($requisition) {
+                $requisition->premier_po_id = $po['PurchaseOrderId'];
+                $requisition->save();
+            }
+        }
+
+        return response()->json([
+            'purchase_orders' => $purchaseOrders->json(),
+        ]);
+
+    }
+
 
 
 }

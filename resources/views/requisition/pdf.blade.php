@@ -116,7 +116,7 @@
                         <tr>
                             <td class="title">
 
-                                <img src="{{ public_path('Superior New logo.png') }}" alt="Logo" class="logo"
+                                <img src="{{ public_path('logo.png') }}" alt="Logo" class="logo"
                                     style="width: 100%; max-width: 150px">
 
                             </td>

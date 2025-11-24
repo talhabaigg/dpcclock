@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CostCode;
+use App\Models\Location;
 use Carbon\Carbon;
 use Http;
 use Log;
@@ -171,5 +172,26 @@ class RequisitionService
             return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
         }
 
+    }
+
+    public function loadPurchaseOrderIdsForLocation($locationId)
+    {
+        $authService = new PremierAuthenticationService();
+        $token = $authService->getAccessToken();
+        $base_url = env('PREMIER_SWAGGER_API_URL');
+        $companyService = new GetCompanyCodeService();
+        $location = Location::findOrFail($locationId);
+        $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+        $response = Http::withToken($token)
+            ->acceptJson()
+            ->get("{$base_url}/api/PurchaseOrder/GetPurchaseOrders", [
+                'companyId' => $companyId,
+                'pageSize' => 1000,
+
+            ]);
+
+        Log::info('Premier API Response: ' . $response->body());
+
+        return $response;
     }
 }
