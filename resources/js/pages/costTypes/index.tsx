@@ -1,12 +1,13 @@
 import CsvImporterDialog from '@/components/csv-importer';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { costTypesColumns } from './columns';
+import { DataTable } from './data-table';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Cost Types',
@@ -71,25 +72,8 @@ export default function CostTypesIndex({ costTypes }) {
                     </Button>
                 </a>
             </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Code</TableHead>
-                            <TableHead>Description</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {/* Assuming you have a costTypes prop with the data */}
-                        {/* Replace this with your actual data rendering logic */}
-                        {costTypes.map((costType) => (
-                            <TableRow key={costType.id}>
-                                <TableCell>{costType.code}</TableCell>
-                                <TableCell>{costType.description}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2">
+                <DataTable columns={costTypesColumns} data={costTypes} />
             </div>
         </AppLayout>
     );
