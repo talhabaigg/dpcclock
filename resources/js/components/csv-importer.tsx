@@ -5,9 +5,9 @@ import { Upload } from 'lucide-react';
 import Papa from 'papaparse';
 import { useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
+import * as XLSX from 'xlsx';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './ui/select';
-
 type CsvImporterDialogProps = {
     requiredColumns: string[]; // List of required columns to map
     onSubmit: (mappedData: Record<string, string>[]) => void; // Callback to handle the mapped data
@@ -20,18 +20,73 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
 
     // Handle file drop or selection
     const handleFile = (file: File) => {
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                setCsvHeaders(results.meta.fields ?? []);
-                setCsvData((results.data as Record<string, string>[]) ?? []);
-                // Reset mappings on new file
-                setMappings({});
-            },
-        });
-    };
+        const name = file.name.toLowerCase();
 
+        if (name.endsWith('.csv')) {
+            // CSV path (Papa)
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                transform: (value) => {
+                    if (typeof value === 'string') return value.trim();
+                    return value == null ? '' : String(value);
+                },
+                complete: (results) => {
+                    const fields = results.meta.fields ?? [];
+                    const rows = (results.data as Record<string, string>[]) ?? [];
+
+                    setCsvHeaders(fields);
+                    setCsvData(rows);
+                    setMappings({});
+                },
+            });
+        } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+            // Excel path (SheetJS)
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const data = e.target?.result as ArrayBuffer;
+                const workbook = XLSX.read(data, {
+                    type: 'array',
+                    cellDates: false,
+                    raw: false, // use formatted cell text
+                });
+                console.log(workbook);
+
+                const sheetName = workbook.SheetNames[1] || workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+
+                // Convert to JSON like Papa's output
+                const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+                    defval: '',
+                    raw: false, // again: formatted text, not raw serials
+                });
+                console.log(rows);
+
+                // Get headers from the first row's keys
+                const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+                // Coerce all values to strings (same shape as CSV path)
+                const normalisedRows: Record<string, string>[] = rows.map((row) => {
+                    const obj: Record<string, string> = {};
+                    headers.forEach((h) => {
+                        const v = row[h];
+                        obj[h] = v == null ? '' : String(v).trim();
+                    });
+                    return obj;
+                });
+
+                setCsvHeaders(headers);
+                setCsvData(normalisedRows);
+                setMappings({});
+            };
+
+            reader.readAsArrayBuffer(file);
+        } else {
+            alert('Unsupported file type. Please upload a CSV or Excel file.');
+        }
+    };
     // Handle mapping change for a required column
     const handleMappingChange = (requiredCol: string, csvHeader: string) => {
         setMappings((prev) => ({
@@ -74,8 +129,12 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>CSV Importer</DialogTitle>
-                        <DialogDescription>Upload your CSV file to import data.</DialogDescription>
+                        <DialogTitle>Data Importer</DialogTitle>
+                        <DialogDescription>Upload your CSV/Excel file to import data.</DialogDescription>
+                        <DialogDescription className="font-slim mt-2 text-sm text-gray-500">
+                            Format columns to text or number before copying data to avoid excel converting values to dates or scientific notation
+                            respectively.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <Dropzone
@@ -84,7 +143,11 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
                                     handleFile(acceptedFiles[0]);
                                 }
                             }}
-                            accept={{ 'text/csv': ['.csv'] }}
+                            accept={{
+                                'text/csv': ['.csv'],
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+                                'application/vnd.ms-excel': ['.xls'],
+                            }}
                             maxFiles={1}
                             multiple={false}
                         />
