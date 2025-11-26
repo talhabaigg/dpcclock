@@ -17,7 +17,7 @@ import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
 import { AlertCircleIcon, Info, ShieldQuestion, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
@@ -199,7 +199,11 @@ export default function Create() {
     //     wrapperBorder: false,
     // });
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
-
+    const rowSelection = useMemo(() => {
+        return {
+            mode: 'multiRow',
+        };
+    }, []);
     const columnDefs = [
         {
             field: 'serial_number',
@@ -361,11 +365,18 @@ export default function Create() {
 
     // Function to delete selected row
     const deleteSelectedRow = () => {
-        if (rowData.length > 0) {
-            const updatedRowData = rowData.slice(0, -1); // Remove the last row from rowData
+        const selectedNodes = gridRef.current?.api.getSelectedNodes();
+        if (selectedNodes && selectedNodes.length > 0) {
+            const selectedData = selectedNodes.map((node) => node.data);
+            const updatedRowData = rowData.filter((row) => !selectedData.includes(row));
             setRowData(updatedRowData);
         } else {
-            alert('No rows to delete.');
+            if (rowData.length > 0) {
+                const updatedRowData = rowData.slice(0, -1); // Remove the last row from rowData
+                setRowData(updatedRowData);
+            } else {
+                alert('No rows to delete.');
+            }
         }
     };
 
@@ -631,6 +642,7 @@ export default function Create() {
                                 ref={gridRef}
                                 rowData={rowData}
                                 theme={appliedTheme}
+                                rowSelection={rowSelection}
                                 rowDragManaged={true}
                                 onRowDragEnd={(event) => {
                                     const movingData = event.node.data;

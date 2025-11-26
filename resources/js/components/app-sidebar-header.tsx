@@ -9,7 +9,7 @@ import { Button } from './ui/button';
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const props = usePage().props as any;
     const notifications = props.notifications;
-    console.log(notifications);
+    // console.log(notifications);
     const displayCount = notifications.unreadCount > 99 ? '99+' : notifications.unreadCount > 0 ? notifications.unreadCount.toString() : null;
     return (
         <header className="border-sidebar-border/50 flex h-16 shrink-0 items-center gap-2 border-b px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
