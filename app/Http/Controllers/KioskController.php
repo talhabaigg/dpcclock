@@ -139,11 +139,12 @@ class KioskController extends Controller
             'employees' => function ($query) {
                 $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
             },
-            'relatedKiosks'
+            'relatedKiosks',
+            'managers'
         ]);
 
         $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>=', now())->get();
-
+        $users = User::all();
 
 
 
@@ -152,6 +153,7 @@ class KioskController extends Controller
             'employees' => $kiosk->employees,
             'events' => $events,
             'allEmployees' => $allEmployees,
+            'users' => $users,
         ]);
     }
 
@@ -344,4 +346,19 @@ class KioskController extends Controller
             ->with('success', 'Admin mode disabled successfully.');
     }
 
+    public function storeManager(Request $request)
+    {
+        $data = $request->validate([
+            'kioskId' => 'required|exists:kiosks,id',
+            'managerIds' => 'required|array',
+            'managerIds.*' => 'exists:users,id',
+        ]);
+
+        $kiosk = Kiosk::findOrFail($data['kioskId']);
+
+        // Attach the managers to the kiosk without detaching existing ones
+        $kiosk->managers()->syncWithoutDetaching($data['managerIds']);
+
+        return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Managers added to kiosk successfully.');
+    }
 }

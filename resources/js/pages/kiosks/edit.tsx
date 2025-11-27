@@ -5,17 +5,19 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Info } from 'lucide-react';
+import { Info, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
 import MinuteSelector from '../timesheets/components/minuteSelector';
 import AddEmployeesToKiosk from './edit-partials/add-employees-kiosk-dialog';
+import AddManagerKioskDialog from './edit-partials/add-manager-kiosk-dialog';
 import GenerateTimesheetsAvailableEventsCard from './edit-partials/generate-timesheets-available-events-card';
-export default function Edit({ kiosk, employees, errors, flash, events, allEmployees }) {
+export default function Edit({ kiosk, employees, errors, flash, events, allEmployees, users }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
@@ -236,6 +238,36 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                                 {kiosk.related_kiosks.map((related) => (
                                     <Link key={related.id} href={`/kiosks/${related.id}`}>
                                         <Badge className="py-2">{related.name}</Badge>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+                <Card className="mx-2 w-full">
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">
+                        Managers
+                        <AddManagerKioskDialog kiosk={kiosk} users={users} existingManagerIds={kiosk.managers?.map((manager) => manager.id) ?? []} />
+                    </CardHeader>
+                    <CardContent>
+                        {kiosk.managers?.length === 0 && <div>No managers assigned</div>}
+                        {kiosk.managers?.length > 0 && (
+                            <div className="flex flex-wrap space-y-2 space-x-2">
+                                {kiosk.managers.map((manager) => (
+                                    <Link key={manager.id} href={`/employees/${manager.id}`}>
+                                        <Badge className="py-2" variant="secondary">
+                                            <UserInfo
+                                                user={{ ...manager, email_verified_at: '', created_at: '', updated_at: '', phone: '' }}
+                                            ></UserInfo>
+
+                                            <span title="Remove Manager">
+                                                <Link href={route('users.kiosk.remove', { user: manager.id, kiosk: kiosk.id })} preserveScroll>
+                                                    <Button variant="outline" size="icon" className="cursor-pointer">
+                                                        <X className="h-2 w-2" />
+                                                    </Button>
+                                                </Link>
+                                            </span>
+                                        </Badge>
                                     </Link>
                                 ))}
                             </div>

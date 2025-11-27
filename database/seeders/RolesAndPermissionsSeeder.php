@@ -24,6 +24,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage worktypes',
             'manage timesheets',
             'view kiosk',
+            'manage kiosk managers',
             'retrieve kiosk token',
             'update travel zones',
             'view timesheet converter',
@@ -81,6 +82,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view all requisitions',
             'can process requisitions',
             'can send requisitions',
+            'manage kiosk managers',
         ]);
 
     }

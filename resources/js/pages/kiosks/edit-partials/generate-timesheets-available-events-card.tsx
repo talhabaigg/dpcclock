@@ -16,9 +16,7 @@ const GenerateTimesheetsAvailableEventsCard = ({ events, employees, kioskId }) =
                                 <div className="flex flex-col">
                                     <Label>{event.title} </Label>
                                     <div className="space-x-2">
-                                        <Label>
-                                            {event.start} to {event.end}
-                                        </Label>
+                                        <Badge variant="outline">{event.start}</Badge>-<Badge variant="outline">{event.end}</Badge>
                                         <Badge variant="outline">{event.state.toUpperCase()}</Badge>
                                     </div>
                                 </div>

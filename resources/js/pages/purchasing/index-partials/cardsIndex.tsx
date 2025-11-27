@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { closestCenter, DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { EyeOff, GripVertical, Hourglass, Loader, Send, Truck, X } from 'lucide-react';
+import { EyeOff, GripVertical, Hourglass, Loader, Truck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import RequisitionCard from './requisitionCard';
 import { Requisition } from './types';
@@ -16,13 +16,12 @@ interface CardsIndexProps {
 
 const statusMap = {
     pending: { label: 'Pending', icon: <Loader /> },
-    'sent to premier': { label: 'Sent to Premier', icon: <Send /> },
     success: { label: 'Waiting in Premier', icon: <Hourglass /> },
     sent: { label: 'Sent to Supplier', icon: <Truck /> },
 };
 
 type StatusKey = keyof typeof statusMap;
-const allStatuses: StatusKey[] = ['pending', 'sent to premier', 'success', 'sent'];
+const allStatuses: StatusKey[] = ['pending', 'success', 'sent'];
 
 const SortableColumn = ({
     id,
