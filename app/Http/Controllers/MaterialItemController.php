@@ -166,11 +166,10 @@ class MaterialItemController extends Controller
             }
 
             MaterialItem::updateOrCreate(
-                ['code' => $code],
+                ['code' => $code, 'supplier_id' => $supplier->id],
                 [
                     'description' => trim($description),
                     'unit_cost' => (float) $unit_cost,
-                    'supplier_id' => $supplier->id,
                     'cost_code_id' => $costCode->id,
                 ]
             );
