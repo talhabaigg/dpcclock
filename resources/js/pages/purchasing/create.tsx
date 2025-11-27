@@ -50,6 +50,12 @@ type Location = {
     name: string;
     external_id: string;
     eh_location_id: string;
+    header?: {
+        delivery_contact?: string;
+        requested_by?: string;
+        deliver_to?: string;
+        order_reference?: string;
+    };
 };
 // type CostCode = {
 //     id: number;
@@ -161,6 +167,14 @@ export default function Create() {
     const handleLocationChange = (value) => {
         setSelectedLocation(value);
         setData('project_id', value);
+        const header = locations.find((loc) => String(loc.id) === String(value))?.header;
+        if (header) {
+            // Pre-fill fields from header
+            setData('delivery_contact', header.delivery_contact || '');
+            setData('requested_by', header.requested_by || '');
+            setData('deliver_to', header.deliver_to || '');
+            setData('order_reference', header.order_reference || '');
+        }
     };
 
     const handleSubmit = (e) => {

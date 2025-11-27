@@ -41,13 +41,13 @@ export default function TimesheetSummaryRow({
                         .replace(',', '')}
                 </button>
             </TableCell>
-            <TableCell className="border border-gray-200">
+            <TableCell className="border border-gray-200 text-center">
                 {new Date(timesheet.clock_in).toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
                 })}
             </TableCell>
-            <TableCell className="border border-gray-200">
+            <TableCell className="border border-gray-200 text-center">
                 {timesheet.clock_out
                     ? new Date(timesheet.clock_out).toLocaleTimeString([], {
                           hour: '2-digit',
@@ -55,8 +55,8 @@ export default function TimesheetSummaryRow({
                       })
                     : 'N/A'}
             </TableCell>
-            <TableCell className="border border-gray-200">{timesheet.hours_worked}</TableCell>
-            <TableCell className="border border-gray-200">
+            <TableCell className="border border-gray-200 text-center">{timesheet.hours_worked}</TableCell>
+            <TableCell className="border border-gray-200 text-center">
                 <Link
                     href={route('clock.edit.summary', {
                         date: new Date(timesheet.clock_in).toLocaleDateString('en-AU'),

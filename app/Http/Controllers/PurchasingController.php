@@ -41,7 +41,7 @@ class PurchasingController extends Controller
                 ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
         })
-            ->with('worktypes');
+            ->with('worktypes', 'header');
 
         if ($user->hasRole('manager')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
@@ -49,6 +49,7 @@ class PurchasingController extends Controller
         }
 
         $locations = $locationsQuery->get();
+
 
 
         return Inertia::render('purchasing/create', [

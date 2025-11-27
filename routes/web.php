@@ -9,6 +9,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\TimesheetEventController;
 use App\Http\Controllers\VariationController;
@@ -112,6 +113,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')->permission('can send requisitions');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
+
+        Route::get('/location/{locationId}/req-header/edit', [RequisitionHeaderTemplateController::class, 'edit'])->name('location.req-header.edit');
+        Route::put('/location/{locationId}/req-header/update', [RequisitionHeaderTemplateController::class, 'update'])->name('location.req-header.update');
 
         Route::get('/location/{locationId}/purchase-orders/sync-premier', [PurchasingController::class, 'getPurchaseOrdersForLocation'])->name('location.purchase-orders');
 

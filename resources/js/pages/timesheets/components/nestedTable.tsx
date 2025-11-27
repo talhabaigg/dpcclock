@@ -50,11 +50,11 @@ export default function TimesheetTable({
         <Table className="max-w-2xl border border-gray-200">
             <TableHeader>
                 <TableRow className="border border-gray-200 bg-gray-100 dark:bg-black">
-                    <TableHead className="w-[100px]"></TableHead>
-                    <TableHead className="border border-gray-200">Start Time</TableHead>
-                    <TableHead className="border border-gray-200">End Time</TableHead>
-                    <TableHead className="border border-gray-200">Units</TableHead>
-                    <TableHead className="border border-gray-200">Action</TableHead>
+                    <TableHead className="w-[100px] text-center">Date</TableHead>
+                    <TableHead className="border border-gray-200 text-center">Start Time</TableHead>
+                    <TableHead className="border border-gray-200 text-center">End Time</TableHead>
+                    <TableHead className="border border-gray-200 text-center">Units</TableHead>
+                    <TableHead className="border border-gray-200 text-center">Action</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
