@@ -14,3 +14,14 @@ export interface Requisition {
     created_at: string;
     notes?: { id: number; note: string; created_at: string; user: { name: string } }[];
 };
+
+export interface RequisitionData {
+    data: Requisition[];
+    current_page: number;
+    first_page_url: string;
+    from: number;
+    last_page: number;
+    last_page_url: string;
+    links: { url: string | null; label: string; active: boolean }[];
+    next_page_url: string | null;
+}

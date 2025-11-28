@@ -160,9 +160,13 @@ class PurchasingController extends Controller
 
         if ($user->hasPermissionTo('view all requisitions')) {
             $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
+
                 ->withSum('lineItems', 'total_cost')
+
                 ->orderByDesc('id')
-                ->get();
+                ->paginate(200);
+
+            // dd($requisitions);
             return Inertia::render('purchasing/index', [
                 'requisitions' => $requisitions,
             ]);
@@ -174,6 +178,7 @@ class PurchasingController extends Controller
 
 
         $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes')
+            ->paginate(100)
             ->withSum('lineItems', 'total_cost')
             ->whereIn('project_number', $location_ids)
             ->orderByDesc('id')

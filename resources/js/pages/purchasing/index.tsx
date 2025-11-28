@@ -12,19 +12,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CirclePlus, EllipsisVertical, ListFilterPlus, Search, SquarePlus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CirclePlus, EllipsisVertical, ListFilterPlus, Search, SquarePlus, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import CardsIndex from './index-partials/cardsIndex';
 import CostRangeSlider from './index-partials/costRangeSlider';
 import { SelectFilter } from './index-partials/selectFilter';
-import { Requisition } from './index-partials/types';
+import { RequisitionData } from './index-partials/types';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -49,8 +50,9 @@ const tableHeader = [
 ];
 
 export default function RequisitionList() {
-    const { requisitions, flash } = usePage<{ requisitions: Requisition[]; flash: { success: string; error: string } }>().props;
-    console.log(requisitions);
+    const { requisitions, flash } = usePage<{ requisitions: RequisitionData; flash: { success: string; error: string } }>().props;
+
+    const reqs = requisitions.data;
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOnlyTemplates, setFilterOnlyTemplates] = useState(false);
     const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') ?? 'table');
@@ -58,11 +60,11 @@ export default function RequisitionList() {
         setViewMode(value);
         localStorage.setItem('viewMode', value);
     };
-    const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);
+    const costs = reqs.map((r) => Number(r.line_items_sum_total_cost) || 0);
     const minCost = Math.min(...costs, 0);
     const maxCost = Math.max(...costs, 10000);
     const [costRange, setCostRange] = useState<[number, number]>(() => {
-        const costs = requisitions.map((r) => Number(r.line_items_sum_total_cost) || 0);
+        const costs = reqs.map((r) => Number(r.line_items_sum_total_cost) || 0);
         return [Math.min(...costs, 0), Math.max(...costs, 10000)];
     });
 
@@ -74,7 +76,7 @@ export default function RequisitionList() {
         creator: null,
         contact: null,
     });
-    const filteredRequisitions = requisitions
+    const filteredRequisitions = reqs
         .filter((req) => {
             const cost = Number(req.line_items_sum_total_cost) || 0;
             return cost >= costRange[0] && cost <= costRange[1];
@@ -142,12 +144,12 @@ export default function RequisitionList() {
     }, [flash.success, flash.error]);
 
     const filterDefinitions = [
-        { key: 'location', label: 'Location', getOptions: () => requisitions.map((r) => r.location?.name) },
-        { key: 'supplier', label: 'Supplier', getOptions: () => requisitions.map((r) => r.supplier?.name) },
-        { key: 'status', label: 'Status', getOptions: () => requisitions.map((r) => r.status) },
-        { key: 'deliver_to', label: 'Deliver To', getOptions: () => requisitions.map((r) => r.deliver_to) },
-        { key: 'creator', label: 'Creator', getOptions: () => requisitions.map((r) => r.creator?.name) },
-        { key: 'contact', label: 'Contact', getOptions: () => requisitions.map((r) => r.delivery_contact) },
+        { key: 'location', label: 'Location', getOptions: () => reqs.map((r) => r.location?.name) },
+        { key: 'supplier', label: 'Supplier', getOptions: () => reqs.map((r) => r.supplier?.name) },
+        { key: 'status', label: 'Status', getOptions: () => reqs.map((r) => r.status) },
+        { key: 'deliver_to', label: 'Deliver To', getOptions: () => reqs.map((r) => r.deliver_to) },
+        { key: 'creator', label: 'Creator', getOptions: () => reqs.map((r) => r.creator?.name) },
+        { key: 'contact', label: 'Contact', getOptions: () => reqs.map((r) => r.delivery_contact) },
     ] as const;
     const updateFilter = (key: keyof typeof filters, value: string | null) => {
         setFilters((prev) => ({ ...prev, [key]: value }));
@@ -156,13 +158,63 @@ export default function RequisitionList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Requisitions" />
             <div className="m-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="items-left flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <Button variant="outline">
                         <Link href="/requisition/create" className="flex items-center gap-2">
                             <CirclePlus size={12} />
                             Create New
                         </Link>
                     </Button>
+                    <div className="mx-auto flex max-w-72 flex-wrap items-center sm:mx-0 sm:max-w-full">
+                        <Pagination>
+                            <PaginationContent className="">
+                                {/* Previous */}
+                                <PaginationItem>
+                                    <PaginationLink href={requisitions.first_page_url} className="hidden w-full px-4 sm:flex">
+                                        <span className="items-left flex flex-row -space-x-2">
+                                            <ChevronLeft /> <ChevronLeft />
+                                        </span>
+                                        First
+                                    </PaginationLink>
+                                </PaginationItem>
+                                <PaginationItem>
+                                    <PaginationPrevious href={requisitions.prev_page_url || '#'} />
+                                </PaginationItem>
+
+                                {/* Visible page range logic */}
+                                {(() => {
+                                    const current = requisitions.current_page;
+                                    const last = requisitions.last_page;
+
+                                    const start = Math.max(1, current - 3);
+                                    const end = Math.min(last, current + 3);
+
+                                    const pages = [];
+                                    for (let page = start; page <= end; page++) {
+                                        pages.push(
+                                            <PaginationItem key={page}>
+                                                <PaginationLink href={`?page=${page}`} isActive={current === page}>
+                                                    {page}
+                                                </PaginationLink>
+                                            </PaginationItem>,
+                                        );
+                                    }
+                                    return pages;
+                                })()}
+
+                                {/* Next */}
+                                <PaginationItem>
+                                    <PaginationNext href={requisitions.next_page_url || '#'} />
+                                </PaginationItem>
+                                <PaginationLink href={requisitions.last_page_url} className="hidden w-full px-4 sm:flex">
+                                    Last
+                                    <span className="items-left flex flex-row -space-x-2">
+                                        <ChevronRight /> <ChevronRight />
+                                    </span>
+                                </PaginationLink>
+                            </PaginationContent>
+                        </Pagination>
+                    </div>
                 </div>
             </div>
             <Tabs className="p-2" defaultValue={viewMode} onValueChange={handleTabChange}>
