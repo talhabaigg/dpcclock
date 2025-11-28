@@ -219,18 +219,16 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
 
                             <Switch checked={kiosk.is_active} onCheckedChange={handleKioskActiveToggle} />
                         </div>
-                        <div className="flex items-center justify-between">
+                        {/* <div className="flex items-center justify-between">
                             <div>
                                 <Label>Auto generate timesheets for events</Label>
                             </div>
                             <Switch />
-                        </div>
+                        </div> */}
                     </CardContent>
                 </Card>
                 <Card className="m-2 w-full">
-                    <CardHeader className="flex items-center justify-between text-lg font-bold">
-                        Related Kiosks <Button>Add</Button>
-                    </CardHeader>
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">Related Kiosks</CardHeader>
                     <CardContent>
                         {kiosk.related_kiosks?.length === 0 && <div>No related kiosks</div>}
                         {kiosk.related_kiosks?.length > 0 && (

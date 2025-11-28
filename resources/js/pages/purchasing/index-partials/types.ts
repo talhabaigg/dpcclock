@@ -24,4 +24,5 @@ export interface RequisitionData {
     last_page_url: string;
     links: { url: string | null; label: string; active: boolean }[];
     next_page_url: string | null;
+    prev_page_url: string | null;
 }

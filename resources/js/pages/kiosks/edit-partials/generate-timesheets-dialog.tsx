@@ -3,6 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/react';
+import { Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Employee = {
@@ -87,6 +88,7 @@ const GenerateTimesheetsDialog = ({ employees, kioskId, event }: GenerateTimeshe
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                     <Button size="sm" variant="outline">
+                        <Sparkles />
                         Generate Timesheets
                     </Button>
                 </DialogTrigger>
@@ -105,6 +107,7 @@ const GenerateTimesheetsDialog = ({ employees, kioskId, event }: GenerateTimeshe
                     <div className="mt-3 flex items-center justify-between">
                         <span className="text-muted-foreground text-sm">{selectedEhIds.length} selected</span>
                         <Button onClick={handleCreateTimeForSelectedEvent} disabled={form.processing || selectedEhIds.length === 0}>
+                            <Sparkles />
                             {form.processing ? 'Generating…' : 'Generate'}
                         </Button>
                     </div>

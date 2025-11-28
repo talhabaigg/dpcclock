@@ -3,6 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/react';
+import { PlusCircle } from 'lucide-react';
 import { useState } from 'react';
 
 const AddEmployeesToKiosk = ({ existingEmployeeIds, allEmployees, kioskId }) => {
@@ -45,7 +46,7 @@ const AddEmployeesToKiosk = ({ existingEmployeeIds, allEmployees, kioskId }) => 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                     <Button size="sm" variant="outline">
-                        + Add Employee
+                        <PlusCircle /> Add Employee
                     </Button>
                 </DialogTrigger>
                 <DialogContent className="max-h-[80vh] overflow-y-auto">

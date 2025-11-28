@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Link } from '@inertiajs/react';
+import { Sparkles } from 'lucide-react';
 
 interface GenerateTimesheetsButtonProps {
     kioskId: number;
@@ -21,7 +22,10 @@ const GenerateTimesheetsButton = ({ kioskId }: GenerateTimesheetsButtonProps) =>
         <AlertDialog>
             <AlertDialogTrigger>
                 {' '}
-                <Button>Generate</Button>
+                <Button>
+                    <Sparkles />
+                    Generate
+                </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>

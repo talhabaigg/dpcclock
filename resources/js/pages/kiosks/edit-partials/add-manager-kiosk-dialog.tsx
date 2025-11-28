@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { UserInfo } from '@/components/user-info';
 import { useForm } from '@inertiajs/react';
+import { PlusCircle } from 'lucide-react';
 import { useState } from 'react';
 
 interface Employee {
@@ -51,7 +52,7 @@ const AddManagerKioskDialog = ({ kiosk, users, existingManagerIds }: { kiosk: Ki
             <Dialog>
                 <DialogTrigger asChild>
                     <Button size="sm" variant="outline">
-                        + Add Manager
+                        <PlusCircle /> Add Manager
                     </Button>
                 </DialogTrigger>
 
