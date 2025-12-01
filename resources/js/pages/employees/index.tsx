@@ -10,7 +10,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowUpDown, RefreshCcw } from 'lucide-react';
+import { ArrowUpDown, RefreshCcw, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 // Define the Employee type
 interface Employee {
@@ -130,6 +130,7 @@ export default function EmployeesList() {
                                 <TableCell>
                                     <Link href={`/employee/${employee.id}/worktypes/sync`}>
                                         <Button variant="outline" className="w-32">
+                                            <RotateCcw />
                                             Retry Sync
                                         </Button>
                                     </Link>

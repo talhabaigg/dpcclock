@@ -9,7 +9,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Info, X } from 'lucide-react';
+import { Baby, BookCopy, Cog, Info, MapPin, Timer, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import HourSelector from '../timesheets/components/hourSelector';
@@ -89,7 +89,10 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                 <Card className="m-2 h-full w-full">
                     <CardHeader className="text-lg font-bold">
                         <div className="flex w-full justify-between">
-                            Select Zones for Employees
+                            <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
+                                <MapPin size={20} />
+                                <div className="text-xs"> Select Zones for Employees</div>
+                            </div>
                             <span className="ml-auto">
                                 <AddEmployeesToKiosk
                                     existingEmployeeIds={employees.map((emp) => emp.id)}
@@ -104,8 +107,8 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                         <form onSubmit={handleSubmit} className="w-full space-y-2">
                             {employees.map((employee, index) => (
                                 <div key={employee.id} className="flex items-center justify-between">
-                                    <div className="flex flex-col space-y-1">
-                                        <Label>{employee.name}</Label>
+                                    <div className="flex flex-row items-center space-x-1">
+                                        <UserInfo user={{ ...employee, email_verified_at: '', created_at: '', updated_at: '', phone: '' }}></UserInfo>
                                     </div>
 
                                     <div className="flex min-w-48 flex-col items-start space-y-1 space-x-1 md:flex-row">
@@ -164,7 +167,11 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                 <Card className="m-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">
                         <div className="flex w-full justify-between">
-                            <div>Shift Default Times</div>
+                            <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
+                                <Timer size={20} />
+                                <div className="text-xs">Shift Default Times</div>
+                            </div>
+
                             <div className="flex flex-row items-center space-x-2">
                                 <Label>Select hour</Label>
                                 <Label>Select minute</Label>
@@ -210,7 +217,12 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                     </CardContent>
                 </Card>
                 <Card className="m-2 w-full">
-                    <CardHeader className="flex items-center justify-between text-lg font-bold">Settings</CardHeader>
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">
+                        <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
+                            <Cog size={20} />
+                            <div className="text-xs">Settings</div>
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         <div className="flex items-center justify-between">
                             <div>
@@ -228,7 +240,12 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                     </CardContent>
                 </Card>
                 <Card className="m-2 w-full">
-                    <CardHeader className="flex items-center justify-between text-lg font-bold">Related Kiosks</CardHeader>
+                    <CardHeader className="flex items-center justify-between text-lg font-bold">
+                        <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
+                            <BookCopy size={20} />
+                            <div className="text-xs"> Related Kiosks</div>
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         {kiosk.related_kiosks?.length === 0 && <div>No related kiosks</div>}
                         {kiosk.related_kiosks?.length > 0 && (
@@ -244,7 +261,10 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                 </Card>
                 <Card className="mx-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">
-                        Managers
+                        <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
+                            <Baby size={20} />
+                            <div className="text-xs"> Managers</div>
+                        </div>
                         <AddManagerKioskDialog kiosk={kiosk} users={users} existingManagerIds={kiosk.managers?.map((manager) => manager.id) ?? []} />
                     </CardHeader>
                     <CardContent>

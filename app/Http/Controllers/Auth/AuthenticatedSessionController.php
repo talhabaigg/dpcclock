@@ -116,7 +116,7 @@ class AuthenticatedSessionController extends Controller
                     cookie(
                         'otp_trusted_' . $user->id,
                         true,           // Value
-                        60 * 24         // Lifetime in minutes (24 hours)
+                        60 * 24 * 30       // Lifetime in minutes (30 days)
                     )
                 );
             }
