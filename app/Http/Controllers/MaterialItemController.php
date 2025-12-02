@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\MaterialItemExport;
 use App\Models\MaterialItem;
 use Cache;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use App\Models\Supplier;
 use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class MaterialItemController extends Controller
 {
@@ -194,6 +196,8 @@ class MaterialItemController extends Controller
 
     public function download()
     {
+        $fileName = 'material_items_' . now()->format('Ymd_His') . '.xlsx';
+        return Excel::download(new MaterialItemExport(), $fileName);
         $fileName = 'material_items_' . now()->format('Ymd_His') . '.csv';
         $filePath = storage_path("app/{$fileName}");
 
@@ -208,7 +212,6 @@ class MaterialItemController extends Controller
                 $item->unit_cost,
                 $item->supplier?->code,
                 $item->costCode?->code,
-
             ]);
         }
         fclose($handle);
