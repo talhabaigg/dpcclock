@@ -30,6 +30,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'B' => NumberFormat::FORMAT_GENERAL,
             'C' => NumberFormat::FORMAT_GENERAL,
             'D' => NumberFormat::FORMAT_GENERAL,
+            'E' => NumberFormat::FORMAT_GENERAL,
         ];
     }
     public function styles(Worksheet $sheet)
@@ -46,6 +47,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
         return [
             'Code',
             'Description',
+            'Unit Cost',
             'Supplier Code',
             'Cost Code',
         ];
@@ -56,6 +58,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
         return [
             $materialItem->code,
             $materialItem->description,
+            $materialItem->unit_cost,
             $materialItem->supplier ? $materialItem->supplier->code : '',
             $materialItem->costCode ? $materialItem->costCode->code : '',
         ];
