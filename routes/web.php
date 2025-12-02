@@ -133,6 +133,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('material-items/download', [MaterialItemController::class, 'download'])->name('material-items.download');
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::get('/material-items/location/{locationId}/download-csv', [MaterialItemController::class, 'downloadLocationPricingListCSV']);
+        Route::get('/material-items/location/{locationId}/download-excel', [MaterialItemController::class, 'downloadLocationPricingListExcel']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
 
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);

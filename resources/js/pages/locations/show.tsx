@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CirclePlus, Edit, RefreshCcw, Trash } from 'lucide-react';
+import { CirclePlus, Download, Edit, RefreshCcw, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -38,6 +38,10 @@ type Location = {
         id: number;
         code: string;
         description: string;
+        supplier?: {
+            id: number;
+            code: string;
+        };
         pivot?: {
             unit_cost_override: number;
         };
@@ -371,7 +375,16 @@ export default function LocationsList() {
                         </Button> */}
                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                         <a href={`/material-items/location/${location.id}/download-csv`}>
-                            <Button className="w-32">Download CSV</Button>
+                            <Button className="w-32" variant="outline">
+                                <Download className="h-4 w-4" />
+                                CSV
+                            </Button>
+                        </a>
+
+                        <a href={`/material-items/location/${location.id}/download-excel`}>
+                            <Button className="w-32" variant="outline">
+                                <Download className="h-4 w-4" /> Excel
+                            </Button>
                         </a>
                     </div>
 
@@ -380,6 +393,7 @@ export default function LocationsList() {
                             <TableHeader>
                                 <TableRow className="rounded-t-md">
                                     <TableHead>Code</TableHead>
+                                    <TableHead>Supplier</TableHead>
                                     <TableHead>Description</TableHead>
                                     <TableHead>Unit Cost</TableHead>
                                 </TableRow>
@@ -396,6 +410,7 @@ export default function LocationsList() {
                                     location.material_items.map((item) => (
                                         <TableRow key={item.id}>
                                             <TableCell>{item.code}</TableCell>
+                                            <TableCell>{item.supplier?.code}</TableCell>
                                             <TableCell>{item.description}</TableCell>
                                             <TableCell>${item.pivot?.unit_cost_override}</TableCell>
                                         </TableRow>

@@ -297,6 +297,46 @@ class MaterialItemController extends Controller
         return response()->download($filePath)->deleteFileAfterSend(true);
     }
 
+    public function downloadLocationPricingListExcel($locationId)
+    {
+        $location = Location::findOrFail($locationId);
+        $fileName = 'location_pricing_' . $location->name . '_' . now()->format('Ymd_His') . '.xlsx';
+        $filePath = storage_path("app/{$fileName}");
+
+        $items = DB::table('location_item_pricing')
+            ->where('location_id', $location->id)
+            ->join('material_items', 'location_item_pricing.material_item_id', '=', 'material_items.id')
+            ->join('suppliers', 'material_items.supplier_id', '=', 'suppliers.id')
+            ->select('location_item_pricing.location_id', 'material_items.code', 'location_item_pricing.unit_cost_override', 'suppliers.code as supplier_code')
+            ->get()
+            ->toArray();
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Location Pricing');
+
+        // Set header
+        $sheet->setCellValue('A1', 'location_id');
+        $sheet->setCellValue('B1', 'code');
+        $sheet->setCellValue('C1', 'unit_cost');
+        $sheet->setCellValue('D1', 'supplier_code');
+
+        // Populate data
+        $rowNumber = 2;
+        foreach ($items as $item) {
+            $sheet->setCellValue('A' . $rowNumber, $location->external_id);
+            $sheet->setCellValue('B' . $rowNumber, $item->code);
+            $sheet->setCellValue('C' . $rowNumber, $item->unit_cost_override);
+            $sheet->setCellValue('D' . $rowNumber, $item->supplier_code);
+            $rowNumber++;
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($filePath);
+
+        return response()->download($filePath)->deleteFileAfterSend(true);
+    }
+
     public function getMaterialItems(Request $request)
     {
         $supplierId = $request->input('supplier_id');
