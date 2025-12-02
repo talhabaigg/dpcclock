@@ -178,11 +178,10 @@ class PurchasingController extends Controller
 
 
         $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes')
-            ->paginate(100)
             ->withSum('lineItems', 'total_cost')
             ->whereIn('project_number', $location_ids)
             ->orderByDesc('id')
-            ->get();
+            ->paginate(100);
 
 
 
