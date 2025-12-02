@@ -325,7 +325,7 @@ class MaterialItemController extends Controller
         $rowNumber = 2;
         foreach ($items as $item) {
             $sheet->setCellValue('A' . $rowNumber, $location->external_id);
-            $sheet->setCellValue('B' . $rowNumber, $item->code);
+            $sheet->setCellValueExplicit('B' . $rowNumber, $item->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->setCellValue('C' . $rowNumber, $item->unit_cost_override);
             $sheet->setCellValue('D' . $rowNumber, $item->supplier_code);
             $rowNumber++;
