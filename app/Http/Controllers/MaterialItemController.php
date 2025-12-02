@@ -11,10 +11,7 @@ use App\Models\Supplier;
 use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+
 class MaterialItemController extends Controller
 {
     /**
@@ -310,77 +307,31 @@ class MaterialItemController extends Controller
             ->where('location_id', $location->id)
             ->join('material_items', 'location_item_pricing.material_item_id', '=', 'material_items.id')
             ->join('suppliers', 'material_items.supplier_id', '=', 'suppliers.id')
-            ->select(
-                'location_item_pricing.location_id',
-                'material_items.code',
-                'location_item_pricing.unit_cost_override',
-                'suppliers.code as supplier_code'
-            )
+            ->select('location_item_pricing.location_id', 'material_items.code', 'location_item_pricing.unit_cost_override', 'suppliers.code as supplier_code')
             ->get()
             ->toArray();
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Location Pricing');
 
-        // Header
+        // Set header
         $sheet->setCellValue('A1', 'location_id');
         $sheet->setCellValue('B1', 'code');
         $sheet->setCellValue('C1', 'unit_cost');
         $sheet->setCellValue('D1', 'supplier_code');
 
-        // Data
+        // Populate data
         $rowNumber = 2;
         foreach ($items as $item) {
-            // Force all ID / code fields to be TEXT
-            $sheet->setCellValueExplicit(
-                'A' . $rowNumber,
-                (string) $location->external_id,
-                DataType::TYPE_STRING
-            );
-
-            $sheet->setCellValueExplicit(
-                'B' . $rowNumber,
-                (string) $item->code,
-                DataType::TYPE_STRING
-            );
-
-            // unit_cost should stay numeric
-            $sheet->setCellValue(
-                'C' . $rowNumber,
-                $item->unit_cost_override
-            );
-
-            $sheet->setCellValueExplicit(
-                'D' . $rowNumber,
-                (string) $item->supplier_code,
-                DataType::TYPE_STRING
-            );
-
+            $sheet->setCellValue('A' . $rowNumber, $location->external_id);
+            $sheet->setCellValue('B' . $rowNumber, $item->code);
+            $sheet->setCellValue('C' . $rowNumber, $item->unit_cost_override);
+            $sheet->setCellValue('D' . $rowNumber, $item->supplier_code);
             $rowNumber++;
         }
 
-        // Format columns as TEXT so Excel doesn't auto-switch to scientific notation
-        $lastRow = $rowNumber - 1;
-
-        $sheet->getStyle("A2:A{$lastRow}")
-            ->getNumberFormat()
-            ->setFormatCode(NumberFormat::FORMAT_TEXT);
-
-        $sheet->getStyle("B2:B{$lastRow}")
-            ->getNumberFormat()
-            ->setFormatCode(NumberFormat::FORMAT_TEXT);
-
-        $sheet->getStyle("D2:D{$lastRow}")
-            ->getNumberFormat()
-            ->setFormatCode(NumberFormat::FORMAT_TEXT);
-
-        // Optional: format unit_cost as number with 2 decimals
-        $sheet->getStyle("C2:C{$lastRow}")
-            ->getNumberFormat()
-            ->setFormatCode('0.00');
-
-        $writer = new Xlsx($spreadsheet);
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($filePath);
 
         return response()->download($filePath)->deleteFileAfterSend(true);
