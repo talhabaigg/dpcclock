@@ -65,5 +65,10 @@ class Location extends Model
         return $this->hasOne(RequisitionHeaderTemplate::class, 'location_id', 'id');
     }
 
+    public function materialItemPriceListUploads()
+    {
+        return $this->hasMany(MaterialItemPriceListUpload::class);
+    }
+
 
 }

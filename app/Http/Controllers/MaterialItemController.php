@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Exports\MaterialItemExport;
 use App\Models\MaterialItem;
+use App\Models\MaterialItemPriceListUpload;
 use Cache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use App\Models\Supplier;
 use App\Models\CostCode;
@@ -224,7 +226,12 @@ class MaterialItemController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
+        $uploaded_fileName = 'location_pricing_upload_' . now()->format('Ymd_His') . '.csv';
 
+        $original_file_uploaded = Storage::disk('s3')->put('location_pricing/uploads/' . $uploaded_fileName, file_get_contents($request->file('file')->getRealPath()));
+        if (!$original_file_uploaded) {
+            return back()->with('error', 'Failed to upload file to S3.');
+        }
         $path = $request->file('file')->getRealPath();
         $rows = array_map('str_getcsv', file($path));
         $header = array_map('trim', array_shift($rows));
@@ -244,7 +251,7 @@ class MaterialItemController extends Controller
                 continue;
             }
 
-            $failedRows[] = $row;
+
             $locationIds[] = $location->id;
 
             $dataToInsert[] = [
@@ -282,13 +289,49 @@ class MaterialItemController extends Controller
             }
             fclose($handle);
 
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            // Save the file to S3
+            $s3Path = "location_pricing/failed/{$filename}";
+            \Storage::disk('s3')->put($s3Path, file_get_contents($filePath));
+
+            // Delete the local file after uploading to S3
+            unlink($filePath);
+
+            $s3Url = \Storage::disk('s3')->url($s3Path);
+            $priceList = MaterialItemPriceListUpload::create([
+                'location_id' => $location->id,
+                'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
+                'failed_file_path' => "location_pricing/failed/{$filename}",
+                'status' => 'success',
+                'total_rows' => count($rows),
+                'processed_rows' => count($dataToInsert),
+                'failed_rows' => count($failedRows),
+                'created_by' => auth()->id(),
+            ]);
+            return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully. Some rows failed to import. Download the failed rows <a href='{$s3Url}'>here</a>.");
         }
+
+        $priceList = MaterialItemPriceListUpload::create([
+            'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
+            'failed_file_path' => null,
+            'status' => 'success',
+            'total_rows' => count($rows),
+            'processed_rows' => count($dataToInsert),
+            'failed_rows' => count($failedRows),
+            'created_by' => auth()->id(),
+        ]);
+        if (!$priceList) {
+            Log::error('Failed to create MaterialItemPriceListUpload record for file: ' . $uploaded_fileName);
+        }
+
 
         return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully.");
     }
 
-
+    private function uploadFileToS3($filePath, $s3Path)
+    {
+        $uploaded = Storage::put($s3Path, file_get_contents($filePath));
+        return $uploaded;
+    }
 
     public function downloadLocationPricingListCSV($locationId)
     {

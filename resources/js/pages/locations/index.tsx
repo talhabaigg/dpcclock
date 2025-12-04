@@ -18,7 +18,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowUpDown, CirclePlus, EllipsisVertical, Eye, Pencil, RefreshCcw } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, CirclePlus, ClockAlert, EllipsisVertical, Eye, Pencil, RefreshCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -208,6 +208,14 @@ export default function LocationsList() {
                                                         <Eye size={16} />
                                                     </span>
                                                     View
+                                                </DropdownMenuItem>
+                                            </Link>
+                                            <Link href={`location/${location.id}/material-item-price-list-uploads`}>
+                                                <DropdownMenuItem>
+                                                    <span>
+                                                        <ClockAlert size={16} />
+                                                    </span>
+                                                    Audit Uploads
                                                 </DropdownMenuItem>
                                             </Link>
 
