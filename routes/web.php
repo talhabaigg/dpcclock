@@ -234,4 +234,5 @@ Route::get('/kiosk', function () {
 
 
 require __DIR__ . '/settings.php';
+require __DIR__ . '/location.php';
 require __DIR__ . '/auth.php';

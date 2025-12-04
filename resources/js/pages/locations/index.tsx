@@ -201,6 +201,17 @@ export default function LocationsList() {
                                                 </DropdownMenuItem>
                                             </Link>
                                             <DropdownMenuSeparator />
+                                            <DropdownMenuLabel>Material Items</DropdownMenuLabel>
+                                            <Link href={`location/${location.id}/material-items`}>
+                                                <DropdownMenuItem>
+                                                    <span>
+                                                        <Eye size={16} />
+                                                    </span>
+                                                    View
+                                                </DropdownMenuItem>
+                                            </Link>
+
+                                            <DropdownMenuSeparator />
                                             <DropdownMenuLabel>Variations</DropdownMenuLabel>
                                             <Link href={`locations/${location.id}/variations`}>
                                                 <DropdownMenuItem>

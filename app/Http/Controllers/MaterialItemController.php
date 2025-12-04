@@ -232,7 +232,7 @@ class MaterialItemController extends Controller
 
         $dataToInsert = [];
         $locationIds = [];
-
+        $failedRows = [];
         foreach ($rows as $row) {
             $data = array_combine($header, $row);
 
@@ -240,9 +240,11 @@ class MaterialItemController extends Controller
             $material = MaterialItem::where('code', $data['code'])->first();
 
             if (!$location || !$material) {
+                $failedRows[] = $row;
                 continue;
             }
 
+            $failedRows[] = $row;
             $locationIds[] = $location->id;
 
             $dataToInsert[] = [
@@ -268,6 +270,20 @@ class MaterialItemController extends Controller
             // Insert new pricing
             DB::table('location_item_pricing')->insert($dataToInsert);
         });
+
+        if (!empty($failedRows)) {
+            $filename = 'failed_location_pricing_' . now()->format('Ymd_His') . '.csv';
+            $filePath = storage_path("app/{$filename}");
+
+            $handle = fopen($filePath, 'w');
+            fputcsv($handle, $header);
+            foreach ($failedRows as $failedRow) {
+                fputcsv($handle, $failedRow);
+            }
+            fclose($handle);
+
+            return response()->download($filePath)->deleteFileAfterSend(true);
+        }
 
         return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully.");
     }
