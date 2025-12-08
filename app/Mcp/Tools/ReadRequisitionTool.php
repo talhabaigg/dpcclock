@@ -58,7 +58,7 @@ DESC;
                 'creator',     // e.g. belongsTo(User::class, 'requested_by')
                 'location',      // e.g. belongsTo(Location::class)
                 'supplier',      // e.g. belongsTo(Supplier::class)
-                'lines',         // e.g. hasMany(RequisitionLine::class)
+                'lineItems',         // e.g. hasMany(RequisitionLine::class)
             ])
             ->find($requisitionId);
 
