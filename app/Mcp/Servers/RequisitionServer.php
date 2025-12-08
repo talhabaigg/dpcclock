@@ -4,6 +4,7 @@ namespace App\Mcp\Servers;
 
 use App\Mcp\Resources\RequisitionsResource;
 use App\Mcp\Tools\ListLocations;
+use App\Mcp\Tools\ListMaterial;
 use App\Mcp\Tools\ListSuppliers;
 use App\Mcp\Tools\ReadRequisitionTool;
 use Laravel\Mcp\Server;
@@ -20,6 +21,7 @@ class RequisitionServer extends Server
         ReadRequisitionTool::class,
         ListLocations::class,
         ListSuppliers::class,
+        ListMaterial::class,
     ];
 
     public array $resources = [
