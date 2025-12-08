@@ -43,8 +43,8 @@ DESC;
      */
     public function handle(array $arguments): ToolResult|Generator
     {
-        $locations = \App\Models\Location::all();
+        $payload = \App\Models\Location::all();
 
-        return ToolResult::text($locations->toJson());
+        return ToolResult::text(json_encode($payload, JSON_PRETTY_PRINT));
     }
 }
