@@ -462,6 +462,10 @@ export default function Create() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
+            {/* <div className="mx-auto p-2">
+                <SimpleChatBox />
+            </div> */}
+
             {orderRestored && (
                 <Alert className="mx-4 mt-2 flex max-w-full flex-row items-center p-1 px-2 sm:max-w-1/2">
                     <AlertCircleIcon />
