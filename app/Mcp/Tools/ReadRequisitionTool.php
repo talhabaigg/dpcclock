@@ -96,8 +96,8 @@ DESC;
             'tax' => (float) ($requisition->tax_total ?? 0),
             'total' => (float) ($requisition->total ?? 0),
 
-            'lines' => $requisition->lines
-                ? $requisition->lines->map(function ($line) {
+            'lines' => $requisition->lineItems
+                ? $requisition->lineItems->map(function ($line) {
                     return [
                         'id' => $line->id,
                         'code' => $line->code ?? $line->item_code ?? null,
