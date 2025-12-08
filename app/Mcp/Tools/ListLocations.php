@@ -20,21 +20,21 @@ class ListLocations extends Tool
 Use this tool to list all locations.
 
 It returns:
-- Basic info: id, name, code, address, and other relevant details for each location
+- Basic info: id, name, and other relevant details for each location
 DESC;
     }
 
     /**
      * The input schema of the tool.
      */
-    public function schema(ToolInputSchema $schema): ToolInputSchema
-    {
-        $schema->string('example')
-            ->description('An example input description.')
-            ->required();
+    // public function schema(ToolInputSchema $schema): ToolInputSchema
+    // {
+    //     $schema->string('example')
+    //         ->description('An example input description.')
+    //         ->required();
 
-        return $schema;
-    }
+    //     return $schema;
+    // }
 
     /**
      * Execute the tool call.
@@ -43,8 +43,8 @@ DESC;
      */
     public function handle(array $arguments): ToolResult|Generator
     {
-        // Implement tool logic here
+        $locations = \App\Models\Location::all();
 
-        return ToolResult::text('Tool executed successfully.');
+        return ToolResult::text($locations->toJson());
     }
 }
