@@ -3,6 +3,7 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Resources\RequisitionsResource;
+use App\Mcp\Tools\ReadRequisitionTool;
 use Laravel\Mcp\Server;
 
 class RequisitionServer extends Server
@@ -14,11 +15,11 @@ class RequisitionServer extends Server
     public string $instructions = 'This server allows to read requisitions and provide assistance.';
 
     public array $tools = [
-        // ExampleTool::class,
+        ReadRequisitionTool::class,
     ];
 
     public array $resources = [
-        RequisitionsResource::class,
+        // RequisitionsResource::class,
     ];
 
     public array $prompts = [

@@ -12,14 +12,14 @@ class RequisitionsResource extends Resource
     protected string $title = 'Requisition Resource';
     protected string $description = 'Resource for requisitions data.';
 
-    /**
-     * Return the resource contents.
-     */
+    // Important: your content is JSON, not plain text
+    protected string $mimeType = 'application/json';
+
     public function handle(Request $request): Response
     {
         $requisitions = Requisition::with('lineItems', 'creator', 'location', 'supplier')->get();
 
-        // Optionally process or return the data
         return Response::text($requisitions->toJson());
     }
 }
+
