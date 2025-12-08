@@ -27,14 +27,14 @@ DESC;
     /**
      * The input schema of the tool.
      */
-    // public function schema(ToolInputSchema $schema): ToolInputSchema
-    // {
-    //     $schema->string('example')
-    //         ->description('An example input description.')
-    //         ->required();
+    public function schema(ToolInputSchema $schema): ToolInputSchema
+    {
+        $schema->string('search')
+            ->description('A name or code to filter locations by.')
+            ->required();
 
-    //     return $schema;
-    // }
+        return $schema;
+    }
 
     /**
      * Execute the tool call.
@@ -43,8 +43,18 @@ DESC;
      */
     public function handle(array $arguments): ToolResult|Generator
     {
-        $payload = \App\Models\Location::all();
+        $search = $arguments['search'] ?? null;
+        $query = \App\Models\Location::query();
 
-        return ToolResult::text(json_encode($payload, JSON_PRETTY_PRINT));
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('external_id', 'like', "%{$search}%");
+            });
+        }
+
+        $payload = $query->limit(10)->get();
+
+        return ToolResult::text($payload->toJson());
     }
 }

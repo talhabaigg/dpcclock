@@ -18,7 +18,7 @@ class ListMaterial extends Tool
      */
     public function description(): string
     {
-        return 'Use this tool to list all materials filtered by location, supplier, matching item code or matching description.';
+        return 'Use this tool to list all materials filtered by location, supplier, pass search term to look for matching item code or matching description.';
     }
 
     /**
@@ -60,7 +60,36 @@ class ListMaterial extends Tool
             });
         }
         $materialItems = $query->limit(100)->get();
+        $itemCodes = [];
+        foreach ($materialItems as $item) {
+            $priceData = $this->getPrice($item->id, $locationId);
+            $itemCodes[] = $priceData->getData();
+        }
 
-        return ToolResult::text($materialItems->toJson());
+        return ToolResult::text(json_encode($itemCodes, JSON_PRETTY_PRINT));
+    }
+
+    private function getPrice($materilItemId, $locationId)
+    {
+        $item = MaterialItem::with('costCode')->find($materilItemId);
+        // Fetch the location-specific price (filtered in SQL)
+        $location_price = DB::table('location_item_pricing')
+            ->where('material_item_id', $materilItemId)
+            ->where('location_id', $locationId)
+            ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
+            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+            ->first();
+
+        if ($location_price) {
+            $item->unit_cost = $location_price->unit_cost_override;
+        }
+
+        // Convert to array for response
+        $itemArray = $item->toArray();
+        $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
+        $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+
+        return response()->json($itemArray);
     }
 }
+
