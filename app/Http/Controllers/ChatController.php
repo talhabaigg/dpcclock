@@ -45,14 +45,14 @@ class ChatController extends Controller
             ->post('https://api.openai.com/v1/responses', [
                 'model' => 'gpt-4.1',
                 'input' => $input,
-                'tools' => [
-                    [
-                        'type' => 'mcp',
-                        'server_label' => 'superiorportal',
-                        'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
-                        'require_approval' => "never",
-                    ]
-                ],
+                // 'tools' => [
+                //     [
+                //         'type' => 'mcp',
+                //         'server_label' => 'superiorportal',
+                //         'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
+                //         'require_approval' => 'never',
+                //     ]
+                // ],
             ]);
 
         $result = $response->json();
