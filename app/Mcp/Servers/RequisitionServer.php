@@ -6,7 +6,7 @@ use App\Mcp\Resources\RequisitionsResource;
 use App\Mcp\Tools\ListLocations;
 use App\Mcp\Tools\ListMaterial;
 use App\Mcp\Tools\ListSuppliers;
-use App\Mcp\Tools\ReadRequisitionTool;
+use App\Mcp\Tools\ReadRequisition;
 use Laravel\Mcp\Server;
 
 class RequisitionServer extends Server
@@ -18,7 +18,7 @@ class RequisitionServer extends Server
     public string $instructions = 'This server allows to read requisitions and provide assistance.';
 
     public array $tools = [
-        ReadRequisitionTool::class,
+        ReadRequisition::class,
         ListLocations::class,
         ListSuppliers::class,
         ListMaterial::class,

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChatController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PurchasingController;
@@ -16,3 +17,5 @@ Route::post('employee/updated', function (\Illuminate\Http\Request $request) {
 
 Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
     ->name('requisition.updateStatusFromPowerAutomate');
+
+Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import { AiImageExtractor } from './create-partials/aiImageExtractor';
+import { ChatDock } from './create-partials/chatDock';
 import GridSizeSelector from './create-partials/gridSizeSelector';
 import { GridStateToolbar } from './create-partials/gridStateToolbar';
 import PasteTableButton from './create-partials/pasteTableButton';
@@ -462,7 +463,8 @@ export default function Create() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
-            {/* <div className="mx-auto p-2">
+            <ChatDock />
+            {/* <div className="mx-auto p-2 sm:min-w-full">
                 <SimpleChatBox />
             </div> */}
 

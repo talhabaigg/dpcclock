@@ -9,8 +9,8 @@ use Laravel\Mcp\Server\Tools\Annotations\Title;
 use Laravel\Mcp\Server\Tools\ToolInputSchema;
 use Laravel\Mcp\Server\Tools\ToolResult;
 
-#[Title('Read Requisition Tool')]
-class ReadRequisitionTool extends Tool
+#[Title('Read Requisition')]
+class ReadRequisition extends Tool
 {
     /**
      * A description of the tool.
@@ -25,7 +25,7 @@ Use this tool to look up a single requisition by ID and get a detailed summary.
 It returns:
 - Basic info: id, number/code, status, created_at, requested_by, location, supplier
 - Financials: subtotal, tax, total, currency
-- Line items: code/description/qty/unit_cost/line_total
+- Line items: code/description/qty/unit_cost/line_total/cost_code/price_list
 DESC;
     }
 
