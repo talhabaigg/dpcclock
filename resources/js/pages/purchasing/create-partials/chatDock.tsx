@@ -10,11 +10,10 @@ export function ChatDock() {
 
     return (
         <div className="fixed right-4 bottom-0 z-50">
-            {/* Container that looks like Facebook's chat box */}
             <div
-                className={`flex w-100 flex-col rounded-t-lg border border-b-0 bg-white shadow-xl transition-all duration-200 ${isOpen ? 'h-[500px]' : 'h-10'} `}
+                className={`flex w-100 flex-col rounded-t-lg border border-b-0 bg-white shadow-xl transition-all duration-300 ease-in-out ${isOpen ? 'h-[500px]' : 'h-10'} `}
             >
-                {/* Header bar (always visible, like Facebook) */}
+                {/* Header */}
                 <Button
                     onClick={() => setIsOpen(!isOpen)}
                     className="flex h-10 w-full items-center justify-between rounded-t-lg rounded-b-none px-3 text-sm font-semibold"
@@ -28,13 +27,12 @@ export function ChatDock() {
                     <span>{isOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}</span>
                 </Button>
 
-                {/* Body (only rendered when open) */}
-                {isOpen && (
-                    <div className="flex-1 overflow-hidden">
-                        {/* Let SimpleChatBox handle scrolling etc. */}
-                        <SimpleChatBox />
-                    </div>
-                )}
+                {/* Animated body fade-in */}
+                <div
+                    className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'} `}
+                >
+                    {isOpen && <SimpleChatBox />}
+                </div>
             </div>
         </div>
     );

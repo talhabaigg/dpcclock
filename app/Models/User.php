@@ -59,4 +59,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Kiosk::class, 'kiosk_user');
     }
+
+    public function aiChatMessages()
+    {
+        return $this->hasMany(AiChatMessage::class);
+    }
 }
