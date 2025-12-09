@@ -17,7 +17,7 @@ import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
 import { AlertCircleIcon, Info, ShieldQuestion, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
@@ -214,11 +214,12 @@ export default function Create() {
     //     wrapperBorder: false,
     // });
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
-    const rowSelection = useMemo(() => {
-        return {
-            mode: 'multiRow',
-        };
-    }, []);
+    // const rowSelection = useMemo(() => {
+    //     return {
+    //         mode: 'multiRow',
+    //     };
+    // }, []);
+    const rowSelection = 'multiple';
     const columnDefs = [
         {
             field: 'serial_number',

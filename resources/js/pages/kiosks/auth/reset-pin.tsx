@@ -185,7 +185,7 @@ export default function ShowPin() {
     return isMobile ? (
         content
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee}>
+        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={false}>
             {content}
         </KioskLayout>
     );

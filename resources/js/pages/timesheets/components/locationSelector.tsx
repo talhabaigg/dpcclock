@@ -6,23 +6,23 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import * as React from 'react';
 
 type Props = {
-    locations: string[]; // kiosk-specific string array
+    listLocations: string[]; // kiosk-specific string array
     allLocations: string[]; // global string array fallback
     selectedLocation: string | null; // selected value (string)
     disabled?: boolean;
     onChange: (val: string) => void; // returns the chosen string
 };
 
-export default function LocationSelector({ locations, allLocations, selectedLocation, onChange, disabled }: Props) {
+export default function LocationSelector({ listLocations, allLocations, selectedLocation, onChange, disabled }: Props) {
     const [open, setOpen] = React.useState(false);
-
+    console.log(listLocations, allLocations);
     // prefer kiosk locations; fall back to allLocations; clean + de-dup
     const options = React.useMemo(() => {
-        const list = (locations?.length ? locations : allLocations) ?? [];
+        const list = (listLocations?.length ? listLocations : allLocations) ?? [];
         // trim, drop falsy, de-dup while preserving order
         const seen = new Set<string>();
         return list.map((s) => (s ?? '').trim()).filter((s) => s.length > 0 && (seen.has(s) ? false : (seen.add(s), true)));
-    }, [locations, allLocations]);
+    }, [listLocations, allLocations]);
 
     const value = selectedLocation ?? '';
 

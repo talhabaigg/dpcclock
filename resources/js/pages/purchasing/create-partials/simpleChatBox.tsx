@@ -188,7 +188,7 @@ export function SimpleChatBox() {
                                         <ReactMarkdown
                                             remarkPlugins={[remarkGfm]}
                                             components={{
-                                                code({ inline, children, ...props }) {
+                                                code({ inline, children, ...props }: { inline?: boolean; children: React.ReactNode }) {
                                                     return inline ? (
                                                         <code className="rounded bg-black/20 px-1" {...props}>
                                                             {children}

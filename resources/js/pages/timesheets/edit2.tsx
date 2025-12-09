@@ -47,7 +47,7 @@ type Kiosk = {
     eh_kiosk_id: number;
     name: string;
     eh_location_id: number;
-    locations?: Location[];
+    locations?: string[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -61,7 +61,7 @@ export default function EditTimesheet() {
         kiosks: Kiosk[];
         date: string;
         flash: { success?: string; error?: string };
-        locations: Location[];
+        locations: string[];
     }>().props;
 
     const splitTime = (datetime: string | null) => {
@@ -194,7 +194,7 @@ export default function EditTimesheet() {
         form.post(`${route('clock.edit.summary.post')}?date=${selectedDate}`);
     };
 
-    const sublocationsForSelectedKiosk = (kioskId: number | '') => {
+    const sublocationsForSelectedKiosk = (kioskId: number | ''): string[] => {
         const kiosk = kiosks.find((k) => k.eh_kiosk_id === kioskId);
         return kiosk?.locations ?? [];
     };
@@ -295,7 +295,7 @@ export default function EditTimesheet() {
                                 <TableCell className="border-r-2">
                                     {' '}
                                     <LocationSelector
-                                        locations={sublocationsForSelectedKiosk(clock.eh_kiosk_id)}
+                                        listLocations={sublocationsForSelectedKiosk(clock.eh_kiosk_id as number)}
                                         selectedLocation={clock.location}
                                         onChange={(val) => updateLocationField(clock.id, val)}
                                         disabled={isSynced}
