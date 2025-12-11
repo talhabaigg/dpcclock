@@ -15,6 +15,8 @@ use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Activitylog\Models\Activity;
+
 use Validator;
 
 class MaterialItemController extends Controller
@@ -86,13 +88,26 @@ class MaterialItemController extends Controller
         if (!$materialItem->exists) {
             return redirect()->route('material-items.index')->with('error', 'Material item not found.');
         }
-        $item = $materialItem->load('costCode', 'supplier');
+        $item = $materialItem->load('costCode', 'supplier', 'orderHistory.requisition.location');
+        // dd($item);
+        $activities = Activity::query()
+            ->with('causer')
+            ->where('subject_type', MaterialItem::class)
+            ->where('subject_id', $materialItem->id)
+            ->when(request()->has('activity_type'), function ($query) {
+                $query->where('description', request()->input('activity_type'));
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+
+        // dd($activities);
         $maxItems = MaterialItem::count();
         return Inertia::render('materialItem/edit', [
             'item' => $item,
             'costCodes' => CostCode::all(),
             'suppliers' => Supplier::all(),
             'maxItems' => $maxItems,
+            'activities' => $activities,
 
         ]);
     }

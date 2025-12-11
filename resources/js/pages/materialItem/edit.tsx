@@ -10,6 +10,8 @@ import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
+import ActivitySheet from './Partials/activity-sheet';
+import OrderHistorySheet from './Partials/order-history-sheet';
 
 type MaterialItem = {
     id: number;
@@ -24,6 +26,8 @@ type MaterialItem = {
         id: number;
         code: string;
     };
+
+    order_history: any[];
 };
 
 type Supplier = {
@@ -33,11 +37,12 @@ type Supplier = {
 };
 
 export default function EditMaterialItem() {
-    const { item, flash, costCodes, suppliers } = usePage<{
+    const { item, flash, costCodes, suppliers, activities } = usePage<{
         item: MaterialItem | null;
         costCodes: CostCode[];
         suppliers: Supplier[];
         flash: { success: string; error: string };
+        activities: any[];
     }>().props;
     const form = useForm({
         code: item?.code || '',
@@ -117,86 +122,94 @@ export default function EditMaterialItem() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Material Item" />
-            <div className="flex flex-col items-center justify-center">
-                <Card className="m-2 w-full max-w-md p-4">
-                    {mode === 'edit' && (
-                        <div className="mb-4 flex items-center justify-between">
-                            <Link href={`/material-items/${item?.id}/previous`}>
-                                <Button variant="outline" size="icon">
-                                    <ChevronLeft />
-                                </Button>
-                            </Link>
-                            <Link href={`/material-items/${item?.id}/next`}>
-                                <Button variant="outline" size="icon">
-                                    <ChevronRight />
-                                </Button>
-                            </Link>
-                            {/* <Link href={`/material-items/${item.id === maxItems ? 1 : item.id + 1}/edit`}>
+            <div>
+                <div className="flex flex-col items-center justify-center">
+                    <Card className="m-2 w-full max-w-md p-4">
+                        {mode === 'edit' && (
+                            <div className="mb-4 flex items-center justify-between">
+                                <Link href={`/material-items/${item?.id}/previous`}>
+                                    <Button variant="outline" size="icon">
+                                        <ChevronLeft />
+                                    </Button>
+                                </Link>
+                                <div className="space-x-2">
+                                    {' '}
+                                    <OrderHistorySheet orderHistory={item.order_history} />
+                                    <ActivitySheet activities={activities} />
+                                    <Link href={`/material-items/${item?.id}/next`}>
+                                        <Button variant="outline" size="icon">
+                                            <ChevronRight />
+                                        </Button>
+                                    </Link>
+                                </div>
+
+                                {/* <Link href={`/material-items/${item.id === maxItems ? 1 : item.id + 1}/edit`}>
                             <Button variant="outline" size="icon">
                                 <ChevronRight />
                             </Button>
                         </Link> */}
-                        </div>
-                    )}
+                            </div>
+                        )}
 
-                    {mode === 'edit' ? <Label>Code (non-editable)</Label> : <Label>Code</Label>}
+                        {mode === 'edit' ? <Label>Code (non-editable)</Label> : <Label>Code</Label>}
 
-                    <Input value={form.data.code} readOnly={mode === 'edit'} onChange={(e) => form.setData('code', e.target.value)} />
-                    <Label>Description</Label>
-                    <Input value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
-                    <Label>Unit Cost</Label>
-                    <Input
-                        type="number"
-                        step="0.000001"
-                        value={form.data.unit_cost}
-                        onChange={(e) => {
-                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                            form.setData('unit_cost', value);
-                        }}
-                    />
-                    <Label>Cost Code</Label>
-                    <Select value={String(form.data.cost_code_id)} onValueChange={(value) => form.setData('cost_code_id', value)}>
-                        <SelectTrigger>
-                            {costCodes.find((cc) => cc.id.toString() === String(form.data.cost_code_id))?.code || 'Select a cost code'}
-                        </SelectTrigger>
-                        <SelectContent>
-                            {costCodes.map((costCode) => (
-                                <SelectItem key={costCode.id} value={costCode.id.toString()}>
-                                    {costCode.code}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Label>Supplier</Label>
-                    <Select value={String(form.data.supplier_id)} onValueChange={(value) => form.setData('supplier_id', value)}>
-                        <SelectTrigger>
-                            {suppliers.find((cc) => cc.id.toString() === String(form.data.supplier_id))?.code || 'Select a cost code'}
-                        </SelectTrigger>
-                        <SelectContent>
-                            {suppliers.map((supplier) => (
-                                <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                                    {supplier.code}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <Button onClick={handleSubmit}>{mode === 'edit' ? 'Update' : 'Create'}</Button>
-                            <Link href="/material-items/all">
-                                <Button variant="secondary" className="ml-2">
-                                    Cancel
+                        <Input value={form.data.code} readOnly={mode === 'edit'} onChange={(e) => form.setData('code', e.target.value)} />
+                        <Label>Description</Label>
+                        <Input value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
+                        <Label>Unit Cost</Label>
+                        <Input
+                            type="number"
+                            step="0.000001"
+                            value={form.data.unit_cost}
+                            onChange={(e) => {
+                                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                form.setData('unit_cost', value);
+                            }}
+                        />
+                        <Label>Cost Code</Label>
+                        <Select value={String(form.data.cost_code_id)} onValueChange={(value) => form.setData('cost_code_id', value)}>
+                            <SelectTrigger>
+                                {costCodes.find((cc) => cc.id.toString() === String(form.data.cost_code_id))?.code || 'Select a cost code'}
+                            </SelectTrigger>
+                            <SelectContent>
+                                {costCodes.map((costCode) => (
+                                    <SelectItem key={costCode.id} value={costCode.id.toString()}>
+                                        {costCode.code}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Label>Supplier</Label>
+                        <Select value={String(form.data.supplier_id)} onValueChange={(value) => form.setData('supplier_id', value)}>
+                            <SelectTrigger>
+                                {suppliers.find((cc) => cc.id.toString() === String(form.data.supplier_id))?.code || 'Select a cost code'}
+                            </SelectTrigger>
+                            <SelectContent>
+                                {suppliers.map((supplier) => (
+                                    <SelectItem key={supplier.id} value={supplier.id.toString()}>
+                                        {supplier.code}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <Button onClick={handleSubmit}>{mode === 'edit' ? 'Update' : 'Create'}</Button>
+                                <Link href="/material-items/all">
+                                    <Button variant="secondary" className="ml-2">
+                                        Cancel
+                                    </Button>
+                                </Link>
+                            </div>
+                            <div>
+                                <Button variant="destructive" onClick={handleDelete} className="flex items-center">
+                                    {' '}
+                                    <Trash2 />
                                 </Button>
-                            </Link>
+                            </div>
                         </div>
-                        <div>
-                            <Button variant="destructive" onClick={handleDelete} className="flex items-center">
-                                {' '}
-                                <Trash2 />
-                            </Button>
-                        </div>
-                    </div>
-                </Card>
+                    </Card>
+                </div>
             </div>
         </AppLayout>
     );
