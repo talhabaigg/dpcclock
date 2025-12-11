@@ -7,7 +7,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { CirclePlus, Download, Search } from 'lucide-react';
+import { CirclePlus, Download, Search, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -131,8 +131,8 @@ export default function ItemList() {
                     />
                 </div>
                 <div className="mr-auto flex w-full items-center gap-4 sm:w-auto">
-                    <Button variant="destructive" onClick={deleteSelectedRow}>
-                        Delete Selected{' '}
+                    <Button variant="destructive" onClick={deleteSelectedRow} className="rounded-lg">
+                        <Trash2 />
                     </Button>
 
                     <span className="text-sm text-gray-600">{selectedCount} Items selected </span>
@@ -154,7 +154,7 @@ export default function ItemList() {
                         <Button>
                             {' '}
                             <Download />
-                            Download CSV
+                            Download
                         </Button>
                     </a>
                 </div>
@@ -167,6 +167,7 @@ export default function ItemList() {
                     theme={appliedTheme}
                     // @ts-ignore
                     rowSelection={rowSelection}
+                    enableCellTextSelection={true}
                     onSelectionChanged={handleSelectionChanged}
                     columnDefs={[
                         { field: 'id', headerName: 'ID' },
