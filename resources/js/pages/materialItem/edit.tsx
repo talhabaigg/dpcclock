@@ -7,18 +7,9 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Items',
-        href: '/material-items/all',
-    },
-    {
-        title: 'Edit Material Item',
-        href: '/material-items/edit',
-    },
-];
 
 type MaterialItem = {
     id: number;
@@ -43,20 +34,36 @@ type Supplier = {
 
 export default function EditMaterialItem() {
     const { item, flash, costCodes, suppliers } = usePage<{
-        item: MaterialItem;
+        item: MaterialItem | null;
         costCodes: CostCode[];
         suppliers: Supplier[];
         flash: { success: string; error: string };
     }>().props;
     const form = useForm({
-        code: item.code,
-        description: item.description,
-        unit_cost: item.unit_cost,
-        cost_code_id: item.cost_code?.id || '',
-        supplier_id: item.supplier?.id || '',
+        code: item?.code || '',
+        description: item?.description || '',
+        unit_cost: item?.unit_cost || 0,
+        cost_code_id: item?.cost_code?.id || '',
+        supplier_id: item?.supplier?.id || '',
     });
 
     const handleSubmit = () => {
+        if (!item) {
+            form.post('/material-items/store', {
+                onSuccess: () => {
+                    if (flash.success) {
+                        toast.success(flash.success);
+                    }
+                },
+                onError: () => {
+                    if (flash.error) {
+                        toast.error(flash.error);
+                    }
+                },
+            });
+            return;
+        }
+
         form.put(`/material-items/${item.id}`, {
             onSuccess: () => {
                 if (flash.success) {
@@ -84,31 +91,57 @@ export default function EditMaterialItem() {
         }
     };
 
+    const [mode, setMode] = React.useState<'create' | 'edit'>(item ? 'edit' : 'create');
+    const checkMode = () => {
+        if (item) {
+            setMode('edit');
+        } else {
+            setMode('create');
+        }
+    };
+
+    useEffect(() => {
+        checkMode();
+    }, []);
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: 'Items',
+            href: '/material-items/all',
+        },
+        {
+            title: mode === 'edit' ? 'Edit Material Item' : 'Create Material Item',
+            href: mode === 'edit' ? `/material-items/edit` : `/material-items/create`,
+        },
+    ];
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Material Item" />
             <div className="flex flex-col items-center justify-center">
                 <Card className="m-2 w-full max-w-md p-4">
-                    <div className="mb-4 flex items-center justify-between">
-                        <Link href={`/material-items/${item.id}/previous`}>
-                            <Button variant="outline" size="icon">
-                                <ChevronLeft />
-                            </Button>
-                        </Link>
-                        <Link href={`/material-items/${item.id}/next`}>
-                            <Button variant="outline" size="icon">
-                                <ChevronRight />
-                            </Button>
-                        </Link>
-                        {/* <Link href={`/material-items/${item.id === maxItems ? 1 : item.id + 1}/edit`}>
+                    {mode === 'edit' && (
+                        <div className="mb-4 flex items-center justify-between">
+                            <Link href={`/material-items/${item?.id}/previous`}>
+                                <Button variant="outline" size="icon">
+                                    <ChevronLeft />
+                                </Button>
+                            </Link>
+                            <Link href={`/material-items/${item?.id}/next`}>
+                                <Button variant="outline" size="icon">
+                                    <ChevronRight />
+                                </Button>
+                            </Link>
+                            {/* <Link href={`/material-items/${item.id === maxItems ? 1 : item.id + 1}/edit`}>
                             <Button variant="outline" size="icon">
                                 <ChevronRight />
                             </Button>
                         </Link> */}
-                    </div>
+                        </div>
+                    )}
 
-                    <Label>Code (non-editable)</Label>
-                    <Input value={form.data.code} readOnly onChange={(e) => form.setData('code', e.target.value)} />
+                    {mode === 'edit' ? <Label>Code (non-editable)</Label> : <Label>Code</Label>}
+
+                    <Input value={form.data.code} readOnly={mode === 'edit'} onChange={(e) => form.setData('code', e.target.value)} />
                     <Label>Description</Label>
                     <Input value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
                     <Label>Unit Cost</Label>
@@ -149,7 +182,7 @@ export default function EditMaterialItem() {
                     </Select>
                     <div className="flex items-center justify-between">
                         <div>
-                            <Button onClick={handleSubmit}>Update</Button>
+                            <Button onClick={handleSubmit}>{mode === 'edit' ? 'Update' : 'Create'}</Button>
                             <Link href="/material-items/all">
                                 <Button variant="secondary" className="ml-2">
                                     Cancel

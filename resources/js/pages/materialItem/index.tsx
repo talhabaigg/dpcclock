@@ -4,11 +4,11 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CirclePlus, Download, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,11 +38,15 @@ export default function ItemList() {
     const { items, flash } = usePage<{ items: MaterialItem[]; flash: { success: string; error: string } }>().props;
     const isDarkMode = document.documentElement.classList.contains('dark');
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
+    const gridRef = useRef<AgGridReact>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const filteredItems = items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
+    const filteredItems = useMemo(() => {
+        return items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
+    }, [items, searchQuery]);
     const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
+    const [selectedCount, setSelectedCount] = useState(0); // ⭐ NEW
     // const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     //     if (e.target.files?.[0]) {
     //         setSelectedFile(e.target.files[0]);
@@ -79,6 +83,39 @@ export default function ItemList() {
             toast.success(flash.success);
         }
     }, [flash.success]);
+    const rowSelection = useMemo(() => {
+        return {
+            mode: 'multiRow',
+            selectAll: 'filtered',
+            enableClickSelection: true,
+        };
+    }, []);
+
+    const deleteSelectedRow = () => {
+        const selectedNodes = gridRef.current?.api.getSelectedNodes();
+        if (selectedNodes && selectedNodes.length > 0) {
+            if (!confirm('Are you sure you want to delete the selected material items?')) {
+                return;
+            }
+
+            const selectedIds = selectedNodes.map((node) => node.data.id);
+            console.log('Deleting IDs:', selectedIds);
+            router.delete('/material-items/delete-multiple', {
+                data: { ids: selectedIds },
+                onSuccess: () => {
+                    toast.success('Selected items deleted successfully.');
+                    setSelectedCount(0); // optional: reset count
+                },
+            });
+        } else {
+            toast.error('No rows selected for deletion.');
+        }
+    };
+    const handleSelectionChanged = () => {
+        const selectedNodes = gridRef.current?.api.getSelectedNodes() ?? [];
+        setSelectedCount(selectedNodes.length);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
@@ -93,12 +130,25 @@ export default function ItemList() {
                         className="pl-10"
                     />
                 </div>
+                <div className="mr-auto flex w-full items-center gap-4 sm:w-auto">
+                    <Button variant="destructive" onClick={deleteSelectedRow}>
+                        Delete Selected{' '}
+                    </Button>
+
+                    <span className="text-sm text-gray-600">{selectedCount} Items selected </span>
+                </div>
+
                 {/* <span className="">
                     {flash.success && <div className="mt-2 text-sm text-green-600">{flash.success}</div>}
                     {flash.error && <div className="mt-2 text-sm text-red-600">{flash.error}</div>}
                 </span> */}
 
-                <div className="m-2 flex items-center gap-2">
+                <div className="m-2 flex w-full items-center gap-2 sm:w-auto">
+                    <Link href="/material-items/create">
+                        <Button>
+                            <CirclePlus /> Add
+                        </Button>
+                    </Link>
                     <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                     <a href="/material-items/download">
                         <Button>
@@ -112,8 +162,12 @@ export default function ItemList() {
 
             <div className="ag-theme-alpine m-2 h-full max-w-sm rounded-xl border-0 p-0 sm:max-w-full sm:pr-4">
                 <AgGridReact
+                    ref={gridRef}
                     rowData={filteredItems}
                     theme={appliedTheme}
+                    // @ts-ignore
+                    rowSelection={rowSelection}
+                    onSelectionChanged={handleSelectionChanged}
                     columnDefs={[
                         { field: 'id', headerName: 'ID' },
                         { field: 'code', headerName: 'Code' },

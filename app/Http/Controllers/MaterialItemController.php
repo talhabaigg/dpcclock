@@ -15,6 +15,7 @@ use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Validator;
 
 class MaterialItemController extends Controller
 {
@@ -37,7 +38,12 @@ class MaterialItemController extends Controller
      */
     public function create()
     {
-        //
+        return Inertia::render('materialItem/edit', [
+            'item' => null,
+            'costCodes' => CostCode::all(),
+            'suppliers' => Supplier::all(),
+            'maxItems' => MaterialItem::count(),
+        ]);
     }
 
     /**
@@ -45,7 +51,23 @@ class MaterialItemController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'code' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'unit_cost' => 'required|numeric|min:0',
+            'cost_code_id' => 'nullable|exists:cost_codes,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
+        ]);
+
+        MaterialItem::create([
+            'code' => $request->input('code'),
+            'description' => $request->input('description'),
+            'unit_cost' => $request->input('unit_cost'),
+            'cost_code_id' => $request->input('cost_code_id'),
+            'supplier_id' => $request->input('supplier_id'),
+        ]);
+
+        return redirect()->route('material-items.index')->with('success', 'Material item created successfully.');
     }
 
     /**
@@ -144,6 +166,18 @@ class MaterialItemController extends Controller
     {
         $materialItem->delete();
         return redirect()->route('material-items.index')->with('success', 'Material item deleted successfully.');
+    }
+
+    public function destroyMultiple(Request $request)
+    {
+        $ids = Validator::make($request->all(), [
+            'ids' => 'required|array',
+            'ids.*' => 'exists:material_items,id',
+        ])->validate()['ids'];
+
+        MaterialItem::whereIn('id', $ids)->delete();
+        return redirect()->route('material-items.index');
+        ;
     }
 
     public function upload(Request $request)
