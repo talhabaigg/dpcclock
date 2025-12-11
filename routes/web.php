@@ -52,7 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::get('/users/edit/{user}', [UserController::class, 'edit'])->name('users.edit');
-        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update')->role('admin');
         Route::post('/users/kiosk/{user}/store', [UserController::class, 'storeKiosk'])->name('users.kiosk.store')->permission('manage kiosk managers');
         Route::post('/kiosks/manager/store', [KioskController::class, 'storeManager'])->name('kiosks.manager.store')->permission('manage kiosk managers');
         Route::get('/users/kiosk/{kiosk}/{user}/remove', [UserController::class, 'removeKiosk'])->name('users.kiosk.remove')->permission('manage kiosk managers');
@@ -131,7 +131,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('material-items/{materialItem}/next', [MaterialItemController::class, 'next'])->name('material-items.next');
         Route::get('material-items/{materialItem}/previous', [MaterialItemController::class, 'previous'])->name('material-items.previous');
         Route::put('material-items/{materialItem}', [MaterialItemController::class, 'update'])->name('material-items.update');
-        Route::delete('material-items/delete-multiple', [MaterialItemController::class, 'destroyMultiple'])->name('material-items.destroyMultiple');
+        Route::delete('material-items/delete-multiple', [MaterialItemController::class, 'destroyMultiple'])->name('material-items.destroyMultiple')->role('admin');
         Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy');
 
         Route::get('material-items/download', [MaterialItemController::class, 'download'])->name('material-items.download');
