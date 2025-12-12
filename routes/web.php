@@ -31,6 +31,12 @@ use App\Http\Controllers\SupplierController;
 Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
+
+Route::get('/dashboard', function () {
+    return Inertia::render('dashboard/main');
+})->name('dashboard');
+
+
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
     $user->unreadNotifications->markAsRead();
