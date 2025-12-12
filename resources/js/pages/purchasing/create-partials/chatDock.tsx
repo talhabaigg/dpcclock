@@ -22,7 +22,7 @@ export function ChatDock() {
                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full">
                             <Sparkles size={16} />
                         </span>
-                        <span className="flex">AI Chat</span>
+                        <span className="flex">Ask Superior AI</span>
                     </div>
                     <span>{isOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}</span>
                 </Button>

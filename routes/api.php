@@ -19,3 +19,4 @@ Route::post('/requisition/update-status', [PurchasingController::class, 'updateS
     ->name('requisition.updateStatusFromPowerAutomate');
 
 Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
+Route::post('/chat/stream', [ChatController::class, 'handleStream']);

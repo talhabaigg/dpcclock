@@ -42,8 +42,8 @@ Route::get('/requisition/update-status', [PurchasingController::class, 'updateSt
 Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
     ->name('requisition.updateStatusFromPowerAutomate');
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', function () {
-        return redirect()->route('kiosks.index');
+    Route::get('/', function () {
+        return Inertia::render('dashboard/main');
     })->name('dashboard');
     Route::middleware('role:admin|manager|backoffice')->group(function () {
 

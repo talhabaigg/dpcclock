@@ -5,10 +5,9 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import axios from 'axios';
-import { ArrowUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { IconSend } from '@tabler/icons-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -16,83 +15,45 @@ type Message = {
     id: number;
     role: 'user' | 'assistant';
     content: string;
-    isLoading?: boolean; // for the typing bubble
+    isLoading?: boolean;
 };
 
 export function SimpleChatBox() {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 1,
-            role: 'assistant',
-            content: 'Hi! Ask me anything about purchase orders 👋',
-        },
-    ]);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [message, setMessage] = useState('');
     const [input, setInput] = useState('');
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
-
+    const [isExpanded, setIsExpanded] = useState(false);
     const nextId = useRef(2);
-    const scrollRef = useRef<HTMLDivElement | null>(null);
-    const firstRender = useRef(true);
-
-    // interval ref for the fake streaming typewriter
-    const typingIntervalRef = useRef<number | null>(null);
-
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const bottomRef = useRef<HTMLDivElement | null>(null);
+    // auto-scroll on new message
     useEffect(() => {
-        if (!scrollRef.current) return;
+        if (!bottomRef.current) return;
 
-        const el = scrollRef.current;
-
-        // First render: jump instantly (no animation)
-        if (firstRender.current) {
-            firstRender.current = false;
-            el.scrollTop = el.scrollHeight;
-            return;
-        }
-
-        // After first load: smooth scroll
-        el.scrollTo({
-            top: el.scrollHeight,
-            behavior: 'smooth',
-        });
+        bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setMessage(e.target.value);
 
-    // Clear typing interval on unmount
-    useEffect(() => {
-        return () => {
-            if (typingIntervalRef.current !== null) {
-                window.clearInterval(typingIntervalRef.current);
-            }
-        };
-    }, []);
-
-    const startTypewriter = (messageId: number, fullText: string) => {
-        if (!fullText) return;
-
-        // Clear any previous interval
-        if (typingIntervalRef.current !== null) {
-            window.clearInterval(typingIntervalRef.current);
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
 
-        let index = 0;
-
-        typingIntervalRef.current = window.setInterval(() => {
-            index++;
-
-            setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, content: fullText.slice(0, index) } : m)));
-
-            if (index >= fullText.length) {
-                if (typingIntervalRef.current !== null) {
-                    window.clearInterval(typingIntervalRef.current);
-                }
-                typingIntervalRef.current = null;
-            }
-        }, 5); // typing speed (ms per character)
+        setIsExpanded(e.target.value.length > 100 || e.target.value.includes('\n'));
+    };
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit(e as any);
+        }
     };
 
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
-        const trimmed = input.trim();
+        const trimmed = message.trim();
         if (!trimmed || isSending) return;
 
         setIsSending(true);
@@ -103,10 +64,10 @@ export function SimpleChatBox() {
             content: trimmed,
         };
 
-        // Create a specific assistant bubble ID so we can stream into it
+        // Assistant message ID we’ll stream into
         const assistantId = nextId.current++;
 
-        // Add user message + a placeholder assistant "typing" message
+        // Add user message + empty assistant bubble (loading)
         setMessages((prev) => [
             ...prev,
             userMessage,
@@ -118,28 +79,107 @@ export function SimpleChatBox() {
             },
         ]);
 
-        setInput('');
+        setMessage('');
 
         try {
-            const res = await axios.post('/api/chat', {
-                message: trimmed,
-                conversation_id: conversationId,
+            const res = await fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'text/event-stream',
+                },
+                body: JSON.stringify({
+                    message: trimmed,
+                    conversation_id: conversationId,
+                }),
             });
 
-            const reply = (res.data.reply as string) ?? '';
-            const convId = (res.data.conversation_id as string | null) ?? null;
+            if (!res.body) {
+                throw new Error('No response body');
+            }
 
-            if (convId) setConversationId(convId);
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
 
-            // Turn off the "Thinking…" loader for that assistant bubble
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isLoading: false, content: '' } : m)));
+            let done = false;
+            let buffer = '';
+            let currentConversationId = conversationId;
 
-            // Fake streaming of reply into the assistant message
-            startTypewriter(assistantId, reply || 'Sorry, I did not get a response.');
+            // Ensure the assistant bubble is in "loading" state
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isLoading: true, content: '' } : m)));
+
+            while (!done) {
+                const { value, done: streamDone } = await reader.read();
+                done = streamDone;
+
+                if (value) {
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+
+                    // SSE blocks are separated by \n\n
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop() || '';
+
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+
+                        const lines = part.split('\n');
+                        let eventName: string | null = null;
+                        let dataLine: string | null = null;
+
+                        for (const line of lines) {
+                            if (line.startsWith('event:')) {
+                                eventName = line.slice('event:'.length).trim();
+                            } else if (line.startsWith('data:')) {
+                                dataLine = line.slice('data:'.length).trim();
+                            }
+                        }
+
+                        if (!dataLine) continue;
+
+                        if (eventName === 'done') {
+                            // final event with conversation_id
+                            try {
+                                const payload = JSON.parse(dataLine);
+                                if (payload.conversation_id) {
+                                    currentConversationId = payload.conversation_id;
+                                    setConversationId(payload.conversation_id);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing done payload', e);
+                            }
+
+                            // mark assistant bubble as not loading
+                            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isLoading: false } : m)));
+                        } else {
+                            // normal 'data' message with delta
+                            try {
+                                const payload = JSON.parse(dataLine) as { delta?: string };
+                                if (payload.delta) {
+                                    const deltaText = payload.delta;
+
+                                    setMessages((prev) =>
+                                        prev.map((m) =>
+                                            m.id === assistantId
+                                                ? {
+                                                      ...m,
+                                                      isLoading: false,
+                                                      content: m.content + deltaText,
+                                                  }
+                                                : m,
+                                        ),
+                                    );
+                                }
+                            } catch (err) {
+                                console.error('Error parsing chunk', err);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (err) {
             console.error(err);
-
-            // Replace loading bubble with error message
+            // Show error in assistant bubble
             setMessages((prev) =>
                 prev.map((m) =>
                     m.id === assistantId
@@ -157,16 +197,9 @@ export function SimpleChatBox() {
     }
 
     return (
-        <Card className="flex h-[480px] max-w-96 flex-col border-0 sm:max-w-full sm:min-w-full">
-            {/* <CardHeader className="border-b">
-                <CardTitle className="flex items-center gap-2 rounded-md p-2 text-xl font-bold">
-                    <Sparkles className="h-4 w-4" />
-                    AI Chat
-                </CardTitle>
-            </CardHeader> */}
-
+        <Card className="mx-auto flex h-[480px] max-w-96 flex-col border-0 shadow-none sm:max-w-full sm:min-w-full">
             <CardContent className="flex flex-1 flex-col gap-3 p-0">
-                <ScrollArea className="h-[200px] flex-1 px-4 py-3" ref={scrollRef}>
+                <div className="h-[200px] flex-1 overflow-y-auto px-4 py-3">
                     <div className="flex h-[100px] flex-col gap-3">
                         {messages.map((m) => (
                             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -207,11 +240,54 @@ export function SimpleChatBox() {
                                 </div>
                             </div>
                         ))}
+
+                        {/* 👇 This is the magic auto-scroll anchor */}
+                        <div ref={bottomRef} />
                     </div>
-                </ScrollArea>
+                </div>
 
                 <form onSubmit={handleSubmit} className="flex items-center gap-2 px-3 py-3">
-                    <Textarea
+                    <div
+                        className={cn(
+                            'dark:bg-muted/50 border-border mx-2 w-full max-w-2xl cursor-text overflow-clip border bg-transparent bg-clip-padding p-2.5 shadow-lg transition-all duration-200 sm:mx-auto',
+                            {
+                                'grid grid-cols-1 grid-rows-[auto_1fr_auto] rounded-3xl': isExpanded,
+                                'grid grid-cols-[auto_1fr_auto] grid-rows-[auto_1fr_auto] rounded-[28px]': !isExpanded,
+                            },
+                        )}
+                        style={{
+                            gridTemplateAreas: isExpanded
+                                ? "'header' 'primary' 'footer'"
+                                : "'header header header' 'leading primary trailing' '. footer .'",
+                        }}
+                    >
+                        <div
+                            className={cn('flex min-h-14 items-center overflow-x-hidden px-1.5', {
+                                'mb-0 px-2 py-1': isExpanded,
+                                '-my-2.5': !isExpanded,
+                            })}
+                            style={{ gridArea: 'primary' }}
+                        >
+                            <div className="max-h-52 flex-1 overflow-auto">
+                                <Textarea
+                                    ref={textareaRef}
+                                    value={message}
+                                    onChange={handleTextareaChange}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="Ask anything"
+                                    className="placeholder:text-muted-foreground scrollbar-thin min-h-0 resize-none rounded-none border-0 p-0 text-base focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent"
+                                    rows={1}
+                                />
+                            </div>
+                            {message.trim() && (
+                                <Button type="submit" size="icon" className="h-9 w-9 rounded-full">
+                                    <IconSend className="size-5" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* <Textarea
                         className="h-20 rounded-2xl"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -219,14 +295,15 @@ export function SimpleChatBox() {
                         autoComplete="off"
                         disabled={isSending}
                     />
+
                     <Button
                         type="submit"
-                        disabled={!input.trim() || isSending}
+                        disabled={!message.trim() || isSending}
                         className="absolute right-12 z-50 rounded-full sm:right-8"
                         size="icon"
                     >
                         {isSending ? <span className="text-lg leading-none">⋯</span> : <ArrowUp className="h-4 w-4" />}
-                    </Button>
+                    </Button> */}
                 </form>
             </CardContent>
         </Card>
