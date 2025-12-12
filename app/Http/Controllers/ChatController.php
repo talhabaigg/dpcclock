@@ -174,7 +174,7 @@ class ChatController extends Controller
                 ->getBody(); // Psr\Http\Message\StreamInterface
 
             $buffer = '';
-
+            $total_tokens = 0;
             while (!$stream->eof()) {
                 $chunk = $stream->read(1024);
                 if ($chunk === '' || $chunk === false) {
@@ -223,6 +223,17 @@ class ChatController extends Controller
                         @ob_flush();
                         @flush();
                     }
+
+                    if (($event['type'] ?? null) === 'response.completed') {
+                        $usage = $event['response']['usage'] ?? null;
+
+                        if (is_array($usage)) {
+                            $total_tokens = $usage['total_tokens'] ?? null;
+                            Log::info('Streaming completed. Usage: ' . json_encode($usage));
+                        }
+
+                        break 2;
+                    }
                 }
             }
 
@@ -234,7 +245,7 @@ class ChatController extends Controller
                     'role' => 'assistant',
                     'message' => $fullText,
                     'model_used' => 'gpt-4.1',
-                    'tokens_used' => null, // not easily available in stream
+                    'tokens_used' => $total_tokens,
                 ]);
             }
 

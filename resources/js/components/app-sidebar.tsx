@@ -25,7 +25,7 @@ import { NavDocuments } from './nav-documents';
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: '/',
         icon: LayoutGrid,
         permission: 'view dashboard',
     },

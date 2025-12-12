@@ -57,6 +57,7 @@ class HandleInertiaRequests extends Middleware
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
             ],
+            'tokenUsage' => fn() => $request->user() ? $request->user()->tokenUsage() : 0,
             'notifications' => fn() => $request->user() ? [
                 'unreadCount' => $request->user()->unreadNotifications()->count(),
                 // keep it small; fetch the full list on a notifications page/API

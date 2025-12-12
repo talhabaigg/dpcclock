@@ -8,8 +8,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { IconSend } from '@tabler/icons-react';
+import { Copy, FileCheckIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { toast } from 'sonner';
 
 type Message = {
     id: number;
@@ -28,6 +30,7 @@ export function SimpleChatBox() {
     const nextId = useRef(2);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const bottomRef = useRef<HTMLDivElement | null>(null);
+    const [copiedMessages, setCopiedMessages] = useState<number[]>([]);
     // auto-scroll on new message
     useEffect(() => {
         if (!bottomRef.current) return;
@@ -197,15 +200,15 @@ export function SimpleChatBox() {
     }
 
     return (
-        <Card className="mx-auto flex h-[480px] max-w-96 flex-col border-0 shadow-none sm:max-w-full sm:min-w-full">
+        <Card className="mx-auto flex h-[450px] max-w-96 flex-col border-0 shadow-none sm:max-w-full sm:min-w-full">
             <CardContent className="flex flex-1 flex-col gap-3 p-0">
                 <div className="h-[200px] flex-1 overflow-y-auto px-4 py-3">
                     <div className="flex h-[100px] flex-col gap-3">
                         {messages.map((m) => (
                             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div
-                                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                                        m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                                    className={`max-w-[80%] rounded-md px-3 py-2 text-sm whitespace-pre-wrap ${
+                                        m.role === 'user' ? 'bg-secondary text-secondary-foreground' : 'bg-none'
                                     }`}
                                 >
                                     {m.isLoading ? (
@@ -218,24 +221,43 @@ export function SimpleChatBox() {
                                             <span>Thinking…</span>
                                         </div>
                                     ) : (
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={{
-                                                code({ inline, children, ...props }: { inline?: boolean; children: React.ReactNode }) {
-                                                    return inline ? (
-                                                        <code className="rounded bg-black/20 px-1" {...props}>
-                                                            {children}
-                                                        </code>
-                                                    ) : (
-                                                        <pre className="overflow-x-auto rounded bg-black/40 p-2 text-white">
-                                                            <code {...props}>{children}</code>
-                                                        </pre>
-                                                    );
-                                                },
-                                            }}
-                                        >
-                                            {m.content}
-                                        </ReactMarkdown>
+                                        <>
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                components={{
+                                                    code({ inline, children, ...props }: { inline?: boolean; children: React.ReactNode }) {
+                                                        return inline ? (
+                                                            <code className="rounded bg-black/20 px-1" {...props}>
+                                                                {children}
+                                                            </code>
+                                                        ) : (
+                                                            <pre className="overflow-x-auto rounded bg-black/40 p-2 text-white">
+                                                                <code {...props}>{children}</code>
+                                                            </pre>
+                                                        );
+                                                    },
+                                                }}
+                                            >
+                                                {m.content}
+                                            </ReactMarkdown>
+                                            {m.role === 'assistant' && (
+                                                <Button
+                                                    className="cursor-pointer"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    onClick={() => {
+                                                        try {
+                                                            navigator.clipboard.writeText(m.content);
+                                                            setCopiedMessages((prev) => [...prev, m.id]);
+                                                            setTimeout(() => setCopiedMessages((prev) => prev.filter((id) => id !== m.id)), 2000);
+                                                            toast.success('Copied to clipboard');
+                                                        } catch {}
+                                                    }}
+                                                >
+                                                    {copiedMessages.includes(m.id) ? <FileCheckIcon /> : <Copy />}
+                                                </Button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>

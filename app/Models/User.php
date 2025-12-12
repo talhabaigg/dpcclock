@@ -64,4 +64,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(AiChatMessage::class);
     }
+
+    public function tokenUsage(): int
+    {
+        return (int) $this->aiChatMessages()->sum('tokens_used');
+    }
 }
