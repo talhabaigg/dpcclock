@@ -51,15 +51,14 @@ class ChatController extends Controller
                         'type' => 'file_search',
                         'vector_store_ids' => ['vs_693b42274360819194f48f75a299bea9'],
                     ],
+                    [
+                        'type' => 'mcp',
+                        'server_label' => 'superiorportal',
+                        'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
+                        'require_approval' => 'never',
+                    ]
                 ],
-                // 'tools' => [
-                //     [
-                //         'type' => 'mcp',
-                //         'server_label' => 'superiorportal',
-                //         'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
-                //         'require_approval' => 'never',
-                //     ]
-                // ],
+
             ]);
 
         $result = $response->json();
