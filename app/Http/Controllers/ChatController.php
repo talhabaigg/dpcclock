@@ -167,6 +167,12 @@ class ChatController extends Controller
                             'type' => 'file_search',
                             'vector_store_ids' => ['vs_693b42274360819194f48f75a299bea9'],
                         ],
+                        [
+                            'type' => 'mcp',
+                            'server_label' => 'superiorportal',
+                            'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
+                            'require_approval' => 'never',
+                        ]
                     ],
                     'stream' => true, // tell OpenAI to stream
                 ])
@@ -205,6 +211,7 @@ class ChatController extends Controller
                     }
 
                     $event = json_decode($payload, true);
+                    Log::info('Stream event: ' . $payload);
                     if (!is_array($event)) {
                         continue;
                     }

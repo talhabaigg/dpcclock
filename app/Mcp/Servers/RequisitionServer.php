@@ -11,6 +11,12 @@ use Laravel\Mcp\Server;
 
 class RequisitionServer extends Server
 {
+    protected array $supportedProtocolVersion = [
+        '2025-11-25',
+        '2025-06-18',
+        '2025-03-26',
+        '2024-11-05',
+    ];
     public string $serverName = 'Requisition Server';
 
     public string $serverVersion = '1.0.0';

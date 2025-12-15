@@ -8,10 +8,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { IconSend } from '@tabler/icons-react';
-import { Copy, FileCheckIcon } from 'lucide-react';
+import { BrickWall, Coins, Copy, FileCheckIcon, GraduationCap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
+import './styles.css';
 
 type Message = {
     id: number;
@@ -199,11 +200,42 @@ export function SimpleChatBox() {
         }
     }
 
+    const MESSAGE_SHORTCUTS = [
+        { icon: GraduationCap, text: 'Explain claims process in 100 words' },
+        { icon: BrickWall, text: 'Show 10 most ordered material items' },
+        { icon: Coins, text: 'Show top suppliers' },
+    ];
+
+    const handleMessageShortcut = (e: React.MouseEvent<HTMLButtonElement>) => {
+        const button = e.currentTarget;
+        const text = button.textContent?.trim() || '';
+        setMessage(text);
+        handleSubmit(e as any);
+
+        // Focus the textarea after setting the message
+        setTimeout(() => {
+            textareaRef.current?.focus();
+        }, 0);
+    };
+
     return (
         <Card className="mx-auto flex h-[450px] max-w-96 flex-col border-0 shadow-none sm:max-w-full sm:min-w-full">
             <CardContent className="flex flex-1 flex-col gap-3 p-0">
                 <div className="h-[200px] flex-1 overflow-y-auto px-4 py-3">
                     <div className="flex h-[100px] flex-col gap-3">
+                        {messages.length === 0 && (
+                            <div className="text-muted-foreground text-center text-sm">
+                                <p>Welcome to Superior AI chat!</p>
+                                <p>Ask me anything.</p>
+                                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                    {MESSAGE_SHORTCUTS.map(({ icon: Icon, text }) => (
+                                        <Button key={text} variant="outline" onClick={handleMessageShortcut}>
+                                            <Icon /> {text}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {messages.map((m) => (
                             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div
@@ -212,13 +244,18 @@ export function SimpleChatBox() {
                                     }`}
                                 >
                                     {m.isLoading ? (
-                                        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                                            <span className="flex gap-1">
-                                                <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full" />
-                                                <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full [animation-delay:0.12s]" />
-                                                <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full [animation-delay:0.24s]" />
-                                            </span>
-                                            <span>Thinking…</span>
+                                        <div className="relative inline-block overflow-hidden">
+                                            <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                                                <span className="flex gap-1">
+                                                    <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full" />
+                                                    <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full [animation-delay:0.12s]" />
+                                                    <span className="bg-muted-foreground/70 h-2 w-2 animate-bounce rounded-full [animation-delay:0.24s]" />
+                                                </span>
+                                                <span>Thinking…</span>
+                                            </div>
+
+                                            {/* Shine overlay */}
+                                            <span className="shine-overlay"></span>
                                         </div>
                                     ) : (
                                         <>
