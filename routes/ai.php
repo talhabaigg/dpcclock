@@ -1,6 +1,6 @@
 <?php
 
-use Laravel\Mcp\Server\Facades\Mcp;
+use Laravel\Mcp\Facades\Mcp;
 
 Mcp::web('requisitions', \App\Mcp\Servers\RequisitionServer::class); // Available at /mcp/requisitions
 // Mcp::local('requisitions', \App\Mcp\Servers\RequisitionServer::class);
