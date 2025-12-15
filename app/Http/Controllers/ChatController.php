@@ -42,24 +42,16 @@ class ChatController extends Controller
 
         // Log::info(env('VITE_OPEN_AI_API_KEY'));
         $response = Http::withToken(env('VITE_OPEN_AI_API_KEY'))
-            ->post('https://api.openai.com/v1/responses', [
-                'model' => 'gpt-4.1',
-                'input' => $input,
-                'instructions' => 'Provide accurate and concise information based on the user\'s queries. If you do not know the answer, respond with "I am not sure about that." Do not make up answers. Always look for answers in file search tools if available.',
-                'tools' => [
-                    [
-                        'type' => 'file_search',
-                        'vector_store_ids' => ['vs_693b42274360819194f48f75a299bea9'],
-                    ],
-                    [
-                        'type' => 'mcp',
-                        'server_label' => 'superiorportal',
-                        'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
-                        'require_approval' => 'never',
-                    ]
+            ->post(
+                'https://api.openai.com/v1/responses',
+                [
+                    'model' => 'gpt-4.1',
+                    'input' => $input,
+                    'instructions' => 'You only have access to the file_search tool. Do not reference MCP or any other tool. If you cannot answer using file_search, say "I am not sure about that."'
+
                 ],
 
-            ]);
+            );
 
         $result = $response->json();
         Log::info('OpenAI response:', ['response' => json_encode($result, JSON_PRETTY_PRINT)]);
@@ -166,12 +158,12 @@ class ChatController extends Controller
                             'type' => 'file_search',
                             'vector_store_ids' => ['vs_693b42274360819194f48f75a299bea9'],
                         ],
-                        [
-                            'type' => 'mcp',
-                            'server_label' => 'superiorportal',
-                            'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
-                            'require_approval' => 'never',
-                        ]
+                        // [
+                        //     'type' => 'mcp',
+                        //     'server_label' => 'superiorportal',
+                        //     'server_url' => 'https://portal.superiorgroup.com.au/mcp/requisitions',
+                        //     'require_approval' => 'never',
+                        // ]
                     ],
                     'stream' => true, // tell OpenAI to stream
                 ])

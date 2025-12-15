@@ -11,11 +11,13 @@ export function ChatDock() {
     return (
         <div className="fixed right-4 bottom-0 z-50">
             <div
-                className={`flex w-100 flex-col rounded-t-lg border border-b-0 bg-white shadow-xl transition-all duration-300 ease-in-out ${isOpen ? 'h-[500px]' : 'h-10'} `}
+                className={`flex w-100 flex-col rounded-t-lg border border-b-0 bg-white shadow-xl transition-all duration-300 ease-in-out dark:bg-black ${
+                    isOpen ? 'h-[500px]' : 'h-10'
+                }`}
             >
                 {/* Header */}
                 <Button
-                    onClick={() => setIsOpen(!isOpen)}
+                    onClick={() => setIsOpen((v) => !v)}
                     className="flex h-10 w-full items-center justify-between rounded-t-lg rounded-b-none px-3 text-sm font-semibold"
                 >
                     <div className="flex items-center gap-2">
@@ -27,11 +29,15 @@ export function ChatDock() {
                     <span>{isOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}</span>
                 </Button>
 
-                {/* Animated body fade-in */}
+                {/* Body (always mounted) */}
                 <div
-                    className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'} `}
+                    className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out ${
+                        isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
+                    }`}
+                    // optional: prevent clicks when closed
+                    style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
                 >
-                    {isOpen && <SimpleChatBox />}
+                    <SimpleChatBox />
                 </div>
             </div>
         </div>
