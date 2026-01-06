@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CirclePlus, Download, Edit, RefreshCcw, Trash } from 'lucide-react';
+import { CirclePlus, Download, Edit, RefreshCcw, RotateCcw, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -179,6 +179,12 @@ export default function LocationsList() {
             <Head title="Locations" />
             <LoadingDialog open={open} setOpen={setOpen} />
             <div className="m-2 flex items-center gap-2">
+                <Link href={`/location/${location.id}/job-data`} method="get">
+                    <Button>
+                        <RotateCcw />
+                        Load Job Cost
+                    </Button>
+                </Link>
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                     <DialogTrigger asChild>
                         <Button variant="secondary" className="mx-auto w-full max-w-96 sm:mx-0 sm:w-full sm:max-w-48">
@@ -207,6 +213,7 @@ export default function LocationsList() {
                 </Dialog>
                 {/* {flash.success && <div className="m-2 text-green-500">{flash.success}</div>}{' '} */}
             </div>
+
             <div className="mx-auto flex max-w-96 flex-col space-y-1 sm:m-0 sm:max-w-full sm:flex-row">
                 <Card className="w-full p-0 sm:m-2 md:w-1/2 2xl:w-1/3">
                     <Table>

@@ -237,4 +237,11 @@ class LocationController extends Controller
 
     }
 
+    public function LoadJobDataFromPremier(Location $location)
+    {
+
+        \App\Jobs\loadJobCostDetails::dispatch();
+        return redirect()->back()->with('success', 'Job Cost Details loading initiated.');
+    }
+
 }
