@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CirclePlus, Download, Edit, RefreshCcw, RotateCcw, Trash } from 'lucide-react';
+import { ChartColumnIncreasing, CirclePlus, Download, Edit, RefreshCcw, RotateCcw, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
@@ -183,6 +183,12 @@ export default function LocationsList() {
                     <Button>
                         <RotateCcw />
                         Load Job Cost
+                    </Button>
+                </Link>
+                <Link href={`/location/${location.id}/job-forecast`} method="get">
+                    <Button>
+                        <ChartColumnIncreasing />
+                        Job Forecast
                     </Button>
                 </Link>
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>

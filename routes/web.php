@@ -4,6 +4,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\JobForecastController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
@@ -176,6 +177,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheet-events/{eventId}/{kioskId}/generate-timesheets', [TimesheetEventController::class, 'generateTimesheets'])->name('events.generateTimesheets');
         // Location Cost Codes from Premier
         Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
+        Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
         Route::get('/locations/{location}/cost-codes/{id}/delete', [LocationCostcodeController::class, 'delete'])->name('locationCostcodes.delete')->role('admin');
