@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArProgressBillingSummary;
 use App\Models\JobCostDetail;
+use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,16 +27,20 @@ class JobForecastController extends Controller
             ->orderBy('month')
             ->orderBy('cost_item')
             ->get();
-        $monthlyActuals = $actualsByMonth->groupBy('month')->map(function ($items) {
-            return $items->mapWithKeys(function ($item) {
-                return [
-                    $item->cost_item => [
-                        'actual' => $item->actual,
-                        'description' => $item->cost_item_description
-                    ]
-                ];
-            });
-        });
+
+        $revenuesByMonth = ArProgressBillingSummary::where('job_number', $jobNumber)
+            ->selectRaw("
+        DATE_FORMAT(period_end_date, '%Y-%m') as month,
+        '99-99' as cost_item, 'Revenue' as cost_item_description,
+        SUM(this_app_work_completed) as actual,
+        'actual' as type
+    ")
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+
+
         $months = $actualsByMonth
             ->pluck('month')
             ->unique()
@@ -42,21 +48,41 @@ class JobForecastController extends Controller
             ->values()
             ->all();
 
-        // Pivot into rows keyed by cost_item
-        $rows = $actualsByMonth
+
+
+        $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->select('cost_item', 'estimate_at_completion')->get();
+        // dd($budget);
+        // Sum actuals by cost_item
+        $sumByCostItem = $budget
             ->groupBy('cost_item')
-            ->map(function ($items, $costItem) use ($months) {
+            ->map(function ($items, $costItem) {
+                return [
+                    'cost_item' => $costItem,
+                    'estimate_at_completion' => $items->sum('estimate_at_completion'),
+                ];
+            })
+            ->values()
+            ->all();
+
+
+
+
+
+        $costRows = $actualsByMonth
+            ->groupBy('cost_item')
+            ->map(function ($items, $costItem) use ($months, $sumByCostItem) {
                 $first = $items->first();
 
                 $row = [
                     'cost_item' => $costItem,
                     'cost_item_description' => $first->cost_item_description,
                     'type' => 'actual',
-                    'budget' => 120000,
-
+                    'budget' => collect($sumByCostItem)
+                        ->where('cost_item', $costItem)
+                        ->pluck('estimate_at_completion')
+                        ->first() ?? 0,
                 ];
 
-                // Ensure every month key exists (optional but nice)
                 foreach ($months as $m) {
                     $row[$m] = null;
                 }
@@ -80,13 +106,36 @@ class JobForecastController extends Controller
             $forecastMonths[] = $current;
             $current = date('Y-m', strtotime($current . ' +1 month'));
         }
+        $revenueRows = [
+            (function () use ($revenuesByMonth, $months) {
+                $row = [
+                    'cost_item' => '99-99',
+                    'cost_item_description' => 'Revenue',
+                    'type' => 'actual',
+                ];
 
+                foreach ($months as $m) {
+                    $row[$m] = null;
+                }
+
+                foreach ($revenuesByMonth as $r) {
+                    $row[$r->month] = (float) $r->actual;
+                }
+
+                return $row;
+            })()
+        ];
 
         return Inertia::render('job-forecast/show', [
-            'rowData' => $rows,
+            'costRowData' => $costRows,
+            'revenueRowData' => $revenueRows,
             'monthsAll' => $months,
+            'projectEndMonth' => $endMonth,
             'forecastMonths' => $forecastMonths,
         ]);
 
+
+
     }
+
 }

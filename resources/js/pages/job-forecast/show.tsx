@@ -1,5 +1,5 @@
 import { AgGridReact } from 'ag-grid-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -11,6 +11,7 @@ type Props = {
     rowData: any[];
     monthsAll: string[];
     forecastMonths: string[];
+    projectEndMonth: string;
 };
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -36,12 +37,12 @@ const sumMonths = (row: any, months: string[]) => {
     return hasAny ? total : null;
 };
 
-const ShowJobForecastPage = ({ rowData, monthsAll, forecastMonths }: Props) => {
+const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths, projectEndMonth }: Props) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
 
     // IMPORTANT: editable data must live in state (not props)
-    const [gridData, setGridData] = useState<any[]>(() => rowData ?? []);
-
+    const [gridData, setGridData] = useState<any[]>(() => costRowData ?? []);
+    const [revenueGridData, setRevenueGridData] = useState<any[]>(() => revenueRowData ?? []);
     // user-selected end date (defaults to latest actual month)
     const [endDate, setEndDate] = useState(monthsAll[monthsAll.length - 1] + '-01');
 
@@ -412,7 +413,8 @@ const ShowJobForecastPage = ({ rowData, monthsAll, forecastMonths }: Props) => {
 
         return [totals];
     }, [gridData, displayMonths, forecastMonths]);
-
+    const gridOne = useRef<AgGridReact>(null);
+    const gridTwo = useRef<AgGridReact>(null);
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="flex h-full flex-col">
@@ -425,18 +427,37 @@ const ShowJobForecastPage = ({ rowData, monthsAll, forecastMonths }: Props) => {
                 </div>
 
                 {/* Controls (your endDate/projectEndDate inputs go here) */}
+                <div className="h-full space-y-2">
+                    <div className="ag-theme-quartz h-50 w-full px-2">
+                        {/* <AgGridReact rowData={revenueRowData} columnDefs={revenueCols} /> */}
 
-                <div className="ag-theme-quartz h-1/2 w-full px-2">
-                    <AgGridReact
-                        theme={themeBalham}
-                        rowData={gridData}
-                        columnDefs={columnDefs}
-                        defaultColDef={defaultColDef}
-                        animateRows
-                        pinnedBottomRowData={pinnedBottomRowData}
-                        // onCellValueChanged={onCellValueChanged}
-                        stopEditingWhenCellsLoseFocus
-                    />
+                        <AgGridReact
+                            theme={themeBalham}
+                            ref={gridTwo}
+                            alignedGrids={[gridOne]}
+                            rowData={revenueGridData}
+                            columnDefs={columnDefs}
+                            defaultColDef={defaultColDef}
+                            animateRows
+                            pinnedBottomRowData={pinnedBottomRowData}
+                            // onCellValueChanged={onCellValueChanged}
+                            stopEditingWhenCellsLoseFocus
+                        />
+                    </div>
+                    <div className="ag-theme-quartz h-1/2 w-full space-y-2 px-2">
+                        <AgGridReact
+                            theme={themeBalham}
+                            ref={gridOne}
+                            alignedGrids={[gridTwo]}
+                            rowData={gridData}
+                            columnDefs={columnDefs}
+                            defaultColDef={defaultColDef}
+                            animateRows
+                            pinnedBottomRowData={pinnedBottomRowData}
+                            // onCellValueChanged={onCellValueChanged}
+                            stopEditingWhenCellsLoseFocus
+                        />
+                    </div>
                 </div>
             </div>
         </AppLayout>
