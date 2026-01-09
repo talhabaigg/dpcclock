@@ -30,16 +30,17 @@ class JobForecastController extends Controller
 
         $revenuesByMonth = ArProgressBillingSummary::where('job_number', $jobNumber)
             ->selectRaw("
-        DATE_FORMAT(period_end_date, '%Y-%m') as month,
-        '99-99' as cost_item, 'Revenue' as cost_item_description,
-        SUM(this_app_work_completed) as actual,
-        'actual' as type
-    ")
+            DATE_FORMAT(period_end_date, '%Y-%m') as month,
+            '99-99' as cost_item, 'Revenue' as cost_item_description,
+            SUM(this_app_work_completed) as actual,
+            MAX(contract_sum_to_date) as contract_sum_to_date,
+            'actual' as type
+            ")
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
-
+        // dd($revenuesByMonth);
 
         $months = $actualsByMonth
             ->pluck('month')
@@ -111,6 +112,7 @@ class JobForecastController extends Controller
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
+                    'contract_sum_to_date' => $revenuesByMonth->max('contract_sum_to_date'),
                     'type' => 'actual',
                 ];
 
