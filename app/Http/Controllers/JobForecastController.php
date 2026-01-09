@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ArProgressBillingSummary;
 use App\Models\JobCostDetail;
+use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class JobForecastController extends Controller
@@ -68,10 +70,28 @@ class JobForecastController extends Controller
 
 
 
+        // Calculate forecast months first
+        $endDate = '2026-09-01';
+        $endMonth = date('Y-m', strtotime($endDate));
+        $lastActualMonth = end($months);
+        $startForecastMonth = date('Y-m', strtotime($lastActualMonth . ' +1 month'));
+        $forecastMonths = [];
+        $current = $startForecastMonth;
+        while ($current <= $endMonth) {
+            $forecastMonths[] = $current;
+            $current = date('Y-m', strtotime($current . ' +1 month'));
+        }
+
+        // Load saved forecast data
+        $savedForecasts = JobForecastData::where('job_number', $jobNumber)
+            ->get()
+            ->groupBy(function ($item) {
+                return $item->grid_type . '_' . $item->cost_item;
+            });
 
         $costRows = $actualsByMonth
             ->groupBy('cost_item')
-            ->map(function ($items, $costItem) use ($months, $sumByCostItem) {
+            ->map(function ($items, $costItem) use ($months, $sumByCostItem, $forecastMonths, $savedForecasts) {
                 $first = $items->first();
 
                 $row = [
@@ -92,23 +112,23 @@ class JobForecastController extends Controller
                     $row[$i->month] = (float) $i->actual;
                 }
 
+                // Load forecast data from saved records
+                $forecastKey = 'cost_' . $costItem;
+                if (isset($savedForecasts[$forecastKey])) {
+                    foreach ($savedForecasts[$forecastKey] as $forecast) {
+                        if (in_array($forecast->month, $forecastMonths)) {
+                            $row[$forecast->month] = (float) $forecast->forecast_amount;
+                        }
+                    }
+                }
+
                 return $row;
             })
             ->values()
             ->all();
 
-        $endDate = '2026-09-01';
-        $endMonth = date('Y-m', strtotime($endDate));
-        $lastActualMonth = end($months);
-        $startForecastMonth = date('Y-m', strtotime($lastActualMonth . ' +1 month'));
-        $forecastMonths = [];
-        $current = $startForecastMonth;
-        while ($current <= $endMonth) {
-            $forecastMonths[] = $current;
-            $current = date('Y-m', strtotime($current . ' +1 month'));
-        }
         $revenueRows = [
-            (function () use ($revenuesByMonth, $months) {
+            (function () use ($revenuesByMonth, $months, $forecastMonths, $savedForecasts) {
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
@@ -124,6 +144,16 @@ class JobForecastController extends Controller
                     $row[$r->month] = (float) $r->actual;
                 }
 
+                // Load forecast data from saved records
+                $forecastKey = 'revenue_99-99';
+                if (isset($savedForecasts[$forecastKey])) {
+                    foreach ($savedForecasts[$forecastKey] as $forecast) {
+                        if (in_array($forecast->month, $forecastMonths)) {
+                            $row[$forecast->month] = (float) $forecast->forecast_amount;
+                        }
+                    }
+                }
+
                 return $row;
             })()
         ];
@@ -134,10 +164,63 @@ class JobForecastController extends Controller
             'monthsAll' => $months,
             'projectEndMonth' => $endMonth,
             'forecastMonths' => $forecastMonths,
+            'locationId' => $id,
+        ]);
+    }
+
+    /**
+     * Save forecast data
+     */
+    public function store(Request $request, $id)
+    {
+        \Log::info('data', $request->all());
+        $validated = $request->validate([
+            'grid_type' => 'required|in:cost,revenue',
+            'forecast_data' => 'required|array',
+            'forecast_data.*.cost_item' => 'required|string',
+            'forecast_data.*.months' => 'present|array',   // present allows empty array
+            'forecast_data.*.months.*' => 'nullable|numeric',
         ]);
 
 
+        $jobNumber = Location::where('id', $id)->value('external_id');
 
+        DB::beginTransaction();
+        try {
+            $gridType = $validated['grid_type'];
+
+            foreach ($validated['forecast_data'] as $row) {
+                $costItem = $row['cost_item'];
+
+                foreach ($row['months'] as $month => $amount) {
+                    JobForecastData::updateOrCreate(
+                        [
+                            'job_number' => $jobNumber,
+                            'grid_type' => $gridType,
+                            'cost_item' => $costItem,
+                            'month' => $month,
+                        ],
+                        [
+                            'location_id' => $id,
+                            'forecast_amount' => $amount,
+                        ]
+                    );
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Forecast saved successfully',
+                'success' => true,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to save forecast: ' . $e->getMessage(),
+                'success' => false,
+            ], 500);
+        }
     }
 
 }

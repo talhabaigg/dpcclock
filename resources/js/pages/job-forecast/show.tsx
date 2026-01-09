@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeBalham } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { ArrowLeft, DollarSign, Percent } from 'lucide-react';
@@ -33,7 +33,7 @@ import { withRowKeys } from './utils';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths }: JobForecastProps) => {
+const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths, locationId }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
 
     // ===========================
@@ -45,6 +45,7 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
     const [chartCtx, setChartCtx] = useState<ChartContext>({ open: false });
     const [topGridHeight, setTopGridHeight] = useState(50); // percentage
     const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('cumulative-percent');
+    const [isSaving, setIsSaving] = useState(false);
 
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
@@ -119,6 +120,87 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         },
         [topGridHeight],
     );
+
+    // ===========================
+    // Save Forecast
+    // ===========================
+    const saveForecast = useCallback(async () => {
+        setIsSaving(true);
+
+        try {
+            // Prepare cost data
+            const costForecastData = costGridData.map((row) => {
+                const months: Record<string, number | null> = {};
+                forecastMonths.forEach((month) => {
+                    if (row[month] !== undefined && row[month] !== null) {
+                        months[month] = row[month];
+                    }
+                });
+                return {
+                    cost_item: row.cost_item,
+                    months,
+                };
+            });
+
+            // Prepare revenue data
+            const revenueForecastData = revenueGridData.map((row) => {
+                const months: Record<string, number | null> = {};
+                forecastMonths.forEach((month) => {
+                    if (row[month] !== undefined && row[month] !== null) {
+                        months[month] = row[month];
+                    }
+                });
+                return {
+                    cost_item: row.cost_item,
+                    months,
+                };
+            });
+
+            console.log('Cost Forecast Data:', costForecastData);
+            console.log('Revenue Forecast Data:', revenueForecastData);
+            router.post(`/location/${locationId}/job-forecast`, {
+                grid_type: 'cost',
+                forecast_data: costForecastData,
+            });
+
+            router.post(`/location/${locationId}/job-forecast`, {
+                grid_type: 'revenue',
+                forecast_data: revenueForecastData,
+            });
+            // // Save cost data
+            // await fetch(`/location/${locationId}/job-forecast`, {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json',
+            //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            //     },
+            //     body: JSON.stringify({
+            //         grid_type: 'cost',
+            //         forecast_data: costForecastData,
+            //     }),
+            // });
+
+            // Save revenue data
+            // await fetch(`/location/${locationId}/job-forecast`, {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json',
+            //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            //     },
+            //     body: JSON.stringify({
+            //         grid_type: 'revenue',
+            //         forecast_data: revenueForecastData,
+            //     }),
+            // });
+
+            alert('Forecast saved successfully!');
+        } catch (error) {
+            console.error('Failed to save forecast:', error);
+            alert('Failed to save forecast. Please try again.');
+        } finally {
+            setIsSaving(false);
+        }
+    }, [costGridData, revenueGridData, forecastMonths, locationId]);
 
     // ===========================
     // Chart Editing
@@ -313,12 +395,15 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
 
             {/* Main Content */}
             <div className="flex h-full flex-col">
-                <div className="m-2">
+                <div className="m-2 flex items-center justify-between">
                     <Link href="/locations" className="p-0">
                         <Button variant="ghost" className="m-0">
                             <ArrowLeft />
                         </Button>
                     </Link>
+                    <Button onClick={saveForecast} disabled={isSaving} className="ml-auto">
+                        {isSaving ? 'Saving...' : 'Save Forecast'}
+                    </Button>
                 </div>
 
                 <div className="h-full space-y-2">
