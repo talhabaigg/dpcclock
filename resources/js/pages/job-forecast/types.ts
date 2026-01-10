@@ -35,6 +35,8 @@ export interface JobForecastProps {
     forecastMonths: string[];
     projectEndMonth: string;
     locationId: number;
+    jobName?: string;
+    jobNumber?: string;
 }
 
 export interface ChartPoint {

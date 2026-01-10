@@ -10,10 +10,12 @@ import { BreadcrumbItem } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeBalham } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ArrowLeft, DollarSign, Percent } from 'lucide-react';
+import { ArrowLeft, BarChart3, DollarSign, FileText, Percent } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { buildCostColumnDefs, buildRevenueColumnDefs } from './column-builders';
+import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
 import { ForecastDialogChart, type ChartViewMode } from './ForecastDialogChart';
+import { RevenueReportDialog } from './RevenueReportDialog';
+import { buildCostColumnDefs, buildRevenueColumnDefs } from './column-builders';
 import {
     LS_COST_COL_STATE,
     LS_REV_COL_STATE,
@@ -29,12 +31,16 @@ import {
     useTrendColumnDef,
 } from './hooks';
 import type { ChartContext, GridRow, JobForecastProps } from './types';
-import { withRowKeys } from './utils';
+import { formatMonthHeader, withRowKeys } from './utils';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths, locationId }: JobForecastProps) => {
-    const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
+const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths, locationId, jobName, jobNumber }: JobForecastProps) => {
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Locations', href: '/locations' },
+        { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
+        { title: 'Job Forecast', href: '#' },
+    ];
 
     // ===========================
     // State Management
@@ -46,6 +52,16 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
     const [topGridHeight, setTopGridHeight] = useState(50); // percentage
     const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('cumulative-percent');
     const [isSaving, setIsSaving] = useState(false);
+
+    // Accrual Summary Dialog State
+    const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
+    const [accrualViewMode, setAccrualViewMode] = useState<AccrualViewMode>('accrual-dollar');
+    const [showCost, setShowCost] = useState(true);
+    const [showRevenue, setShowRevenue] = useState(true);
+    const [showMargin, setShowMargin] = useState(true);
+
+    // Revenue Report Dialog State
+    const [revenueReportOpen, setRevenueReportOpen] = useState(false);
 
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
@@ -76,8 +92,17 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
     // Unified Group Show State
     // ===========================
     const syncGroupShowStateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isEditingRef = useRef(false);
+    const lastSyncedState = useRef<string | null>(null);
+    const editingStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const syncGroupShowState = useCallback(() => {
+        // Don't sync if user is currently editing a cell
+        if (isEditingRef.current) {
+            console.log('Skipping sync - editing in progress');
+            return;
+        }
+
         // Debounce to prevent excessive calls
         if (syncGroupShowStateTimeoutRef.current) {
             clearTimeout(syncGroupShowStateTimeoutRef.current);
@@ -86,8 +111,17 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         syncGroupShowStateTimeoutRef.current = setTimeout(() => {
             const api1 = gridOne.current?.api;
             if (api1) {
-                saveGroupShowState(api1);
-                restoreGroupShowState(gridTwo.current?.api);
+                const currentState = JSON.stringify(api1.getColumnState().filter((col: any) => col.hide !== undefined));
+
+                // Only sync if the state has actually changed
+                if (currentState !== lastSyncedState.current) {
+                    console.log('Syncing group state to localStorage');
+                    lastSyncedState.current = currentState;
+                    saveGroupShowState(api1);
+                    // Don't call restoreGroupShowState here - alignedGrids handles the sync automatically
+                } else {
+                    console.log('State unchanged, skipping sync');
+                }
             }
         }, 100);
     }, []);
@@ -250,21 +284,6 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         [costTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumBefore, forecastSumThrough, updateCostRowCell],
     );
 
-    const revenueColDefs = useMemo(
-        () =>
-            buildRevenueColumnDefs({
-                trendColDef: revenueTrendColDef,
-                displayMonths,
-                forecastMonths,
-                actualsTotalForRow,
-                forecastSumThrough,
-                forecastSumBefore,
-                updateRowCell: updateRevenueRowCell,
-                budgetField: 'contract_sum_to_date',
-            }),
-        [revenueTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumThrough, forecastSumBefore, updateRevenueRowCell],
-    );
-
     const defaultColDef = useMemo(
         () => ({
             resizable: false,
@@ -294,6 +313,64 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         description: 'Total Revenue',
     });
 
+    const revenueColDefs = useMemo(
+        () =>
+            buildRevenueColumnDefs({
+                trendColDef: revenueTrendColDef,
+                displayMonths,
+                forecastMonths,
+                actualsTotalForRow,
+                forecastSumThrough,
+                forecastSumBefore,
+                updateRowCell: updateRevenueRowCell,
+                budgetField: 'contract_sum_to_date',
+                revenueTotals: pinnedBottomRevenueRowData[0],
+            }),
+        [revenueTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumThrough, forecastSumBefore, updateRevenueRowCell, pinnedBottomRevenueRowData],
+    );
+
+    // Calculate profit row (Revenue - Cost)
+    const pinnedBottomProfitRowData = useMemo(() => {
+        if (!pinnedBottomRowData.length || !pinnedBottomRevenueRowData.length) return [];
+
+        const costTotals = pinnedBottomRowData[0];
+        const revenueTotals = pinnedBottomRevenueRowData[0];
+        const lastForecastMonth = forecastMonths[forecastMonths.length - 1];
+
+        const profitRow: any = {
+            cost_item: '',
+            cost_item_description: 'Profit',
+            contract_sum_to_date: (revenueTotals.contract_sum_to_date || 0) - (costTotals.budget || 0),
+        };
+
+        // Calculate profit for each display month
+        for (const m of displayMonths) {
+            profitRow[m] = (revenueTotals[m] || 0) - (costTotals[m] || 0);
+        }
+
+        // Calculate profit for each forecast month (except last, which is auto-calculated)
+        for (const m of forecastMonths) {
+            if (m === lastForecastMonth) {
+                // Don't pre-calculate the last month - let the column valueGetter handle it
+                profitRow[m] = 0; // This will be overridden by valueGetter
+            } else {
+                profitRow[m] = (revenueTotals[m] || 0) - (costTotals[m] || 0);
+            }
+        }
+
+        // Calculate totals (excluding last forecast month since it's auto-calculated)
+        profitRow.actuals_total = displayMonths.reduce((sum, m) => sum + (Number(profitRow[m]) || 0), 0);
+
+        // Forecast total should include all months including the last one
+        // We need to calculate it including the auto-calculated last month
+        const forecastExceptLast = forecastMonths.slice(0, -1);
+        const forecastBeforeLast = forecastExceptLast.reduce((sum, m) => sum + (Number(profitRow[m]) || 0), 0);
+        const lastMonthProfit = (revenueTotals[lastForecastMonth] || 0) - (costTotals[lastForecastMonth] || 0);
+        profitRow.forecast_total = forecastBeforeLast + lastMonthProfit;
+
+        return [profitRow];
+    }, [pinnedBottomRowData, pinnedBottomRevenueRowData, displayMonths, forecastMonths]);
+
     // ===========================
     // Chart Data
     // ===========================
@@ -313,6 +390,33 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         const budgetField = chartCtx.grid === 'cost' ? 'budget' : 'contract_sum_to_date';
         return Number(activeRow[budgetField]) || undefined;
     }, [chartCtx, activeRow]);
+
+    // ===========================
+    // Accrual Summary Data
+    // ===========================
+    const accrualData = useMemo<AccrualDataPoint[]>(() => {
+        const allMonths = [...displayMonths, ...forecastMonths];
+
+        return allMonths.map((monthKey) => {
+            const isActual = displayMonths.includes(monthKey);
+
+            // Get totals from pinned rows
+            const costTotal = pinnedBottomRowData[0]?.[monthKey];
+            const revenueTotal = pinnedBottomRevenueRowData[0]?.[monthKey];
+
+            return {
+                monthKey,
+                monthLabel: formatMonthHeader(monthKey),
+                costActual: isActual ? (costTotal ?? 0) : null,
+                costForecast: !isActual ? (costTotal ?? 0) : null,
+                revenueActual: isActual ? (revenueTotal ?? 0) : null,
+                revenueForecast: !isActual ? (revenueTotal ?? 0) : null,
+            };
+        });
+    }, [displayMonths, forecastMonths, pinnedBottomRowData, pinnedBottomRevenueRowData]);
+
+    const totalCostBudget = useMemo(() => pinnedBottomRowData[0]?.budget || 0, [pinnedBottomRowData]);
+    const totalRevenueBudget = useMemo(() => pinnedBottomRevenueRowData[0]?.contract_sum_to_date || 0, [pinnedBottomRevenueRowData]);
 
     // ===========================
     // Render
@@ -393,6 +497,130 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                 </DialogContent>
             </Dialog>
 
+            {/* Revenue Report Dialog */}
+            <RevenueReportDialog
+                open={revenueReportOpen}
+                onOpenChange={setRevenueReportOpen}
+                jobName={jobName || 'Job Forecast'}
+                jobNumber={jobNumber || `Location ${locationId}`}
+                accrualData={accrualData}
+                totalCostBudget={totalCostBudget}
+                totalRevenueBudget={totalRevenueBudget}
+                displayMonths={displayMonths}
+                forecastMonths={forecastMonths}
+            />
+
+            {/* Accrual Summary Dialog */}
+            <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
+                <DialogContent className="h-150 w-full max-w-5xl min-w-7xl">
+                    <DialogHeader>
+                        <div className="flex items-center justify-between">
+                            <DialogTitle>Accrual Summary - Job Progression</DialogTitle>
+                            <TooltipProvider>
+                                <div className="flex gap-4 pr-4">
+                                    {/* View Mode Toggles */}
+                                    <div className="flex gap-1">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className={`rounded-md p-2 ${
+                                                        accrualViewMode === 'accrual-percent'
+                                                            ? 'bg-blue-500 text-white'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                    onClick={() => setAccrualViewMode('accrual-percent')}
+                                                >
+                                                    <Percent className="h-4 w-4" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Accrual Percent View</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className={`rounded-md p-2 ${
+                                                        accrualViewMode === 'accrual-dollar'
+                                                            ? 'bg-blue-500 text-white'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                    onClick={() => setAccrualViewMode('accrual-dollar')}
+                                                >
+                                                    <DollarSign className="h-4 w-4" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Accrual Dollar View</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
+
+                                    {/* Line Visibility Toggles */}
+                                    <div className="flex items-center gap-3 border-l pl-4">
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={showCost}
+                                                onChange={(e) => setShowCost(e.target.checked)}
+                                                className="h-4 w-4 cursor-pointer"
+                                            />
+                                            <span className="flex items-center gap-1">
+                                                <span className="h-3 w-3 rounded-full bg-[#60A5FA]"></span>
+                                                Cost
+                                            </span>
+                                        </label>
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={showRevenue}
+                                                onChange={(e) => setShowRevenue(e.target.checked)}
+                                                className="h-4 w-4 cursor-pointer"
+                                            />
+                                            <span className="flex items-center gap-1">
+                                                <span className="h-3 w-3 rounded-full bg-[#10B981]"></span>
+                                                Revenue
+                                            </span>
+                                        </label>
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={showMargin}
+                                                onChange={(e) => setShowMargin(e.target.checked)}
+                                                className="h-4 w-4 cursor-pointer"
+                                            />
+                                            <span className="flex items-center gap-1">
+                                                <span className="h-3 w-3 rounded-full bg-[#A855F7]"></span>
+                                                Margin
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </TooltipProvider>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="h-[520px]">
+                        <AccrualSummaryChart
+                            data={accrualData}
+                            viewMode={accrualViewMode}
+                            showCost={showCost}
+                            showRevenue={showRevenue}
+                            showMargin={showMargin}
+                            costBudget={totalCostBudget}
+                            revenueBudget={totalRevenueBudget}
+                        />
+                    </div>
+
+                    <div className="text-muted-foreground text-xs">
+                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Yellow points represent actuals,
+                        blue/green/purple points represent forecast values.
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Main Content */}
             <div className="flex h-full flex-col">
                 <div className="m-2 flex items-center justify-between">
@@ -401,9 +629,19 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                             <ArrowLeft />
                         </Button>
                     </Link>
-                    <Button onClick={saveForecast} disabled={isSaving} className="ml-auto">
-                        {isSaving ? 'Saving...' : 'Save Forecast'}
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setAccrualDialogOpen(true)}>
+                            <BarChart3 className="mr-2 h-4 w-4" />
+                            Accrual Summary
+                        </Button>
+                        <Button variant="outline" onClick={() => setRevenueReportOpen(true)}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Revenue Report
+                        </Button>
+                        <Button onClick={saveForecast} disabled={isSaving}>
+                            {isSaving ? 'Saving...' : 'Save Forecast'}
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="h-full space-y-2">
@@ -419,21 +657,31 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                             animateRows
                             pinnedBottomRowData={pinnedBottomRowData}
                             stopEditingWhenCellsLoseFocus
+                            suppressColumnVirtualisation={true}
                             onFirstDataRendered={(params) => {
                                 restoreColState(params.api, LS_COST_COL_STATE);
                                 restoreGroupShowState(params.api);
-                                // Also apply to second grid after both are ready
-                                if (gridTwo.current?.api) {
-                                    restoreGroupShowState(gridTwo.current.api);
-                                }
                             }}
                             onColumnVisible={(params) => {
                                 saveColState(params.api, LS_COST_COL_STATE);
                             }}
-                            onColumnGroupOpened={() => {
-                                syncGroupShowState();
-                            }}
                             onColumnMoved={(params) => saveColState(params.api, LS_COST_COL_STATE)}
+                            onCellEditingStarted={() => {
+                                // Clear any pending timeout
+                                if (editingStopTimeoutRef.current) {
+                                    clearTimeout(editingStopTimeoutRef.current);
+                                }
+                                isEditingRef.current = true;
+                            }}
+                            onCellEditingStopped={() => {
+                                // Delay resetting the editing flag to prevent column group events from firing
+                                if (editingStopTimeoutRef.current) {
+                                    clearTimeout(editingStopTimeoutRef.current);
+                                }
+                                editingStopTimeoutRef.current = setTimeout(() => {
+                                    isEditingRef.current = false;
+                                }, 200);
+                            }}
                         />
                     </div>
 
@@ -459,19 +707,39 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                             columnDefs={revenueColDefs}
                             defaultColDef={defaultColDef}
                             animateRows
-                            pinnedBottomRowData={pinnedBottomRevenueRowData}
+                            pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
                             stopEditingWhenCellsLoseFocus
+                            suppressColumnVirtualisation={true}
                             onFirstDataRendered={(params) => {
                                 restoreColState(params.api, LS_REV_COL_STATE);
-                                restoreGroupShowState(params.api);
+                                // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
                             }}
                             onColumnVisible={(params) => {
                                 saveColState(params.api, LS_REV_COL_STATE);
                             }}
-                            onColumnGroupOpened={() => {
-                                syncGroupShowState();
-                            }}
                             onColumnMoved={(params) => saveColState(params.api, LS_REV_COL_STATE)}
+                            onCellClicked={() => {
+                                // Set editing flag on cell click to prevent column group events
+                                isEditingRef.current = true;
+                                // Clear any pending timeout
+                                if (editingStopTimeoutRef.current) {
+                                    clearTimeout(editingStopTimeoutRef.current);
+                                }
+                            }}
+                            onCellEditingStarted={(params) => {
+                                console.log('Revenue grid - Cell editing STARTED', params.colDef?.field);
+                                isEditingRef.current = true;
+                            }}
+                            onCellEditingStopped={(params) => {
+                                console.log('Revenue grid - Cell editing STOPPED', params.colDef?.field);
+                                // Delay resetting the editing flag to prevent column group events from firing
+                                if (editingStopTimeoutRef.current) {
+                                    clearTimeout(editingStopTimeoutRef.current);
+                                }
+                                editingStopTimeoutRef.current = setTimeout(() => {
+                                    isEditingRef.current = false;
+                                }, 200);
+                            }}
                         />
                     </div>
                 </div>

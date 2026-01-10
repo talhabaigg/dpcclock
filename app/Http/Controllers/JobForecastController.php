@@ -15,7 +15,9 @@ class JobForecastController extends Controller
 {
     public function show($id)
     {
-        $jobNumber = Location::where('id', $id)->value('external_id');
+        $location = Location::where('id', $id)->first();
+        $jobNumber = $location->external_id;
+        $jobName = $location->name ?? 'Job ' . $jobNumber;
 
         // $jobCost = JobCostDetail::where('job_number', $jobNumber)->limit(10)->get();
         $actualsByMonth = JobCostDetail::where('job_number', $jobNumber)
@@ -165,6 +167,8 @@ class JobForecastController extends Controller
             'projectEndMonth' => $endMonth,
             'forecastMonths' => $forecastMonths,
             'locationId' => $id,
+            'jobName' => $jobName,
+            'jobNumber' => $jobNumber,
         ]);
     }
 

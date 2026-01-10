@@ -143,7 +143,6 @@ export function buildCostColumnDefs({
         },
         {
             headerName: 'Forecast',
-            marryChildren: true,
             headerClass: 'ag-right-aligned-header',
             children: [
                 {
@@ -153,9 +152,23 @@ export function buildCostColumnDefs({
                     type: 'numericColumn',
                     resizable: false,
                     width: 140,
-                    columnGroupShow: 'closed' as const,
                     editable: false,
-                    valueGetter: (p: any) => (p?.data ? sumMonths(p.data, forecastMonths) : null),
+                    pinned: 'right',
+                    valueGetter: (p: any) => {
+                        if (!p?.data) return null;
+
+                        const lastMonth = forecastMonths[forecastMonths.length - 1];
+                        const forecastExceptLast = forecastMonths.slice(0, -1);
+                        const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+
+                        // Calculate the last month value (auto-calculated as remaining)
+                        const budget = Number(p.data?.budget ?? 0) || 0;
+                        const actuals = actualsTotalForRow(p.data);
+                        const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                        const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+
+                        return sumBeforeLast + lastMonthValue;
+                    },
                     valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                     headerClass: 'ag-right-aligned-header',
                     children: [
@@ -166,7 +179,21 @@ export function buildCostColumnDefs({
                             type: 'numericColumn',
                             resizable: false,
                             width: 90,
-                            valueGetter: (p: any) => (p?.data ? sumMonths(p.data, forecastMonths) : null),
+                            valueGetter: (p: any) => {
+                                if (!p?.data) return null;
+
+                                const lastMonth = forecastMonths[forecastMonths.length - 1];
+                                const forecastExceptLast = forecastMonths.slice(0, -1);
+                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+
+                                // Calculate the last month value (auto-calculated as remaining)
+                                const budget = Number(p.data?.budget ?? 0) || 0;
+                                const actuals = actualsTotalForRow(p.data);
+                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+
+                                return sumBeforeLast + lastMonthValue;
+                            },
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             cellClass: 'bg-blue-50 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
@@ -181,7 +208,16 @@ export function buildCostColumnDefs({
                             valueGetter: (p: any) => {
                                 const budget = Number(p.data?.budget ?? 0) || 0;
                                 if (!budget) return null;
-                                const forecast = sumMonths(p.data, forecastMonths) || 0;
+
+                                // Calculate forecast total including last month
+                                const lastMonth = forecastMonths[forecastMonths.length - 1];
+                                const forecastExceptLast = forecastMonths.slice(0, -1);
+                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+                                const actuals = actualsTotalForRow(p.data);
+                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+                                const forecast = sumBeforeLast + lastMonthValue;
+
                                 return (forecast / budget) * 100;
                             },
                             valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
@@ -193,7 +229,6 @@ export function buildCostColumnDefs({
                     const isLastMonth = idx === forecastMonths.length - 1;
                     return {
                         headerName: formatMonthHeader(m),
-                        columnGroupShow: 'open' as const,
                         marryChildren: true,
                         children: [
                             {
@@ -304,6 +339,7 @@ export function buildCostColumnDefs({
 
 interface RevenueColumnBuilderParams extends ColumnBuilderParams {
     budgetField: 'contract_sum_to_date';
+    revenueTotals?: any;
 }
 
 export function buildRevenueColumnDefs({
@@ -314,6 +350,7 @@ export function buildRevenueColumnDefs({
     forecastSumBefore,
     forecastSumThrough,
     updateRowCell,
+    revenueTotals,
 }: RevenueColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
         trendColDef,
@@ -367,7 +404,7 @@ export function buildRevenueColumnDefs({
                             width: 90,
                             valueGetter: (p: any) => (p?.data ? sumMonths(p.data, displayMonths) : null),
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
-                            cellClass: 'bg-green-50 font-semibold text-right',
+                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 font-semibold text-right' : 'bg-green-50 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
                         {
@@ -378,13 +415,21 @@ export function buildRevenueColumnDefs({
                             type: 'numericColumn',
                             headerClass: 'ag-right-aligned-header',
                             valueGetter: (p: any) => {
+                                // Check if this is the profit row
+                                if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
+                                    const profitActuals = sumMonths(p.data, displayMonths) || 0;
+                                    const revenueActuals = sumMonths(revenueTotals, displayMonths) || 0;
+                                    if (!revenueActuals) return null;
+                                    return (profitActuals / revenueActuals) * 100;
+                                }
+
                                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                 if (!budget) return null;
                                 const actuals = sumMonths(p.data, displayMonths) || 0;
                                 return (actuals / budget) * 100;
                             },
                             valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
-                            cellClass: 'bg-green-50 font-semibold text-right',
+                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 font-semibold text-right' : 'bg-green-50 font-semibold text-right',
                         },
                     ],
                 },
@@ -403,7 +448,7 @@ export function buildRevenueColumnDefs({
                             editable: false,
                             type: 'numericColumn',
                             headerClass: 'ag-right-aligned-header',
-                            cellClass: 'bg-green-50 font-semibold text-right',
+                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 font-semibold text-right' : 'bg-green-50 font-semibold text-right',
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                         },
                         {
@@ -413,9 +458,17 @@ export function buildRevenueColumnDefs({
                             editable: false,
                             singleClickEdit: true,
                             type: 'numericColumn',
-                            cellClass: 'bg-green-50 font-semibold text-right',
+                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 font-semibold text-right' : 'bg-green-50 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                             valueGetter: (p: any) => {
+                                // Check if this is the profit row - show margin %
+                                if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
+                                    const monthProfit = Number(p.data?.[m] ?? 0) || 0;
+                                    const monthRevenue = Number(revenueTotals?.[m] ?? 0) || 0;
+                                    if (!monthRevenue) return null;
+                                    return (monthProfit / monthRevenue) * 100;
+                                }
+
                                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                 if (!budget) return null;
                                 const cumulative =
@@ -433,7 +486,6 @@ export function buildRevenueColumnDefs({
         },
         {
             headerName: 'Forecast',
-            marryChildren: true,
             headerClass: 'ag-right-aligned-header',
             children: [
                 {
@@ -443,9 +495,23 @@ export function buildRevenueColumnDefs({
                     type: 'numericColumn',
                     resizable: false,
                     width: 140,
-                    columnGroupShow: 'closed' as const,
                     editable: false,
-                    valueGetter: (p: any) => (p?.data ? sumMonths(p.data, forecastMonths) : null),
+                    pinned: 'right',
+                    valueGetter: (p: any) => {
+                        if (!p?.data) return null;
+
+                        const lastMonth = forecastMonths[forecastMonths.length - 1];
+                        const forecastExceptLast = forecastMonths.slice(0, -1);
+                        const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+
+                        // Calculate the last month value (auto-calculated as remaining)
+                        const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
+                        const actuals = actualsTotalForRow(p.data);
+                        const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                        const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+
+                        return sumBeforeLast + lastMonthValue;
+                    },
                     valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                     headerClass: 'ag-right-aligned-header',
                     children: [
@@ -456,7 +522,21 @@ export function buildRevenueColumnDefs({
                             type: 'numericColumn',
                             resizable: false,
                             width: 90,
-                            valueGetter: (p: any) => (p?.data ? sumMonths(p.data, forecastMonths) : null),
+                            valueGetter: (p: any) => {
+                                if (!p?.data) return null;
+
+                                const lastMonth = forecastMonths[forecastMonths.length - 1];
+                                const forecastExceptLast = forecastMonths.slice(0, -1);
+                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+
+                                // Calculate the last month value (auto-calculated as remaining)
+                                const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
+                                const actuals = actualsTotalForRow(p.data);
+                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+
+                                return sumBeforeLast + lastMonthValue;
+                            },
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             cellClass: 'bg-blue-50 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
@@ -469,9 +549,44 @@ export function buildRevenueColumnDefs({
                             type: 'numericColumn',
                             headerClass: 'ag-right-aligned-header',
                             valueGetter: (p: any) => {
+                                // Check if this is the profit row - show margin %
+                                if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
+                                    // Need to calculate profit forecast total including last month
+                                    const lastMonth = forecastMonths[forecastMonths.length - 1];
+                                    const forecastExceptLast = forecastMonths.slice(0, -1);
+                                    const profitSumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+
+                                    // Get last month profit (revenue - cost for last month)
+                                    const profitBudget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
+                                    const profitActuals = actualsTotalForRow(p.data);
+                                    const profitForecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                                    const profitLastMonth = Math.max(0, profitBudget - profitActuals - profitForecastBeforeLast);
+                                    const profitForecast = profitSumBeforeLast + profitLastMonth;
+
+                                    // Calculate revenue forecast total including last month
+                                    const revSumBeforeLast = sumMonths(revenueTotals, forecastExceptLast) || 0;
+                                    const revBudget = Number(revenueTotals?.contract_sum_to_date ?? 0) || 0;
+                                    const revActuals = sumMonths(revenueTotals, displayMonths) || 0;
+                                    const revForecastBeforeLast = forecastSumBefore(revenueTotals, lastMonth);
+                                    const revLastMonth = Math.max(0, revBudget - revActuals - revForecastBeforeLast);
+                                    const revenueForecast = revSumBeforeLast + revLastMonth;
+
+                                    if (!revenueForecast) return null;
+                                    return (profitForecast / revenueForecast) * 100;
+                                }
+
                                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                 if (!budget) return null;
-                                const forecast = sumMonths(p.data, forecastMonths) || 0;
+
+                                // Calculate forecast total including last month
+                                const lastMonth = forecastMonths[forecastMonths.length - 1];
+                                const forecastExceptLast = forecastMonths.slice(0, -1);
+                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+                                const actuals = actualsTotalForRow(p.data);
+                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
+                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
+                                const forecast = sumBeforeLast + lastMonthValue;
+
                                 return (forecast / budget) * 100;
                             },
                             valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
@@ -483,7 +598,6 @@ export function buildRevenueColumnDefs({
                     const isLastMonth = idx === forecastMonths.length - 1;
                     return {
                         headerName: formatMonthHeader(m),
-                        columnGroupShow: 'open' as const,
                         marryChildren: true,
                         children: [
                             {
@@ -495,7 +609,12 @@ export function buildRevenueColumnDefs({
                                 singleClickEdit: !isLastMonth,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isLastMonth ? 'bg-blue-100 font-semibold text-right' : 'bg-blue-50 font-semibold text-right',
+                                cellClass: (p: any) => {
+                                    if (p.data?.cost_item_description === 'Profit') {
+                                        return 'bg-purple-50 font-semibold text-right';
+                                    }
+                                    return isLastMonth ? 'bg-blue-100 font-semibold text-right' : 'bg-blue-50 font-semibold text-right';
+                                },
                                 valueGetter: isLastMonth
                                     ? (p: any) => {
                                           // Calculate remaining amount for last month
@@ -523,9 +642,22 @@ export function buildRevenueColumnDefs({
                                 editable: !isLastMonth,
                                 singleClickEdit: !isLastMonth,
                                 type: 'numericColumn',
-                                cellClass: isLastMonth ? 'bg-blue-100 font-semibold text-right' : 'bg-blue-50 font-semibold text-right',
+                                cellClass: (p: any) => {
+                                    if (p.data?.cost_item_description === 'Profit') {
+                                        return 'bg-purple-50 font-semibold text-right';
+                                    }
+                                    return isLastMonth ? 'bg-blue-100 font-semibold text-right' : 'bg-blue-50 font-semibold text-right';
+                                },
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
+                                    // Check if this is the profit row - show margin %
+                                    if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
+                                        const monthProfit = Number(p.data?.[m] ?? 0) || 0;
+                                        const monthRevenue = Number(revenueTotals?.[m] ?? 0) || 0;
+                                        if (!monthRevenue) return null;
+                                        return (monthProfit / monthRevenue) * 100;
+                                    }
+
                                     const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                     if (!budget) return null;
 
@@ -594,3 +726,4 @@ export function buildRevenueColumnDefs({
         },
     ];
 }
+
