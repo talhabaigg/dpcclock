@@ -181,7 +181,10 @@ class JobForecastController extends Controller
      */
     public function store(Request $request, $id)
     {
-        \Log::info('data', $request->all());
+        \Log::info('=== JOB FORECAST SAVE DEBUG ===');
+        \Log::info('Request Data:', $request->all());
+        \Log::info('Location ID:', ['id' => $id]);
+
         $validated = $request->validate([
             'grid_type' => 'required|in:cost,revenue',
             'forecast_data' => 'required|array',
@@ -201,33 +204,43 @@ class JobForecastController extends Controller
                 $costItem = $row['cost_item'];
 
                 foreach ($row['months'] as $month => $amount) {
-                    JobForecastData::updateOrCreate(
-                        [
+                    if ($amount !== null && $amount !== '') {
+                        JobForecastData::updateOrCreate(
+                            [
+                                'job_number' => $jobNumber,
+                                'grid_type' => $gridType,
+                                'cost_item' => $costItem,
+                                'month' => $month,
+                            ],
+                            [
+                                'location_id' => $id,
+                                'forecast_amount' => $amount,
+                            ]
+                        );
+                    } else {
+                        // Delete the record if the value is null or empty
+                        JobForecastData::where([
                             'job_number' => $jobNumber,
                             'grid_type' => $gridType,
                             'cost_item' => $costItem,
                             'month' => $month,
-                        ],
-                        [
-                            'location_id' => $id,
-                            'forecast_amount' => $amount,
-                        ]
-                    );
+                        ])->delete();
+                    }
                 }
             }
 
             DB::commit();
 
-            return response()->json([
-                'message' => 'Forecast saved successfully',
-                'success' => true,
-            ]);
+            return redirect()->back()->with('success', 'Forecast saved successfully');
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'message' => 'Failed to save forecast: ' . $e->getMessage(),
-                'success' => false,
-            ], 500);
+
+            \Log::error('Job forecast save failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
         }
     }
 

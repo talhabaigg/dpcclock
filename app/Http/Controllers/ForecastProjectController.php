@@ -142,6 +142,7 @@ class ForecastProjectController extends Controller
             'jobName' => $project->name,
             'jobNumber' => $project->project_number,
             'isForecastProject' => true,
+            'lastUpdate' => $project->updated_at,
         ]);
     }
 
@@ -399,12 +400,16 @@ class ForecastProjectController extends Controller
      */
     public function storeForecast(Request $request, $id)
     {
+        \Log::info('=== FORECAST PROJECT SAVE DEBUG ===');
+        \Log::info('Request Data:', $request->all());
+        \Log::info('Project ID:', ['id' => $id]);
+
         $validated = $request->validate([
             // Items management (optional - only for new format)
             'deletedCostItems' => 'sometimes|array',
-            'deletedCostItems.*' => 'integer|exists:forecast_project_cost_items,id',
+            'deletedCostItems.*' => 'integer',
             'deletedRevenueItems' => 'sometimes|array',
-            'deletedRevenueItems.*' => 'integer|exists:forecast_project_revenue_items,id',
+            'deletedRevenueItems.*' => 'integer',
             'newCostItems' => 'sometimes|array',
             'newCostItems.*.cost_item' => 'required|string|max:255',
             'newCostItems.*.cost_item_description' => 'nullable|string',
@@ -436,17 +441,27 @@ class ForecastProjectController extends Controller
         try {
             // Handle new format (all-in-one save)
             if (isset($validated['costForecastData']) && isset($validated['revenueForecastData'])) {
-                // Delete items
+                // Delete items (only delete items that exist in DB - positive IDs)
                 if (!empty($validated['deletedCostItems'])) {
-                    ForecastProjectCostItem::whereIn('id', $validated['deletedCostItems'])
-                        ->where('forecast_project_id', $id)
-                        ->delete();
+                    $existingCostItemIds = array_filter($validated['deletedCostItems'], function($id) {
+                        return $id > 0;
+                    });
+                    if (!empty($existingCostItemIds)) {
+                        ForecastProjectCostItem::whereIn('id', $existingCostItemIds)
+                            ->where('forecast_project_id', $id)
+                            ->delete();
+                    }
                 }
 
                 if (!empty($validated['deletedRevenueItems'])) {
-                    ForecastProjectRevenueItem::whereIn('id', $validated['deletedRevenueItems'])
-                        ->where('forecast_project_id', $id)
-                        ->delete();
+                    $existingRevenueItemIds = array_filter($validated['deletedRevenueItems'], function($id) {
+                        return $id > 0;
+                    });
+                    if (!empty($existingRevenueItemIds)) {
+                        ForecastProjectRevenueItem::whereIn('id', $existingRevenueItemIds)
+                            ->where('forecast_project_id', $id)
+                            ->delete();
+                    }
                 }
 
                 // Add new cost items
@@ -479,17 +494,27 @@ class ForecastProjectController extends Controller
                 foreach ($validated['costForecastData'] as $row) {
                     $costItem = $row['cost_item'];
                     foreach ($row['months'] as $month => $amount) {
-                        JobForecastData::updateOrCreate(
-                            [
+                        if ($amount !== null && $amount !== '') {
+                            JobForecastData::updateOrCreate(
+                                [
+                                    'forecast_project_id' => $id,
+                                    'grid_type' => 'cost',
+                                    'cost_item' => $costItem,
+                                    'month' => $month,
+                                ],
+                                [
+                                    'forecast_amount' => $amount,
+                                ]
+                            );
+                        } else {
+                            // Delete the record if the value is null or empty
+                            JobForecastData::where([
                                 'forecast_project_id' => $id,
                                 'grid_type' => 'cost',
                                 'cost_item' => $costItem,
                                 'month' => $month,
-                            ],
-                            [
-                                'forecast_amount' => $amount,
-                            ]
-                        );
+                            ])->delete();
+                        }
                     }
                 }
 
@@ -497,17 +522,27 @@ class ForecastProjectController extends Controller
                 foreach ($validated['revenueForecastData'] as $row) {
                     $costItem = $row['cost_item'];
                     foreach ($row['months'] as $month => $amount) {
-                        JobForecastData::updateOrCreate(
-                            [
+                        if ($amount !== null && $amount !== '') {
+                            JobForecastData::updateOrCreate(
+                                [
+                                    'forecast_project_id' => $id,
+                                    'grid_type' => 'revenue',
+                                    'cost_item' => $costItem,
+                                    'month' => $month,
+                                ],
+                                [
+                                    'forecast_amount' => $amount,
+                                ]
+                            );
+                        } else {
+                            // Delete the record if the value is null or empty
+                            JobForecastData::where([
                                 'forecast_project_id' => $id,
                                 'grid_type' => 'revenue',
                                 'cost_item' => $costItem,
                                 'month' => $month,
-                            ],
-                            [
-                                'forecast_amount' => $amount,
-                            ]
-                        );
+                            ])->delete();
+                        }
                     }
                 }
             } else {
@@ -518,44 +553,43 @@ class ForecastProjectController extends Controller
                     $costItem = $row['cost_item'];
 
                     foreach ($row['months'] as $month => $amount) {
-                        JobForecastData::updateOrCreate(
-                            [
+                        if ($amount !== null && $amount !== '') {
+                            JobForecastData::updateOrCreate(
+                                [
+                                    'forecast_project_id' => $id,
+                                    'grid_type' => $gridType,
+                                    'cost_item' => $costItem,
+                                    'month' => $month,
+                                ],
+                                [
+                                    'forecast_amount' => $amount,
+                                ]
+                            );
+                        } else {
+                            // Delete the record if the value is null or empty
+                            JobForecastData::where([
                                 'forecast_project_id' => $id,
                                 'grid_type' => $gridType,
                                 'cost_item' => $costItem,
                                 'month' => $month,
-                            ],
-                            [
-                                'forecast_amount' => $amount,
-                            ]
-                        );
+                            ])->delete();
+                        }
                     }
                 }
             }
 
             DB::commit();
 
-            // Return Inertia response for new format, JSON for legacy
-            if (isset($validated['costForecastData'])) {
-                return redirect()->back()->with('success', 'Forecast saved successfully');
-            } else {
-                return response()->json([
-                    'message' => 'Forecast saved successfully',
-                    'success' => true,
-                ]);
-            }
+            return redirect()->back()->with('success', 'Forecast saved successfully');
         } catch (\Exception $e) {
             DB::rollBack();
 
-            // Return appropriate error response
-            if (isset($validated['costForecastData'])) {
-                return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
-            } else {
-                return response()->json([
-                    'message' => 'Failed to save forecast: ' . $e->getMessage(),
-                    'success' => false,
-                ], 500);
-            }
+            \Log::error('Forecast save failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
         }
     }
 }

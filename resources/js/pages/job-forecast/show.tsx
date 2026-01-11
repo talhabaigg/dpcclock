@@ -197,6 +197,13 @@ const ShowJobForecastPage = ({
     // ===========================
     const saveForecast = useCallback(() => {
         setIsSaving(true);
+        setSaveError(null);
+
+        console.log('=== SAVE FORECAST DEBUG ===');
+        console.log('isForecastProject:', isForecastProject);
+        console.log('forecastMonths:', forecastMonths);
+        console.log('costGridData:', costGridData);
+        console.log('revenueGridData:', revenueGridData);
 
         // Prepare forecast data
         const costForecastData = costGridData.map((row) => {
@@ -225,34 +232,43 @@ const ShowJobForecastPage = ({
             };
         });
 
+        console.log('costForecastData:', costForecastData);
+        console.log('revenueForecastData:', revenueForecastData);
+
         const saveUrl = isForecastProject ? `/forecast-projects/${forecastProjectId}/forecast` : `/location/${locationId}/job-forecast`;
 
         if (isForecastProject) {
             const newCostItems = costGridData.filter((row) => row.id < 0);
             const newRevenueItems = revenueGridData.filter((row) => row.id < 0);
 
+            const payload = {
+                deletedCostItems: pendingDeletedItemIds.cost,
+                deletedRevenueItems: pendingDeletedItemIds.revenue,
+                newCostItems: newCostItems.map((item) => ({
+                    cost_item: item.cost_item,
+                    cost_item_description: item.cost_item_description,
+                    budget: item.budget,
+                })),
+                newRevenueItems: newRevenueItems.map((item) => ({
+                    cost_item: item.cost_item,
+                    cost_item_description: item.cost_item_description,
+                    contract_sum_to_date: item.contract_sum_to_date,
+                })),
+                costForecastData,
+                revenueForecastData,
+            };
+
+            console.log('Forecast Project Save URL:', saveUrl);
+            console.log('Forecast Project Payload:', payload);
+
             // Send everything in one request using Inertia router
             router.post(
                 saveUrl,
-                {
-                    deletedCostItems: pendingDeletedItemIds.cost,
-                    deletedRevenueItems: pendingDeletedItemIds.revenue,
-                    newCostItems: newCostItems.map((item) => ({
-                        cost_item: item.cost_item,
-                        cost_item_description: item.cost_item_description,
-                        budget: item.budget,
-                    })),
-                    newRevenueItems: newRevenueItems.map((item) => ({
-                        cost_item: item.cost_item,
-                        cost_item_description: item.cost_item_description,
-                        contract_sum_to_date: item.contract_sum_to_date,
-                    })),
-                    costForecastData,
-                    revenueForecastData,
-                },
+                payload,
                 {
                     preserveScroll: true,
-                    onSuccess: () => {
+                    onSuccess: (page) => {
+                        console.log('Forecast project save successful:', page);
                         setIsSaving(false);
                         setSaveSuccess(true);
                         setPendingDeletedItemIds({ cost: [], revenue: [] });
@@ -261,18 +277,25 @@ const ShowJobForecastPage = ({
                         }, 1500);
                     },
                     onError: (errors) => {
+                        console.error('Forecast project save errors:', errors);
                         setIsSaving(false);
-                        console.error('Save errors:', errors);
                         // Format error messages
                         const errorMessages = Object.entries(errors)
                             .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                             .join('\n');
                         setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
                     },
+                    onFinish: () => {
+                        console.log('Forecast project save finished');
+                    },
                 },
             );
         } else {
-            // For regular job forecasts, save cost and revenue separately
+            // For regular job forecasts, save cost first, then revenue
+            console.log('Regular Job Forecast Save URL:', saveUrl);
+            console.log('Cost Forecast Data:', costForecastData);
+            console.log('Revenue Forecast Data:', revenueForecastData);
+
             router.post(
                 saveUrl,
                 {
@@ -283,6 +306,7 @@ const ShowJobForecastPage = ({
                     preserveScroll: true,
                     preserveState: true,
                     onSuccess: () => {
+                        console.log('Cost data saved, now saving revenue...');
                         // Save revenue after cost succeeds
                         router.post(
                             saveUrl,
@@ -293,6 +317,7 @@ const ShowJobForecastPage = ({
                             {
                                 preserveScroll: true,
                                 onSuccess: () => {
+                                    console.log('Revenue data saved successfully');
                                     setIsSaving(false);
                                     setSaveSuccess(true);
                                     setTimeout(() => {
@@ -300,21 +325,29 @@ const ShowJobForecastPage = ({
                                     }, 1500);
                                 },
                                 onError: (errors) => {
+                                    console.error('Revenue save errors:', errors);
                                     setIsSaving(false);
                                     const errorMessages = Object.entries(errors)
                                         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                                         .join('\n');
                                     setSaveError(errorMessages || 'Failed to save revenue forecast.');
                                 },
+                                onFinish: () => {
+                                    console.log('Revenue save finished');
+                                },
                             },
                         );
                     },
                     onError: (errors) => {
+                        console.error('Cost save errors:', errors);
                         setIsSaving(false);
                         const errorMessages = Object.entries(errors)
                             .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                             .join('\n');
                         setSaveError(errorMessages || 'Failed to save cost forecast.');
+                    },
+                    onFinish: () => {
+                        console.log('Cost save finished');
                     },
                 },
             );
