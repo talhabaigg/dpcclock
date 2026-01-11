@@ -7,10 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Link, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry, themeBalham } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ArrowLeft, BarChart3, DollarSign, FileText, Percent } from 'lucide-react';
+import { ArrowLeft, BarChart3, DollarSign, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
 import { ForecastDialogChart, type ChartViewMode } from './ForecastDialogChart';
@@ -35,12 +35,27 @@ import { formatMonthHeader, withRowKeys } from './utils';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastMonths, locationId, jobName, jobNumber }: JobForecastProps) => {
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Locations', href: '/locations' },
-        { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
-        { title: 'Job Forecast', href: '#' },
-    ];
+const ShowJobForecastPage = ({
+    costRowData,
+    revenueRowData,
+    monthsAll,
+    forecastMonths,
+    locationId,
+    forecastProjectId,
+    jobName,
+    jobNumber,
+    isForecastProject = false
+}: JobForecastProps) => {
+    const breadcrumbs: BreadcrumbItem[] = isForecastProject
+        ? [
+            { title: 'Forecast Projects', href: '/forecast-projects' },
+            { title: jobName || 'Forecast Project', href: '#' },
+        ]
+        : [
+            { title: 'Locations', href: '/locations' },
+            { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
+            { title: 'Job Forecast', href: '#' },
+        ];
 
     // ===========================
     // State Management
@@ -52,6 +67,8 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
     const [topGridHeight, setTopGridHeight] = useState(50); // percentage
     const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('cumulative-percent');
     const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Accrual Summary Dialog State
     const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
@@ -62,6 +79,23 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
 
     // Revenue Report Dialog State
     const [revenueReportOpen, setRevenueReportOpen] = useState(false);
+
+    // Forecast Project Item Management State
+    const [itemDialogOpen, setItemDialogOpen] = useState(false);
+    const [itemDialogType, setItemDialogType] = useState<'cost' | 'revenue'>('cost');
+    const [itemFormData, setItemFormData] = useState({
+        cost_item: '',
+        cost_item_description: '',
+        budget: '',
+        contract_sum_to_date: '',
+    });
+
+    // Track pending changes (items to add/delete) - only saved when "Save Forecast" is clicked
+    const [pendingDeletedItemIds, setPendingDeletedItemIds] = useState<{ cost: number[]; revenue: number[] }>({
+        cost: [],
+        revenue: [],
+    });
+    const nextTempId = useRef(-1); // Temporary IDs for new items (negative to distinguish from real IDs)
 
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
@@ -158,83 +192,226 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
     // ===========================
     // Save Forecast
     // ===========================
-    const saveForecast = useCallback(async () => {
+    const saveForecast = useCallback(() => {
         setIsSaving(true);
 
-        try {
-            // Prepare cost data
-            const costForecastData = costGridData.map((row) => {
-                const months: Record<string, number | null> = {};
-                forecastMonths.forEach((month) => {
-                    if (row[month] !== undefined && row[month] !== null) {
-                        months[month] = row[month];
-                    }
-                });
-                return {
-                    cost_item: row.cost_item,
-                    months,
-                };
+        // Prepare forecast data
+        const costForecastData = costGridData.map((row) => {
+            const months: Record<string, number | null> = {};
+            forecastMonths.forEach((month) => {
+                if (row[month] !== undefined && row[month] !== null) {
+                    months[month] = row[month];
+                }
             });
+            return {
+                cost_item: row.cost_item,
+                months,
+            };
+        });
 
-            // Prepare revenue data
-            const revenueForecastData = revenueGridData.map((row) => {
-                const months: Record<string, number | null> = {};
-                forecastMonths.forEach((month) => {
-                    if (row[month] !== undefined && row[month] !== null) {
-                        months[month] = row[month];
-                    }
-                });
-                return {
-                    cost_item: row.cost_item,
-                    months,
-                };
+        const revenueForecastData = revenueGridData.map((row) => {
+            const months: Record<string, number | null> = {};
+            forecastMonths.forEach((month) => {
+                if (row[month] !== undefined && row[month] !== null) {
+                    months[month] = row[month];
+                }
             });
+            return {
+                cost_item: row.cost_item,
+                months,
+            };
+        });
 
-            console.log('Cost Forecast Data:', costForecastData);
-            console.log('Revenue Forecast Data:', revenueForecastData);
-            router.post(`/location/${locationId}/job-forecast`, {
+        const saveUrl = isForecastProject
+            ? `/forecast-projects/${forecastProjectId}/forecast`
+            : `/location/${locationId}/job-forecast`;
+
+        if (isForecastProject) {
+            const newCostItems = costGridData.filter((row) => row.id < 0);
+            const newRevenueItems = revenueGridData.filter((row) => row.id < 0);
+
+            // Send everything in one request using Inertia router
+            router.post(saveUrl, {
+                deletedCostItems: pendingDeletedItemIds.cost,
+                deletedRevenueItems: pendingDeletedItemIds.revenue,
+                newCostItems: newCostItems.map(item => ({
+                    cost_item: item.cost_item,
+                    cost_item_description: item.cost_item_description,
+                    budget: item.budget,
+                })),
+                newRevenueItems: newRevenueItems.map(item => ({
+                    cost_item: item.cost_item,
+                    cost_item_description: item.cost_item_description,
+                    contract_sum_to_date: item.contract_sum_to_date,
+                })),
+                costForecastData,
+                revenueForecastData,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsSaving(false);
+                    setSaveSuccess(true);
+                    setPendingDeletedItemIds({ cost: [], revenue: [] });
+                    setTimeout(() => {
+                        setSaveSuccess(false);
+                    }, 1500);
+                },
+                onError: (errors) => {
+                    setIsSaving(false);
+                    console.error('Save errors:', errors);
+                    // Format error messages
+                    const errorMessages = Object.entries(errors)
+                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                        .join('\n');
+                    setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
+                },
+            });
+        } else {
+            // For regular job forecasts, save cost and revenue separately
+            router.post(saveUrl, {
                 grid_type: 'cost',
                 forecast_data: costForecastData,
+            }, {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    // Save revenue after cost succeeds
+                    router.post(saveUrl, {
+                        grid_type: 'revenue',
+                        forecast_data: revenueForecastData,
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            setIsSaving(false);
+                            setSaveSuccess(true);
+                            setTimeout(() => {
+                                setSaveSuccess(false);
+                            }, 1500);
+                        },
+                        onError: (errors) => {
+                            setIsSaving(false);
+                            const errorMessages = Object.entries(errors)
+                                .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                                .join('\n');
+                            setSaveError(errorMessages || 'Failed to save revenue forecast.');
+                        },
+                    });
+                },
+                onError: (errors) => {
+                    setIsSaving(false);
+                    const errorMessages = Object.entries(errors)
+                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                        .join('\n');
+                    setSaveError(errorMessages || 'Failed to save cost forecast.');
+                },
             });
-
-            router.post(`/location/${locationId}/job-forecast`, {
-                grid_type: 'revenue',
-                forecast_data: revenueForecastData,
-            });
-            // // Save cost data
-            // await fetch(`/location/${locationId}/job-forecast`, {
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            //     },
-            //     body: JSON.stringify({
-            //         grid_type: 'cost',
-            //         forecast_data: costForecastData,
-            //     }),
-            // });
-
-            // Save revenue data
-            // await fetch(`/location/${locationId}/job-forecast`, {
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            //     },
-            //     body: JSON.stringify({
-            //         grid_type: 'revenue',
-            //         forecast_data: revenueForecastData,
-            //     }),
-            // });
-
-            alert('Forecast saved successfully!');
-        } catch (error) {
-            console.error('Failed to save forecast:', error);
-            alert('Failed to save forecast. Please try again.');
-        } finally {
-            setIsSaving(false);
         }
-    }, [costGridData, revenueGridData, forecastMonths, locationId]);
+    }, [costGridData, revenueGridData, forecastMonths, locationId, forecastProjectId, isForecastProject, pendingDeletedItemIds]);
+
+    // ===========================
+    // Forecast Project Item Management
+    // ===========================
+    const handleAddItem = (type: 'cost' | 'revenue') => {
+        setItemDialogType(type);
+        setItemFormData({
+            cost_item: '',
+            cost_item_description: '',
+            budget: '',
+            contract_sum_to_date: '',
+        });
+        setItemDialogOpen(true);
+    };
+
+    const handleSubmitItem = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // Create new item with temporary ID
+        const tempId = nextTempId.current--;
+
+        if (itemDialogType === 'cost') {
+            const newRow: GridRow = {
+                id: tempId,
+                _rowKey: `c${tempId}`,
+                cost_item: itemFormData.cost_item,
+                cost_item_description: itemFormData.cost_item_description,
+                budget: parseFloat(itemFormData.budget) || 0,
+                type: 'forecast',
+            };
+
+            // Initialize forecast months to null
+            forecastMonths.forEach((month) => {
+                newRow[month] = null;
+            });
+
+            setCostGridData((prev) => [...prev, newRow]);
+        } else {
+            const newRow: GridRow = {
+                id: tempId,
+                _rowKey: `r${tempId}`,
+                cost_item: itemFormData.cost_item,
+                cost_item_description: itemFormData.cost_item_description,
+                contract_sum_to_date: parseFloat(itemFormData.contract_sum_to_date) || 0,
+                type: 'forecast',
+            };
+
+            // Initialize forecast months to null
+            forecastMonths.forEach((month) => {
+                newRow[month] = null;
+            });
+
+            setRevenueGridData((prev) => [...prev, newRow]);
+        }
+
+        setItemDialogOpen(false);
+    };
+
+    const handleDeleteSelectedCostItems = () => {
+        const selectedNodes = gridOne.current?.api?.getSelectedNodes();
+        if (!selectedNodes || selectedNodes.length === 0) {
+            alert('Please select items to delete');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete ${selectedNodes.length} cost item(s)?`)) return;
+
+        const idsToDelete = selectedNodes.map((node) => node.data.id);
+
+        // Remove from grid data
+        setCostGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
+
+        // Track existing items for deletion on save
+        const existingIds = idsToDelete.filter((id) => id > 0);
+        if (existingIds.length > 0) {
+            setPendingDeletedItemIds((prev) => ({
+                ...prev,
+                cost: [...prev.cost, ...existingIds],
+            }));
+        }
+    };
+
+    const handleDeleteSelectedRevenueItems = () => {
+        const selectedNodes = gridTwo.current?.api?.getSelectedNodes();
+        if (!selectedNodes || selectedNodes.length === 0) {
+            alert('Please select items to delete');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete ${selectedNodes.length} revenue item(s)?`)) return;
+
+        const idsToDelete = selectedNodes.map((node) => node.data.id);
+
+        // Remove from grid data
+        setRevenueGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
+
+        // Track existing items for deletion on save
+        const existingIds = idsToDelete.filter((id) => id > 0);
+        if (existingIds.length > 0) {
+            setPendingDeletedItemIds((prev) => ({
+                ...prev,
+                revenue: [...prev.revenue, ...existingIds],
+            }));
+        }
+    };
 
     // ===========================
     // Chart Editing
@@ -270,19 +447,35 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         onChartOpen: setChartCtx,
     });
 
-    const costColDefs = useMemo(
-        () =>
-            buildCostColumnDefs({
-                trendColDef: costTrendColDef,
-                displayMonths,
-                forecastMonths,
-                actualsTotalForRow,
-                forecastSumBefore,
-                forecastSumThrough,
-                updateRowCell: updateCostRowCell,
-            }),
-        [costTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumBefore, forecastSumThrough, updateCostRowCell],
-    );
+    const costColDefs = useMemo(() => {
+        const baseDefs = buildCostColumnDefs({
+            trendColDef: costTrendColDef,
+            displayMonths,
+            forecastMonths,
+            actualsTotalForRow,
+            forecastSumBefore,
+            forecastSumThrough,
+            updateRowCell: updateCostRowCell,
+        });
+
+        // Add checkbox selection column for forecast projects
+        if (isForecastProject) {
+            return [
+                {
+                    headerName: '',
+                    field: 'checkbox',
+                    checkboxSelection: true,
+                    headerCheckboxSelection: true,
+                    pinned: 'left' as const,
+                    width: 50,
+                    lockPosition: 'left' as const,
+                    suppressMovable: true,
+                },
+                ...baseDefs,
+            ];
+        }
+        return baseDefs;
+    }, [costTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumBefore, forecastSumThrough, updateCostRowCell, isForecastProject]);
 
     const defaultColDef = useMemo(
         () => ({
@@ -313,21 +506,37 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
         description: 'Total Revenue',
     });
 
-    const revenueColDefs = useMemo(
-        () =>
-            buildRevenueColumnDefs({
-                trendColDef: revenueTrendColDef,
-                displayMonths,
-                forecastMonths,
-                actualsTotalForRow,
-                forecastSumThrough,
-                forecastSumBefore,
-                updateRowCell: updateRevenueRowCell,
-                budgetField: 'contract_sum_to_date',
-                revenueTotals: pinnedBottomRevenueRowData[0],
-            }),
-        [revenueTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumThrough, forecastSumBefore, updateRevenueRowCell, pinnedBottomRevenueRowData],
-    );
+    const revenueColDefs = useMemo(() => {
+        const baseDefs = buildRevenueColumnDefs({
+            trendColDef: revenueTrendColDef,
+            displayMonths,
+            forecastMonths,
+            actualsTotalForRow,
+            forecastSumThrough,
+            forecastSumBefore,
+            updateRowCell: updateRevenueRowCell,
+            budgetField: 'contract_sum_to_date',
+            revenueTotals: pinnedBottomRevenueRowData[0],
+        });
+
+        // Add checkbox selection column for forecast projects
+        if (isForecastProject) {
+            return [
+                {
+                    headerName: '',
+                    field: 'checkbox',
+                    checkboxSelection: true,
+                    headerCheckboxSelection: true,
+                    pinned: 'left' as const,
+                    width: 50,
+                    lockPosition: 'left' as const,
+                    suppressMovable: true,
+                },
+                ...baseDefs,
+            ];
+        }
+        return baseDefs;
+    }, [revenueTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumThrough, forecastSumBefore, updateRevenueRowCell, pinnedBottomRevenueRowData, isForecastProject]);
 
     // Calculate profit row (Revenue - Cost)
     const pinnedBottomProfitRowData = useMemo(() => {
@@ -621,33 +830,199 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                 </DialogContent>
             </Dialog>
 
+            {/* Item Management Dialog for Forecast Projects */}
+            {isForecastProject && (
+                <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+                    <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                            <DialogTitle>Add {itemDialogType === 'cost' ? 'Cost' : 'Revenue'} Item</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={handleSubmitItem}>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <label htmlFor="cost_item" className="text-right text-sm font-medium">
+                                        Code *
+                                    </label>
+                                    <input
+                                        id="cost_item"
+                                        type="text"
+                                        value={itemFormData.cost_item}
+                                        onChange={(e) => setItemFormData({ ...itemFormData, cost_item: e.target.value })}
+                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                        placeholder="e.g., 01-01"
+                                        required
+                                    />
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <label htmlFor="cost_item_description" className="text-right text-sm font-medium">
+                                        Description
+                                    </label>
+                                    <input
+                                        id="cost_item_description"
+                                        type="text"
+                                        value={itemFormData.cost_item_description}
+                                        onChange={(e) => setItemFormData({ ...itemFormData, cost_item_description: e.target.value })}
+                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <label htmlFor="amount" className="text-right text-sm font-medium">
+                                        {itemDialogType === 'cost' ? 'Budget *' : 'Amount *'}
+                                    </label>
+                                    <input
+                                        id="amount"
+                                        type="number"
+                                        step="0.01"
+                                        value={itemDialogType === 'cost' ? itemFormData.budget : itemFormData.contract_sum_to_date}
+                                        onChange={(e) =>
+                                            setItemFormData({
+                                                ...itemFormData,
+                                                [itemDialogType === 'cost' ? 'budget' : 'contract_sum_to_date']: e.target.value,
+                                            })
+                                        }
+                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setItemDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit">Add Item</Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Saving Loader Dialog */}
+            {isSaving && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="rounded-lg bg-white p-8 shadow-lg">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600"></div>
+                            <p className="text-lg font-semibold">Saving forecast...</p>
+                            <p className="text-muted-foreground text-sm">Please wait, do not close this page</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Success Dialog */}
+            {saveSuccess && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="rounded-lg bg-white p-8 shadow-lg">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <p className="text-lg font-semibold text-green-600">Saved successfully!</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Error Dialog */}
+            {saveError && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="max-w-md rounded-lg bg-white p-8 shadow-lg">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+                                <svg className="h-10 w-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </div>
+                            <p className="text-lg font-semibold text-red-600">Error Saving Forecast</p>
+                            <div className="max-h-48 w-full overflow-y-auto rounded bg-red-50 p-4">
+                                <pre className="whitespace-pre-wrap text-sm text-red-800">{saveError}</pre>
+                            </div>
+                            <Button onClick={() => setSaveError(null)} variant="outline">
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Main Content */}
             <div className="flex h-full flex-col">
                 <div className="m-2 flex items-center justify-between">
-                    <Link href="/locations" className="p-0">
-                        <Button variant="ghost" className="m-0">
-                            <ArrowLeft />
-                        </Button>
-                    </Link>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setAccrualDialogOpen(true)}>
-                            <BarChart3 className="mr-2 h-4 w-4" />
-                            Accrual Summary
-                        </Button>
-                        <Button variant="outline" onClick={() => setRevenueReportOpen(true)}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Revenue Report
-                        </Button>
-                        <Button onClick={saveForecast} disabled={isSaving}>
-                            {isSaving ? 'Saving...' : 'Save Forecast'}
-                        </Button>
+                    <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={() => router.visit(isForecastProject ? '/forecast-projects' : '/locations')}>
+                                        <ArrowLeft className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Back</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={() => setAccrualDialogOpen(true)}>
+                                        <BarChart3 className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Accrual Summary</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={() => setRevenueReportOpen(true)}>
+                                        <FileText className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Revenue Report</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
+
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving}>
+                                    <Save className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Save Forecast</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
 
-                <div className="h-full space-y-2">
+                <div className="flex h-full flex-col space-y-2">
                     {/* Cost Grid */}
-                    <div className="ag-theme-quartz w-full space-y-2 px-2" style={{ height: `${topGridHeight}%` }}>
-                        <AgGridReact
+                    <div className="flex flex-col px-2" style={{ height: `${topGridHeight}%` }}>
+                        {isForecastProject && (
+                            <div className="flex items-center gap-1 pb-2">
+                                <span className="text-sm font-semibold text-gray-700">Cost</span>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('cost')}>
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Add Cost Item</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedCostItems()}>
+                                                <Trash2 className="h-4 w-4 text-red-600" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete Selected Cost Items</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                        )}
+                        <div className="ag-theme-quartz flex-1">
+                            <AgGridReact
                             theme={themeBalham}
                             ref={gridOne}
                             alignedGrids={[gridTwo]}
@@ -658,6 +1033,7 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                             pinnedBottomRowData={pinnedBottomRowData}
                             stopEditingWhenCellsLoseFocus
                             suppressColumnVirtualisation={true}
+                            rowSelection={isForecastProject ? 'multiple' : undefined}
                             onFirstDataRendered={(params) => {
                                 restoreColState(params.api, LS_COST_COL_STATE);
                                 restoreGroupShowState(params.api);
@@ -683,6 +1059,7 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                                 }, 200);
                             }}
                         />
+                        </div>
                     </div>
 
                     {/* Drag Handle */}
@@ -695,8 +1072,34 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                     </div>
 
                     {/* Revenue Grid */}
-                    <div className="ag-theme-quartz w-full px-2" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
-                        <AgGridReact
+                    <div className="flex flex-col px-2" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
+                        {isForecastProject && (
+                            <div className="flex items-center gap-1 pb-2">
+                                <span className="text-sm font-semibold text-gray-700">Revenue</span>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('revenue')}>
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Add Revenue Item</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedRevenueItems()}>
+                                                <Trash2 className="h-4 w-4 text-red-600" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete Selected Revenue Items</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                        )}
+                        <div className="ag-theme-quartz flex-1">
+                            <AgGridReact
                             theme={themeBalham}
                             ref={gridTwo}
                             headerHeight={0}
@@ -710,6 +1113,7 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                             pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
                             stopEditingWhenCellsLoseFocus
                             suppressColumnVirtualisation={true}
+                            rowSelection={isForecastProject ? 'multiple' : undefined}
                             onFirstDataRendered={(params) => {
                                 restoreColState(params.api, LS_REV_COL_STATE);
                                 // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
@@ -741,6 +1145,7 @@ const ShowJobForecastPage = ({ costRowData, revenueRowData, monthsAll, forecastM
                                 }, 200);
                             }}
                         />
+                        </div>
                     </div>
                 </div>
             </div>

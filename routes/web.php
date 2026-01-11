@@ -4,6 +4,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
@@ -179,6 +180,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::post('/location/{location}/job-forecast', [JobForecastController::class, 'store'])->name('jobForecast.store');
+
+        // Forecast Projects Routes
+        Route::get('/forecast-projects', [ForecastProjectController::class, 'index'])->name('forecastProjects.index');
+        Route::post('/forecast-projects', [ForecastProjectController::class, 'store'])->name('forecastProjects.store');
+        Route::get('/forecast-projects/{id}', [ForecastProjectController::class, 'show'])->name('forecastProjects.show');
+        Route::put('/forecast-projects/{id}', [ForecastProjectController::class, 'update'])->name('forecastProjects.update');
+        Route::delete('/forecast-projects/{id}', [ForecastProjectController::class, 'destroy'])->name('forecastProjects.destroy');
+
+        // Forecast Project Cost Items
+        Route::post('/forecast-projects/{id}/items', [ForecastProjectController::class, 'saveItems'])->name('forecastProjects.saveItems');
+        Route::post('/forecast-projects/{id}/cost-items', [ForecastProjectController::class, 'addCostItem'])->name('forecastProjects.addCostItem');
+        Route::put('/forecast-projects/{projectId}/cost-items/{itemId}', [ForecastProjectController::class, 'updateCostItem'])->name('forecastProjects.updateCostItem');
+        Route::delete('/forecast-projects/{projectId}/cost-items/{itemId}', [ForecastProjectController::class, 'deleteCostItem'])->name('forecastProjects.deleteCostItem');
+
+        // Forecast Project Revenue Items
+        Route::post('/forecast-projects/{id}/revenue-items', [ForecastProjectController::class, 'addRevenueItem'])->name('forecastProjects.addRevenueItem');
+        Route::put('/forecast-projects/{projectId}/revenue-items/{itemId}', [ForecastProjectController::class, 'updateRevenueItem'])->name('forecastProjects.updateRevenueItem');
+        Route::delete('/forecast-projects/{projectId}/revenue-items/{itemId}', [ForecastProjectController::class, 'deleteRevenueItem'])->name('forecastProjects.deleteRevenueItem');
+
+        // Forecast Project Forecast Data
+        Route::post('/forecast-projects/{id}/forecast', [ForecastProjectController::class, 'storeForecast'])->name('forecastProjects.storeForecast');
+
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
         Route::get('/locations/{location}/cost-codes/{id}/delete', [LocationCostcodeController::class, 'delete'])->name('locationCostcodes.delete')->role('admin');

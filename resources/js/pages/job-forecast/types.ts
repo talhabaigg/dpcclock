@@ -34,9 +34,11 @@ export interface JobForecastProps {
     monthsAll: string[];
     forecastMonths: string[];
     projectEndMonth: string;
-    locationId: number;
+    locationId?: number;
+    forecastProjectId?: number;
     jobName?: string;
     jobNumber?: string;
+    isForecastProject?: boolean;
 }
 
 export interface ChartPoint {

@@ -119,6 +119,46 @@ interface UseTrendColumnDefProps {
     onChartOpen: (context: ChartContext) => void;
 }
 
+// Sparkline Cell Renderer Component
+const SparklineCellRenderer = (props: any) => {
+    const { value: row, node, grid, displayMonths, forecastMonths, onChartOpen } = props;
+
+    if (!row) return null;
+
+    const isPinnedBottom = node?.rowPinned === 'bottom';
+    const allMonths = [...displayMonths, ...forecastMonths];
+    const values = allMonths.map((m: string) => toNumberOrNull(row?.[m]) ?? 0);
+
+    const handleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const costItem = row?.cost_item ?? '';
+        const desc = row?.cost_item_description ?? 'Row';
+        const title = isPinnedBottom ? 'TOTAL' : `${costItem} ${desc}`.trim();
+
+        onChartOpen({
+            open: true,
+            grid,
+            pinned: isPinnedBottom,
+            rowKey: isPinnedBottom ? undefined : row._rowKey,
+            title,
+            editable: !isPinnedBottom,
+        });
+    };
+
+    return (
+        <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleClick}
+            title="View chart"
+        >
+            <Sparkline values={values} />
+        </button>
+    );
+};
+
 export function useTrendColumnDef({ grid, displayMonths, forecastMonths, onChartOpen }: UseTrendColumnDefProps): ColDef {
     return useMemo(
         () => ({
@@ -128,40 +168,12 @@ export function useTrendColumnDef({ grid, displayMonths, forecastMonths, onChart
             width: 100,
             cellClass: 'flex items-center justify-center',
             valueGetter: (p: any) => p.data,
-            cellRenderer: (p: any) => {
-                const row = p.value;
-                if (!row) return null;
-
-                const isPinnedBottom = p.node?.rowPinned === 'bottom';
-                const allMonths = [...displayMonths, ...forecastMonths];
-                const values = allMonths.map((m) => toNumberOrNull(row?.[m]) ?? 0);
-
-                return (
-                    <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-
-                            const costItem = row?.cost_item ?? '';
-                            const desc = row?.cost_item_description ?? 'Row';
-                            const title = isPinnedBottom ? 'TOTAL' : `${costItem} ${desc}`.trim();
-
-                            onChartOpen({
-                                open: true,
-                                grid,
-                                pinned: isPinnedBottom,
-                                rowKey: isPinnedBottom ? undefined : row._rowKey,
-                                title,
-                                editable: !isPinnedBottom,
-                            });
-                        }}
-                        title="View chart"
-                    >
-                        <Sparkline values={values} />
-                    </button>
-                );
+            cellRenderer: SparklineCellRenderer,
+            cellRendererParams: {
+                grid,
+                displayMonths,
+                forecastMonths,
+                onChartOpen,
             },
         }),
         [grid, displayMonths, forecastMonths, onChartOpen],
