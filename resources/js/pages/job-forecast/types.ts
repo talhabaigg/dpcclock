@@ -39,6 +39,7 @@ export interface JobForecastProps {
     jobName?: string;
     jobNumber?: string;
     isForecastProject?: boolean;
+    lastUpdate?: string;
 }
 
 export interface ChartPoint {

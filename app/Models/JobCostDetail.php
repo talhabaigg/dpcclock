@@ -23,5 +23,7 @@ class JobCostDetail extends Model
         'quantity',
         'unit_cost',
         'vendor',
+        'created_at',
+        'updated_at',
     ];
 }

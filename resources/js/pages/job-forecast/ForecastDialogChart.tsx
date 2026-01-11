@@ -105,6 +105,35 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
         return meta.map((m) => m.y);
     }, [viewMode, budget, cumulativeData, meta]);
 
+    const dataLabelPlugin = useMemo(
+        () => ({
+            id: 'simpleDataLabels',
+            afterDatasetsDraw: (chart: any) => {
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    meta.data.forEach((element: any, index: number) => {
+                        const rawValue = dataset.data?.[index];
+                        if (rawValue == null || !Number.isFinite(rawValue)) return;
+                        const { x, y } = element.tooltipPosition();
+                        ctx.save();
+                        ctx.fillStyle = '#000';
+                        ctx.font = '10px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const label =
+                            viewMode === 'cumulative-percent'
+                                ? `${Number(rawValue).toLocaleString(undefined, { maximumFractionDigits: 1 })}`
+                                : `${Number(rawValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                        ctx.fillText(label, x, y - 6);
+                        ctx.restore();
+                    });
+                });
+            },
+        }),
+        [viewMode],
+    );
+
     const chartData = useMemo(
         () => ({
             labels: meta.map((m) => m.label),
@@ -252,7 +281,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 if (editBox) closeEditBox();
             }}
         >
-            <Line data={chartData} options={options} />
+            <Line data={chartData} options={options} plugins={[dataLabelPlugin]} />
 
             {editBox && (
                 <div

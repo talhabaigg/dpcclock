@@ -4,6 +4,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
@@ -46,6 +47,7 @@ const ShowJobForecastPage = ({
     jobName,
     jobNumber,
     isForecastProject = false,
+    lastUpdate,
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
@@ -774,7 +776,7 @@ const ShowJobForecastPage = ({
                                                 </button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                <p>Accrual Percent View</p>
+                                                <p>Percent View</p>
                                             </TooltipContent>
                                         </Tooltip>
                                         <Tooltip>
@@ -792,13 +794,13 @@ const ShowJobForecastPage = ({
                                                 </button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                <p>Accrual Dollar View</p>
+                                                <p>Amount View</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     </div>
 
                                     {/* Line Visibility Toggles */}
-                                    <div className="flex items-center gap-3 border-l pl-4">
+                                    {/* <div className="flex items-center gap-3 border-l pl-4">
                                         <label className="flex cursor-pointer items-center gap-2 text-sm">
                                             <input
                                                 type="checkbox"
@@ -835,7 +837,7 @@ const ShowJobForecastPage = ({
                                                 Margin
                                             </span>
                                         </label>
-                                    </div>
+                                    </div> */}
                                 </div>
                             </TooltipProvider>
                         </div>
@@ -1013,6 +1015,10 @@ const ShowJobForecastPage = ({
                                 <TooltipContent>Revenue Report</TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
+                        <div className="flex flex-col">
+                            <p className="text-xs font-light text-gray-700">Job data last refreshed:</p>
+                            <Label className="text-xs font-bold">{lastUpdate ? `${new Date(lastUpdate).toLocaleString()}` : 'No Updates Yet'}</Label>
+                        </div>
                     </div>
 
                     <TooltipProvider>

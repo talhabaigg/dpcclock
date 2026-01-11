@@ -19,6 +19,9 @@ class JobForecastController extends Controller
         $jobNumber = $location->external_id;
         $jobName = $location->name ?? 'Job ' . $jobNumber;
 
+        $lastUpdate = JobCostDetail::where('job_number', $jobNumber)->max('updated_at');
+
+
         // $jobCost = JobCostDetail::where('job_number', $jobNumber)->limit(10)->get();
         $actualsByMonth = JobCostDetail::where('job_number', $jobNumber)
             ->selectRaw("
@@ -169,6 +172,7 @@ class JobForecastController extends Controller
             'locationId' => $id,
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
+            'lastUpdate' => $lastUpdate,
         ]);
     }
 

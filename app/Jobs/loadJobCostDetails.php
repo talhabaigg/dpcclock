@@ -72,6 +72,8 @@ class loadJobCostDetails implements ShouldQueue
                 'quantity' => isset($r['Quantity']) ? (float) $r['Quantity'] : null,
                 'unit_cost' => isset($r['Unit_Cost_plus_Tax1']) ? (float) $r['Unit_Cost_plus_Tax1'] : null,
                 'vendor' => $r['Vendor'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now(),
             ];
         }, $rows);
 
@@ -86,7 +88,7 @@ class loadJobCostDetails implements ShouldQueue
             JobCostDetail::query()->delete();
 
             $i = 0;
-            foreach (array_chunk($data, 2000) as $chunk) {
+            foreach (array_chunk($data, 1000) as $chunk) {
                 $i++;
                 \Log::info("START chunk {$i}", ['rows' => count($chunk)]);
                 JobCostDetail::insert($chunk);
