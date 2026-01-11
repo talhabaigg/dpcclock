@@ -251,7 +251,7 @@ class LocationController extends Controller
     {
         try {
             // Dispatch all three jobs
-            \App\Jobs\LoadJobCostDetails::dispatch();
+            \App\Jobs\LoadJobCostData::dispatch();
             \App\Jobs\LoadJobReportByCostItemAndCostTypes::dispatch();
             \App\Jobs\LoadArProgressBillingSummaries::dispatch();
 
