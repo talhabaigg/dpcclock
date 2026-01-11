@@ -426,7 +426,7 @@ export default function TurnoverForecastIndex({
                     const rowData = params.data as any;
 
                     // For total row, use pre-calculated value
-                    if (rowData.type === 'total') {
+                    if (rowData.type === 'Total') {
                         return rowData[`month_${month}`] || 0;
                     }
 
@@ -453,7 +453,7 @@ export default function TurnoverForecastIndex({
                 field: 'cost_to_date',
                 width: 150,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'profit') {
+                    if (params.data?.type === 'Profit') {
                         return formatCurrency(params.data.profit_to_date);
                     }
                     return formatCurrency(params.value);
@@ -474,7 +474,7 @@ export default function TurnoverForecastIndex({
                 field: 'cost_contract_fy',
                 width: 150,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'profit') {
+                    if (params.data?.type === 'Profit') {
                         return formatCurrency(params.data.profit_contract_fy);
                     }
                     return formatCurrency(params.value);
@@ -496,7 +496,7 @@ export default function TurnoverForecastIndex({
                 field: 'budget',
                 width: 170,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'profit') {
+                    if (params.data?.type === 'Profit') {
                         return formatCurrency(params.data.profit_total);
                     }
                     return formatCurrency(params.value);
@@ -584,7 +584,7 @@ export default function TurnoverForecastIndex({
                     const rowData = params.data as any;
 
                     // For profit or total row, use the pre-calculated value
-                    if (rowData.type === 'profit' || rowData.type === 'total') {
+                    if (rowData.type === 'Profit' || rowData.type === 'Total') {
                         return rowData[`month_${month}`] || 0;
                     }
 
@@ -643,10 +643,10 @@ export default function TurnoverForecastIndex({
 
     const getRowId = useMemo<(params: GetRowIdParams) => string>(() => {
         return (params: GetRowIdParams) => {
-            if (params.data.type === 'profit') {
+            if (params.data.type === 'Profit') {
                 return 'profit-row';
             }
-            if (params.data.type === 'total') {
+            if (params.data.type === 'Total') {
                 return params.data.id;
             }
             return `${params.data.type}-${params.data.id}`;
