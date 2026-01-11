@@ -40,10 +40,7 @@ class ForecastProjectController extends Controller
 
         $project = ForecastProject::create($validated);
 
-        return response()->json([
-            'message' => 'Forecast project created successfully',
-            'project' => $project,
-        ]);
+        return redirect()->back()->with('success', 'Forecast project created successfully');
     }
 
     /**
@@ -164,10 +161,7 @@ class ForecastProjectController extends Controller
 
         $project->update($validated);
 
-        return response()->json([
-            'message' => 'Forecast project updated successfully',
-            'project' => $project,
-        ]);
+        return redirect()->back()->with('success', 'Forecast project updated successfully');
     }
 
     /**
@@ -178,9 +172,7 @@ class ForecastProjectController extends Controller
         $project = ForecastProject::findOrFail($id);
         $project->delete();
 
-        return response()->json([
-            'message' => 'Forecast project deleted successfully',
-        ]);
+        return redirect()->back()->with('success', 'Forecast project deleted successfully');
     }
 
     /**

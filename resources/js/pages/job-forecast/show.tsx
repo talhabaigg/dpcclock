@@ -262,34 +262,30 @@ const ShowJobForecastPage = ({
             console.log('Forecast Project Payload:', payload);
 
             // Send everything in one request using Inertia router
-            router.post(
-                saveUrl,
-                payload,
-                {
-                    preserveScroll: true,
-                    onSuccess: (page) => {
-                        console.log('Forecast project save successful:', page);
-                        setIsSaving(false);
-                        setSaveSuccess(true);
-                        setPendingDeletedItemIds({ cost: [], revenue: [] });
-                        setTimeout(() => {
-                            setSaveSuccess(false);
-                        }, 1500);
-                    },
-                    onError: (errors) => {
-                        console.error('Forecast project save errors:', errors);
-                        setIsSaving(false);
-                        // Format error messages
-                        const errorMessages = Object.entries(errors)
-                            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                            .join('\n');
-                        setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
-                    },
-                    onFinish: () => {
-                        console.log('Forecast project save finished');
-                    },
+            router.post(saveUrl, payload, {
+                preserveScroll: true,
+                onSuccess: (page) => {
+                    console.log('Forecast project save successful:', page);
+                    setIsSaving(false);
+                    setSaveSuccess(true);
+                    setPendingDeletedItemIds({ cost: [], revenue: [] });
+                    setTimeout(() => {
+                        setSaveSuccess(false);
+                    }, 1500);
                 },
-            );
+                onError: (errors) => {
+                    console.error('Forecast project save errors:', errors);
+                    setIsSaving(false);
+                    // Format error messages
+                    const errorMessages = Object.entries(errors)
+                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                        .join('\n');
+                    setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
+                },
+                onFinish: () => {
+                    console.log('Forecast project save finished');
+                },
+            });
         } else {
             // For regular job forecasts, save cost first, then revenue
             console.log('Regular Job Forecast Save URL:', saveUrl);
@@ -1019,11 +1015,7 @@ const ShowJobForecastPage = ({
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => router.visit(isForecastProject ? '/forecast-projects' : '/locations')}
-                                    >
+                                    <Button variant="ghost" size="icon" onClick={() => router.visit('/turnover-forecast')}>
                                         <ArrowLeft className="h-5 w-5" />
                                     </Button>
                                 </TooltipTrigger>

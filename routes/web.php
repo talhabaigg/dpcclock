@@ -11,6 +11,7 @@ use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
+use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
@@ -206,6 +207,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Turnover Forecast
         Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
+
+        // Queue Status Monitor
+        Route::get('/queue-status', [QueueStatusController::class, 'index'])->name('queueStatus.index');
+        Route::get('/queue-status/stats', [QueueStatusController::class, 'stats'])->name('queueStatus.stats');
 
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');

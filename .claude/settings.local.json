@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
-      "Bash(php artisan:*)"
+      "Bash(php artisan:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(curl:*)"
     ]
   }
 }

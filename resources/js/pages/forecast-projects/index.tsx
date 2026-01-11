@@ -1,3 +1,5 @@
+import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -7,11 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { PlusCircle, Eye, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Turnover Forecast', href: '/turnover-forecast' },
     { title: 'Forecast Projects', href: '/forecast-projects' },
 ];
 
@@ -40,6 +43,8 @@ type FormData = {
 export default function ForecastProjectsIndex({ projects = [] }: { projects: ForecastProject[] }) {
     // Ensure projects is always an array and filter out any invalid entries
     const validProjects = Array.isArray(projects) ? projects.filter(p => p && typeof p === 'object' && p.id) : [];
+    const { flash, errors } = usePage<{ flash: { success?: string; error?: string }; errors: Record<string, string> }>().props;
+    const [showFlash, setShowFlash] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<ForecastProject | null>(null);
     const [formData, setFormData] = useState<FormData>({
@@ -50,6 +55,16 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
         end_date: '',
         status: 'potential',
     });
+
+    useEffect(() => {
+        if (flash?.success || flash?.error) {
+            setShowFlash(true);
+            const timer = setTimeout(() => {
+                setShowFlash(false);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [flash]);
 
     const handleCreate = () => {
         setEditingProject(null);
@@ -66,12 +81,49 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
 
     const handleEdit = (project: ForecastProject) => {
         setEditingProject(project);
+
+        // Convert date to YYYY-MM-DD format for input[type="date"]
+        const formatDate = (dateStr?: string) => {
+            if (!dateStr) return '';
+
+            // If it's already in YYYY-MM-DD format, return it
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                return dateStr;
+            }
+
+            // Try different parsing strategies
+            let date: Date;
+
+            // Try parsing as-is first
+            date = new Date(dateStr);
+
+            // If that fails, try with explicit UTC parsing
+            if (isNaN(date.getTime())) {
+                date = new Date(dateStr.replace(' ', 'T'));
+            }
+
+            // If still invalid, return empty
+            if (isNaN(date.getTime())) return '';
+
+            // Format to YYYY-MM-DD
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        console.log('Project dates:', { start_date: project.start_date, end_date: project.end_date });
+        console.log('Formatted dates:', {
+            start: formatDate(project.start_date),
+            end: formatDate(project.end_date)
+        });
+
         setFormData({
             name: project.name,
             project_number: project.project_number,
             description: project.description || '',
-            start_date: project.start_date || '',
-            end_date: project.end_date || '',
+            start_date: formatDate(project.start_date),
+            end_date: formatDate(project.end_date),
             status: project.status,
         });
         setDialogOpen(true);
@@ -119,6 +171,9 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Forecast Projects" />
+
+            {showFlash && flash?.success && <SuccessAlertFlash message={flash.success} />}
+            {showFlash && flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
             <div className="m-4">
                 <div className="mb-4 flex items-center justify-between">
@@ -188,29 +243,35 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
                         <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="name" className="text-right">
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="name" className="text-right pt-2">
                                     Name *
                                 </Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="col-span-3"
-                                    required
-                                />
+                                <div className="col-span-3">
+                                    <Input
+                                        id="name"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className={errors.name ? 'border-red-500' : ''}
+                                        required
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="project_number" className="text-right">
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="project_number" className="text-right pt-2">
                                     Project # *
                                 </Label>
-                                <Input
-                                    id="project_number"
-                                    value={formData.project_number}
-                                    onChange={(e) => setFormData({ ...formData, project_number: e.target.value })}
-                                    className="col-span-3"
-                                    required
-                                />
+                                <div className="col-span-3">
+                                    <Input
+                                        id="project_number"
+                                        value={formData.project_number}
+                                        onChange={(e) => setFormData({ ...formData, project_number: e.target.value })}
+                                        className={errors.project_number ? 'border-red-500' : ''}
+                                        required
+                                    />
+                                    <InputError message={errors.project_number} />
+                                </div>
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="description" className="text-right">
@@ -240,29 +301,35 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="start_date" className="text-right">
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="start_date" className="text-right pt-2">
                                     Start Date
                                 </Label>
-                                <Input
-                                    id="start_date"
-                                    type="date"
-                                    value={formData.start_date}
-                                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                    className="col-span-3"
-                                />
+                                <div className="col-span-3">
+                                    <Input
+                                        id="start_date"
+                                        type="date"
+                                        value={formData.start_date}
+                                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                                        className={errors.start_date ? 'border-red-500' : ''}
+                                    />
+                                    <InputError message={errors.start_date} />
+                                </div>
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="end_date" className="text-right">
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="end_date" className="text-right pt-2">
                                     End Date
                                 </Label>
-                                <Input
-                                    id="end_date"
-                                    type="date"
-                                    value={formData.end_date}
-                                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                    className="col-span-3"
-                                />
+                                <div className="col-span-3">
+                                    <Input
+                                        id="end_date"
+                                        type="date"
+                                        value={formData.end_date}
+                                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                        className={errors.end_date ? 'border-red-500' : ''}
+                                    />
+                                    <InputError message={errors.end_date} />
+                                </div>
                             </div>
                         </div>
                         <DialogFooter>

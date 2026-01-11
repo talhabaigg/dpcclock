@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AppLayout from '@/layouts/app-layout';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import type { ColDef, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
@@ -98,6 +98,7 @@ export default function TurnoverForecastIndex({
     });
 
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<'both' | 'revenue' | 'cost'>('both');
 
     // Save excluded jobs to local storage whenever it changes
     useEffect(() => {
@@ -315,7 +316,17 @@ export default function TurnoverForecastIndex({
                     if (params.data?.type === 'Profit') {
                         return 'font-bold bg-red-50';
                     }
-                    return '';
+                    return 'text-blue-600 hover:underline cursor-pointer';
+                },
+                onCellClicked: (params: any) => {
+                    const rowData = params.data;
+                    if (rowData.type !== 'Total' && rowData.type !== 'Profit' && rowData.job_number) {
+                        if (rowData.type === 'forecast_project') {
+                            window.location.href = `/forecast-projects/${rowData.id}`;
+                        } else {
+                            window.location.href = `/location/${rowData.id}/job-forecast`;
+                        }
+                    }
                 },
             },
         ],
@@ -658,16 +669,57 @@ export default function TurnoverForecastIndex({
             <Head title="Turnover Forecast" />
 
             <div className="m-4">
-                <div className="mb-4 flex items-center justify-between">
-                    <div>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            Combined view of current and potential projects - Financial Year: {fyLabel}
-                        </p>
+                <div className="mb-6 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                            <h1 className="text-2xl font-semibold tracking-tight">Turnover Forecast</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Combined view of current and potential projects - Financial Year: {fyLabel}
+                            </p>
+                        </div>
+                        <Link href="/forecast-projects" className="sm:flex-shrink-0">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                                Manage Forecast Projects
+                            </Button>
+                        </Link>
                     </div>
-                    <div className="flex gap-2">
-                        <Button onClick={() => setFilterDialogOpen(true)} variant="outline">
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50/50 p-1">
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'both' ? 'default' : 'ghost'}
+                                onClick={() => setViewMode('both')}
+                                className="h-8 flex-1 sm:flex-none"
+                            >
+                                Both
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'revenue' ? 'default' : 'ghost'}
+                                onClick={() => setViewMode('revenue')}
+                                className="h-8 flex-1 sm:flex-none"
+                            >
+                                Revenue
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'cost' ? 'default' : 'ghost'}
+                                onClick={() => setViewMode('cost')}
+                                className="h-8 flex-1 sm:flex-none"
+                            >
+                                Cost
+                            </Button>
+                        </div>
+                        <Button onClick={() => setFilterDialogOpen(true)} variant="outline" size="sm" className="w-full sm:w-auto">
                             <Filter className="mr-2 h-4 w-4" />
-                            Filter Jobs ({data.length - filteredData.length} hidden)
+                            <span className="hidden sm:inline">Filter Jobs</span>
+                            <span className="sm:hidden">Filter</span>
+                            {data.length - filteredData.length > 0 && (
+                                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                    {data.length - filteredData.length}
+                                </span>
+                            )}
                         </Button>
                     </div>
                 </div>
@@ -799,68 +851,72 @@ export default function TurnoverForecastIndex({
                 {/* Aligned Grids Container */}
                 <div className="space-y-4">
                     {/* Revenue Grid */}
-                    <div>
-                        <div className="mb-2 flex items-center justify-between">
-                            <h2 className="text-sm font-semibold">Revenue</h2>
-                            <Tooltip>
-                                <TooltipTrigger>
-                                    <Button onClick={() => handleExportCSV('revenue')} variant="outline" size="icon">
-                                        <Download className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
-                            </Tooltip>
+                    {(viewMode === 'both' || viewMode === 'revenue') && (
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h2 className="text-sm font-semibold">Revenue</h2>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button onClick={() => handleExportCSV('revenue')} variant="outline" size="icon">
+                                            <Download className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                </Tooltip>
+                            </div>
+                            <div className="rounded-md border bg-white" style={{ height: '150px' }}>
+                                <AgGridReact
+                                    ref={revenueGridRef}
+                                    rowData={filteredData}
+                                    columnDefs={revenueColumnDefs}
+                                    defaultColDef={defaultColDef}
+                                    theme={shadcnTheme}
+                                    enableCellTextSelection={true}
+                                    ensureDomOrder={true}
+                                    getRowId={getRowId}
+                                    pinnedBottomRowData={revenueTotalRowData}
+                                    alignedGrids={[]}
+                                    onGridReady={() => {
+                                        setGridsReady((prev) => ({ ...prev, revenue: true }));
+                                    }}
+                                />
+                            </div>
                         </div>
-                        <div className="rounded-md border bg-white" style={{ height: '150px' }}>
-                            <AgGridReact
-                                ref={revenueGridRef}
-                                rowData={filteredData}
-                                columnDefs={revenueColumnDefs}
-                                defaultColDef={defaultColDef}
-                                theme={shadcnTheme}
-                                enableCellTextSelection={true}
-                                ensureDomOrder={true}
-                                getRowId={getRowId}
-                                pinnedBottomRowData={revenueTotalRowData}
-                                alignedGrids={[]}
-                                onGridReady={() => {
-                                    setGridsReady((prev) => ({ ...prev, revenue: true }));
-                                }}
-                            />
-                        </div>
-                    </div>
+                    )}
 
                     {/* Cost Grid with Total and Profit Pinned Rows */}
-                    <div>
-                        <div className="mb-2 flex items-center justify-between">
-                            <h2 className="text-sm font-semibold">Cost</h2>
-                            <Tooltip>
-                                <TooltipTrigger>
-                                    <Button onClick={() => handleExportCSV('cost')} variant="outline" size="icon">
-                                        <Download className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
-                            </Tooltip>
+                    {(viewMode === 'both' || viewMode === 'cost') && (
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h2 className="text-sm font-semibold">Cost</h2>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button onClick={() => handleExportCSV('cost')} variant="outline" size="icon">
+                                            <Download className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                </Tooltip>
+                            </div>
+                            <div className="rounded-md border bg-white" style={{ height: '150px' }}>
+                                <AgGridReact
+                                    ref={costGridRef}
+                                    rowData={filteredData}
+                                    columnDefs={costColumnDefs}
+                                    defaultColDef={defaultColDef}
+                                    theme={shadcnTheme}
+                                    enableCellTextSelection={true}
+                                    ensureDomOrder={true}
+                                    getRowId={getRowId}
+                                    pinnedBottomRowData={[...costTotalRowData, ...profitPinnedRowData]}
+                                    alignedGrids={[]}
+                                    onGridReady={() => {
+                                        setGridsReady((prev) => ({ ...prev, cost: true }));
+                                    }}
+                                />
+                            </div>
                         </div>
-                        <div className="rounded-md border bg-white" style={{ height: '150px' }}>
-                            <AgGridReact
-                                ref={costGridRef}
-                                rowData={filteredData}
-                                columnDefs={costColumnDefs}
-                                defaultColDef={defaultColDef}
-                                theme={shadcnTheme}
-                                enableCellTextSelection={true}
-                                ensureDomOrder={true}
-                                getRowId={getRowId}
-                                pinnedBottomRowData={[...costTotalRowData, ...profitPinnedRowData]}
-                                alignedGrids={[]}
-                                onGridReady={() => {
-                                    setGridsReady((prev) => ({ ...prev, cost: true }));
-                                }}
-                            />
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Footer info */}

@@ -108,8 +108,8 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
             $batchSize = config('premier.jobs.batch_size', 1000);
 
             $conn->transaction(function () use ($data, $batchSize) {
-                // Use truncate for better performance
-                JobReportByCostItemAndCostType::query()->truncate();
+                // Delete all records (don't use truncate inside transaction as it auto-commits)
+                JobReportByCostItemAndCostType::query()->delete();
 
                 $chunks = array_chunk($data, $batchSize);
                 foreach ($chunks as $index => $chunk) {

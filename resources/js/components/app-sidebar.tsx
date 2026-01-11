@@ -5,10 +5,12 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Activity,
     Binary,
     Box,
     Building,
     CalendarDays,
+    ChartLine,
     Clock,
     Database,
     File,
@@ -18,7 +20,6 @@ import {
     Hourglass,
     LayoutGrid,
     Pickaxe,
-    TrendingUp,
     UsersRound,
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -35,6 +36,12 @@ const mainNavItems: NavItem[] = [
         href: '/locations',
         icon: Building,
         permission: 'manage locations',
+    },
+    {
+        title: 'Turnover Forecast',
+        href: '/turnover-forecast',
+        icon: ChartLine,
+        permission: 'view all requisitions',
     },
     {
         title: 'Employees',
@@ -158,17 +165,17 @@ const reports = [
                 icon: Pickaxe,
                 permission: 'view all requisitions',
             },
-            {
-                name: 'Turnover Forecast',
-                url: '/turnover-forecast',
-                icon: TrendingUp,
-                permission: 'view all requisitions',
-            },
         ],
     },
 ];
 
 const footerNavItems: NavItem[] = [
+    {
+        title: 'Queue Status',
+        href: '/queue-status',
+        icon: Activity,
+        permission: 'view all requisitions',
+    },
     {
         title: 'Calendar',
         href: '/calendar',
