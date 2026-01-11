@@ -240,8 +240,29 @@ class LocationController extends Controller
     public function LoadJobDataFromPremier(Location $location)
     {
 
-        \App\Jobs\loadJobCostDetails::dispatch();
+        \App\Jobs\LoadJobCostDetails::dispatch();
         return redirect()->back()->with('success', 'Job Cost Details loading initiated.');
+    }
+
+    /**
+     * Load all job data from Premier (Cost Details, Reports, and AR Progress Billing)
+     */
+    public function loadJobData()
+    {
+        try {
+            // Dispatch all three jobs
+            \App\Jobs\LoadJobCostDetails::dispatch();
+            \App\Jobs\LoadJobReportByCostItemAndCostTypes::dispatch();
+            \App\Jobs\LoadArProgressBillingSummaries::dispatch();
+
+            return redirect()->back()->with('success', 'Data download initiated. All three jobs have been queued: Job Cost Details, Job Report by Cost Item & Cost Types, and AR Progress Billing Summaries.');
+        } catch (\Exception $e) {
+            \Log::error('Failed to dispatch job data loading jobs', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->with('error', 'Failed to initiate data download: ' . $e->getMessage());
+        }
     }
 
 }

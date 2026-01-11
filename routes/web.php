@@ -66,6 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/kiosks/update', [EmployeeController::class, 'updateKioskEmployees'])->name('employees.kiosks.update');
 
         Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync');
+        Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')->role('admin');
         Route::resource('locations', LocationController::class)->names('locations');
         Route::post('sub-locations', [LocationController::class, 'createSubLocation'])->name('sub-locations.create');
 

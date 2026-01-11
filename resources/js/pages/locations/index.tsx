@@ -18,7 +18,7 @@ import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowUpDown, CirclePlus, ClockAlert, EllipsisVertical, Eye, Pencil, RefreshCcw } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, CirclePlus, ClockAlert, Download, EllipsisVertical, Eye, Pencil, RefreshCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 const breadcrumbs: BreadcrumbItem[] = [
@@ -48,7 +48,11 @@ type Location = {
     }>;
 };
 export default function LocationsList() {
-    const { locations, flash } = usePage<{ locations: Location[]; flash: { success?: string; error?: string } }>().props;
+    const { locations, flash, auth } = usePage<{
+        locations: Location[];
+        flash: { success?: string; error?: string };
+        auth: { user: { roles?: Array<{ name: string }> } };
+    }>().props;
     const isLoading = false;
     const [open, setOpen] = useState(isLoading);
     const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('companySelected') ?? null);
@@ -61,6 +65,8 @@ export default function LocationsList() {
         return filter ? sortedLocations.filter((location) => location.eh_parent_id === filter) : sortedLocations;
     }, [sortedLocations, filter]);
 
+    const isAdmin = auth?.user?.roles?.some((role) => role.name === 'admin') ?? false;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
@@ -70,6 +76,13 @@ export default function LocationsList() {
                         <RefreshCcw /> {isLoading ? 'Syncing...' : 'Sync Locations'}
                     </Button>
                 </Link>
+                {isAdmin && (
+                    <Link href="/locations/load-job-data" method="get">
+                        <Button variant="outline" className="w-full min-w-96 sm:w-full sm:min-w-full" onClick={() => setOpen(true)}>
+                            <Download /> Load Job Data
+                        </Button>
+                    </Link>
+                )}
                 <div className="w-full sm:max-w-48">
                     <SelectFilter
                         value={filter}
