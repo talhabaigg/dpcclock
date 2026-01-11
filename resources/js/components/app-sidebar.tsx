@@ -18,6 +18,7 @@ import {
     Hourglass,
     LayoutGrid,
     Pickaxe,
+    TrendingUp,
     UsersRound,
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -155,6 +156,12 @@ const reports = [
                 name: 'Req Line Desc Report',
                 url: '/reports/req-line-items-desc',
                 icon: Pickaxe,
+                permission: 'view all requisitions',
+            },
+            {
+                name: 'Turnover Forecast',
+                url: '/turnover-forecast',
+                icon: TrendingUp,
                 permission: 'view all requisitions',
             },
         ],

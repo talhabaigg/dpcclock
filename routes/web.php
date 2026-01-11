@@ -6,6 +6,7 @@ use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
+use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
@@ -201,6 +202,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Forecast Project Forecast Data
         Route::post('/forecast-projects/{id}/forecast', [ForecastProjectController::class, 'storeForecast'])->name('forecastProjects.storeForecast');
+
+        // Turnover Forecast
+        Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
 
         Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync');
         Route::get('/location/{location}/cost-codes/edit', [LocationCostcodeController::class, 'edit'])->name('locationCostcodes.edit');
