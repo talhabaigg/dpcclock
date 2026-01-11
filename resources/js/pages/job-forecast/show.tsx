@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
+import { shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
-import { AllCommunityModule, ModuleRegistry, themeBalham } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { ArrowLeft, BarChart3, DollarSign, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -44,18 +45,18 @@ const ShowJobForecastPage = ({
     forecastProjectId,
     jobName,
     jobNumber,
-    isForecastProject = false
+    isForecastProject = false,
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
-            { title: 'Forecast Projects', href: '/forecast-projects' },
-            { title: jobName || 'Forecast Project', href: '#' },
-        ]
+              { title: 'Forecast Projects', href: '/forecast-projects' },
+              { title: jobName || 'Forecast Project', href: '#' },
+          ]
         : [
-            { title: 'Locations', href: '/locations' },
-            { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
-            { title: 'Job Forecast', href: '#' },
-        ];
+              { title: 'Locations', href: '/locations' },
+              { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
+              { title: 'Job Forecast', href: '#' },
+          ];
 
     // ===========================
     // State Management
@@ -222,89 +223,99 @@ const ShowJobForecastPage = ({
             };
         });
 
-        const saveUrl = isForecastProject
-            ? `/forecast-projects/${forecastProjectId}/forecast`
-            : `/location/${locationId}/job-forecast`;
+        const saveUrl = isForecastProject ? `/forecast-projects/${forecastProjectId}/forecast` : `/location/${locationId}/job-forecast`;
 
         if (isForecastProject) {
             const newCostItems = costGridData.filter((row) => row.id < 0);
             const newRevenueItems = revenueGridData.filter((row) => row.id < 0);
 
             // Send everything in one request using Inertia router
-            router.post(saveUrl, {
-                deletedCostItems: pendingDeletedItemIds.cost,
-                deletedRevenueItems: pendingDeletedItemIds.revenue,
-                newCostItems: newCostItems.map(item => ({
-                    cost_item: item.cost_item,
-                    cost_item_description: item.cost_item_description,
-                    budget: item.budget,
-                })),
-                newRevenueItems: newRevenueItems.map(item => ({
-                    cost_item: item.cost_item,
-                    cost_item_description: item.cost_item_description,
-                    contract_sum_to_date: item.contract_sum_to_date,
-                })),
-                costForecastData,
-                revenueForecastData,
-            }, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setIsSaving(false);
-                    setSaveSuccess(true);
-                    setPendingDeletedItemIds({ cost: [], revenue: [] });
-                    setTimeout(() => {
-                        setSaveSuccess(false);
-                    }, 1500);
+            router.post(
+                saveUrl,
+                {
+                    deletedCostItems: pendingDeletedItemIds.cost,
+                    deletedRevenueItems: pendingDeletedItemIds.revenue,
+                    newCostItems: newCostItems.map((item) => ({
+                        cost_item: item.cost_item,
+                        cost_item_description: item.cost_item_description,
+                        budget: item.budget,
+                    })),
+                    newRevenueItems: newRevenueItems.map((item) => ({
+                        cost_item: item.cost_item,
+                        cost_item_description: item.cost_item_description,
+                        contract_sum_to_date: item.contract_sum_to_date,
+                    })),
+                    costForecastData,
+                    revenueForecastData,
                 },
-                onError: (errors) => {
-                    setIsSaving(false);
-                    console.error('Save errors:', errors);
-                    // Format error messages
-                    const errorMessages = Object.entries(errors)
-                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                        .join('\n');
-                    setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setIsSaving(false);
+                        setSaveSuccess(true);
+                        setPendingDeletedItemIds({ cost: [], revenue: [] });
+                        setTimeout(() => {
+                            setSaveSuccess(false);
+                        }, 1500);
+                    },
+                    onError: (errors) => {
+                        setIsSaving(false);
+                        console.error('Save errors:', errors);
+                        // Format error messages
+                        const errorMessages = Object.entries(errors)
+                            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                            .join('\n');
+                        setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
+                    },
                 },
-            });
+            );
         } else {
             // For regular job forecasts, save cost and revenue separately
-            router.post(saveUrl, {
-                grid_type: 'cost',
-                forecast_data: costForecastData,
-            }, {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => {
-                    // Save revenue after cost succeeds
-                    router.post(saveUrl, {
-                        grid_type: 'revenue',
-                        forecast_data: revenueForecastData,
-                    }, {
-                        preserveScroll: true,
-                        onSuccess: () => {
-                            setIsSaving(false);
-                            setSaveSuccess(true);
-                            setTimeout(() => {
-                                setSaveSuccess(false);
-                            }, 1500);
-                        },
-                        onError: (errors) => {
-                            setIsSaving(false);
-                            const errorMessages = Object.entries(errors)
-                                .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                                .join('\n');
-                            setSaveError(errorMessages || 'Failed to save revenue forecast.');
-                        },
-                    });
+            router.post(
+                saveUrl,
+                {
+                    grid_type: 'cost',
+                    forecast_data: costForecastData,
                 },
-                onError: (errors) => {
-                    setIsSaving(false);
-                    const errorMessages = Object.entries(errors)
-                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                        .join('\n');
-                    setSaveError(errorMessages || 'Failed to save cost forecast.');
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        // Save revenue after cost succeeds
+                        router.post(
+                            saveUrl,
+                            {
+                                grid_type: 'revenue',
+                                forecast_data: revenueForecastData,
+                            },
+                            {
+                                preserveScroll: true,
+                                onSuccess: () => {
+                                    setIsSaving(false);
+                                    setSaveSuccess(true);
+                                    setTimeout(() => {
+                                        setSaveSuccess(false);
+                                    }, 1500);
+                                },
+                                onError: (errors) => {
+                                    setIsSaving(false);
+                                    const errorMessages = Object.entries(errors)
+                                        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                                        .join('\n');
+                                    setSaveError(errorMessages || 'Failed to save revenue forecast.');
+                                },
+                            },
+                        );
+                    },
+                    onError: (errors) => {
+                        setIsSaving(false);
+                        const errorMessages = Object.entries(errors)
+                            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                            .join('\n');
+                        setSaveError(errorMessages || 'Failed to save cost forecast.');
+                    },
                 },
-            });
+            );
         }
     }, [costGridData, revenueGridData, forecastMonths, locationId, forecastProjectId, isForecastProject, pendingDeletedItemIds]);
 
@@ -475,7 +486,16 @@ const ShowJobForecastPage = ({
             ];
         }
         return baseDefs;
-    }, [costTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumBefore, forecastSumThrough, updateCostRowCell, isForecastProject]);
+    }, [
+        costTrendColDef,
+        displayMonths,
+        forecastMonths,
+        actualsTotalForRow,
+        forecastSumBefore,
+        forecastSumThrough,
+        updateCostRowCell,
+        isForecastProject,
+    ]);
 
     const defaultColDef = useMemo(
         () => ({
@@ -536,7 +556,17 @@ const ShowJobForecastPage = ({
             ];
         }
         return baseDefs;
-    }, [revenueTrendColDef, displayMonths, forecastMonths, actualsTotalForRow, forecastSumThrough, forecastSumBefore, updateRevenueRowCell, pinnedBottomRevenueRowData, isForecastProject]);
+    }, [
+        revenueTrendColDef,
+        displayMonths,
+        forecastMonths,
+        actualsTotalForRow,
+        forecastSumThrough,
+        forecastSumBefore,
+        updateRevenueRowCell,
+        pinnedBottomRevenueRowData,
+        isForecastProject,
+    ]);
 
     // Calculate profit row (Revenue - Cost)
     const pinnedBottomProfitRowData = useMemo(() => {
@@ -848,7 +878,7 @@ const ShowJobForecastPage = ({
                                         type="text"
                                         value={itemFormData.cost_item}
                                         onChange={(e) => setItemFormData({ ...itemFormData, cost_item: e.target.value })}
-                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
                                         placeholder="e.g., 01-01"
                                         required
                                     />
@@ -862,7 +892,7 @@ const ShowJobForecastPage = ({
                                         type="text"
                                         value={itemFormData.cost_item_description}
                                         onChange={(e) => setItemFormData({ ...itemFormData, cost_item_description: e.target.value })}
-                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
                                     />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
@@ -880,7 +910,7 @@ const ShowJobForecastPage = ({
                                                 [itemDialogType === 'cost' ? 'budget' : 'contract_sum_to_date']: e.target.value,
                                             })
                                         }
-                                        className="col-span-3 rounded-md border border-input bg-background px-3 py-2"
+                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
                                         required
                                     />
                                 </div>
@@ -937,7 +967,7 @@ const ShowJobForecastPage = ({
                             </div>
                             <p className="text-lg font-semibold text-red-600">Error Saving Forecast</p>
                             <div className="max-h-48 w-full overflow-y-auto rounded bg-red-50 p-4">
-                                <pre className="whitespace-pre-wrap text-sm text-red-800">{saveError}</pre>
+                                <pre className="text-sm whitespace-pre-wrap text-red-800">{saveError}</pre>
                             </div>
                             <Button onClick={() => setSaveError(null)} variant="outline">
                                 Close
@@ -954,7 +984,11 @@ const ShowJobForecastPage = ({
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => router.visit(isForecastProject ? '/forecast-projects' : '/locations')}>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => router.visit(isForecastProject ? '/forecast-projects' : '/locations')}
+                                    >
                                         <ArrowLeft className="h-5 w-5" />
                                     </Button>
                                 </TooltipTrigger>
@@ -1023,42 +1057,42 @@ const ShowJobForecastPage = ({
                         )}
                         <div className="ag-theme-quartz flex-1">
                             <AgGridReact
-                            theme={themeBalham}
-                            ref={gridOne}
-                            alignedGrids={[gridTwo]}
-                            rowData={costGridData}
-                            columnDefs={costColDefs}
-                            defaultColDef={defaultColDef}
-                            animateRows
-                            pinnedBottomRowData={pinnedBottomRowData}
-                            stopEditingWhenCellsLoseFocus
-                            suppressColumnVirtualisation={true}
-                            rowSelection={isForecastProject ? 'multiple' : undefined}
-                            onFirstDataRendered={(params) => {
-                                restoreColState(params.api, LS_COST_COL_STATE);
-                                restoreGroupShowState(params.api);
-                            }}
-                            onColumnVisible={(params) => {
-                                saveColState(params.api, LS_COST_COL_STATE);
-                            }}
-                            onColumnMoved={(params) => saveColState(params.api, LS_COST_COL_STATE)}
-                            onCellEditingStarted={() => {
-                                // Clear any pending timeout
-                                if (editingStopTimeoutRef.current) {
-                                    clearTimeout(editingStopTimeoutRef.current);
-                                }
-                                isEditingRef.current = true;
-                            }}
-                            onCellEditingStopped={() => {
-                                // Delay resetting the editing flag to prevent column group events from firing
-                                if (editingStopTimeoutRef.current) {
-                                    clearTimeout(editingStopTimeoutRef.current);
-                                }
-                                editingStopTimeoutRef.current = setTimeout(() => {
-                                    isEditingRef.current = false;
-                                }, 200);
-                            }}
-                        />
+                                theme={shadcnTheme}
+                                ref={gridOne}
+                                alignedGrids={[gridTwo]}
+                                rowData={costGridData}
+                                columnDefs={costColDefs}
+                                defaultColDef={defaultColDef}
+                                animateRows
+                                pinnedBottomRowData={pinnedBottomRowData}
+                                stopEditingWhenCellsLoseFocus
+                                suppressColumnVirtualisation={true}
+                                rowSelection={isForecastProject ? 'multiple' : undefined}
+                                onFirstDataRendered={(params) => {
+                                    restoreColState(params.api, LS_COST_COL_STATE);
+                                    restoreGroupShowState(params.api);
+                                }}
+                                onColumnVisible={(params) => {
+                                    saveColState(params.api, LS_COST_COL_STATE);
+                                }}
+                                onColumnMoved={(params) => saveColState(params.api, LS_COST_COL_STATE)}
+                                onCellEditingStarted={() => {
+                                    // Clear any pending timeout
+                                    if (editingStopTimeoutRef.current) {
+                                        clearTimeout(editingStopTimeoutRef.current);
+                                    }
+                                    isEditingRef.current = true;
+                                }}
+                                onCellEditingStopped={() => {
+                                    // Delay resetting the editing flag to prevent column group events from firing
+                                    if (editingStopTimeoutRef.current) {
+                                        clearTimeout(editingStopTimeoutRef.current);
+                                    }
+                                    editingStopTimeoutRef.current = setTimeout(() => {
+                                        isEditingRef.current = false;
+                                    }, 200);
+                                }}
+                            />
                         </div>
                     </div>
 
@@ -1089,7 +1123,12 @@ const ShowJobForecastPage = ({
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedRevenueItems()}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={() => handleDeleteSelectedRevenueItems()}
+                                            >
                                                 <Trash2 className="h-4 w-4 text-red-600" />
                                             </Button>
                                         </TooltipTrigger>
@@ -1098,53 +1137,53 @@ const ShowJobForecastPage = ({
                                 </TooltipProvider>
                             </div>
                         )}
-                        <div className="ag-theme-quartz flex-1">
+                        <div className="ag-theme-balham flex-1">
                             <AgGridReact
-                            theme={themeBalham}
-                            ref={gridTwo}
-                            headerHeight={0}
-                            groupHeaderHeight={0}
-                            floatingFiltersHeight={0}
-                            alignedGrids={[gridOne]}
-                            rowData={revenueGridData}
-                            columnDefs={revenueColDefs}
-                            defaultColDef={defaultColDef}
-                            animateRows
-                            pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
-                            stopEditingWhenCellsLoseFocus
-                            suppressColumnVirtualisation={true}
-                            rowSelection={isForecastProject ? 'multiple' : undefined}
-                            onFirstDataRendered={(params) => {
-                                restoreColState(params.api, LS_REV_COL_STATE);
-                                // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
-                            }}
-                            onColumnVisible={(params) => {
-                                saveColState(params.api, LS_REV_COL_STATE);
-                            }}
-                            onColumnMoved={(params) => saveColState(params.api, LS_REV_COL_STATE)}
-                            onCellClicked={() => {
-                                // Set editing flag on cell click to prevent column group events
-                                isEditingRef.current = true;
-                                // Clear any pending timeout
-                                if (editingStopTimeoutRef.current) {
-                                    clearTimeout(editingStopTimeoutRef.current);
-                                }
-                            }}
-                            onCellEditingStarted={(params) => {
-                                console.log('Revenue grid - Cell editing STARTED', params.colDef?.field);
-                                isEditingRef.current = true;
-                            }}
-                            onCellEditingStopped={(params) => {
-                                console.log('Revenue grid - Cell editing STOPPED', params.colDef?.field);
-                                // Delay resetting the editing flag to prevent column group events from firing
-                                if (editingStopTimeoutRef.current) {
-                                    clearTimeout(editingStopTimeoutRef.current);
-                                }
-                                editingStopTimeoutRef.current = setTimeout(() => {
-                                    isEditingRef.current = false;
-                                }, 200);
-                            }}
-                        />
+                                theme={shadcnTheme}
+                                ref={gridTwo}
+                                headerHeight={0}
+                                groupHeaderHeight={0}
+                                floatingFiltersHeight={0}
+                                alignedGrids={[gridOne]}
+                                rowData={revenueGridData}
+                                columnDefs={revenueColDefs}
+                                defaultColDef={defaultColDef}
+                                animateRows
+                                pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
+                                stopEditingWhenCellsLoseFocus
+                                suppressColumnVirtualisation={true}
+                                rowSelection={isForecastProject ? 'multiple' : undefined}
+                                onFirstDataRendered={(params) => {
+                                    restoreColState(params.api, LS_REV_COL_STATE);
+                                    // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
+                                }}
+                                onColumnVisible={(params) => {
+                                    saveColState(params.api, LS_REV_COL_STATE);
+                                }}
+                                onColumnMoved={(params) => saveColState(params.api, LS_REV_COL_STATE)}
+                                onCellClicked={() => {
+                                    // Set editing flag on cell click to prevent column group events
+                                    isEditingRef.current = true;
+                                    // Clear any pending timeout
+                                    if (editingStopTimeoutRef.current) {
+                                        clearTimeout(editingStopTimeoutRef.current);
+                                    }
+                                }}
+                                onCellEditingStarted={(params) => {
+                                    console.log('Revenue grid - Cell editing STARTED', params.colDef?.field);
+                                    isEditingRef.current = true;
+                                }}
+                                onCellEditingStopped={(params) => {
+                                    console.log('Revenue grid - Cell editing STOPPED', params.colDef?.field);
+                                    // Delay resetting the editing flag to prevent column group events from firing
+                                    if (editingStopTimeoutRef.current) {
+                                        clearTimeout(editingStopTimeoutRef.current);
+                                    }
+                                    editingStopTimeoutRef.current = setTimeout(() => {
+                                        isEditingRef.current = false;
+                                    }, 200);
+                                }}
+                            />
                         </div>
                     </div>
                 </div>

@@ -39,3 +39,33 @@ export const darkTheme = themeQuartz.withParams({
     rowVerticalPaddingScale: 1,
     wrapperBorder: false,
 });
+
+export const shadcnTheme = themeQuartz.withParams({
+    accentColor: 'hsl(var(--primary))',
+    backgroundColor: 'hsl(var(--background))',
+    borderColor: '#e5e7eb',
+    borderWidth: 1,
+    browserColorScheme: 'inherit',
+    cellHorizontalPaddingScale: 0.55,
+    columnBorder: true,
+    dataFontSize: 10,
+    fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    foregroundColor: 'hsl(var(--foreground))',
+    headerBackgroundColor: 'hsl(var(--muted))',
+    headerFontFamily: 'var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    headerFontSize: 10,
+    headerFontWeight: 700,
+    headerTextColor: 'hsl(var(--foreground))',
+    headerVerticalPaddingScale: 0.5,
+    oddRowBackgroundColor: 'hsl(var(--muted) / 0.35)',
+    rowBorder: true,
+    rowVerticalPaddingScale: 0.4,
+    wrapperBorder: true,
+    wrapperBorderRadius: '12px',
+    borderRadius: '12px',
+    menuBackgroundColor: '#FFFFFF',
+    pickerListBackgroundColor: '#FFFFFF',
+    listItemHeight: 20,
+
+    menuShadow: { radius: 10, spread: 5, color: '#e5e7eb' },
+});
