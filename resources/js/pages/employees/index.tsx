@@ -35,7 +35,7 @@ const isLoading = false;
 export default function EmployeesList() {
     const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
-    const { sortedItems: sortedEmployees, handleSort } = useSortableData<Employee>(employees); //useSortableData is a custom hook to sort table data
+    const { sortedItems: sortedEmployees, handleSort } = useSortableData<Employee>(employees, { field: 'name', order: 'asc' }); //useSortableData is a custom hook to sort table data
     const filteredEmployees = useMemo(() => {
         return searchQuery ? employees.filter((employee) => employee.name.toLowerCase().includes(searchQuery.toLowerCase())) : sortedEmployees;
     }, [sortedEmployees, searchQuery]);
