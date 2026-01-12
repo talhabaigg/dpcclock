@@ -6,6 +6,7 @@ use App\Models\ArProgressBillingSummary;
 use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
+use App\Models\JobSummary;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +18,7 @@ class JobForecastController extends Controller
     public function show($id)
     {
         $location = Location::where('id', $id)->first();
+        $JobSummary = JobSummary::where('job_number', $location->external_id)->first();
 
         // Check if user has access to this location
         $user = Auth::user();
@@ -91,7 +93,7 @@ class JobForecastController extends Controller
 
 
         // Calculate forecast months first
-        $endDate = '2026-05-20';
+        $endDate = $JobSummary->actual_end_date ?? $JobSummary->estimated_end_date ?? date('Y-m-d');
         $endMonth = date('Y-m', strtotime($endDate));
         $lastActualMonth = end($months);
 

@@ -251,9 +251,11 @@ class LocationController extends Controller
     {
         try {
             // Dispatch all three jobs
+            \App\Jobs\LoadJobSummaries::dispatch();
             \App\Jobs\LoadJobCostData::dispatch();
             \App\Jobs\LoadJobReportByCostItemAndCostTypes::dispatch();
             \App\Jobs\LoadArProgressBillingSummaries::dispatch();
+
 
             return redirect()->back()->with('success', 'Data download initiated. All three jobs have been queued: Job Cost Details, Job Report by Cost Item & Cost Types, and AR Progress Billing Summaries.');
         } catch (\Exception $e) {

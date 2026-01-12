@@ -22,6 +22,7 @@ return [
         'job_cost_details' => '/JobCostDetails',
         'job_report_by_cost_item' => '/JobReportByCostItemAndCostTypes',
         'ar_progress_billing' => '/ARProgressBillingSummaries',
+        'job_summaries' => '/JobSummaries',
     ],
 
     'jobs' => [
