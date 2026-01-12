@@ -73,17 +73,29 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
     };
 
     const meta = useMemo<ChartMeta[]>(
-        () =>
-            data.map((d) => {
-                const isActual = d.actual != null;
-                const y = isActual ? d.actual : d.forecast;
+        () => {
+            console.log('=== CHART DATA DEBUG ===');
+            console.log('Chart data:', data);
+
+            return data.map((d) => {
+                // If both actual and forecast exist (current month), prefer forecast for display
+                const hasForecast = d.forecast != null;
+                const hasActual = d.actual != null;
+
+                // Use forecast if available, otherwise use actual
+                const y = hasForecast ? d.forecast : (hasActual ? d.actual : 0);
+                const isActual = !hasForecast && hasActual;
+
+                console.log(`Month ${d.monthKey}: hasActual=${hasActual}, hasForecast=${hasForecast}, isActual=${isActual}, y=${y}`);
+
                 return {
                     label: d.monthLabel,
                     y: y ?? 0,
                     is_actual: isActual,
                     monthKey: d.monthKey,
                 };
-            }),
+            });
+        },
         [data],
     );
 

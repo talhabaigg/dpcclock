@@ -210,8 +210,10 @@ const ShowJobForecastPage = ({
         const costForecastData = costGridData.map((row) => {
             const months: Record<string, number | null> = {};
             forecastMonths.forEach((month) => {
-                if (row[month] !== undefined && row[month] !== null) {
-                    months[month] = row[month];
+                // Check for forecast_ prefixed field first (current month scenario)
+                const fieldName = row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
+                if (row[fieldName] !== undefined && row[fieldName] !== null) {
+                    months[fieldName] = row[fieldName];
                 }
             });
             return {
@@ -223,8 +225,10 @@ const ShowJobForecastPage = ({
         const revenueForecastData = revenueGridData.map((row) => {
             const months: Record<string, number | null> = {};
             forecastMonths.forEach((month) => {
-                if (row[month] !== undefined && row[month] !== null) {
-                    months[month] = row[month];
+                // Check for forecast_ prefixed field first (current month scenario)
+                const fieldName = row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
+                if (row[fieldName] !== undefined && row[fieldName] !== null) {
+                    months[fieldName] = row[fieldName];
                 }
             });
             return {
@@ -466,11 +470,13 @@ const ShowJobForecastPage = ({
 
             const updateFn = chartCtx.grid === 'cost' ? updateCostRowCell : updateRevenueRowCell;
             if (chartCtx.rowKey) {
-                updateFn(chartCtx.rowKey, monthKey, newValue);
-                queueMicrotask(() => refreshMonthCells(monthKey));
+                // Use forecast_ prefix for current month
+                const fieldName = monthKey === currentMonth ? `forecast_${monthKey}` : monthKey;
+                updateFn(chartCtx.rowKey, fieldName, newValue);
+                queueMicrotask(() => refreshMonthCells(fieldName));
             }
         },
-        [chartCtx, forecastMonths, updateCostRowCell, updateRevenueRowCell, refreshMonthCells],
+        [chartCtx, forecastMonths, currentMonth, updateCostRowCell, updateRevenueRowCell, refreshMonthCells],
     );
 
     // ===========================
@@ -480,6 +486,7 @@ const ShowJobForecastPage = ({
         grid: 'cost',
         displayMonths,
         forecastMonths,
+        currentMonth,
         onChartOpen: setChartCtx,
     });
 
@@ -487,6 +494,7 @@ const ShowJobForecastPage = ({
         grid: 'revenue',
         displayMonths,
         forecastMonths,
+        currentMonth,
         onChartOpen: setChartCtx,
     });
 
@@ -649,7 +657,7 @@ const ShowJobForecastPage = ({
     // ===========================
     // Chart Data
     // ===========================
-    const buildChartRowsFromRow = useChartRowsBuilder({ displayMonths, forecastMonths });
+    const buildChartRowsFromRow = useChartRowsBuilder({ displayMonths, forecastMonths, currentMonth });
     const { activeRow, activeChartRows } = useActiveChartData({
         chartCtx,
         costGridData,

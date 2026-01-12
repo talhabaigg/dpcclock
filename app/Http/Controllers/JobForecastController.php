@@ -97,8 +97,9 @@ class JobForecastController extends Controller
         $endMonth = date('Y-m', strtotime($endDate));
         $lastActualMonth = end($months);
 
-        // Forecast starts from the month AFTER the last actual month
-        $startForecastMonth = date('Y-m', strtotime($lastActualMonth . ' +1 month'));
+        // Forecast starts from the CURRENT month (to allow forecasting for remainder of current month)
+        // If current month has actuals, include it in forecast; otherwise start from next month
+        $startForecastMonth = ($currentMonth >= $lastActualMonth) ? $currentMonth : date('Y-m', strtotime($lastActualMonth . ' +1 month'));
 
         $forecastMonths = [];
         $current = $startForecastMonth;
@@ -137,12 +138,18 @@ class JobForecastController extends Controller
                     $row[$i->month] = (float) $i->actual;
                 }
 
+                $currentMonth = date('Y-m');
                 // Load forecast data from saved records
                 $forecastKey = 'cost_' . $costItem;
                 if (isset($savedForecasts[$forecastKey])) {
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
-                            $row[$forecast->month] = (float) $forecast->forecast_amount;
+                            // If this is the current month, use forecast_ prefix to separate from actual
+                            if ($forecast->month === $currentMonth) {
+                                $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
+                            } else {
+                                $row[$forecast->month] = (float) $forecast->forecast_amount;
+                            }
                         }
                     }
                 }
@@ -174,7 +181,12 @@ class JobForecastController extends Controller
                 if (isset($savedForecasts[$forecastKey])) {
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
-                            $row[$forecast->month] = (float) $forecast->forecast_amount;
+                            // If this is the current month, use forecast_ prefix to separate from actual
+                            if ($forecast->month === $currentMonth) {
+                                $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
+                            } else {
+                                $row[$forecast->month] = (float) $forecast->forecast_amount;
+                            }
                         }
                     }
                 }
@@ -272,13 +284,16 @@ class JobForecastController extends Controller
                 $costItem = $row['cost_item'];
 
                 foreach ($row['months'] as $month => $amount) {
+                    // Strip "forecast_" prefix if present (for current month scenario)
+                    $actualMonth = str_starts_with($month, 'forecast_') ? substr($month, 9) : $month;
+
                     if ($amount !== null && $amount !== '') {
                         JobForecastData::updateOrCreate(
                             [
                                 'job_number' => $jobNumber,
                                 'grid_type' => $gridType,
                                 'cost_item' => $costItem,
-                                'month' => $month,
+                                'month' => $actualMonth,
                             ],
                             [
                                 'location_id' => $id,
@@ -291,7 +306,7 @@ class JobForecastController extends Controller
                             'job_number' => $jobNumber,
                             'grid_type' => $gridType,
                             'cost_item' => $costItem,
-                            'month' => $month,
+                            'month' => $actualMonth,
                         ])->delete();
                     }
                 }

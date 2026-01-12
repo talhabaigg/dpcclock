@@ -86,7 +86,9 @@ export function useForecastCalculations({ displayMonths, forecastMonths }: UseFo
             let sum = 0;
             for (const fm of forecastMonths) {
                 if (fm >= month) break;
-                sum += Number(toNumberOrNull(row?.[fm]) ?? 0);
+                // Check if this month has a forecast_ prefix field (current month scenario)
+                const fieldName = row?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
+                sum += Number(toNumberOrNull(row?.[fieldName]) ?? 0);
             }
             return sum;
         },
@@ -98,7 +100,9 @@ export function useForecastCalculations({ displayMonths, forecastMonths }: UseFo
             let sum = 0;
             for (const fm of forecastMonths) {
                 if (fm > month) break;
-                sum += Number(toNumberOrNull(row?.[fm]) ?? 0);
+                // Check if this month has a forecast_ prefix field (current month scenario)
+                const fieldName = row?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
+                sum += Number(toNumberOrNull(row?.[fieldName]) ?? 0);
             }
             return sum;
         },
@@ -116,6 +120,7 @@ interface UseTrendColumnDefProps {
     grid: 'cost' | 'revenue';
     displayMonths: string[];
     forecastMonths: string[];
+    currentMonth?: string;
     onChartOpen: (context: ChartContext) => void;
 }
 
@@ -127,7 +132,15 @@ const SparklineCellRenderer = (props: any) => {
 
     const isPinnedBottom = node?.rowPinned === 'bottom';
     const allMonths = [...displayMonths, ...forecastMonths];
-    const values = allMonths.map((m: string) => toNumberOrNull(row?.[m]) ?? 0);
+    // Remove duplicates and map values, checking for forecast_ prefix
+    const uniqueMonths = Array.from(new Set(allMonths)).sort();
+    const values = uniqueMonths.map((m: string) => {
+        // For forecast months, check if there's a forecast_ prefixed field
+        if (forecastMonths.includes(m) && row?.[`forecast_${m}`] !== undefined) {
+            return toNumberOrNull(row?.[`forecast_${m}`]) ?? 0;
+        }
+        return toNumberOrNull(row?.[m]) ?? 0;
+    });
 
     const handleClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -159,7 +172,7 @@ const SparklineCellRenderer = (props: any) => {
     );
 };
 
-export function useTrendColumnDef({ grid, displayMonths, forecastMonths, onChartOpen }: UseTrendColumnDefProps): ColDef {
+export function useTrendColumnDef({ grid, displayMonths, forecastMonths, currentMonth, onChartOpen }: UseTrendColumnDefProps): ColDef {
     return useMemo(
         () => ({
             headerName: '',
@@ -173,10 +186,11 @@ export function useTrendColumnDef({ grid, displayMonths, forecastMonths, onChart
                 grid,
                 displayMonths,
                 forecastMonths,
+                currentMonth,
                 onChartOpen,
             },
         }),
-        [grid, displayMonths, forecastMonths, onChartOpen],
+        [grid, displayMonths, forecastMonths, currentMonth, onChartOpen],
     );
 }
 
@@ -199,16 +213,27 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
         };
 
         for (const m of displayMonths) totals[m] = 0;
-        for (const m of forecastMonths) totals[m] = 0;
+        for (const m of forecastMonths) {
+            totals[m] = 0;
+            totals[`forecast_${m}`] = 0; // Initialize forecast_ prefix fields too
+        }
 
         for (const r of gridData) {
             for (const m of displayMonths) totals[m] += Number(r?.[m] ?? 0) || 0;
-            for (const m of forecastMonths) totals[m] += Number(r?.[m] ?? 0) || 0;
+            for (const m of forecastMonths) {
+                // Check if this month has a forecast_ prefix field (current month scenario)
+                const fieldName = r?.[`forecast_${m}`] !== undefined ? `forecast_${m}` : m;
+                totals[fieldName] += Number(r?.[fieldName] ?? 0) || 0;
+            }
             totals[budgetField] += Number(r?.[budgetField] ?? 0) || 0;
         }
 
         totals.actuals_total = displayMonths.reduce((sum, m) => sum + (Number(totals[m]) || 0), 0);
-        totals.forecast_total = forecastMonths.reduce((sum, m) => sum + (Number(totals[m]) || 0), 0);
+        totals.forecast_total = forecastMonths.reduce((sum, m) => {
+            // Check if this month has a forecast_ prefix field
+            const fieldName = totals[`forecast_${m}`] !== undefined ? `forecast_${m}` : m;
+            return sum + (Number(totals[fieldName]) || 0);
+        }, 0);
 
         return [totals];
     }, [gridData, displayMonths, forecastMonths, budgetField, description]);
@@ -217,26 +242,46 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
 interface UseChartRowsProps {
     displayMonths: string[];
     forecastMonths: string[];
+    currentMonth?: string;
 }
 
-export function useChartRowsBuilder({ displayMonths, forecastMonths }: UseChartRowsProps) {
+export function useChartRowsBuilder({ displayMonths, forecastMonths, currentMonth }: UseChartRowsProps) {
     return useCallback(
         (row: any): ChartRow[] => {
             const allMonths = [...displayMonths, ...forecastMonths];
+            // Remove duplicates (current month appears in both)
+            const uniqueMonths = Array.from(new Set(allMonths)).sort();
 
-            return allMonths.map((m) => {
-                const value = toNumberOrNull(row?.[m]);
+            return uniqueMonths.map((m) => {
                 const isActual = displayMonths.includes(m);
+                const isForecast = forecastMonths.includes(m);
+                const isCurrentMonth = currentMonth && m === currentMonth;
+
+                // If month is current month (in both actual and forecast)
+                if (isCurrentMonth && isActual && isForecast) {
+                    const actualValue = toNumberOrNull(row?.[m]);
+                    const forecastValue = toNumberOrNull(row?.[`forecast_${m}`]);
+                    return {
+                        monthKey: m,
+                        monthLabel: formatMonthHeader(m),
+                        actual: actualValue,
+                        forecast: forecastValue,
+                    };
+                }
+
+                // Otherwise, determine which field to read
+                const fieldName = isForecast && row?.[`forecast_${m}`] !== undefined ? `forecast_${m}` : m;
+                const value = toNumberOrNull(row?.[fieldName]);
 
                 return {
                     monthKey: m,
                     monthLabel: formatMonthHeader(m),
                     actual: isActual ? value : null,
-                    forecast: !isActual ? value : null,
+                    forecast: isForecast ? value : null,
                 };
             });
         },
-        [displayMonths, forecastMonths],
+        [displayMonths, forecastMonths, currentMonth],
     );
 }
 
