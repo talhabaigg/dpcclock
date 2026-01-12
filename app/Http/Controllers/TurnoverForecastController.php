@@ -9,6 +9,7 @@ use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -46,14 +47,26 @@ class TurnoverForecastController extends Controller
         $fyStartDate = "$fyStartYear-07-01";
         $fyEndDate = "$fyEndYear-06-30";
 
-        // Get all locations with job numbers
-        $locations = Location::where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093)->whereNotNull('external_id')
-            ->select('id', 'name', 'external_id')
-            ->get();
+        // Get all locations with job numbers, filtered by kiosk access
+        $user = Auth::user();
+        $locationsQuery = Location::where(function ($query) {
+            $query->where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
+        })->whereNotNull('external_id');
 
-        // Get all forecast projects
-        $forecastProjects = ForecastProject::with(['costItems', 'revenueItems'])
-            ->get();
+        // Filter by kiosk access if user is not admin or backoffice
+        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+            // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
+            $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
+            $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
+        }
+
+        $locations = $locationsQuery->select('id', 'name', 'external_id')->get();
+
+        // Get forecast projects - hide them if user has restricted access (not admin or backoffice)
+        $forecastProjects = collect([]);
+        if ($user->hasRole('admin') || $user->hasRole('backoffice')) {
+            $forecastProjects = ForecastProject::with(['costItems', 'revenueItems'])->get();
+        }
 
         // Build combined data
         $combinedData = [];

@@ -13,6 +13,7 @@ interface ColumnBuilderParams {
     forecastSumBefore: (row: any, month: string) => number;
     forecastSumThrough: (row: any, month: string) => number;
     updateRowCell: (rowKey: string, field: string, value: any) => void;
+    currentMonth?: string;
 }
 
 export function buildCostColumnDefs({
@@ -23,6 +24,7 @@ export function buildCostColumnDefs({
     forecastSumBefore,
     forecastSumThrough,
     updateRowCell,
+    currentMonth,
 }: ColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
         trendColDef,
@@ -98,47 +100,54 @@ export function buildCostColumnDefs({
                         },
                     ],
                 },
-                ...displayMonths.map((m) => ({
-                    headerName: formatMonthHeader(m),
-                    field: m,
-                    filter: false,
-                    marryChildren: true,
-                    columnGroupShow: 'open' as const,
-                    children: [
-                        {
-                            headerName: '$',
-                            colId: `${m}__amt`,
-                            field: m,
-                            width: 120,
-                            editable: false,
-                            type: 'numericColumn',
-                            headerClass: 'ag-right-aligned-header',
-                            cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
-                        },
-                        {
-                            headerName: '%',
-                            colId: `${m}__pct`,
-                            width: 90,
-                            editable: false,
-                            singleClickEdit: true,
-                            type: 'numericColumn',
-                            cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
-                            headerClass: 'ag-right-aligned-header',
-                            valueGetter: (p: any) => {
-                                const budget = Number(p.data?.budget ?? 0) || 0;
-                                if (!budget) return null;
-                                const cumulative =
-                                    sumMonths(
-                                        p.data,
-                                        displayMonths.filter((dm) => dm <= m),
-                                    ) || 0;
-                                return (cumulative / budget) * 100;
+                ...displayMonths.map((m) => {
+                    const isCurrentMonth = currentMonth && m === currentMonth;
+                    return {
+                        headerName: formatMonthHeader(m),
+                        field: m,
+                        filter: false,
+                        marryChildren: true,
+                        columnGroupShow: 'open' as const,
+                        children: [
+                            {
+                                headerName: '$',
+                                colId: `${m}__amt`,
+                                field: m,
+                                width: 120,
+                                editable: false,
+                                type: 'numericColumn',
+                                headerClass: 'ag-right-aligned-header',
+                                cellClass: isCurrentMonth
+                                    ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
+                                    : 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
-                        },
-                    ],
-                })),
+                            {
+                                headerName: '%',
+                                colId: `${m}__pct`,
+                                width: 90,
+                                editable: false,
+                                singleClickEdit: true,
+                                type: 'numericColumn',
+                                cellClass: isCurrentMonth
+                                    ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
+                                    : 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                                headerClass: 'ag-right-aligned-header',
+                                valueGetter: (p: any) => {
+                                    const budget = Number(p.data?.budget ?? 0) || 0;
+                                    if (!budget) return null;
+                                    const cumulative =
+                                        sumMonths(
+                                            p.data,
+                                            displayMonths.filter((dm) => dm <= m),
+                                        ) || 0;
+                                    return (cumulative / budget) * 100;
+                                },
+                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                            },
+                        ],
+                    };
+                }),
             ],
         },
         {
@@ -227,6 +236,7 @@ export function buildCostColumnDefs({
                 },
                 ...forecastMonths.map((m, idx) => {
                     const isLastMonth = idx === forecastMonths.length - 1;
+                    const isCurrentMonth = currentMonth && m === currentMonth;
                     return {
                         headerName: formatMonthHeader(m),
                         marryChildren: true,
@@ -240,7 +250,11 @@ export function buildCostColumnDefs({
                                 singleClickEdit: !isLastMonth,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+                                cellClass: isCurrentMonth
+                                    ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
+                                    : isLastMonth
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 valueGetter: isLastMonth
                                     ? (p: any) => {
                                           // Calculate remaining amount for last month
@@ -268,7 +282,11 @@ export function buildCostColumnDefs({
                                 editable: !isLastMonth,
                                 singleClickEdit: !isLastMonth,
                                 type: 'numericColumn',
-                                cellClass: isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+                                cellClass: isCurrentMonth
+                                    ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
+                                    : isLastMonth
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
                                     const budget = Number(p.data?.budget ?? 0) || 0;
@@ -351,6 +369,7 @@ export function buildRevenueColumnDefs({
     forecastSumThrough,
     updateRowCell,
     revenueTotals,
+    currentMonth,
 }: RevenueColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
         trendColDef,
@@ -433,55 +452,72 @@ export function buildRevenueColumnDefs({
                         },
                     ],
                 },
-                ...displayMonths.map((m) => ({
-                    headerName: formatMonthHeader(m),
-                    field: m,
-                    filter: false,
-                    marryChildren: true,
-                    columnGroupShow: 'open' as const,
-                    children: [
-                        {
-                            headerName: '$',
-                            colId: `${m}__amt`,
-                            field: m,
-                            width: 120,
-                            editable: false,
-                            type: 'numericColumn',
-                            headerClass: 'ag-right-aligned-header',
-                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right' : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
-                        },
-                        {
-                            headerName: '%',
-                            colId: `${m}__pct`,
-                            width: 90,
-                            editable: false,
-                            singleClickEdit: true,
-                            type: 'numericColumn',
-                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right' : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
-                            headerClass: 'ag-right-aligned-header',
-                            valueGetter: (p: any) => {
-                                // Check if this is the profit row - show margin %
-                                if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
-                                    const monthProfit = Number(p.data?.[m] ?? 0) || 0;
-                                    const monthRevenue = Number(revenueTotals?.[m] ?? 0) || 0;
-                                    if (!monthRevenue) return null;
-                                    return (monthProfit / monthRevenue) * 100;
-                                }
-
-                                const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                                if (!budget) return null;
-                                const cumulative =
-                                    sumMonths(
-                                        p.data,
-                                        displayMonths.filter((dm) => dm <= m),
-                                    ) || 0;
-                                return (cumulative / budget) * 100;
+                ...displayMonths.map((m) => {
+                    const isCurrentMonth = currentMonth && m === currentMonth;
+                    return {
+                        headerName: formatMonthHeader(m),
+                        field: m,
+                        filter: false,
+                        marryChildren: true,
+                        columnGroupShow: 'open' as const,
+                        children: [
+                            {
+                                headerName: '$',
+                                colId: `${m}__amt`,
+                                field: m,
+                                width: 120,
+                                editable: false,
+                                type: 'numericColumn',
+                                headerClass: 'ag-right-aligned-header',
+                                cellClass: (p: any) => {
+                                    if (p.data?.cost_item_description === 'Profit') {
+                                        return 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right';
+                                    }
+                                    return isCurrentMonth
+                                        ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
+                                        : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right';
+                                },
+                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
-                        },
-                    ],
-                })),
+                            {
+                                headerName: '%',
+                                colId: `${m}__pct`,
+                                width: 90,
+                                editable: false,
+                                singleClickEdit: true,
+                                type: 'numericColumn',
+                                cellClass: (p: any) => {
+                                    if (p.data?.cost_item_description === 'Profit') {
+                                        return 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right';
+                                    }
+                                    return isCurrentMonth
+                                        ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
+                                        : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right';
+                                },
+                                headerClass: 'ag-right-aligned-header',
+                                valueGetter: (p: any) => {
+                                    // Check if this is the profit row - show margin %
+                                    if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
+                                        const monthProfit = Number(p.data?.[m] ?? 0) || 0;
+                                        const monthRevenue = Number(revenueTotals?.[m] ?? 0) || 0;
+                                        if (!monthRevenue) return null;
+                                        return (monthProfit / monthRevenue) * 100;
+                                    }
+
+                                    const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
+                                    if (!budget) return null;
+                                    const cumulative =
+                                        sumMonths(
+                                            p.data,
+                                            displayMonths.filter((dm) => dm <= m),
+                                        ) || 0;
+                                    return (cumulative / budget) * 100;
+                                },
+                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                            },
+                        ],
+                    };
+                }),
             ],
         },
         {
@@ -596,6 +632,7 @@ export function buildRevenueColumnDefs({
                 },
                 ...forecastMonths.map((m, idx) => {
                     const isLastMonth = idx === forecastMonths.length - 1;
+                    const isCurrentMonth = currentMonth && m === currentMonth;
                     return {
                         headerName: formatMonthHeader(m),
                         marryChildren: true,
@@ -612,6 +649,9 @@ export function buildRevenueColumnDefs({
                                 cellClass: (p: any) => {
                                     if (p.data?.cost_item_description === 'Profit') {
                                         return 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right';
+                                    }
+                                    if (isCurrentMonth) {
+                                        return 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400';
                                     }
                                     return isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },
@@ -645,6 +685,9 @@ export function buildRevenueColumnDefs({
                                 cellClass: (p: any) => {
                                     if (p.data?.cost_item_description === 'Profit') {
                                         return 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right';
+                                    }
+                                    if (isCurrentMonth) {
+                                        return 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right';
                                     }
                                     return isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },

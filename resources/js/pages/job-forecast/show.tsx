@@ -42,6 +42,7 @@ const ShowJobForecastPage = ({
     revenueRowData,
     monthsAll,
     forecastMonths,
+    currentMonth,
     locationId,
     forecastProjectId,
     jobName,
@@ -498,6 +499,7 @@ const ShowJobForecastPage = ({
             forecastSumBefore,
             forecastSumThrough,
             updateRowCell: updateCostRowCell,
+            currentMonth,
         });
 
         // Add checkbox selection column for forecast projects
@@ -526,6 +528,7 @@ const ShowJobForecastPage = ({
         forecastSumThrough,
         updateCostRowCell,
         isForecastProject,
+        currentMonth,
     ]);
 
     const defaultColDef = useMemo(
@@ -568,6 +571,7 @@ const ShowJobForecastPage = ({
             updateRowCell: updateRevenueRowCell,
             budgetField: 'contract_sum_to_date',
             revenueTotals: pinnedBottomRevenueRowData[0],
+            currentMonth,
         });
 
         // Add checkbox selection column for forecast projects
@@ -597,6 +601,7 @@ const ShowJobForecastPage = ({
         updateRevenueRowCell,
         pinnedBottomRevenueRowData,
         isForecastProject,
+        currentMonth,
     ]);
 
     // Calculate profit row (Revenue - Cost)

@@ -8,6 +8,7 @@ use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -16,6 +17,19 @@ class JobForecastController extends Controller
     public function show($id)
     {
         $location = Location::where('id', $id)->first();
+
+        // Check if user has access to this location
+        $user = Auth::user();
+        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+            // Get accessible location IDs based on kiosk access
+            $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
+
+            // Check if this location is accessible
+            if (!in_array($location->eh_location_id, $accessibleLocationIds)) {
+                abort(403, 'You do not have access to this job forecast.');
+            }
+        }
+
         $jobNumber = $location->external_id;
         $jobName = $location->name ?? 'Job ' . $jobNumber;
 
@@ -56,7 +70,8 @@ class JobForecastController extends Controller
             ->values()
             ->all();
 
-
+        // Get current month in YYYY-MM format
+        $currentMonth = date('Y-m');
 
         $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->select('cost_item', 'estimate_at_completion')->get();
         // dd($budget);
@@ -76,10 +91,13 @@ class JobForecastController extends Controller
 
 
         // Calculate forecast months first
-        $endDate = '2026-09-01';
+        $endDate = '2026-05-20';
         $endMonth = date('Y-m', strtotime($endDate));
         $lastActualMonth = end($months);
+
+        // Forecast starts from the month AFTER the last actual month
         $startForecastMonth = date('Y-m', strtotime($lastActualMonth . ' +1 month'));
+
         $forecastMonths = [];
         $current = $startForecastMonth;
         while ($current <= $endMonth) {
@@ -169,6 +187,7 @@ class JobForecastController extends Controller
             'monthsAll' => $months,
             'projectEndMonth' => $endMonth,
             'forecastMonths' => $forecastMonths,
+            'currentMonth' => $currentMonth,
             'locationId' => $id,
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
@@ -193,12 +212,59 @@ class JobForecastController extends Controller
             'forecast_data.*.months.*' => 'nullable|numeric',
         ]);
 
-
         $jobNumber = Location::where('id', $id)->value('external_id');
+
+        // Validate that forecast amounts don't exceed budget
+        $gridType = $validated['grid_type'];
+        $validationErrors = [];
+
+        foreach ($validated['forecast_data'] as $row) {
+            $costItem = $row['cost_item'];
+
+            // Get the budget for this cost item
+            if ($gridType === 'cost') {
+                $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
+                    ->where('cost_item', $costItem)
+                    ->sum('estimate_at_completion');
+            } else {
+                // For revenue, use contract sum
+                $budget = ArProgressBillingSummary::where('job_number', $jobNumber)
+                    ->max('contract_sum_to_date');
+            }
+
+            // Calculate actuals
+            if ($gridType === 'cost') {
+                $actuals = JobCostDetail::where('job_number', $jobNumber)
+                    ->where('cost_item', $costItem)
+                    ->sum('amount');
+            } else {
+                $actuals = ArProgressBillingSummary::where('job_number', $jobNumber)
+                    ->sum('this_app_work_completed');
+            }
+
+            // Calculate total forecast amount
+            $forecastTotal = 0;
+            foreach ($row['months'] as $amount) {
+                if ($amount !== null && $amount !== '') {
+                    $forecastTotal += floatval($amount);
+                }
+            }
+
+            // Check if actuals + forecast exceeds budget
+            $total = $actuals + $forecastTotal;
+            $remaining = $budget - $total;
+
+            if ($remaining < -0.01) { // Allow small rounding errors
+                $validationErrors[] = "Cost item {$costItem}: Total (actuals + forecast) exceeds budget by " . number_format(abs($remaining), 2);
+            }
+        }
+
+        if (!empty($validationErrors)) {
+            return redirect()->back()->withErrors(['error' => implode("\n", $validationErrors)]);
+        }
 
         DB::beginTransaction();
         try {
-            $gridType = $validated['grid_type'];
 
             foreach ($validated['forecast_data'] as $row) {
                 $costItem = $row['cost_item'];
