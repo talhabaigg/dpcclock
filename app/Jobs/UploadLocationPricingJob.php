@@ -96,7 +96,7 @@ class UploadLocationPricingJob implements ShouldQueue
             $seen = [];
             $dataToInsert = [];
             $locationIds = [];
-            $failedRows = [];
+            $failedRows = []; // Each item will be ['row' => [...], 'reason' => '...']
 
             // Preload locations and materials for efficient lookup
             Log::info('UploadLocationPricingJob: Loading reference data');
@@ -119,7 +119,10 @@ class UploadLocationPricingJob implements ShouldQueue
                 // Check for malformed rows (column count mismatch)
                 if (count($row) !== count($header)) {
                     $stats['malformed']++;
-                    $failedRows[] = $row;
+                    $failedRows[] = [
+                        'row' => $row,
+                        'reason' => 'Malformed: column count mismatch'
+                    ];
                     Log::warning('UploadLocationPricingJob: Malformed row', [
                         'row' => $rowIndex + 2,
                         'expected_columns' => count($header),
@@ -136,7 +139,13 @@ class UploadLocationPricingJob implements ShouldQueue
 
                 if (!$location || !$material) {
                     $stats['failed_lookup']++;
-                    $failedRows[] = $row;
+                    $reason = [];
+                    if (!$location) $reason[] = 'location not found';
+                    if (!$material) $reason[] = 'material not found';
+                    $failedRows[] = [
+                        'row' => $row,
+                        'reason' => 'Lookup failed: ' . implode(', ', $reason)
+                    ];
                     Log::warning('UploadLocationPricingJob: Lookup failed', [
                         'row' => $rowIndex + 2,
                         'location_id' => $data['location_id'] ?? 'missing',
@@ -151,6 +160,10 @@ class UploadLocationPricingJob implements ShouldQueue
                 $key = $location->id . '-' . $material->id;
                 if (isset($seen[$key])) {
                     $stats['duplicate']++;
+                    $failedRows[] = [
+                        'row' => $row,
+                        'reason' => 'Duplicate'
+                    ];
                     Log::debug('UploadLocationPricingJob: Duplicate row skipped', [
                         'row' => $rowIndex + 2,
                         'location_id' => $location->id,
@@ -171,24 +184,34 @@ class UploadLocationPricingJob implements ShouldQueue
             }
 
             $stats['processed'] = count($dataToInsert);
-            $totalFailed = $stats['malformed'] + $stats['failed_lookup'];
+            $totalFailed = $stats['malformed'] + $stats['failed_lookup'] + $stats['duplicate'];
 
             Log::info('UploadLocationPricingJob: Processing complete', [
-                'total_rows' => $totalRows,
+                'total_rows_in_csv' => $totalRows,
                 'empty_rows' => $stats['empty'],
                 'processed_rows' => $stats['processed'],
                 'failed_rows' => $totalFailed,
-                'malformed_rows' => $stats['malformed'],
-                'failed_lookup_rows' => $stats['failed_lookup'],
-                'duplicate_rows' => $stats['duplicate'],
+                'failed_breakdown' => [
+                    'malformed' => $stats['malformed'],
+                    'failed_lookup' => $stats['failed_lookup'],
+                    'duplicate' => $stats['duplicate'],
+                ],
+                'recorded_total' => $stats['processed'] + $totalFailed,
                 'validation' => [
-                    'total_equals_processed_plus_failed' => ($totalRows - $stats['empty']) === ($stats['processed'] + $totalFailed + $stats['duplicate']),
+                    'csv_rows_accounted_for' => ($totalRows === ($stats['empty'] + $stats['processed'] + $totalFailed)),
+                    'recorded_total_equals_processed_plus_failed' => (($stats['processed'] + $totalFailed) === ($stats['processed'] + $totalFailed)),
                     'calculation' => sprintf(
-                        '%d (total - empty) = %d (processed) + %d (failed) + %d (duplicate)',
-                        $totalRows - $stats['empty'],
+                        'CSV: %d = %d empty + %d processed + %d failed (malformed:%d + lookup:%d + duplicate:%d) | Recorded: %d = %d processed + %d failed',
+                        $totalRows,
+                        $stats['empty'],
                         $stats['processed'],
                         $totalFailed,
-                        $stats['duplicate']
+                        $stats['malformed'],
+                        $stats['failed_lookup'],
+                        $stats['duplicate'],
+                        $stats['processed'] + $totalFailed,
+                        $stats['processed'],
+                        $totalFailed
                     )
                 ]
             ]);
@@ -245,9 +268,13 @@ class UploadLocationPricingJob implements ShouldQueue
                 $localFilePath = storage_path("app/{$filename}");
 
                 $handle = fopen($localFilePath, 'w');
-                fputcsv($handle, $header);
-                foreach ($failedRows as $failedRow) {
-                    fputcsv($handle, $failedRow);
+                // Add 'reason' column to header
+                $failedHeader = array_merge($header, ['reason']);
+                fputcsv($handle, $failedHeader);
+                foreach ($failedRows as $failedRowData) {
+                    // Merge row data with reason
+                    $rowWithReason = array_merge($failedRowData['row'], [$failedRowData['reason']]);
+                    fputcsv($handle, $rowWithReason);
                 }
                 fclose($handle);
 
@@ -270,12 +297,14 @@ class UploadLocationPricingJob implements ShouldQueue
             $firstLocationId = !empty($uniqueLocationIds) ? $uniqueLocationIds[0] : null;
 
             // Create upload record
+            // Note: total_rows = processed + failed (where failed includes malformed, lookup failures, and duplicates)
+            // Empty rows are excluded from total count
             $priceList = MaterialItemPriceListUpload::create([
                 'location_id' => $firstLocationId,
                 'upload_file_path' => 'location_pricing/uploads/' . $this->uploadedFileName,
                 'failed_file_path' => $failedFilePath,
                 'status' => 'success',
-                'total_rows' => $totalRows - $stats['empty'], // Exclude empty rows from total
+                'total_rows' => $stats['processed'] + $totalFailed,
                 'processed_rows' => $stats['processed'],
                 'failed_rows' => $totalFailed,
                 'created_by' => $this->userId,
