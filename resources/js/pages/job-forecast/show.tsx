@@ -714,7 +714,7 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="h-150 w-full max-w-5xl min-w-7xl">
+                <DialogContent className="h-150 w-full max-w-5xl min-w-full sm:min-w-7xl ">
                     <DialogHeader>
                         <div className="flex items-center justify-between">
                             <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
@@ -796,26 +796,26 @@ const ShowJobForecastPage = ({
 
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
-                <DialogContent className="h-150 w-full max-w-5xl min-w-7xl">
-                    <DialogHeader>
-                        <div className="flex items-center justify-between">
-                            <DialogTitle>Accrual Summary - Job Progression</DialogTitle>
+                <DialogContent className="h-[95vh] w-[98vw] max-w-[98vw] sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] overflow-hidden flex flex-col p-3 sm:p-6">
+                    <DialogHeader className="flex-shrink-0">
+                        <div className="flex items-center justify-between gap-2">
+                            <DialogTitle className="text-sm sm:text-lg">Accrual Summary - Job Progression</DialogTitle>
                             <TooltipProvider>
-                                <div className="flex gap-4 pr-4">
+                                <div className="flex gap-1 sm:gap-4 pr-2 sm:pr-4">
                                     {/* View Mode Toggles */}
                                     <div className="flex gap-1">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <button
                                                     type="button"
-                                                    className={`rounded-md p-2 ${
+                                                    className={`rounded-md p-1.5 sm:p-2 transition-colors ${
                                                         accrualViewMode === 'accrual-percent'
-                                                            ? 'bg-blue-500 text-white'
-                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                                                     }`}
                                                     onClick={() => setAccrualViewMode('accrual-percent')}
                                                 >
-                                                    <Percent className="h-4 w-4" />
+                                                    <Percent className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                 </button>
                                             </TooltipTrigger>
                                             <TooltipContent>
@@ -826,14 +826,14 @@ const ShowJobForecastPage = ({
                                             <TooltipTrigger asChild>
                                                 <button
                                                     type="button"
-                                                    className={`rounded-md p-2 ${
+                                                    className={`rounded-md p-1.5 sm:p-2 transition-colors ${
                                                         accrualViewMode === 'accrual-dollar'
-                                                            ? 'bg-blue-500 text-white'
-                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                                                     }`}
                                                     onClick={() => setAccrualViewMode('accrual-dollar')}
                                                 >
-                                                    <DollarSign className="h-4 w-4" />
+                                                    <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                 </button>
                                             </TooltipTrigger>
                                             <TooltipContent>
@@ -886,7 +886,7 @@ const ShowJobForecastPage = ({
                         </div>
                     </DialogHeader>
 
-                    <div className="h-[520px]">
+                    <div className="flex-1 min-h-0 overflow-auto">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -898,9 +898,9 @@ const ShowJobForecastPage = ({
                         />
                     </div>
 
-                    <div className="text-muted-foreground text-xs">
-                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Yellow points represent actuals,
-                        blue/green/purple points represent forecast values.
+                    <div className="flex-shrink-0 text-muted-foreground text-xs sm:text-sm pt-2 border-t">
+                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Solid lines represent actuals, dashed
+                        lines represent forecast values.
                     </div>
                 </DialogContent>
             </Dialog>

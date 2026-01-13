@@ -15,7 +15,8 @@ import {
     LineElement,
     PointElement,
 } from 'chart.js';
-import { useMemo } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ChartTooltip, Filler, Legend);
@@ -65,16 +66,20 @@ interface ProcessedData {
 }
 
 export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, showMargin, costBudget, revenueBudget }: AccrualSummaryChartProps) {
+    const [focusedChart, setFocusedChart] = useState<'cumulative' | 'monthly' | 'both'>('both');
+
     const COLORS = useMemo(
         () => ({
             actualYellow: '#d1c700',
-            costActual: '#2563eb',
-            costForecast: '#93c5fd',
-            revenueActual: '#16a34a',
-            revenueForecast: '#86efac',
-            marginActual: '#dc2626',
-            marginForecast: '#fca5a5',
-            forecastBar: '#bfdbfe',
+            // Professional color palette with better contrast
+            costActual: 'hsl(221.2 83.2% 53.3%)', // Blue-600
+            costForecast: 'hsl(221.2 83.2% 53.3% / 0.5)', // Blue-400 with transparency
+            revenueActual: 'hsl(142.1 76.2% 36.3%)', // Green-600
+            revenueForecast: 'hsl(142.1 76.2% 36.3% / 0.5)', // Green-400 with transparency
+            marginActual: 'hsl(262.1 83.3% 57.8%)', // Purple-500
+            marginForecast: 'hsl(262.1 83.3% 57.8% / 0.5)', // Purple-300 with transparency
+            gridColor: 'hsl(214.3 31.8% 91.4%)', // Border color
+            textColor: 'hsl(222.2 47.4% 11.2%)', // Foreground
         }),
         [],
     );
@@ -185,15 +190,18 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 borderColor: COLORS.costActual,
                 backgroundColor: COLORS.costActual,
                 borderWidth: 2.5,
-                tension: 0.25,
-                pointRadius: 3,
-                pointHoverRadius: 4,
-                pointHitRadius: 14,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHitRadius: 6,
                 pointBackgroundColor: processedData.pointColors.cost,
-                pointBorderColor: processedData.pointColors.cost,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointHoverBorderWidth: 2,
                 datalabels: true,
                 segment: {
                     borderColor: (ctx: any) => processedData.segmentColors.cost[ctx.p1DataIndex] || COLORS.costActual,
+                    borderDash: (ctx: any) => (processedData.costIsActual[ctx.p1DataIndex] ? [] : [5, 5]),
                 },
             });
         }
@@ -205,15 +213,18 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 borderColor: COLORS.revenueActual,
                 backgroundColor: COLORS.revenueActual,
                 borderWidth: 2.5,
-                tension: 0.25,
-                pointRadius: 3,
-                pointHoverRadius: 4,
-                pointHitRadius: 14,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHitRadius: 6,
                 pointBackgroundColor: processedData.pointColors.revenue,
-                pointBorderColor: processedData.pointColors.revenue,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointHoverBorderWidth: 2,
                 datalabels: true,
                 segment: {
                     borderColor: (ctx: any) => processedData.segmentColors.revenue[ctx.p1DataIndex] || COLORS.revenueActual,
+                    borderDash: (ctx: any) => (processedData.revenueIsActual[ctx.p1DataIndex] ? [] : [5, 5]),
                 },
             });
         }
@@ -225,15 +236,18 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 borderColor: COLORS.marginActual,
                 backgroundColor: COLORS.marginActual,
                 borderWidth: 2.5,
-                tension: 0.25,
-                pointRadius: 3,
-                pointHoverRadius: 4,
-                pointHitRadius: 14,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHitRadius: 6,
                 pointBackgroundColor: processedData.pointColors.margin,
-                pointBorderColor: processedData.pointColors.margin,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointHoverBorderWidth: 2,
                 datalabels: true,
                 segment: {
                     borderColor: (ctx: any) => processedData.segmentColors.margin[ctx.p1DataIndex] || COLORS.marginActual,
+                    borderDash: (ctx: any) => (processedData.marginIsActual[ctx.p1DataIndex] ? [] : [5, 5]),
                 },
             });
         }
@@ -253,8 +267,8 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 data: processedData.costMonthlyValues,
                 backgroundColor: processedData.costIsActual.map((isActual) => (isActual ? COLORS.costActual : COLORS.costForecast)),
                 borderColor: processedData.costIsActual.map((isActual) => (isActual ? COLORS.costActual : COLORS.costForecast)),
-                borderWidth: 1,
-                borderDash: (ctx: any) => (processedData.costIsActual[ctx.dataIndex] ? [] : [3, 3]),
+                borderWidth: 0,
+                borderRadius: 4,
                 datalabels: true,
             });
         }
@@ -265,8 +279,8 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 data: processedData.revenueMonthlyValues,
                 backgroundColor: processedData.revenueIsActual.map((isActual) => (isActual ? COLORS.revenueActual : COLORS.revenueForecast)),
                 borderColor: processedData.revenueIsActual.map((isActual) => (isActual ? COLORS.revenueActual : COLORS.revenueForecast)),
-                borderWidth: 1,
-                borderDash: (ctx: any) => (processedData.revenueIsActual[ctx.dataIndex] ? [] : [3, 3]),
+                borderWidth: 0,
+                borderRadius: 4,
                 datalabels: true,
             });
         }
@@ -277,8 +291,8 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 data: processedData.marginMonthlyValues,
                 backgroundColor: processedData.marginIsActual.map((isActual) => (isActual ? COLORS.marginActual : COLORS.marginForecast)),
                 borderColor: processedData.marginIsActual.map((isActual) => (isActual ? COLORS.marginActual : COLORS.marginForecast)),
-                borderWidth: 1,
-                borderDash: (ctx: any) => (processedData.marginIsActual[ctx.dataIndex] ? [] : [3, 3]),
+                borderWidth: 0,
+                borderRadius: 4,
                 datalabels: true,
             });
         }
@@ -304,16 +318,36 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
                     if (!dataset.datalabels) return;
                     const meta = chart.getDatasetMeta(datasetIndex);
+
+                    // Skip if dataset is hidden
+                    if (meta.hidden) return;
+
                     meta.data.forEach((element: any, index: number) => {
                         const rawValue = dataset.data?.[index];
                         if (rawValue == null || !Number.isFinite(rawValue)) return;
                         const { x, y } = element.tooltipPosition();
                         ctx.save();
-                        ctx.fillStyle = '#000';
-                        ctx.font = '10px sans-serif';
+
+                        // Add background for better readability
+                        const text = formatValue(rawValue);
+                        ctx.font = '11px "Inter", system-ui, sans-serif';
+                        const textWidth = ctx.measureText(text).width;
+                        const padding = 4;
+
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                        ctx.fillRect(x - textWidth / 2 - padding, y - 18, textWidth + padding * 2, 16);
+
+                        // Draw border
+                        ctx.strokeStyle = 'hsl(214.3 31.8% 91.4%)';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x - textWidth / 2 - padding, y - 18, textWidth + padding * 2, 16);
+
+                        // Draw text
+                        ctx.fillStyle = 'hsl(222.2 47.4% 11.2%)';
+                        ctx.font = '600 11px "Inter", system-ui, sans-serif';
                         ctx.textAlign = 'center';
-                        ctx.textBaseline = 'bottom';
-                        ctx.fillText(formatValue(rawValue), x, y - 6);
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(text, x, y - 10);
                         ctx.restore();
                     });
                 });
@@ -326,13 +360,50 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
         () => ({
             responsive: true,
             maintainAspectRatio: false,
-            animation: false,
+            animation: {
+                duration: 750,
+                easing: 'easeInOutQuart',
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            // Limit events to only those needed for tooltips and legend interaction
+            events: ['mousemove', 'mouseout', 'click'],
             plugins: {
                 legend: {
                     display: true,
                     position: 'top' as const,
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 16,
+                        font: {
+                            size: 12,
+                            weight: 'bold' as const,
+                            family: "'Inter', system-ui, sans-serif",
+                        },
+                        color: COLORS.textColor,
+                    },
                 },
                 tooltip: {
+                    enabled: true,
+                    backgroundColor: 'hsl(0 0% 100%)',
+                    titleColor: COLORS.textColor,
+                    bodyColor: COLORS.textColor,
+                    borderColor: COLORS.gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: {
+                        size: 13,
+                        weight: 'bold' as const,
+                        family: "'Inter', system-ui, sans-serif",
+                    },
+                    bodyFont: {
+                        size: 12,
+                        family: "'Inter', system-ui, sans-serif",
+                    },
                     callbacks: {
                         label: (ctx) => {
                             const value = ctx.parsed.y;
@@ -363,30 +434,92 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             },
             scales: {
                 x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 0, autoSkip: true },
+                    grid: {
+                        display: true,
+                        color: COLORS.gridColor,
+                        drawOnChartArea: true,
+                        drawTicks: true,
+                    },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: true,
+                        padding: 8,
+                        font: {
+                            size: 11,
+                            family: "'Inter', system-ui, sans-serif",
+                        },
+                        color: 'hsl(215.4 16.3% 46.9%)', // Muted foreground
+                    },
+                    border: {
+                        display: true,
+                        color: COLORS.gridColor,
+                    },
                 },
                 y: {
                     display: false,
-                    grid: { display: false },
-                    ticks: { display: false },
+                    grid: {
+                        display: false,
+                    },
+                    ticks: {
+                        display: false,
+                    },
+                    border: {
+                        display: false,
+                    },
                 },
             },
         }),
-        [viewMode, data],
+        [viewMode, data, COLORS],
     );
 
     const barOptions = useMemo<ChartOptions<'bar'>>(
         () => ({
             responsive: true,
             maintainAspectRatio: false,
-            animation: false,
+            animation: {
+                duration: 750,
+                easing: 'easeInOutQuart',
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            // Limit events to only those needed for tooltips and legend interaction
+            events: ['mousemove', 'mouseout', 'click'],
             plugins: {
                 legend: {
                     display: true,
                     position: 'top' as const,
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'rect',
+                        padding: 16,
+                        font: {
+                            size: 12,
+                            weight: 'bold' as const,
+                            family: "'Inter', system-ui, sans-serif",
+                        },
+                        color: COLORS.textColor,
+                    },
                 },
                 tooltip: {
+                    enabled: true,
+                    backgroundColor: 'hsl(0 0% 100%)',
+                    titleColor: COLORS.textColor,
+                    bodyColor: COLORS.textColor,
+                    borderColor: COLORS.gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: {
+                        size: 13,
+                        weight: 'bold' as const,
+                        family: "'Inter', system-ui, sans-serif",
+                    },
+                    bodyFont: {
+                        size: 12,
+                        family: "'Inter', system-ui, sans-serif",
+                    },
                     callbacks: {
                         label: (ctx) => {
                             const value = ctx.parsed.y;
@@ -404,27 +537,100 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             },
             scales: {
                 x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 0, autoSkip: true },
+                    grid: {
+                        display: false,
+                    },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: true,
+                        padding: 8,
+                        font: {
+                            size: 11,
+                            family: "'Inter', system-ui, sans-serif",
+                        },
+                        color: 'hsl(215.4 16.3% 46.9%)', // Muted foreground
+                    },
+                    border: {
+                        display: true,
+                        color: COLORS.gridColor,
+                    },
                 },
                 y: {
                     display: false,
-                    grid: { display: false },
-                    ticks: { display: false },
+                    grid: {
+                        display: false,
+                    },
+                    ticks: {
+                        display: false,
+                    },
+                    border: {
+                        display: false,
+                    },
                 },
             },
         }),
-        [viewMode],
+        [viewMode, COLORS],
     );
 
+    const handleToggleCumulative = () => {
+        setFocusedChart((prev) => (prev === 'cumulative' ? 'both' : 'cumulative'));
+    };
+
+    const handleToggleMonthly = () => {
+        setFocusedChart((prev) => (prev === 'monthly' ? 'both' : 'monthly'));
+    };
+
     return (
-        <div className="flex h-full w-full flex-col gap-4">
-            <div className="min-h-[260px]">
-                <Line data={lineChartData} options={lineOptions} plugins={[dataLabelPlugin]} />
-            </div>
-            <div className="h-[160px]">
-                <Bar data={barChartData} options={barOptions} plugins={[dataLabelPlugin]} />
-            </div>
+        <div className="flex h-full w-full flex-col gap-3 p-1 sm:gap-6 sm:p-4">
+            {/* Cumulative Line Chart */}
+            {(focusedChart === 'both' || focusedChart === 'cumulative') && (
+                <div
+                    className="flex flex-col rounded-lg border border-border bg-card p-2 shadow-sm transition-all sm:p-4"
+                    style={{
+                        height: focusedChart === 'cumulative' ? '100%' : focusedChart === 'both' ? '50%' : '50%',
+                        minHeight: focusedChart === 'both' ? '200px' : '250px',
+                    }}
+                >
+                    <div className="mb-1.5 flex items-center justify-between sm:mb-3">
+                        <h3 className="text-xs font-semibold text-foreground sm:text-sm">Cumulative Accrual</h3>
+                        <button
+                            onClick={handleToggleCumulative}
+                            className="rounded-md p-1 sm:p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            title={focusedChart === 'cumulative' ? 'Show both charts' : 'Focus on this chart'}
+                        >
+                            {focusedChart === 'cumulative' ? <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                        </button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                        <Line data={lineChartData} options={lineOptions} plugins={[dataLabelPlugin]} />
+                    </div>
+                </div>
+            )}
+
+            {/* Monthly Bar Chart */}
+            {(focusedChart === 'both' || focusedChart === 'monthly') && (
+                <div
+                    className="flex flex-col rounded-lg border border-border bg-card p-2 shadow-sm transition-all sm:p-4"
+                    style={{
+                        height: focusedChart === 'monthly' ? '100%' : focusedChart === 'both' ? '45%' : '45%',
+                        minHeight: focusedChart === 'both' ? '180px' : '250px',
+                    }}
+                >
+                    <div className="mb-1.5 flex items-center justify-between sm:mb-3">
+                        <h3 className="text-xs font-semibold text-foreground sm:text-sm">Monthly Breakdown</h3>
+                        <button
+                            onClick={handleToggleMonthly}
+                            className="rounded-md p-1 sm:p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            title={focusedChart === 'monthly' ? 'Show both charts' : 'Focus on this chart'}
+                        >
+                            {focusedChart === 'monthly' ? <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                        </button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                        <Bar data={barChartData} options={barOptions} plugins={[dataLabelPlugin]} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
