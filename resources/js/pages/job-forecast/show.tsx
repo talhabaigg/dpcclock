@@ -12,9 +12,10 @@ import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ArrowLeft, BarChart3, DollarSign, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, DollarSign, FileSpreadsheet, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
+import { ExcelUploadDialog } from './ExcelUploadDialog';
 import { ForecastDialogChart, type ChartViewMode } from './ForecastDialogChart';
 import { RevenueReportDialog } from './RevenueReportDialog';
 import { buildCostColumnDefs, buildRevenueColumnDefs } from './column-builders';
@@ -83,6 +84,9 @@ const ShowJobForecastPage = ({
 
     // Revenue Report Dialog State
     const [revenueReportOpen, setRevenueReportOpen] = useState(false);
+
+    // Excel Upload Dialog State
+    const [excelUploadOpen, setExcelUploadOpen] = useState(false);
 
     // Forecast Project Item Management State
     const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -461,6 +465,47 @@ const ShowJobForecastPage = ({
     };
 
     // ===========================
+    // Excel Import
+    // ===========================
+    const handleExcelImport = useCallback(
+        (importedData: { costItem: string; percentages: Record<string, number> }[]) => {
+            setCostGridData((prev) =>
+                prev.map((row) => {
+                    const imported = importedData.find((d) => d.costItem === row.cost_item);
+                    if (!imported) return row;
+
+                    const budget = Number(row.budget) || 0;
+                    if (budget === 0) return row;
+
+                    // Calculate actuals to date
+                    const actualsToDate = displayMonths.reduce((sum, m) => sum + (Number(row[m]) || 0), 0);
+
+                    const updatedRow = { ...row };
+
+                    // Convert cumulative percentages to monthly amounts
+                    let previousCumulative = actualsToDate;
+                    forecastMonths.forEach((month) => {
+                        const cumulativePercent = imported.percentages[month];
+                        if (cumulativePercent !== undefined) {
+                            const targetCumulative = (cumulativePercent / 100) * budget;
+                            const monthlyAmount = Math.max(0, targetCumulative - previousCumulative);
+
+                            // Use forecast_ prefix for current month
+                            const fieldName = month === currentMonth ? `forecast_${month}` : month;
+                            updatedRow[fieldName] = monthlyAmount;
+
+                            previousCumulative = targetCumulative;
+                        }
+                    });
+
+                    return updatedRow;
+                }),
+            );
+        },
+        [displayMonths, forecastMonths, currentMonth],
+    );
+
+    // ===========================
     // Chart Editing
     // ===========================
     const setForecastMonthValueFromChart = useCallback(
@@ -796,6 +841,16 @@ const ShowJobForecastPage = ({
                 forecastMonths={forecastMonths}
             />
 
+            {/* Excel Upload Dialog */}
+            <ExcelUploadDialog
+                open={excelUploadOpen}
+                onOpenChange={setExcelUploadOpen}
+                costGridData={costGridData}
+                displayMonths={displayMonths}
+                forecastMonths={forecastMonths}
+                onImportData={handleExcelImport}
+            />
+
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
                 <DialogContent className="h-[95vh] w-[98vw] max-w-[98vw] sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] overflow-hidden flex flex-col p-3 sm:p-6">
@@ -1054,6 +1109,15 @@ const ShowJobForecastPage = ({
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Revenue Report</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={() => setExcelUploadOpen(true)}>
+                                        <FileSpreadsheet className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Excel Import/Export</TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                         <div className="flex flex-col">

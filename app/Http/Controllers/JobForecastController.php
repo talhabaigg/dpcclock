@@ -75,27 +75,36 @@ class JobForecastController extends Controller
         // Get current month in YYYY-MM format
         $currentMonth = date('Y-m');
 
-        $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->select('cost_item', 'estimate_at_completion')->get();
-        // dd($budget);
-        // Sum actuals by cost_item
-        $sumByCostItem = $budget
+        // Get ALL cost codes with budgets from JobReportByCostItemAndCostType
+        // Join with CostCodes table to get descriptions
+        $budgetData = JobReportByCostItemAndCostType::where('job_report_by_cost_items_and_cost_types.job_number', $jobNumber)
+            ->leftJoin('cost_codes', 'job_report_by_cost_items_and_cost_types.cost_item', '=', 'cost_codes.code')
+            ->select(
+                'job_report_by_cost_items_and_cost_types.cost_item',
+                'cost_codes.description as cost_item_description',
+                'job_report_by_cost_items_and_cost_types.estimate_at_completion'
+            )
+            ->get();
+
+        // Sum budgets by cost_item (in case there are multiple cost types per cost item)
+        $budgetByCostItem = $budgetData
             ->groupBy('cost_item')
-            ->map(function ($items, $costItem) {
+            ->map(function ($items) {
+                $first = $items->first();
                 return [
-                    'cost_item' => $costItem,
-                    'estimate_at_completion' => $items->sum('estimate_at_completion'),
+                    'cost_item' => $first->cost_item,
+                    'cost_item_description' => $first->cost_item_description ?? '',
+                    'budget' => $items->sum('estimate_at_completion'),
                 ];
-            })
-            ->values()
-            ->all();
+            });
 
-
-
+        // Group actuals by cost_item for easy lookup
+        $actualsByCostItem = $actualsByMonth->groupBy('cost_item');
 
         // Calculate forecast months first
         $endDate = $JobSummary->actual_end_date ?? $JobSummary->estimated_end_date ?? date('Y-m-d');
         $endMonth = date('Y-m', strtotime($endDate));
-        $lastActualMonth = end($months);
+        $lastActualMonth = !empty($months) ? end($months) : $currentMonth;
 
         // Forecast starts from the CURRENT month (to allow forecasting for remainder of current month)
         // If current month has actuals, include it in forecast; otherwise start from next month
@@ -115,30 +124,30 @@ class JobForecastController extends Controller
                 return $item->grid_type . '_' . $item->cost_item;
             });
 
-        $costRows = $actualsByMonth
-            ->groupBy('cost_item')
-            ->map(function ($items, $costItem) use ($months, $sumByCostItem, $forecastMonths, $savedForecasts) {
-                $first = $items->first();
+        // Build cost rows from ALL budget items (not just those with actuals)
+        $costRows = $budgetByCostItem
+            ->map(function ($budgetItem) use ($months, $actualsByCostItem, $forecastMonths, $savedForecasts, $currentMonth) {
+                $costItem = $budgetItem['cost_item'];
 
                 $row = [
                     'cost_item' => $costItem,
-                    'cost_item_description' => $first->cost_item_description,
+                    'cost_item_description' => $budgetItem['cost_item_description'],
                     'type' => 'actual',
-                    'budget' => collect($sumByCostItem)
-                        ->where('cost_item', $costItem)
-                        ->pluck('estimate_at_completion')
-                        ->first() ?? 0,
+                    'budget' => $budgetItem['budget'],
                 ];
 
+                // Initialize all months to null
                 foreach ($months as $m) {
                     $row[$m] = null;
                 }
 
-                foreach ($items as $i) {
-                    $row[$i->month] = (float) $i->actual;
+                // Fill in actuals if they exist for this cost item
+                if (isset($actualsByCostItem[$costItem])) {
+                    foreach ($actualsByCostItem[$costItem] as $actualRecord) {
+                        $row[$actualRecord->month] = (float) $actualRecord->actual;
+                    }
                 }
 
-                $currentMonth = date('Y-m');
                 // Load forecast data from saved records
                 $forecastKey = 'cost_' . $costItem;
                 if (isset($savedForecasts[$forecastKey])) {
@@ -156,6 +165,7 @@ class JobForecastController extends Controller
 
                 return $row;
             })
+            ->sortBy('cost_item')
             ->values()
             ->all();
 
