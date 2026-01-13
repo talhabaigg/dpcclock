@@ -6,7 +6,8 @@
       "Bash(php artisan:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

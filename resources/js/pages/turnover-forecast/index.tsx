@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
@@ -9,8 +10,9 @@ import { Head, Link } from '@inertiajs/react';
 import type { ColDef, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, Filter } from 'lucide-react';
+import { Download, FileText, Filter } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { TurnoverReportDialog } from './TurnoverReportDialog';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -98,7 +100,42 @@ export default function TurnoverForecastIndex({
     });
 
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+    const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'both' | 'revenue' | 'cost'>('both');
+
+    // Financial Year filter - generate available FYs based on data
+    const availableFYs = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+        const currentFY = currentMonth >= 7 ? currentYear : currentYear - 1;
+
+        // Generate FY options from 5 years ago to 2 years ahead
+        const fys = [{ value: 'all', label: 'All Time' }];
+        for (let year = currentFY - 5; year <= currentFY + 2; year++) {
+            fys.push({
+                value: year.toString(),
+                label: `FY${year}-${String(year + 1).slice(2)}`,
+            });
+        }
+        return fys;
+    }, []);
+
+    const [selectedFY, setSelectedFY] = useState<string>(() => {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+        return currentMonth >= 7 ? currentYear.toString() : (currentYear - 1).toString();
+    });
+
+    // Filter months based on selected FY
+    const filteredMonths = useMemo(() => {
+        if (selectedFY === 'all') {
+            return months;
+        }
+        const fyYear = parseInt(selectedFY);
+        const fyStart = `${fyYear}-07`;
+        const fyEnd = `${fyYear + 1}-06`;
+        return months.filter((month) => month >= fyStart && month <= fyEnd);
+    }, [months, selectedFY]);
 
     // Save excluded jobs to local storage whenever it changes
     useEffect(() => {
@@ -148,7 +185,7 @@ export default function TurnoverForecastIndex({
         };
 
         // Calculate totals for each month
-        months.forEach((month) => {
+        filteredMonths.forEach((month) => {
             let totalRevenue = 0;
 
             filteredData.forEach((row) => {
@@ -171,7 +208,7 @@ export default function TurnoverForecastIndex({
         });
 
         return [totalRow];
-    }, [filteredData, months]);
+    }, [filteredData, filteredMonths]);
 
     // Calculate cost total row data
     const costTotalRowData = useMemo(() => {
@@ -188,7 +225,7 @@ export default function TurnoverForecastIndex({
         };
 
         // Calculate totals for each month
-        months.forEach((month) => {
+        filteredMonths.forEach((month) => {
             let totalCost = 0;
 
             filteredData.forEach((row) => {
@@ -211,7 +248,7 @@ export default function TurnoverForecastIndex({
         });
 
         return [totalRow];
-    }, [filteredData, months]);
+    }, [filteredData, filteredMonths]);
 
     // Calculate profit pinned row data
     const profitPinnedRowData = useMemo(() => {
@@ -233,7 +270,7 @@ export default function TurnoverForecastIndex({
         };
 
         // Calculate profit for each month
-        months.forEach((month) => {
+        filteredMonths.forEach((month) => {
             let totalRevenue = 0;
             let totalCost = 0;
 
@@ -269,7 +306,7 @@ export default function TurnoverForecastIndex({
         profitRow.profit_total = profitRow.total_contract_value - profitRow.budget;
 
         return [profitRow];
-    }, [filteredData, months]);
+    }, [filteredData, filteredMonths]);
 
     // Build static column definitions (shared across grids)
     const staticCols = useMemo<ColDef[]>(
@@ -406,7 +443,7 @@ export default function TurnoverForecastIndex({
             },
         ];
 
-        const monthlyCols: ColDef[] = months.map((month) => {
+        const monthlyCols: ColDef[] = filteredMonths.map((month) => {
             const isActualColumn = lastActualMonth && month <= lastActualMonth;
 
             return {
@@ -453,7 +490,7 @@ export default function TurnoverForecastIndex({
         });
 
         return [...summaryCols, ...monthlyCols];
-    }, [months, lastActualMonth, fyLabel, staticCols]);
+    }, [filteredMonths, lastActualMonth, fyLabel, staticCols]);
 
     // Build cost column definitions (same structure as revenue)
     const costColumnDefs = useMemo<ColDef[]>(() => {
@@ -558,7 +595,7 @@ export default function TurnoverForecastIndex({
             },
         ];
 
-        const monthlyCols: ColDef[] = months.map((month) => {
+        const monthlyCols: ColDef[] = filteredMonths.map((month) => {
             const isActualColumn = lastActualMonth && month <= lastActualMonth;
 
             return {
@@ -611,7 +648,7 @@ export default function TurnoverForecastIndex({
         });
 
         return [...summaryCols, ...monthlyCols];
-    }, [months, lastActualMonth, staticCols, fyLabel]);
+    }, [filteredMonths, lastActualMonth, staticCols, fyLabel]);
 
     const defaultColDef = useMemo<ColDef>(
         () => ({
@@ -673,7 +710,7 @@ export default function TurnoverForecastIndex({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                             <h1 className="text-2xl font-semibold tracking-tight">Turnover Forecast</h1>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 Combined view of current and potential projects - Financial Year: {fyLabel}
                             </p>
                         </div>
@@ -685,42 +722,63 @@ export default function TurnoverForecastIndex({
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50/50 p-1">
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'both' ? 'default' : 'ghost'}
-                                onClick={() => setViewMode('both')}
-                                className="h-8 flex-1 sm:flex-none"
-                            >
-                                Both
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50/50 p-1">
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'both' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('both')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Both
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'revenue' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('revenue')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Revenue
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'cost' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('cost')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Cost
+                                </Button>
+                            </div>
+                            <Select value={selectedFY} onValueChange={setSelectedFY}>
+                                <SelectTrigger className="h-8 w-[140px]">
+                                    <SelectValue placeholder="Select FY" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableFYs.map((fy) => (
+                                        <SelectItem key={fy.value} value={fy.value}>
+                                            {fy.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setReportDialogOpen(true)} variant="default" size="sm" className="w-full sm:w-auto">
+                                <FileText className="mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">View Report</span>
+                                <span className="sm:hidden">Report</span>
                             </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'revenue' ? 'default' : 'ghost'}
-                                onClick={() => setViewMode('revenue')}
-                                className="h-8 flex-1 sm:flex-none"
-                            >
-                                Revenue
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'cost' ? 'default' : 'ghost'}
-                                onClick={() => setViewMode('cost')}
-                                className="h-8 flex-1 sm:flex-none"
-                            >
-                                Cost
+                            <Button onClick={() => setFilterDialogOpen(true)} variant="outline" size="sm" className="w-full sm:w-auto">
+                                <Filter className="mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Filter Jobs</span>
+                                <span className="sm:hidden">Filter</span>
+                                {data.length - filteredData.length > 0 && (
+                                    <span className="bg-primary/10 text-primary ml-2 rounded-full px-2 py-0.5 text-xs font-medium">
+                                        {data.length - filteredData.length}
+                                    </span>
+                                )}
                             </Button>
                         </div>
-                        <Button onClick={() => setFilterDialogOpen(true)} variant="outline" size="sm" className="w-full sm:w-auto">
-                            <Filter className="mr-2 h-4 w-4" />
-                            <span className="hidden sm:inline">Filter Jobs</span>
-                            <span className="sm:hidden">Filter</span>
-                            {data.length - filteredData.length > 0 && (
-                                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                    {data.length - filteredData.length}
-                                </span>
-                            )}
-                        </Button>
                     </div>
                 </div>
 
@@ -976,6 +1034,17 @@ export default function TurnoverForecastIndex({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Turnover Report Dialog */}
+            <TurnoverReportDialog
+                open={reportDialogOpen}
+                onOpenChange={setReportDialogOpen}
+                data={filteredData}
+                months={filteredMonths}
+                lastActualMonth={lastActualMonth}
+                fyLabel={fyLabel}
+                allMonths={months}
+            />
         </AppLayout>
     );
 }
