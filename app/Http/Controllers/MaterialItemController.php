@@ -363,6 +363,7 @@ class MaterialItemController extends Controller
         }
 
         $priceList = MaterialItemPriceListUpload::create([
+            'location_id' => $location->id,
             'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
             'failed_file_path' => null,
             'status' => 'success',
