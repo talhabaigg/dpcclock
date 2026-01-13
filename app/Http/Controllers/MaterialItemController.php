@@ -275,135 +275,71 @@ class MaterialItemController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
+
         $uploaded_fileName = 'location_pricing_upload_' . now()->format('Ymd_His') . '.csv';
 
-        $original_file_uploaded = Storage::disk('s3')->put('location_pricing/uploads/' . $uploaded_fileName, file_get_contents($request->file('file')->getRealPath()));
-        if (!$original_file_uploaded) {
-            return back()->with('error', 'Failed to upload file to S3.');
-        }
-        $path = $request->file('file')->getRealPath();
-        $rows = array_map('str_getcsv', file($path));
-        $header = array_map('trim', array_shift($rows));
-        $stats = [
-            'total' => 0,
-            'failed' => 0,
-            'empty' => 0,
-            'malformed' => 0,
-            'duplicate' => 0,
-        ];
-        $seen = [];
-        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
-
-        $dataToInsert = [];
-        $locationIds = [];
-        $failedRows = [];
-        $locationsData = Location::select('id', 'external_id')->get()->keyBy('external_id');
-        $materials = MaterialItem::select('id', 'code')->get()->keyBy('code');
-        foreach ($rows as $row) {
-            if (count($row) === 1 && trim((string) $row[0]) === '') {
-                $stats['empty']++;
-                continue;
-            }
-
-            $stats['total']++;
-
-            // malformed: columns don't match header
-            if (count($row) !== count($header)) {
-                $stats['malformed']++;
-                $failedRows[] = $row; // or enrich with reason
-                continue;
-            }
-            $data = array_combine($header, $row);
-
-            $location = $locationsData->get($data['location_id']);
-            $material = $materials->get($data['code']);
-
-            if (!$location || !$material) {
-                $stats['failed']++;
-                $failedRows[] = $row;
-                continue;
-            }
-
-            $key = $location->id . '-' . $material->id;
-            if (isset($seen[$key])) {
-                $stats['duplicate']++;
-                continue;
-            }
-            $seen[$key] = true;
-            $locationIds[] = $location->id;
-
-            $dataToInsert[] = [
-                'location_id' => $location->id,
-                'material_item_id' => $material->id,
-                'unit_cost_override' => floatval($data['unit_cost']),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
-
-        $uniqueLocationIds = array_unique($locationIds);
-        $dataToInsert = collect($dataToInsert)
-            ->unique(fn($item) => $item['location_id'] . '-' . $item['material_item_id'])
-            ->values()
-            ->toArray();
-        DB::transaction(function () use ($uniqueLocationIds, $dataToInsert) {
-            // Delete old pricing only for relevant locations
-            DB::table('location_item_pricing')
-                ->whereIn('location_id', $uniqueLocationIds)
-                ->delete();
-
-            // Insert new pricing
-            DB::table('location_item_pricing')->insert($dataToInsert);
-        });
-
-        if (!empty($failedRows)) {
-            $filename = 'failed_location_pricing_' . now()->format('Ymd_His') . '.csv';
-            $filePath = storage_path("app/{$filename}");
-
-            $handle = fopen($filePath, 'w');
-            fputcsv($handle, $header);
-            foreach ($failedRows as $failedRow) {
-                fputcsv($handle, $failedRow);
-            }
-            fclose($handle);
-
-            // Save the file to S3
-            $s3Path = "location_pricing/failed/{$filename}";
-            \Storage::disk('s3')->put($s3Path, file_get_contents($filePath));
-
-            // Delete the local file after uploading to S3
-            unlink($filePath);
-
-            $s3Url = \Storage::disk('s3')->url($s3Path);
-            $priceList = MaterialItemPriceListUpload::create([
-                'location_id' => $location->id,
-                'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
-                'failed_file_path' => "location_pricing/failed/{$filename}",
-                'status' => 'success',
-                'total_rows' => count($rows),
-                'processed_rows' => count($dataToInsert),
-                'failed_rows' => count($failedRows),
-                'created_by' => auth()->id(),
-            ]);
-            return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully. Some rows failed to import. Download the failed rows <a href='{$s3Url}'>here</a>.");
-        }
-
-        $priceList = MaterialItemPriceListUpload::create([
-            'location_id' => $location->id,
-            'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
-            'failed_file_path' => null,
-            'status' => 'success',
-            'total_rows' => $stats['total'],
-            'processed_rows' => count($dataToInsert),
-            'failed_rows' => $stats['failed'] + $stats['malformed'], // depending how you want it
-            'created_by' => auth()->id(),
+        Log::info('MaterialItemController: Starting location pricing upload', [
+            'file_name' => $uploaded_fileName,
+            'user_id' => auth()->id(),
+            'original_file_name' => $request->file('file')->getClientOriginalName()
         ]);
-        if (!$priceList) {
-            Log::error('Failed to create MaterialItemPriceListUpload record for file: ' . $uploaded_fileName);
+
+        try {
+            // Upload original file to S3
+            $original_file_uploaded = Storage::disk('s3')->put(
+                'location_pricing/uploads/' . $uploaded_fileName,
+                file_get_contents($request->file('file')->getRealPath())
+            );
+
+            if (!$original_file_uploaded) {
+                Log::error('MaterialItemController: Failed to upload file to S3', [
+                    'file_name' => $uploaded_fileName
+                ]);
+                return back()->with('error', 'Failed to upload file to S3.');
+            }
+
+            Log::info('MaterialItemController: File uploaded to S3 successfully', [
+                'file_name' => $uploaded_fileName,
+                's3_path' => 'location_pricing/uploads/' . $uploaded_fileName
+            ]);
+
+            // Save temporary local copy for job processing
+            $tempPath = storage_path('app/temp/' . $uploaded_fileName);
+
+            // Create temp directory if it doesn't exist
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+
+            copy($request->file('file')->getRealPath(), $tempPath);
+
+            Log::info('MaterialItemController: Dispatching UploadLocationPricingJob', [
+                'file_name' => $uploaded_fileName,
+                'temp_path' => $tempPath
+            ]);
+
+            // Dispatch the job
+            \App\Jobs\UploadLocationPricingJob::dispatch(
+                $tempPath,
+                $uploaded_fileName,
+                auth()->id()
+            );
+
+            Log::info('MaterialItemController: Job dispatched successfully', [
+                'file_name' => $uploaded_fileName
+            ]);
+
+            return back()->with('success', "File uploaded successfully and is being processed. You will be notified when the import is complete.");
+
+        } catch (\Exception $e) {
+            Log::error('MaterialItemController: Error during upload', [
+                'file_name' => $uploaded_fileName,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return back()->with('error', 'An error occurred during file upload: ' . $e->getMessage());
         }
-
-
-        return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully.");
     }
 
     private function uploadFileToS3($filePath, $s3Path)
