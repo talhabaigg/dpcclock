@@ -289,13 +289,16 @@ class MaterialItemController extends Controller
         $dataToInsert = [];
         $locationIds = [];
         $failedRows = [];
+        $locationsData = Location::select('id', 'external_id')->get()->keyBy('external_id');
+        $materials = MaterialItem::select('id', 'code')->get()->keyBy('code');
         foreach ($rows as $row) {
             $data = array_combine($header, $row);
 
-            $location = Location::where('external_id', $data['location_id'])->first();
-            $material = MaterialItem::where('code', $data['code'])->first();
+            $location = $locationsData->get($data['location_id']);
+            $material = $materials->get($data['code']);
 
             if (!$location || !$material) {
+                $row['reason'] = !$location ? 'Invalid location_id' : 'Invalid material code';
                 $failedRows[] = $row;
                 continue;
             }
