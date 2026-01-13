@@ -284,6 +284,14 @@ class MaterialItemController extends Controller
         $path = $request->file('file')->getRealPath();
         $rows = array_map('str_getcsv', file($path));
         $header = array_map('trim', array_shift($rows));
+        $stats = [
+            'total' => 0,
+            'failed' => 0,
+            'empty' => 0,
+            'malformed' => 0,
+            'duplicate' => 0,
+        ];
+        $seen = [];
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
 
         $dataToInsert = [];
@@ -292,18 +300,36 @@ class MaterialItemController extends Controller
         $locationsData = Location::select('id', 'external_id')->get()->keyBy('external_id');
         $materials = MaterialItem::select('id', 'code')->get()->keyBy('code');
         foreach ($rows as $row) {
+            if (count($row) === 1 && trim((string) $row[0]) === '') {
+                $stats['empty']++;
+                continue;
+            }
+
+            $stats['total']++;
+
+            // malformed: columns don't match header
+            if (count($row) !== count($header)) {
+                $stats['malformed']++;
+                $failedRows[] = $row; // or enrich with reason
+                continue;
+            }
             $data = array_combine($header, $row);
 
             $location = $locationsData->get($data['location_id']);
             $material = $materials->get($data['code']);
 
             if (!$location || !$material) {
-                $row['reason'] = !$location ? 'Invalid location_id' : 'Invalid material code';
+                $stats['failed']++;
                 $failedRows[] = $row;
                 continue;
             }
 
-
+            $key = $location->id . '-' . $material->id;
+            if (isset($seen[$key])) {
+                $stats['duplicate']++;
+                continue;
+            }
+            $seen[$key] = true;
             $locationIds[] = $location->id;
 
             $dataToInsert[] = [
@@ -367,9 +393,9 @@ class MaterialItemController extends Controller
             'upload_file_path' => 'location_pricing/uploads/' . $uploaded_fileName,
             'failed_file_path' => null,
             'status' => 'success',
-            'total_rows' => count($rows),
+            'total_rows' => $stats['total'],
             'processed_rows' => count($dataToInsert),
-            'failed_rows' => count($failedRows),
+            'failed_rows' => $stats['failed'] + $stats['malformed'], // depending how you want it
             'created_by' => auth()->id(),
         ]);
         if (!$priceList) {
