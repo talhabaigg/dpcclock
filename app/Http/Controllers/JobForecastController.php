@@ -160,7 +160,7 @@ class JobForecastController extends Controller
             ->all();
 
         $revenueRows = [
-            (function () use ($revenuesByMonth, $months, $forecastMonths, $savedForecasts) {
+            (function () use ($revenuesByMonth, $months, $forecastMonths, $savedForecasts, $currentMonth) {
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
