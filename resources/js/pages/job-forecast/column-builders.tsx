@@ -9,7 +9,6 @@ interface ColumnBuilderParams {
     trendColDef: ColDef;
     displayMonths: string[];
     forecastMonths: string[];
-    actualsTotalForRow: (row: any) => number;
     forecastSumBefore: (row: any, month: string) => number;
     forecastSumThrough: (row: any, month: string) => number;
     updateRowCell: (rowKey: string, field: string, value: any) => void;
@@ -20,7 +19,6 @@ export function buildCostColumnDefs({
     trendColDef,
     displayMonths,
     forecastMonths,
-    actualsTotalForRow,
     forecastSumBefore,
     forecastSumThrough,
     updateRowCell,
@@ -168,17 +166,13 @@ export function buildCostColumnDefs({
                     valueGetter: (p: any) => {
                         if (!p?.data) return null;
 
-                        const lastMonth = forecastMonths[forecastMonths.length - 1];
-                        const forecastExceptLast = forecastMonths.slice(0, -1);
-                        const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-
-                        // Calculate the last month value (auto-calculated as remaining)
-                        const budget = Number(p.data?.budget ?? 0) || 0;
-                        const actuals = actualsTotalForRow(p.data);
-                        const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                        const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-
-                        return sumBeforeLast + lastMonthValue;
+                        // Sum all forecast months including last month (no auto-calculation)
+                        let total = 0;
+                        for (const fm of forecastMonths) {
+                            const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                            total += Number(p.data?.[fieldName] ?? 0) || 0;
+                        }
+                        return total;
                     },
                     valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                     headerClass: 'ag-right-aligned-header',
@@ -193,17 +187,13 @@ export function buildCostColumnDefs({
                             valueGetter: (p: any) => {
                                 if (!p?.data) return null;
 
-                                const lastMonth = forecastMonths[forecastMonths.length - 1];
-                                const forecastExceptLast = forecastMonths.slice(0, -1);
-                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-
-                                // Calculate the last month value (auto-calculated as remaining)
-                                const budget = Number(p.data?.budget ?? 0) || 0;
-                                const actuals = actualsTotalForRow(p.data);
-                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-
-                                return sumBeforeLast + lastMonthValue;
+                                // Sum all forecast months including last month (no auto-calculation)
+                                let total = 0;
+                                for (const fm of forecastMonths) {
+                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    total += Number(p.data?.[fieldName] ?? 0) || 0;
+                                }
+                                return total;
                             },
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
@@ -220,14 +210,12 @@ export function buildCostColumnDefs({
                                 const budget = Number(p.data?.budget ?? 0) || 0;
                                 if (!budget) return null;
 
-                                // Calculate forecast total including last month
-                                const lastMonth = forecastMonths[forecastMonths.length - 1];
-                                const forecastExceptLast = forecastMonths.slice(0, -1);
-                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-                                const actuals = actualsTotalForRow(p.data);
-                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-                                const forecast = sumBeforeLast + lastMonthValue;
+                                // Sum all forecast months including last month (no auto-calculation)
+                                let forecast = 0;
+                                for (const fm of forecastMonths) {
+                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    forecast += Number(p.data?.[fieldName] ?? 0) || 0;
+                                }
 
                                 return (forecast / budget) * 100;
                             },
@@ -249,8 +237,8 @@ export function buildCostColumnDefs({
                                 colId: `${m}__amt`,
                                 field: isCurrentMonth ? `forecast_${m}` : m,
                                 width: 120,
-                                editable: !isLastMonth,
-                                singleClickEdit: !isLastMonth,
+                                editable: true,
+                                singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
                                 cellClass: isCurrentMonth
@@ -258,38 +246,27 @@ export function buildCostColumnDefs({
                                     : isLastMonth
                                         ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
                                         : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
-                                valueGetter: isLastMonth
+                                valueGetter: isCurrentMonth
                                     ? (p: any) => {
-                                          // Calculate remaining amount for last month
-                                          const budget = Number(p.data?.budget ?? 0) || 0;
-                                          const actuals = actualsTotalForRow(p.data);
-                                          const forecastBeforeLast = forecastSumBefore(p.data, m);
-                                          const remaining = budget - actuals - forecastBeforeLast;
-                                          return Math.max(0, remaining);
-                                      }
-                                    : isCurrentMonth
-                                        ? (p: any) => {
-                                              // For current month in forecast, use separate forecast field
-                                              return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                          }
-                                        : undefined,
-                                valueParser: !isLastMonth ? (p: any) => toNumberOrNull(p.newValue) : undefined,
-                                valueSetter: !isLastMonth
-                                    ? (p: any) => {
-                                          const parsed = toNumberOrNull(p.newValue);
-                                          const fieldName = isCurrentMonth ? `forecast_${m}` : m;
-                                          updateRowCell(p.data._rowKey, fieldName, parsed);
-                                          return true;
+                                          // For current month in forecast, use separate forecast field
+                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
                                       }
                                     : undefined,
+                                valueParser: (p: any) => toNumberOrNull(p.newValue),
+                                valueSetter: (p: any) => {
+                                    const parsed = toNumberOrNull(p.newValue);
+                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    updateRowCell(p.data._rowKey, fieldName, parsed);
+                                    return true;
+                                },
                                 valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             },
                             {
                                 headerName: '%',
                                 colId: `${m}__pct`,
                                 width: 90,
-                                editable: !isLastMonth,
-                                singleClickEdit: !isLastMonth,
+                                editable: true,
+                                singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
@@ -311,53 +288,41 @@ export function buildCostColumnDefs({
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
                                     }
 
-                                    let forecastToThisMonth: number;
-
-                                    if (isLastMonth) {
-                                        // For last month, calculate including the auto-calculated value
-                                        const forecastBeforeLast = forecastSumBefore(p.data, m);
-                                        const remaining = Math.max(0, budget - actuals - forecastBeforeLast);
-                                        forecastToThisMonth = forecastBeforeLast + remaining;
-                                    } else {
-                                        forecastToThisMonth = forecastSumThrough(p.data, m);
-                                    }
-
+                                    const forecastToThisMonth = forecastSumThrough(p.data, m);
                                     const cumulative = actuals + forecastToThisMonth;
                                     return (cumulative / budget) * 100;
                                 },
-                                valueSetter: !isLastMonth
-                                    ? (p: any) => {
-                                          const budget = Number(p.data?.budget ?? 0) || 0;
-                                          if (!budget) return false;
+                                valueSetter: (p: any) => {
+                                    const budget = Number(p.data?.budget ?? 0) || 0;
+                                    if (!budget) return false;
 
-                                          const pct = toNumberOrNull(p.newValue);
-                                          const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    const pct = toNumberOrNull(p.newValue);
+                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
 
-                                          if (pct == null) {
-                                              updateRowCell(p.data._rowKey, fieldName, null);
-                                              return true;
-                                          }
+                                    if (pct == null) {
+                                        updateRowCell(p.data._rowKey, fieldName, null);
+                                        return true;
+                                    }
 
-                                          const targetCum = (pct / 100) * budget;
+                                    const targetCum = (pct / 100) * budget;
 
-                                          // Calculate actuals, but exclude current month if it's in forecast
-                                          let actuals = 0;
-                                          for (const dm of displayMonths) {
-                                              if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                                  // Skip current month actual, we'll use forecast instead
-                                                  continue;
-                                              }
-                                              actuals += Number(p.data?.[dm] ?? 0) || 0;
-                                          }
+                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    let actuals = 0;
+                                    for (const dm of displayMonths) {
+                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
+                                            // Skip current month actual, we'll use forecast instead
+                                            continue;
+                                        }
+                                        actuals += Number(p.data?.[dm] ?? 0) || 0;
+                                    }
 
-                                          const forecastBeforeThisMonth = forecastSumBefore(p.data, m);
-                                          const alreadyBefore = actuals + forecastBeforeThisMonth;
-                                          const newAmt = targetCum - alreadyBefore;
+                                    const forecastBeforeThisMonth = forecastSumBefore(p.data, m);
+                                    const alreadyBefore = actuals + forecastBeforeThisMonth;
+                                    const newAmt = targetCum - alreadyBefore;
 
-                                          updateRowCell(p.data._rowKey, fieldName, Math.max(0, newAmt));
-                                          return true;
-                                      }
-                                    : undefined,
+                                    updateRowCell(p.data._rowKey, fieldName, Math.max(0, newAmt));
+                                    return true;
+                                },
                                 valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
                             },
                         ],
@@ -375,8 +340,24 @@ export function buildCostColumnDefs({
             pinned: 'right',
             valueGetter: (p: any) => {
                 const budget = Number(p.data?.budget ?? 0) || 0;
-                const actuals = sumMonths(p.data, displayMonths) || 0;
-                const forecast = sumMonths(p.data, forecastMonths) || 0;
+
+                // Calculate actuals, excluding current month if it has a forecast
+                let actuals = 0;
+                for (const dm of displayMonths) {
+                    if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
+                        // Skip current month actual, we'll use forecast instead
+                        continue;
+                    }
+                    actuals += Number(p.data?.[dm] ?? 0) || 0;
+                }
+
+                // Calculate forecast, checking for forecast_ prefix for current month
+                let forecast = 0;
+                for (const fm of forecastMonths) {
+                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                    forecast += Number(p.data?.[fieldName] ?? 0) || 0;
+                }
+
                 return budget - actuals - forecast;
             },
             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
@@ -567,17 +548,13 @@ export function buildRevenueColumnDefs({
                     valueGetter: (p: any) => {
                         if (!p?.data) return null;
 
-                        const lastMonth = forecastMonths[forecastMonths.length - 1];
-                        const forecastExceptLast = forecastMonths.slice(0, -1);
-                        const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-
-                        // Calculate the last month value (auto-calculated as remaining)
-                        const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                        const actuals = actualsTotalForRow(p.data);
-                        const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                        const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-
-                        return sumBeforeLast + lastMonthValue;
+                        // Sum all forecast months including last month (no auto-calculation)
+                        let total = 0;
+                        for (const fm of forecastMonths) {
+                            const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                            total += Number(p.data?.[fieldName] ?? 0) || 0;
+                        }
+                        return total;
                     },
                     valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                     headerClass: 'ag-right-aligned-header',
@@ -592,17 +569,13 @@ export function buildRevenueColumnDefs({
                             valueGetter: (p: any) => {
                                 if (!p?.data) return null;
 
-                                const lastMonth = forecastMonths[forecastMonths.length - 1];
-                                const forecastExceptLast = forecastMonths.slice(0, -1);
-                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-
-                                // Calculate the last month value (auto-calculated as remaining)
-                                const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                                const actuals = actualsTotalForRow(p.data);
-                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-
-                                return sumBeforeLast + lastMonthValue;
+                                // Sum all forecast months including last month (no auto-calculation)
+                                let total = 0;
+                                for (const fm of forecastMonths) {
+                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    total += Number(p.data?.[fieldName] ?? 0) || 0;
+                                }
+                                return total;
                             },
                             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
@@ -618,25 +591,19 @@ export function buildRevenueColumnDefs({
                             valueGetter: (p: any) => {
                                 // Check if this is the profit row - show margin %
                                 if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
-                                    // Need to calculate profit forecast total including last month
-                                    const lastMonth = forecastMonths[forecastMonths.length - 1];
-                                    const forecastExceptLast = forecastMonths.slice(0, -1);
-                                    const profitSumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
+                                    // Sum all profit forecast months (no auto-calculation)
+                                    let profitForecast = 0;
+                                    for (const fm of forecastMonths) {
+                                        const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                        profitForecast += Number(p.data?.[fieldName] ?? 0) || 0;
+                                    }
 
-                                    // Get last month profit (revenue - cost for last month)
-                                    const profitBudget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                                    const profitActuals = actualsTotalForRow(p.data);
-                                    const profitForecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                                    const profitLastMonth = Math.max(0, profitBudget - profitActuals - profitForecastBeforeLast);
-                                    const profitForecast = profitSumBeforeLast + profitLastMonth;
-
-                                    // Calculate revenue forecast total including last month
-                                    const revSumBeforeLast = sumMonths(revenueTotals, forecastExceptLast) || 0;
-                                    const revBudget = Number(revenueTotals?.contract_sum_to_date ?? 0) || 0;
-                                    const revActuals = sumMonths(revenueTotals, displayMonths) || 0;
-                                    const revForecastBeforeLast = forecastSumBefore(revenueTotals, lastMonth);
-                                    const revLastMonth = Math.max(0, revBudget - revActuals - revForecastBeforeLast);
-                                    const revenueForecast = revSumBeforeLast + revLastMonth;
+                                    // Sum all revenue forecast months (no auto-calculation)
+                                    let revenueForecast = 0;
+                                    for (const fm of forecastMonths) {
+                                        const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                        revenueForecast += Number(revenueTotals?.[fieldName] ?? 0) || 0;
+                                    }
 
                                     if (!revenueForecast) return null;
                                     return (profitForecast / revenueForecast) * 100;
@@ -645,14 +612,12 @@ export function buildRevenueColumnDefs({
                                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                 if (!budget) return null;
 
-                                // Calculate forecast total including last month
-                                const lastMonth = forecastMonths[forecastMonths.length - 1];
-                                const forecastExceptLast = forecastMonths.slice(0, -1);
-                                const sumBeforeLast = sumMonths(p.data, forecastExceptLast) || 0;
-                                const actuals = actualsTotalForRow(p.data);
-                                const forecastBeforeLast = forecastSumBefore(p.data, lastMonth);
-                                const lastMonthValue = Math.max(0, budget - actuals - forecastBeforeLast);
-                                const forecast = sumBeforeLast + lastMonthValue;
+                                // Sum all forecast months (no auto-calculation)
+                                let forecast = 0;
+                                for (const fm of forecastMonths) {
+                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    forecast += Number(p.data?.[fieldName] ?? 0) || 0;
+                                }
 
                                 return (forecast / budget) * 100;
                             },
@@ -674,8 +639,8 @@ export function buildRevenueColumnDefs({
                                 colId: `${m}__amt`,
                                 field: isCurrentMonth ? `forecast_${m}` : m,
                                 width: 120,
-                                editable: !isLastMonth,
-                                singleClickEdit: !isLastMonth,
+                                editable: true,
+                                singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
                                 cellClass: (p: any) => {
@@ -687,38 +652,27 @@ export function buildRevenueColumnDefs({
                                     }
                                     return isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },
-                                valueGetter: isLastMonth
+                                valueGetter: isCurrentMonth
                                     ? (p: any) => {
-                                          // Calculate remaining amount for last month
-                                          const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                                          const actuals = actualsTotalForRow(p.data);
-                                          const forecastBeforeLast = forecastSumBefore(p.data, m);
-                                          const remaining = budget - actuals - forecastBeforeLast;
-                                          return Math.max(0, remaining);
-                                      }
-                                    : isCurrentMonth
-                                        ? (p: any) => {
-                                              // For current month in forecast, use separate forecast field
-                                              return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                          }
-                                        : undefined,
-                                valueParser: !isLastMonth ? (p: any) => toNumberOrNull(p.newValue) : undefined,
-                                valueSetter: !isLastMonth
-                                    ? (p: any) => {
-                                          const parsed = toNumberOrNull(p.newValue);
-                                          const fieldName = isCurrentMonth ? `forecast_${m}` : m;
-                                          updateRowCell(p.data._rowKey, fieldName, parsed);
-                                          return true;
+                                          // For current month in forecast, use separate forecast field
+                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
                                       }
                                     : undefined,
+                                valueParser: (p: any) => toNumberOrNull(p.newValue),
+                                valueSetter: (p: any) => {
+                                    const parsed = toNumberOrNull(p.newValue);
+                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    updateRowCell(p.data._rowKey, fieldName, parsed);
+                                    return true;
+                                },
                                 valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
                             },
                             {
                                 headerName: '%',
                                 colId: `${m}__pct`,
                                 width: 90,
-                                editable: !isLastMonth,
-                                singleClickEdit: !isLastMonth,
+                                editable: true,
+                                singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: (p: any) => {
                                     if (p.data?.cost_item_description === 'Profit') {
@@ -733,8 +687,9 @@ export function buildRevenueColumnDefs({
                                 valueGetter: (p: any) => {
                                     // Check if this is the profit row - show margin %
                                     if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
-                                        const monthProfit = Number(p.data?.[m] ?? 0) || 0;
-                                        const monthRevenue = Number(revenueTotals?.[m] ?? 0) || 0;
+                                        const fieldName = m === currentMonth ? `forecast_${m}` : m;
+                                        const monthProfit = Number(p.data?.[fieldName] ?? 0) || 0;
+                                        const monthRevenue = Number(revenueTotals?.[fieldName] ?? 0) || 0;
                                         if (!monthRevenue) return null;
                                         return (monthProfit / monthRevenue) * 100;
                                     }
@@ -752,56 +707,44 @@ export function buildRevenueColumnDefs({
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
                                     }
 
-                                    let forecastToThisMonth: number;
-
-                                    if (isLastMonth) {
-                                        // For last month, calculate including the auto-calculated value
-                                        const forecastBeforeLast = forecastSumBefore(p.data, m);
-                                        const remaining = Math.max(0, budget - actuals - forecastBeforeLast);
-                                        forecastToThisMonth = forecastBeforeLast + remaining;
-                                    } else {
-                                        forecastToThisMonth = forecastSumThrough(p.data, m);
-                                    }
-
+                                    const forecastToThisMonth = forecastSumThrough(p.data, m);
                                     const cumulative = actuals + forecastToThisMonth;
                                     return (cumulative / budget) * 100;
                                 },
-                                valueSetter: !isLastMonth
-                                    ? (p: any) => {
-                                          const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                                          if (!budget) return false;
+                                valueSetter: (p: any) => {
+                                    const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
+                                    if (!budget) return false;
 
-                                          const rowKey = p.data?._rowKey;
-                                          if (!rowKey) return false;
+                                    const rowKey = p.data?._rowKey;
+                                    if (!rowKey) return false;
 
-                                          const pct = toNumberOrNull(p.newValue);
-                                          const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    const pct = toNumberOrNull(p.newValue);
+                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
 
-                                          if (pct == null) {
-                                              updateRowCell(rowKey, fieldName, null);
-                                              return true;
-                                          }
+                                    if (pct == null) {
+                                        updateRowCell(rowKey, fieldName, null);
+                                        return true;
+                                    }
 
-                                          const targetCum = (pct / 100) * budget;
+                                    const targetCum = (pct / 100) * budget;
 
-                                          // Calculate actuals, but exclude current month if it's in forecast
-                                          let actuals = 0;
-                                          for (const dm of displayMonths) {
-                                              if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                                  // Skip current month actual, we'll use forecast instead
-                                                  continue;
-                                              }
-                                              actuals += Number(p.data?.[dm] ?? 0) || 0;
-                                          }
+                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    let actuals = 0;
+                                    for (const dm of displayMonths) {
+                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
+                                            // Skip current month actual, we'll use forecast instead
+                                            continue;
+                                        }
+                                        actuals += Number(p.data?.[dm] ?? 0) || 0;
+                                    }
 
-                                          const forecastBeforeThisMonth = forecastSumBefore(p.data, m);
-                                          const alreadyBefore = actuals + forecastBeforeThisMonth;
-                                          const newAmt = Math.max(0, targetCum - alreadyBefore);
+                                    const forecastBeforeThisMonth = forecastSumBefore(p.data, m);
+                                    const alreadyBefore = actuals + forecastBeforeThisMonth;
+                                    const newAmt = Math.max(0, targetCum - alreadyBefore);
 
-                                          updateRowCell(rowKey, fieldName, Math.round(newAmt));
-                                          return true;
-                                      }
-                                    : undefined,
+                                    updateRowCell(rowKey, fieldName, Math.round(newAmt));
+                                    return true;
+                                },
                                 valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
                             },
                         ],
@@ -819,8 +762,24 @@ export function buildRevenueColumnDefs({
             pinned: 'right',
             valueGetter: (p: any) => {
                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
-                const actuals = sumMonths(p.data, displayMonths) || 0;
-                const forecast = sumMonths(p.data, forecastMonths) || 0;
+
+                // Calculate actuals, excluding current month if it has a forecast
+                let actuals = 0;
+                for (const dm of displayMonths) {
+                    if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
+                        // Skip current month actual, we'll use forecast instead
+                        continue;
+                    }
+                    actuals += Number(p.data?.[dm] ?? 0) || 0;
+                }
+
+                // Calculate forecast, checking for forecast_ prefix for current month
+                let forecast = 0;
+                for (const fm of forecastMonths) {
+                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                    forecast += Number(p.data?.[fieldName] ?? 0) || 0;
+                }
+
                 return budget - actuals - forecast;
             },
             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
