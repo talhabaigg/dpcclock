@@ -76,6 +76,8 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
         () => {
             console.log('=== CHART DATA DEBUG ===');
             console.log('Chart data:', data);
+            console.log('Budget:', budget);
+            console.log('View mode:', viewMode);
 
             return data.map((d) => {
                 // If both actual and forecast exist (current month), prefer forecast for display
@@ -86,7 +88,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 const y = hasForecast ? d.forecast : (hasActual ? d.actual : 0);
                 const isActual = !hasForecast && hasActual;
 
-                console.log(`Month ${d.monthKey}: hasActual=${hasActual}, hasForecast=${hasForecast}, isActual=${isActual}, y=${y}`);
+                console.log(`Month ${d.monthKey}: hasActual=${hasActual}, hasForecast=${hasForecast}, isActual=${isActual}, y=${y}, actual=${d.actual}, forecast=${d.forecast}`);
 
                 return {
                     label: d.monthLabel,
@@ -96,7 +98,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 };
             });
         },
-        [data],
+        [data, budget, viewMode],
     );
 
     // Calculate cumulative values for percent view

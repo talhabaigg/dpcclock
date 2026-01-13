@@ -200,9 +200,10 @@ interface UsePinnedRowDataProps {
     forecastMonths: string[];
     budgetField: 'budget' | 'contract_sum_to_date';
     description: string;
+    currentMonth?: string;
 }
 
-export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budgetField, description }: UsePinnedRowDataProps) {
+export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budgetField, description, currentMonth }: UsePinnedRowDataProps) {
     return useMemo(() => {
         if (!gridData?.length) return [];
 
@@ -215,7 +216,10 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
         for (const m of displayMonths) totals[m] = 0;
         for (const m of forecastMonths) {
             totals[m] = 0;
-            totals[`forecast_${m}`] = 0; // Initialize forecast_ prefix fields too
+            // Only initialize forecast_ prefix field for the current month
+            if (m === currentMonth) {
+                totals[`forecast_${m}`] = 0;
+            }
         }
 
         for (const r of gridData) {
@@ -236,7 +240,7 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
         }, 0);
 
         return [totals];
-    }, [gridData, displayMonths, forecastMonths, budgetField, description]);
+    }, [gridData, displayMonths, forecastMonths, budgetField, description, currentMonth]);
 }
 
 interface UseChartRowsProps {

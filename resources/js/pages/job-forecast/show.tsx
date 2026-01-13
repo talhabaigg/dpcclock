@@ -558,6 +558,7 @@ const ShowJobForecastPage = ({
         forecastMonths,
         budgetField: 'budget',
         description: 'Total Costs',
+        currentMonth,
     });
 
     const pinnedBottomRevenueRowData = usePinnedRowData({
@@ -566,6 +567,7 @@ const ShowJobForecastPage = ({
         forecastMonths,
         budgetField: 'contract_sum_to_date',
         description: 'Total Revenue',
+        currentMonth,
     });
 
     const revenueColDefs = useMemo(() => {

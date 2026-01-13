@@ -231,6 +231,7 @@ class JobForecastController extends Controller
         // Validate that forecast amounts don't exceed budget
         $gridType = $validated['grid_type'];
         $validationErrors = [];
+        $currentMonth = date('Y-m');
 
         foreach ($validated['forecast_data'] as $row) {
             $costItem = $row['cost_item'];
@@ -256,16 +257,36 @@ class JobForecastController extends Controller
                     ->sum('this_app_work_completed');
             }
 
-            // Calculate total forecast amount
+            // Calculate actuals excluding current month (since current month may have incomplete actuals)
+            if ($gridType === 'cost') {
+                $actualsExcludingCurrentMonth = JobCostDetail::where('job_number', $jobNumber)
+                    ->where('cost_item', $costItem)
+                    ->whereRaw("DATE_FORMAT(transaction_date, '%Y-%m') < ?", [$currentMonth])
+                    ->sum('amount');
+            } else {
+                $actualsExcludingCurrentMonth = ArProgressBillingSummary::where('job_number', $jobNumber)
+                    ->whereRaw("DATE_FORMAT(period_end_date, '%Y-%m') < ?", [$currentMonth])
+                    ->sum('this_app_work_completed');
+            }
+
+            // Calculate total forecast amount, excluding current month
             $forecastTotal = 0;
-            foreach ($row['months'] as $amount) {
+            foreach ($row['months'] as $monthKey => $amount) {
                 if ($amount !== null && $amount !== '') {
+                    // Strip "forecast_" prefix if present
+                    $actualMonth = str_starts_with($monthKey, 'forecast_') ? substr($monthKey, 9) : $monthKey;
+
+                    // Skip current month in validation (it's in progress and has incomplete actuals)
+                    if ($actualMonth === $currentMonth) {
+                        continue;
+                    }
+
                     $forecastTotal += floatval($amount);
                 }
             }
 
-            // Check if actuals + forecast exceeds budget
-            $total = $actuals + $forecastTotal;
+            // Check if actuals (excluding current month) + forecast (excluding current month) exceeds budget
+            $total = $actualsExcludingCurrentMonth + $forecastTotal;
             $remaining = $budget - $total;
 
             if ($remaining < -0.01) { // Allow small rounding errors
