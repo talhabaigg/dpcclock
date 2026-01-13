@@ -678,10 +678,11 @@ const ShowJobForecastPage = ({
     // Accrual Summary Data
     // ===========================
     const accrualData = useMemo<AccrualDataPoint[]>(() => {
-        const allMonths = [...displayMonths, ...forecastMonths];
+        const removeCurrentMonthFromDisplayMonths = displayMonths.filter((m) => m !== currentMonth);
+        const allMonths = [...removeCurrentMonthFromDisplayMonths, ...forecastMonths];
 
         return allMonths.map((monthKey) => {
-            const isActual = displayMonths.includes(monthKey);
+            const isActual = removeCurrentMonthFromDisplayMonths.includes(monthKey);
 
             // Get totals from pinned rows
             const costTotal = pinnedBottomRowData[0]?.[monthKey];
