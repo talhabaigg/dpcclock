@@ -665,8 +665,6 @@ const ShowJobForecastPage = ({
 
         const costTotals = pinnedBottomRowData[0];
         const revenueTotals = pinnedBottomRevenueRowData[0];
-        const lastForecastMonth = forecastMonths[forecastMonths.length - 1];
-
         const profitRow: any = {
             cost_item: '',
             cost_item_description: 'Profit',
@@ -678,28 +676,22 @@ const ShowJobForecastPage = ({
             profitRow[m] = (revenueTotals[m] || 0) - (costTotals[m] || 0);
         }
 
-        // Calculate profit for each forecast month (except last, which is auto-calculated)
+        // Calculate profit for each forecast month, honoring forecast_ fields for current month
         for (const m of forecastMonths) {
-            if (m === lastForecastMonth) {
-                // Don't pre-calculate the last month - let the column valueGetter handle it
-                profitRow[m] = 0; // This will be overridden by valueGetter
-            } else {
-                profitRow[m] = (revenueTotals[m] || 0) - (costTotals[m] || 0);
-            }
+            const fieldName = currentMonth && m === currentMonth ? `forecast_${m}` : m;
+            profitRow[fieldName] = (revenueTotals[fieldName] || 0) - (costTotals[fieldName] || 0);
         }
 
-        // Calculate totals (excluding last forecast month since it's auto-calculated)
+        // Calculate totals
         profitRow.actuals_total = displayMonths.reduce((sum, m) => sum + (Number(profitRow[m]) || 0), 0);
 
-        // Forecast total should include all months including the last one
-        // We need to calculate it including the auto-calculated last month
-        const forecastExceptLast = forecastMonths.slice(0, -1);
-        const forecastBeforeLast = forecastExceptLast.reduce((sum, m) => sum + (Number(profitRow[m]) || 0), 0);
-        const lastMonthProfit = (revenueTotals[lastForecastMonth] || 0) - (costTotals[lastForecastMonth] || 0);
-        profitRow.forecast_total = forecastBeforeLast + lastMonthProfit;
+        profitRow.forecast_total = forecastMonths.reduce((sum, m) => {
+            const fieldName = currentMonth && m === currentMonth ? `forecast_${m}` : m;
+            return sum + (Number(profitRow[fieldName]) || 0);
+        }, 0);
 
         return [profitRow];
-    }, [pinnedBottomRowData, pinnedBottomRevenueRowData, displayMonths, forecastMonths]);
+    }, [pinnedBottomRowData, pinnedBottomRevenueRowData, displayMonths, forecastMonths, currentMonth]);
 
     // ===========================
     // Chart Data
