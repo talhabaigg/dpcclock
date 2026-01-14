@@ -19,6 +19,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Turnover Forecast', href: '/turnover-forecast' }];
 
 const STORAGE_KEY = 'turnover-forecast-excluded-jobs';
+const GRID_HEIGHTS_KEY = 'turnover-forecast-grid-heights';
 
 type MonthlyData = {
     [month: string]: number;
@@ -102,6 +103,41 @@ export default function TurnoverForecastIndex({
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'both' | 'revenue' | 'cost'>('both');
+    const [gridHeights, setGridHeights] = useState(() => {
+        try {
+            const stored = localStorage.getItem(GRID_HEIGHTS_KEY);
+            const parsed = stored ? JSON.parse(stored) : null;
+            return {
+                revenue: typeof parsed?.revenue === 'number' ? parsed.revenue : 150,
+                cost: typeof parsed?.cost === 'number' ? parsed.cost : 150,
+            };
+        } catch {
+            return { revenue: 150, cost: 150 };
+        }
+    });
+
+    const MIN_GRID_HEIGHT = 120;
+    const MAX_GRID_HEIGHT = 600;
+
+    const handleGridResizeStart = (grid: 'revenue' | 'cost') => (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startHeight = gridHeights[grid];
+
+        const handleDrag = (moveEvent: MouseEvent) => {
+            const deltaY = moveEvent.clientY - startY;
+            const nextHeight = Math.min(MAX_GRID_HEIGHT, Math.max(MIN_GRID_HEIGHT, startHeight + deltaY));
+            setGridHeights((prev) => (prev[grid] === nextHeight ? prev : { ...prev, [grid]: nextHeight }));
+        };
+
+        const handleDragEnd = () => {
+            document.removeEventListener('mousemove', handleDrag);
+            document.removeEventListener('mouseup', handleDragEnd);
+        };
+
+        document.addEventListener('mousemove', handleDrag);
+        document.addEventListener('mouseup', handleDragEnd);
+    };
 
     // Financial Year filter - generate available FYs based on data
     const availableFYs = useMemo(() => {
@@ -141,6 +177,10 @@ export default function TurnoverForecastIndex({
     useEffect(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(excludedJobIds)));
     }, [excludedJobIds]);
+
+    useEffect(() => {
+        localStorage.setItem(GRID_HEIGHTS_KEY, JSON.stringify(gridHeights));
+    }, [gridHeights]);
 
     // Sync grid alignment when both grids are ready
     useEffect(() => {
@@ -922,7 +962,7 @@ export default function TurnoverForecastIndex({
                                     <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
                                 </Tooltip>
                             </div>
-                            <div className="rounded-md border bg-white" style={{ height: '150px' }}>
+                            <div className="rounded-md border bg-white" style={{ height: `${gridHeights.revenue}px` }}>
                                 <AgGridReact
                                     ref={revenueGridRef}
                                     rowData={filteredData}
@@ -938,6 +978,13 @@ export default function TurnoverForecastIndex({
                                         setGridsReady((prev) => ({ ...prev, revenue: true }));
                                     }}
                                 />
+                            </div>
+                            <div
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100"
+                                onMouseDown={handleGridResizeStart('revenue')}
+                                title="Drag to resize grid"
+                            >
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500" />
                             </div>
                         </div>
                     )}
@@ -956,7 +1003,7 @@ export default function TurnoverForecastIndex({
                                     <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
                                 </Tooltip>
                             </div>
-                            <div className="rounded-md border bg-white" style={{ height: '150px' }}>
+                            <div className="rounded-md border bg-white" style={{ height: `${gridHeights.cost}px` }}>
                                 <AgGridReact
                                     ref={costGridRef}
                                     rowData={filteredData}
@@ -972,6 +1019,13 @@ export default function TurnoverForecastIndex({
                                         setGridsReady((prev) => ({ ...prev, cost: true }));
                                     }}
                                 />
+                            </div>
+                            <div
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100"
+                                onMouseDown={handleGridResizeStart('cost')}
+                                title="Drag to resize grid"
+                            >
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500" />
                             </div>
                         </div>
                     )}
