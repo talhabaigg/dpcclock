@@ -10,6 +10,7 @@ import {
     Box,
     Building,
     CalendarDays,
+    ChartArea,
     ChartLine,
     Clock,
     Database,
@@ -41,6 +42,12 @@ const mainNavItems: NavItem[] = [
         title: 'Turnover Forecast',
         href: '/turnover-forecast',
         icon: ChartLine,
+        permission: 'view all requisitions',
+    },
+    {
+        title: 'Cashflow Forecast',
+        href: '/cash-forecast',
+        icon: ChartArea,
         permission: 'view all requisitions',
     },
     {

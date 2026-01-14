@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
@@ -208,6 +209,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Turnover Forecast
         Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
 
+        Route::get('/cash-forecast', CashForecastController::class)->name('cashForecast.show');
         // Queue Status Monitor
         Route::get('/queue-status', [QueueStatusController::class, 'index'])->name('queueStatus.index');
         Route::get('/queue-status/stats', [QueueStatusController::class, 'stats'])->name('queueStatus.stats');
