@@ -14,7 +14,7 @@ import {
     PointElement,
 } from 'chart.js';
 import dragData from 'chartjs-plugin-dragdata';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import type { ChartMeta, ChartRow } from './types';
 
@@ -109,6 +109,43 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
             return cumulative;
         });
     }, [meta]);
+
+    const getEditBoxInput = useCallback((index: number) => {
+        const m = meta[index];
+        if (!m) return null;
+
+        if (viewMode === 'cumulative-percent' && budget) {
+            const cumulativeAmount = cumulativeData[index] ?? 0;
+            const percent = (cumulativeAmount / budget) * 100;
+            return {
+                value: String(Math.round(percent * 10) / 10),
+                inputMode: 'percent' as const,
+            };
+        }
+
+        return {
+            value: String(Math.round(m.y)),
+            inputMode: 'amount' as const,
+        };
+    }, [meta, viewMode, budget, cumulativeData]);
+
+    useEffect(() => {
+        if (!editBox) return;
+        const nextInput = getEditBoxInput(editBox.index);
+        if (!nextInput) return;
+
+        setEditBox((prev) => {
+            if (!prev) return prev;
+            if (prev.value === nextInput.value && prev.inputMode === nextInput.inputMode) {
+                return prev;
+            }
+            return {
+                ...prev,
+                value: nextInput.value,
+                inputMode: nextInput.inputMode,
+            };
+        });
+    }, [editBox, getEditBoxInput]);
 
     // Calculate display values based on view mode
     const displayValues = useMemo(() => {
@@ -287,21 +324,8 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 const m = meta[idx];
                 if (!m || m.is_actual) return;
 
-                // Get current value in the appropriate format
-                let currentValue: string;
-                let inputMode: 'amount' | 'percent';
-
-                if (viewMode === 'cumulative-percent' && budget) {
-                    // Show cumulative percentage
-                    const cumulativeAmount = cumulativeData[idx];
-                    const percent = (cumulativeAmount / budget) * 100;
-                    currentValue = String(Math.round(percent * 10) / 10);
-                    inputMode = 'percent';
-                } else {
-                    // Show monthly amount
-                    currentValue = String(Math.round(m.y));
-                    inputMode = 'amount';
-                }
+                const nextInput = getEditBoxInput(idx);
+                if (!nextInput) return;
 
                 const el = elements[0].element;
                 const px = el?.x ?? 0;
@@ -329,8 +353,8 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                     left,
                     top,
                     index: idx,
-                    value: currentValue,
-                    inputMode,
+                    value: nextInput.value,
+                    inputMode: nextInput.inputMode,
                 });
             },
             scales: {
@@ -381,7 +405,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 if (editBox) closeEditBox();
             }}
         >
-            <Line data={chartData} options={options} plugins={[dataLabelPlugin]} />
+            <Line key={viewMode} data={chartData} options={options} plugins={[dataLabelPlugin]} />
 
             {editBox && (
                 <div
