@@ -3,6 +3,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -753,50 +754,42 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="h-150 w-full max-w-5xl min-w-full sm:min-w-7xl ">
+                <DialogContent className="h-150 w-full max-w-5xl min-w-full sm:min-w-7xl">
                     <DialogHeader>
                         <div className="flex items-center justify-between">
                             <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
-                            <TooltipProvider>
-                                <div className="flex gap-1 pr-4">
+                            <ButtonGroup className="mr-4">
+                                <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className={`rounded-md p-2 ${
-                                                    chartViewMode === 'cumulative-percent'
-                                                        ? 'bg-blue-500 text-white'
-                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                }`}
+                                            <Button
+                                                size="icon"
+                                                variant={`${chartViewMode === 'cumulative-percent' ? 'default' : 'secondary'}`}
                                                 onClick={() => setChartViewMode('cumulative-percent')}
                                             >
                                                 <Percent className="h-4 w-4" />
-                                            </button>
+                                            </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Cumulative Percent View</p>
+                                            <p>Cumulative %</p>
                                         </TooltipContent>
                                     </Tooltip>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className={`rounded-md p-2 ${
-                                                    chartViewMode === 'monthly-amount'
-                                                        ? 'bg-blue-500 text-white'
-                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                }`}
+                                            <Button
+                                                size="icon"
+                                                variant={`${chartViewMode === 'monthly-amount' ? 'default' : 'secondary'}`}
                                                 onClick={() => setChartViewMode('monthly-amount')}
                                             >
                                                 <DollarSign className="h-4 w-4" />
-                                            </button>
+                                            </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Monthly Amount View</p>
+                                            <p>Monthly $</p>
                                         </TooltipContent>
                                     </Tooltip>
-                                </div>
-                            </TooltipProvider>
+                                </TooltipProvider>
+                            </ButtonGroup>
                         </div>
                     </DialogHeader>
 
@@ -845,97 +838,53 @@ const ShowJobForecastPage = ({
 
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
-                <DialogContent className="h-[95vh] w-[98vw] max-w-[98vw] sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] overflow-hidden flex flex-col p-3 sm:p-6">
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-3 sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:p-6">
                     <DialogHeader className="flex-shrink-0">
                         <div className="flex items-center justify-between gap-2">
                             <DialogTitle className="text-sm sm:text-lg">Accrual Summary - Job Progression</DialogTitle>
                             <TooltipProvider>
-                                <div className="flex gap-1 sm:gap-4 pr-2 sm:pr-4">
+                                <div className="flex gap-1 pr-2 sm:gap-4 sm:pr-4">
                                     {/* View Mode Toggles */}
                                     <div className="flex gap-1">
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className={`rounded-md p-1.5 sm:p-2 transition-colors ${
-                                                        accrualViewMode === 'accrual-percent'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                                    }`}
-                                                    onClick={() => setAccrualViewMode('accrual-percent')}
-                                                >
-                                                    <Percent className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Percent View</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className={`rounded-md p-1.5 sm:p-2 transition-colors ${
-                                                        accrualViewMode === 'accrual-dollar'
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                                    }`}
-                                                    onClick={() => setAccrualViewMode('accrual-dollar')}
-                                                >
-                                                    <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Amount View</p>
-                                            </TooltipContent>
-                                        </Tooltip>
+                                        <ButtonGroup className="mr-4">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            size="icon"
+                                                            variant={`${accrualViewMode === 'accrual-percent' ? 'default' : 'secondary'}`}
+                                                            onClick={() => setAccrualViewMode('accrual-percent')}
+                                                        >
+                                                            <Percent className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Switch to %</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            size="icon"
+                                                            variant={`${accrualViewMode === 'accrual-dollar' ? 'default' : 'secondary'}`}
+                                                            onClick={() => setAccrualViewMode('accrual-dollar')}
+                                                        >
+                                                            <DollarSign className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Switch to $</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </ButtonGroup>
                                     </div>
-
-                                    {/* Line Visibility Toggles */}
-                                    {/* <div className="flex items-center gap-3 border-l pl-4">
-                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={showCost}
-                                                onChange={(e) => setShowCost(e.target.checked)}
-                                                className="h-4 w-4 cursor-pointer"
-                                            />
-                                            <span className="flex items-center gap-1">
-                                                <span className="h-3 w-3 rounded-full bg-[#60A5FA]"></span>
-                                                Cost
-                                            </span>
-                                        </label>
-                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={showRevenue}
-                                                onChange={(e) => setShowRevenue(e.target.checked)}
-                                                className="h-4 w-4 cursor-pointer"
-                                            />
-                                            <span className="flex items-center gap-1">
-                                                <span className="h-3 w-3 rounded-full bg-[#10B981]"></span>
-                                                Revenue
-                                            </span>
-                                        </label>
-                                        <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={showMargin}
-                                                onChange={(e) => setShowMargin(e.target.checked)}
-                                                className="h-4 w-4 cursor-pointer"
-                                            />
-                                            <span className="flex items-center gap-1">
-                                                <span className="h-3 w-3 rounded-full bg-[#A855F7]"></span>
-                                                Margin
-                                            </span>
-                                        </label>
-                                    </div> */}
                                 </div>
                             </TooltipProvider>
                         </div>
                     </DialogHeader>
 
-                    <div className="flex-1 min-h-0 overflow-auto">
+                    <div className="min-h-0 flex-1 overflow-auto">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -947,9 +896,9 @@ const ShowJobForecastPage = ({
                         />
                     </div>
 
-                    <div className="flex-shrink-0 text-muted-foreground text-xs sm:text-sm pt-2 border-t">
-                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Solid lines represent actuals, dashed
-                        lines represent forecast values.
+                    <div className="text-muted-foreground flex-shrink-0 border-t pt-2 text-xs sm:text-sm">
+                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Solid lines represent actuals, dashed lines
+                        represent forecast values.
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1113,7 +1062,7 @@ const ShowJobForecastPage = ({
                             </Tooltip>
                         </TooltipProvider>
                         <div className="flex flex-col">
-                            <p className="text-xs font-light text-gray-700">Job data last refreshed:</p>
+                            <p className="text-xs font-light text-gray-700 dark:text-gray-200">Job data last refreshed:</p>
                             <Label className="text-xs font-bold">{lastUpdate ? `${new Date(lastUpdate).toLocaleString()}` : 'No Updates Yet'}</Label>
                         </div>
                     </div>

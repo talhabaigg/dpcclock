@@ -76,7 +76,8 @@ export function buildCostColumnDefs({
                             resizable: false,
                             width: 90,
                             valueGetter: (p: any) => (p?.data ? sumMonths(p.data, displayMonths) : null),
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
@@ -93,7 +94,8 @@ export function buildCostColumnDefs({
                                 const actuals = sumMonths(p.data, displayMonths) || 0;
                                 return (actuals / budget) * 100;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
                         },
                     ],
@@ -119,7 +121,8 @@ export function buildCostColumnDefs({
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
                                     : 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
-                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
                             {
                                 headerName: '%',
@@ -143,7 +146,8 @@ export function buildCostColumnDefs({
                                         ) || 0;
                                     return (cumulative / budget) * 100;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             },
                         ],
                     };
@@ -195,7 +199,8 @@ export function buildCostColumnDefs({
                                 }
                                 return total;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
@@ -219,7 +224,8 @@ export function buildCostColumnDefs({
 
                                 return (forecast / budget) * 100;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                         },
                     ],
@@ -244,8 +250,8 @@ export function buildCostColumnDefs({
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
                                     : isLastMonth
-                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
-                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+                                      ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                      : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 valueGetter: isCurrentMonth
                                     ? (p: any) => {
                                           // For current month in forecast, use separate forecast field
@@ -259,7 +265,8 @@ export function buildCostColumnDefs({
                                     updateRowCell(p.data._rowKey, fieldName, parsed);
                                     return true;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
                             {
                                 headerName: '%',
@@ -271,8 +278,8 @@ export function buildCostColumnDefs({
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
                                     : isLastMonth
-                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
-                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+                                      ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                      : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
                                     const budget = Number(p.data?.budget ?? 0) || 0;
@@ -323,7 +330,8 @@ export function buildCostColumnDefs({
                                     updateRowCell(p.data._rowKey, fieldName, Math.max(0, newAmt));
                                     return true;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             },
                         ],
                     };
@@ -337,7 +345,18 @@ export function buildCostColumnDefs({
             cellClass: 'text-right font-bold',
             filter: false,
             width: 120,
+            sortable: true,
             pinned: 'right',
+            cellStyle: (params) => {
+                const rounded = Math.round(params.value * 100) / 100;
+                // Detect dark mode by checking for 'dark' class on documentElement (html)
+                const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
+                if (rounded < 0) {
+                    return { color: isDark ? '#f87171' : 'red', fontWeight: 'bold' };
+                }
+                return { color: isDark ? '#F3F4F6 ' : 'black' };
+            },
             valueGetter: (p: any) => {
                 const budget = Number(p.data?.budget ?? 0) || 0;
 
@@ -360,6 +379,7 @@ export function buildCostColumnDefs({
 
                 return budget - actuals - forecast;
             },
+
             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
             headerClass: 'ag-right-aligned-header',
         },
@@ -433,8 +453,12 @@ export function buildRevenueColumnDefs({
                             resizable: false,
                             width: 90,
                             valueGetter: (p: any) => (p?.data ? sumMonths(p.data, displayMonths) : null),
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
-                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right' : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                            cellClass: (p: any) =>
+                                p.data?.cost_item_description === 'Profit'
+                                    ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right'
+                                    : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
                         {
@@ -458,8 +482,12 @@ export function buildRevenueColumnDefs({
                                 const actuals = sumMonths(p.data, displayMonths) || 0;
                                 return (actuals / budget) * 100;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
-                            cellClass: (p: any) => p.data?.cost_item_description === 'Profit' ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right' : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
+                            cellClass: (p: any) =>
+                                p.data?.cost_item_description === 'Profit'
+                                    ? 'bg-purple-50 dark:bg-purple-950/30 font-semibold text-right'
+                                    : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right',
                         },
                     ],
                 },
@@ -489,7 +517,8 @@ export function buildRevenueColumnDefs({
                                         ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
                                         : 'bg-green-50 dark:bg-emerald-950/30 font-semibold text-right';
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
                             {
                                 headerName: '%',
@@ -525,7 +554,8 @@ export function buildRevenueColumnDefs({
                                         ) || 0;
                                     return (cumulative / budget) * 100;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             },
                         ],
                     };
@@ -577,7 +607,8 @@ export function buildRevenueColumnDefs({
                                 }
                                 return total;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
@@ -621,7 +652,8 @@ export function buildRevenueColumnDefs({
 
                                 return (forecast / budget) * 100;
                             },
-                            valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                            valueFormatter: (p: any) =>
+                                p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                         },
                     ],
@@ -650,7 +682,9 @@ export function buildRevenueColumnDefs({
                                     if (isCurrentMonth) {
                                         return 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400';
                                     }
-                                    return isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
+                                    return isLastMonth
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },
                                 valueGetter: isCurrentMonth
                                     ? (p: any) => {
@@ -665,7 +699,8 @@ export function buildRevenueColumnDefs({
                                     updateRowCell(p.data._rowKey, fieldName, parsed);
                                     return true;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
                             {
                                 headerName: '%',
@@ -681,7 +716,9 @@ export function buildRevenueColumnDefs({
                                     if (isCurrentMonth) {
                                         return 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right';
                                     }
-                                    return isLastMonth ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right' : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
+                                    return isLastMonth
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
+                                        : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
@@ -745,7 +782,8 @@ export function buildRevenueColumnDefs({
                                     updateRowCell(rowKey, fieldName, Math.round(newAmt));
                                     return true;
                                 },
-                                valueFormatter: (p: any) => (p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`),
+                                valueFormatter: (p: any) =>
+                                    p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                             },
                         ],
                     };
@@ -787,5 +825,3 @@ export function buildRevenueColumnDefs({
         },
     ];
 }
-
-

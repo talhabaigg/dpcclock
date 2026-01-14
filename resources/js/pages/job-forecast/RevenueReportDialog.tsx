@@ -572,7 +572,7 @@ export function RevenueReportDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] w-full max-w-6xl min-w-5xl overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-full max-w-6xl min-w-5xl overflow-y-auto bg-white">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Revenue Report</DialogTitle>
@@ -597,27 +597,31 @@ export function RevenueReportDialog({
                         <div className="grid grid-cols-2 gap-4">
                             <div className="rounded border-l-4 border-blue-400 bg-white p-4">
                                 <label className="text-muted-foreground block text-xs font-medium uppercase">Contract Value</label>
-                                <div className="text-2xl font-bold">
+                                <div className="text-2xl font-bold text-gray-700">
                                     ${totalRevenueBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             </div>
 
                             <div className="rounded border-l-4 border-green-500 bg-white p-4">
                                 <label className="text-muted-foreground block text-xs font-medium uppercase">Actuals to Date</label>
-                                <div className="text-2xl font-bold">${actualsToDate.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                <div className="text-2xl font-bold text-gray-700">
+                                    ${actualsToDate.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
                                 <div className="text-muted-foreground mt-1 text-xs">{actualsPercent.toFixed(1)}% Complete</div>
                             </div>
 
                             <div className="rounded border-l-4 border-gray-400 bg-white p-4">
                                 <label className="text-muted-foreground block text-xs font-medium uppercase">Remaining</label>
-                                <div className="text-2xl font-bold">
+                                <div className="text-2xl font-bold text-gray-700">
                                     ${(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             </div>
 
                             <div className="rounded border-l-4 border-purple-500 bg-white p-4">
                                 <label className="text-muted-foreground block text-xs font-medium uppercase">Projected Margin</label>
-                                <div className="text-2xl font-bold">${finalMargin.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                <div className="text-2xl font-bold text-gray-700">
+                                    ${finalMargin.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
                                 <div className="text-muted-foreground mt-1 text-xs">{marginPercent.toFixed(1)}% of Revenue</div>
                             </div>
                         </div>
@@ -644,27 +648,27 @@ export function RevenueReportDialog({
                                 <tbody>
                                     {tableData.map((row, idx) => (
                                         <tr key={row.monthKey} className={row.isActual ? 'bg-yellow-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                            <td className="border-t px-4 py-2">{row.month}</td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-gray-700">{row.month}</td>
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {row.monthlyRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {row.monthlyCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {(row.monthlyRevenue - row.monthlyCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {row.cumulativeRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {row.cumulativeCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {(row.cumulativeRevenue - row.cumulativeCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t px-4 py-2 text-right">{row.percentComplete.toFixed(1)}%</td>
-                                            <td className="border-t px-4 py-2 text-right">
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">{row.percentComplete.toFixed(1)}%</td>
+                                            <td className="border-t px-4 py-2 text-right text-gray-700">
                                                 {row.remaining.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
                                             <td></td>
@@ -673,20 +677,20 @@ export function RevenueReportDialog({
                                 </tbody>
                                 <tfoot className="bg-gray-100 font-bold">
                                     <tr>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3">TOTAL</td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">Total to Claim:</td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-gray-700">TOTAL</td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">Total to Claim:</td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">
                                             {totalRevenueBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                         </td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">Total Claimed:</td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">Total Claimed:</td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">
                                             {finalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} (
                                             {((finalRevenue / totalRevenueBudget) * 100).toFixed(1)}%)
                                         </td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right"></td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right"></td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">Remaining to Claim:</td>
-                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right">
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700"></td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700"></td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">Remaining to Claim:</td>
+                                        <td className="border-t-2 border-cyan-600 px-4 py-3 text-right text-gray-700">
                                             {(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                         </td>
                                     </tr>

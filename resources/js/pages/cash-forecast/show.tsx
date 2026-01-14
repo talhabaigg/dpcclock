@@ -31,14 +31,22 @@ type JobNode = {
 
 const showCashForecast = ({ months }: Props) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
+    // Keep formatting consistent across the table and detail views.
     const formatAmount = (value: number) =>
         value.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
-    const totalCashIn = months.reduce((sum, month) => sum + (month.cash_in?.total ?? 0), 0);
-    const totalCashOut = months.reduce((sum, month) => sum + (month.cash_out?.total ?? 0), 0);
-    const totalNet = months.reduce((sum, month) => sum + (month.net ?? 0), 0);
+
+    const totals = months.reduce(
+        (sum, month) => ({
+            cashIn: sum.cashIn + (month.cash_in?.total ?? 0),
+            cashOut: sum.cashOut + (month.cash_out?.total ?? 0),
+            net: sum.net + (month.net ?? 0),
+        }),
+        { cashIn: 0, cashOut: 0, net: 0 },
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashflow Forecast" />
@@ -73,6 +81,7 @@ const showCashForecast = ({ months }: Props) => {
                                         <summary className="cursor-pointer select-none text-sm font-semibold text-slate-700">
                                             Cash In detail
                                         </summary>
+                                        {/* Month -> cost item -> job breakdown */}
                                         <div className="mt-2 space-y-3">
                                             {months.map((month) => (
                                                 <details key={`cash-in-${month.month}`} className="rounded border border-slate-200">
@@ -155,6 +164,7 @@ const showCashForecast = ({ months }: Props) => {
                                         <summary className="cursor-pointer select-none text-sm font-semibold text-slate-700">
                                             Cash Out detail
                                         </summary>
+                                        {/* Month -> cost item -> job breakdown */}
                                         <div className="mt-2 space-y-3">
                                             {months.map((month) => (
                                                 <details key={`cash-out-${month.month}`} className="rounded border border-slate-200">
@@ -252,8 +262,8 @@ const showCashForecast = ({ months }: Props) => {
                     </table>
                 </div>
                 <div className="text-sm text-slate-600">
-                    Totals: Cash In {formatAmount(totalCashIn)}, Cash Out {formatAmount(totalCashOut)}, Net{' '}
-                    {formatAmount(totalNet)}
+                    Totals: Cash In {formatAmount(totals.cashIn)}, Cash Out {formatAmount(totals.cashOut)}, Net{' '}
+                    {formatAmount(totals.net)}
                 </div>
             </div>
         </AppLayout>

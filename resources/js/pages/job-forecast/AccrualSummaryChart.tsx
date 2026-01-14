@@ -67,7 +67,7 @@ interface ProcessedData {
 
 export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, showMargin, costBudget, revenueBudget }: AccrualSummaryChartProps) {
     const [focusedChart, setFocusedChart] = useState<'cumulative' | 'monthly' | 'both'>('both');
-
+    const isDark = document.documentElement.classList.contains('dark');
     const COLORS = useMemo(
         () => ({
             actualYellow: '#d1c700',
@@ -383,7 +383,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                             weight: 'bold' as const,
                             family: "'Inter', system-ui, sans-serif",
                         },
-                        color: COLORS.textColor,
+                        color: isDark ? 'hsl(0 0% 100%)' : 'hsl(222.2 47.4% 11.2%)',
                     },
                 },
                 tooltip: {
@@ -492,14 +492,14 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                     position: 'top' as const,
                     labels: {
                         usePointStyle: true,
-                        pointStyle: 'rect',
+                        pointStyle: 'circle',
                         padding: 16,
                         font: {
                             size: 12,
                             weight: 'bold' as const,
                             family: "'Inter', system-ui, sans-serif",
                         },
-                        color: COLORS.textColor,
+                        color: isDark ? 'hsl(0 0% 100%)' : 'hsl(222.2 47.4% 11.2%)',
                     },
                 },
                 tooltip: {
@@ -585,24 +585,28 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             {/* Cumulative Line Chart */}
             {(focusedChart === 'both' || focusedChart === 'cumulative') && (
                 <div
-                    className="flex flex-col rounded-lg border border-border bg-card p-2 shadow-sm transition-all sm:p-4"
+                    className="border-border bg-card flex flex-col rounded-lg border p-2 shadow-sm transition-all sm:p-4"
                     style={{
                         height: focusedChart === 'cumulative' ? '100%' : focusedChart === 'both' ? '50%' : '50%',
                         minHeight: focusedChart === 'both' ? '200px' : '250px',
                     }}
                 >
                     <div className="mb-1.5 flex items-center justify-between sm:mb-3">
-                        <h3 className="text-xs font-semibold text-foreground sm:text-sm">Cumulative Accrual</h3>
+                        <h3 className="text-foreground text-xs font-semibold sm:text-sm">Cumulative Accrual</h3>
                         <button
                             onClick={handleToggleCumulative}
-                            className="rounded-md p-1 sm:p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            className="text-muted-foreground hover:bg-secondary hover:text-foreground rounded-md p-1 transition-colors sm:p-1.5"
                             title={focusedChart === 'cumulative' ? 'Show both charts' : 'Focus on this chart'}
                         >
-                            {focusedChart === 'cumulative' ? <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                            {focusedChart === 'cumulative' ? (
+                                <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            ) : (
+                                <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            )}
                         </button>
                     </div>
-                    <div className="flex-1 min-h-0">
-                        <Line data={lineChartData} options={lineOptions} plugins={[dataLabelPlugin]} />
+                    <div className="min-h-0 flex-1">
+                        <Line data={lineChartData} options={lineOptions} plugins={[dataLabelPlugin]} key={viewMode} />
                     </div>
                 </div>
             )}
@@ -610,24 +614,28 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             {/* Monthly Bar Chart */}
             {(focusedChart === 'both' || focusedChart === 'monthly') && (
                 <div
-                    className="flex flex-col rounded-lg border border-border bg-card p-2 shadow-sm transition-all sm:p-4"
+                    className="border-border bg-card flex flex-col rounded-lg border p-2 shadow-sm transition-all sm:p-4"
                     style={{
                         height: focusedChart === 'monthly' ? '100%' : focusedChart === 'both' ? '45%' : '45%',
                         minHeight: focusedChart === 'both' ? '180px' : '250px',
                     }}
                 >
                     <div className="mb-1.5 flex items-center justify-between sm:mb-3">
-                        <h3 className="text-xs font-semibold text-foreground sm:text-sm">Monthly Breakdown</h3>
+                        <h3 className="text-foreground text-xs font-semibold sm:text-sm">Monthly Breakdown</h3>
                         <button
                             onClick={handleToggleMonthly}
-                            className="rounded-md p-1 sm:p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            className="text-muted-foreground hover:bg-secondary hover:text-foreground rounded-md p-1 transition-colors sm:p-1.5"
                             title={focusedChart === 'monthly' ? 'Show both charts' : 'Focus on this chart'}
                         >
-                            {focusedChart === 'monthly' ? <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                            {focusedChart === 'monthly' ? (
+                                <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            ) : (
+                                <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            )}
                         </button>
                     </div>
-                    <div className="flex-1 min-h-0">
-                        <Bar data={barChartData} options={barOptions} plugins={[dataLabelPlugin]} />
+                    <div className="min-h-0 flex-1">
+                        <Bar data={barChartData} options={barOptions} plugins={[dataLabelPlugin]} key={viewMode} />
                     </div>
                 </div>
             )}

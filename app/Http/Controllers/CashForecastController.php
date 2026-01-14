@@ -11,14 +11,17 @@ class CashForecastController extends Controller
 {
     public function __invoke(Request $request)
     {
+        // Base forecast data for the next 12 months.
         $forecastData = JobForecastData::select('month', 'cost_item', 'forecast_amount', 'job_number')->get();
         $rules = $this->getForecastRules();
-        // $maxDelayMonths = $this->getMaxDelayMonths($rules);
         $allMonths = $this->generateMonthRange(Carbon::now(), 12);
+
+        $forecastRows = $this->applyRules($forecastData, $rules);
+        $gstPayableRows = $this->calculateQuarterlyGstPayable($forecastRows, $rules);
 
         $allMonthsWithCostSummary = $this->buildMonthHierarchy(
             $allMonths,
-            $this->applyRules($forecastData, $rules)
+            $forecastRows->concat($gstPayableRows)
         );
 
         return Inertia::render('cash-forecast/show', [
@@ -29,6 +32,10 @@ class CashForecastController extends Controller
     private function getForecastRules()
     {
         return [
+            // Cash-in cost item (used to separate inflows vs outflows).
+            'cash_in_code' => '99-99',
+            // Cost item code to represent GST payable in the cash flow.
+            'gst_payable_code' => 'GST-PAYABLE',
             // Delay rules in months by cost item code.
             'cost_item_delays' => [
                 '01-01' => 1,
@@ -40,10 +47,23 @@ class CashForecastController extends Controller
                     ['delay' => 1, 'ratio' => 0.30],
                     ['delay' => 0, 'ratio' => 0.70],
                 ],
+                '03-01' => [
+                    ['delay' => 1, 'ratio' => 0.30],
+                    ['delay' => 0, 'ratio' => 0.70],
+                ],
+                '05-01' => [
+                    ['delay' => 1, 'ratio' => 0.30],
+                    ['delay' => 0, 'ratio' => 0.70],
+                ],
+                '07-01' => [
+                    ['delay' => 1, 'ratio' => 0.30],
+                    ['delay' => 0, 'ratio' => 0.70],
+                ],
             ],
             // GST rates by cost item code (e.g., 0.10 for 10%).
             'cost_item_gst_rates' => [
                 '01-01' => 0.10,
+                '99-99' => 0.10,
             ],
             // Prefix-based GST rule.
             'gst_prefix' => [
@@ -60,15 +80,6 @@ class CashForecastController extends Controller
         ];
     }
 
-    // private function getMaxDelayMonths(array $rules)
-    // {
-    //     $explicitDelays = array_values($rules['cost_item_delays'] ?? []);
-    //     $splitDelays = collect($rules['cost_item_delay_splits'] ?? [])->flatten(1)->pluck('delay')->all();
-    //     $prefixDelay = $rules['delay_prefix']['months'] ?? 0;
-    //     $allDelays = array_merge($explicitDelays, $splitDelays, [$prefixDelay]);
-
-    //     return !empty($allDelays) ? max($allDelays) : 0;
-    // }
 
     private function generateMonthRange(Carbon $start, int $monthsForward)
     {
@@ -104,9 +115,11 @@ class CashForecastController extends Controller
                 $baseDelayMonths = (int) ($delayPrefix['months'] ?? 0);
             }
 
+            // GST applies after any delay/split logic, so keep a single multiplier.
             $gstMultiplier = 1 + $gstRate;
 
             if (isset($costItemDelaySplits[$item->cost_item])) {
+                // Split a single forecast row into multiple delayed rows by ratio.
                 return collect($costItemDelaySplits[$item->cost_item])->map(function ($split) use ($item, $gstMultiplier, $baseDelayMonths) {
                     $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
                         ->addMonths($baseDelayMonths + $split['delay'])
@@ -121,6 +134,7 @@ class CashForecastController extends Controller
                 });
             }
 
+            // Default path: apply a single delay and GST multiplier.
             $delayMonths = $baseDelayMonths + ($costItemDelays[$item->cost_item] ?? 0);
             $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
                 ->addMonths($delayMonths)
@@ -139,8 +153,9 @@ class CashForecastController extends Controller
 
     private function buildMonthHierarchy(array $months, $forecastRows)
     {
+        // Organize rows so the UI can render month -> cash in/out -> cost item -> job.
         $forecastByMonth = $forecastRows->groupBy('month');
-        $cashInCode = '99-99';
+        $cashInCode = $this->getForecastRules()['cash_in_code'] ?? '99-99';
 
         return collect($months)->map(function ($month) use ($forecastByMonth, $cashInCode) {
             $monthItems = $forecastByMonth->get($month, collect());
@@ -214,11 +229,97 @@ class CashForecastController extends Controller
 
     private function getCostItemPrefix($costItem)
     {
+        // Extract "01" from "01-01" style cost item codes.
         if (preg_match('/^(\d{2})-/', $costItem, $matches)) {
             return (int) $matches[1];
         }
 
         return null;
+    }
+
+    private function calculateQuarterlyGstPayable($forecastRows, array $rules)
+    {
+        $cashInCode = $rules['cash_in_code'] ?? '99-99';
+        $gstPayableCode = $rules['gst_payable_code'] ?? 'GST-PAYABLE';
+        $costItemGstRates = $rules['cost_item_gst_rates'] ?? [];
+        $gstPrefix = $rules['gst_prefix'] ?? [];
+
+        $monthlyGst = $forecastRows->reduce(function ($carry, $row) use ($cashInCode, $costItemGstRates, $gstPrefix) {
+            $gstRate = $costItemGstRates[$row->cost_item] ?? 0;
+            if ($gstRate === 0) {
+                $prefix = $this->getCostItemPrefix($row->cost_item);
+                if ($this->isPrefixInRange($prefix, $gstPrefix['min'] ?? null, $gstPrefix['max'] ?? null)) {
+                    $gstRate = $gstPrefix['rate'] ?? 0;
+                }
+            }
+
+            if ($gstRate <= 0) {
+                return $carry;
+            }
+
+            $gstAmount = $this->extractGstFromGross((float) $row->forecast_amount, (float) $gstRate);
+            $monthKey = $row->month;
+            if (!isset($carry[$monthKey])) {
+                $carry[$monthKey] = ['collected' => 0.0, 'paid' => 0.0];
+            }
+
+            if ($row->cost_item === $cashInCode) {
+                $carry[$monthKey]['collected'] += $gstAmount;
+            } else {
+                $carry[$monthKey]['paid'] += $gstAmount;
+            }
+
+            return $carry;
+        }, []);
+
+        $quarterBuckets = [];
+        foreach ($monthlyGst as $month => $amounts) {
+            $date = Carbon::createFromFormat('Y-m', $month);
+            $key = $date->year . '-Q' . $date->quarter;
+
+            if (!isset($quarterBuckets[$key])) {
+                $quarterBuckets[$key] = [
+                    'year' => $date->year,
+                    'quarter' => $date->quarter,
+                    'collected' => 0.0,
+                    'paid' => 0.0,
+                ];
+            }
+
+            $quarterBuckets[$key]['collected'] += $amounts['collected'];
+            $quarterBuckets[$key]['paid'] += $amounts['paid'];
+        }
+
+        $rows = collect();
+        foreach ($quarterBuckets as $bucket) {
+            $netGst = $bucket['collected'] - $bucket['paid'];
+            if (abs($netGst) < 0.01) {
+                continue;
+            }
+
+            // Net GST for the quarter is paid the following month.
+            $payableMonth = Carbon::create($bucket['year'], $bucket['quarter'] * 3, 1)
+                ->addMonth()
+                ->format('Y-m');
+
+            $rows->push((object) [
+                'month' => $payableMonth,
+                'cost_item' => $gstPayableCode,
+                'job_number' => 'GST',
+                'forecast_amount' => (float) $netGst,
+            ]);
+        }
+
+        return $rows;
+    }
+
+    private function extractGstFromGross(float $grossAmount, float $rate)
+    {
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        return $grossAmount - ($grossAmount / (1 + $rate));
     }
 
     private function isPrefixInRange($prefix, $min, $max)
