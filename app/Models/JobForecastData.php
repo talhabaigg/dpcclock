@@ -10,6 +10,7 @@ class JobForecastData extends Model
     protected $table = 'job_forecast_data';
 
     protected $fillable = [
+        'job_forecast_id',
         'location_id',
         'forecast_project_id',
         'job_number',
@@ -37,5 +38,10 @@ class JobForecastData extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class);
+    }
+
+    public function jobForecast(): BelongsTo
+    {
+        return $this->belongsTo(JobForecast::class, 'job_forecast_id');
     }
 }

@@ -13,8 +13,8 @@ import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ArrowLeft, BarChart3, DollarSign, FileSpreadsheet, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, BarChart3, ChevronLeft, ChevronRight, DollarSign, FileSpreadsheet, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
 import { ExcelUploadDialog } from './ExcelUploadDialog';
 import { ForecastDialogChart, type ChartViewMode } from './ForecastDialogChart';
@@ -45,6 +45,8 @@ const ShowJobForecastPage = ({
     monthsAll,
     forecastMonths,
     currentMonth,
+    availableForecastMonths,
+    selectedForecastMonth: initialForecastMonth,
     locationId,
     forecastProjectId,
     jobName,
@@ -75,6 +77,9 @@ const ShowJobForecastPage = ({
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [selectedForecastMonth, setSelectedForecastMonth] = useState(
+        initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7),
+    );
 
     // Accrual Summary Dialog State
     const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
@@ -109,6 +114,12 @@ const ShowJobForecastPage = ({
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
 
+    useEffect(() => {
+        if (initialForecastMonth) {
+            setSelectedForecastMonth(initialForecastMonth);
+        }
+    }, [initialForecastMonth]);
+
     // ===========================
     // Derived State & Calculations
     // ===========================
@@ -130,6 +141,33 @@ const ShowJobForecastPage = ({
         gridOne.current?.api?.refreshCells({ force: true, columns: [monthKey] });
         gridTwo.current?.api?.refreshCells({ force: true, columns: [monthKey] });
     }, []);
+
+    const addMonths = useCallback((value: string, delta: number) => {
+        const parts = value.split('-');
+        if (parts.length !== 2) return value;
+        const year = Number(parts[0]);
+        const month = Number(parts[1]);
+        if (!Number.isFinite(year) || !Number.isFinite(month)) return value;
+        const nextDate = new Date(Date.UTC(year, month - 1 + delta, 1));
+        const nextYear = nextDate.getUTCFullYear();
+        const nextMonth = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+        return `${nextYear}-${nextMonth}`;
+    }, []);
+
+    const handleForecastMonthChange = useCallback(
+        (value: string) => {
+            setSelectedForecastMonth(value);
+            if (!locationId) return;
+            router.get(
+                `/location/${locationId}/job-forecast`,
+                { forecast_month: value },
+                {
+                    preserveScroll: true,
+                },
+            );
+        },
+        [locationId],
+    );
 
     // ===========================
     // Unified Group Show State
@@ -210,6 +248,12 @@ const ShowJobForecastPage = ({
         console.log('forecastMonths:', forecastMonths);
         console.log('costGridData:', costGridData);
         console.log('revenueGridData:', revenueGridData);
+
+        if (!isForecastProject && !selectedForecastMonth) {
+            setIsSaving(false);
+            setSaveError('Please select a forecast month before saving.');
+            return;
+        }
 
         // Prepare forecast data
         const costForecastData = costGridData.map((row) => {
@@ -307,6 +351,7 @@ const ShowJobForecastPage = ({
                 {
                     grid_type: 'cost',
                     forecast_data: costForecastData,
+                    forecast_month: selectedForecastMonth,
                 },
                 {
                     preserveScroll: true,
@@ -319,6 +364,7 @@ const ShowJobForecastPage = ({
                             {
                                 grid_type: 'revenue',
                                 forecast_data: revenueForecastData,
+                                forecast_month: selectedForecastMonth,
                             },
                             {
                                 preserveScroll: true,
@@ -358,7 +404,16 @@ const ShowJobForecastPage = ({
                 },
             );
         }
-    }, [costGridData, revenueGridData, forecastMonths, locationId, forecastProjectId, isForecastProject, pendingDeletedItemIds]);
+    }, [
+        costGridData,
+        revenueGridData,
+        forecastMonths,
+        locationId,
+        forecastProjectId,
+        isForecastProject,
+        pendingDeletedItemIds,
+        selectedForecastMonth,
+    ]);
 
     // ===========================
     // Forecast Project Item Management
@@ -1067,16 +1122,57 @@ const ShowJobForecastPage = ({
                         </div>
                     </div>
 
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving}>
-                                    <Save className="h-5 w-5" />
+                    <div className="flex items-center gap-3">
+                        {!isForecastProject && (
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="forecast-month" className="text-xs font-medium text-gray-700">
+                                    Forecast Month
+                                </Label>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, -1))}
+                                    title="Previous month"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Save Forecast</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                                <input
+                                    id="forecast-month"
+                                    type="month"
+                                    value={selectedForecastMonth}
+                                    onChange={(e) => handleForecastMonthChange(e.target.value)}
+                                    className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                                    title={
+                                        availableForecastMonths?.length
+                                            ? `Saved months: ${availableForecastMonths.join(', ')}`
+                                            : 'Select forecast month'
+                                    }
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, 1))}
+                                    title="Next month"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving}>
+                                        <Save className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Save Forecast</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </div>
                 </div>
 
                 <div className="flex h-full flex-col space-y-2">

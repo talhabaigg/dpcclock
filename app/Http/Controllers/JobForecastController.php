@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ArProgressBillingSummary;
 use App\Models\JobCostDetail;
+use App\Models\JobForecast;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
@@ -15,7 +16,7 @@ use Inertia\Inertia;
 
 class JobForecastController extends Controller
 {
-    public function show($id)
+    public function show(Request $request, $id)
     {
         $location = Location::where('id', $id)->first();
         $JobSummary = JobSummary::where('job_number', $location->external_id)->first();
@@ -75,6 +76,48 @@ class JobForecastController extends Controller
         // Get current month in YYYY-MM format
         $currentMonth = date('Y-m');
 
+        $availableForecastMonths = JobForecast::where('job_number', $jobNumber)
+            ->orderBy('forecast_month', 'desc')
+            ->pluck('forecast_month')
+            ->map(function ($date) {
+                return date('Y-m', strtotime($date));
+            })
+            ->values()
+            ->all();
+
+        $requestedForecastMonth = $request->query('forecast_month');
+        $hasRequestedForecastMonth = !empty($requestedForecastMonth);
+        $selectedForecastMonth = null;
+        $forecastMonthDate = null;
+        if ($requestedForecastMonth) {
+            $forecastMonthDate = \DateTime::createFromFormat('Y-m', $requestedForecastMonth);
+            if ($forecastMonthDate && $forecastMonthDate->format('Y-m') === $requestedForecastMonth) {
+                $selectedForecastMonth = $requestedForecastMonth;
+            }
+        }
+
+        if (!$selectedForecastMonth) {
+            $selectedForecastMonth = $availableForecastMonths[0] ?? $currentMonth;
+            $forecastMonthDate = \DateTime::createFromFormat('Y-m', $selectedForecastMonth);
+        }
+
+        $jobForecast = null;
+        if ($forecastMonthDate) {
+            $jobForecast = JobForecast::where('job_number', $jobNumber)
+                ->whereYear('forecast_month', $forecastMonthDate->format('Y'))
+                ->whereMonth('forecast_month', $forecastMonthDate->format('m'))
+                ->first();
+        }
+
+        if (!$jobForecast && !empty($availableForecastMonths) && !$hasRequestedForecastMonth) {
+            $jobForecast = JobForecast::where('job_number', $jobNumber)
+                ->orderBy('forecast_month', 'desc')
+                ->first();
+            if ($jobForecast) {
+                $selectedForecastMonth = date('Y-m', strtotime($jobForecast->forecast_month));
+            }
+        }
+
         // Get ALL cost codes with budgets from JobReportByCostItemAndCostType
         // Join with CostCodes table to get descriptions
         $budgetData = JobReportByCostItemAndCostType::where('job_report_by_cost_items_and_cost_types.job_number', $jobNumber)
@@ -106,9 +149,8 @@ class JobForecastController extends Controller
         $endMonth = date('Y-m', strtotime($endDate));
         $lastActualMonth = !empty($months) ? end($months) : $currentMonth;
 
-        // Forecast starts from the CURRENT month (to allow forecasting for remainder of current month)
-        // If current month has actuals, include it in forecast; otherwise start from next month
-        $startForecastMonth = ($currentMonth >= $lastActualMonth) ? $currentMonth : date('Y-m', strtotime($lastActualMonth . ' +1 month'));
+        // Forecast starts from selected forecast month (versioned forecasts)
+        $startForecastMonth = $selectedForecastMonth ?: $currentMonth;
 
         $forecastMonths = [];
         $current = $startForecastMonth;
@@ -118,11 +160,22 @@ class JobForecastController extends Controller
         }
 
         // Load saved forecast data
-        $savedForecasts = JobForecastData::where('job_number', $jobNumber)
-            ->get()
-            ->groupBy(function ($item) {
-                return $item->grid_type . '_' . $item->cost_item;
-            });
+        $savedForecasts = collect();
+        if ($jobForecast) {
+            $savedForecasts = JobForecastData::where('job_number', $jobNumber)
+                ->where('job_forecast_id', $jobForecast->id)
+                ->get()
+                ->groupBy(function ($item) {
+                    return $item->grid_type . '_' . $item->cost_item;
+                });
+        } else {
+            $savedForecasts = JobForecastData::where('job_number', $jobNumber)
+                ->whereNull('job_forecast_id')
+                ->get()
+                ->groupBy(function ($item) {
+                    return $item->grid_type . '_' . $item->cost_item;
+                });
+        }
 
         // Build cost rows from ALL budget items (not just those with actuals)
         $costRows = $budgetByCostItem
@@ -212,6 +265,8 @@ class JobForecastController extends Controller
             'projectEndMonth' => $endMonth,
             'forecastMonths' => $forecastMonths,
             'currentMonth' => $currentMonth,
+            'availableForecastMonths' => $availableForecastMonths,
+            'selectedForecastMonth' => $selectedForecastMonth,
             'locationId' => $id,
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
@@ -230,6 +285,7 @@ class JobForecastController extends Controller
 
         $validated = $request->validate([
             'grid_type' => 'required|in:cost,revenue',
+            'forecast_month' => 'required|date_format:Y-m',
             'forecast_data' => 'required|array',
             'forecast_data.*.cost_item' => 'required|string',
             'forecast_data.*.months' => 'present|array',   // present allows empty array
@@ -242,7 +298,16 @@ class JobForecastController extends Controller
         $gridType = $validated['grid_type'];
         $validationErrors = [];
         $currentMonth = date('Y-m');
-
+        $forecastMonth = $validated['forecast_month'];
+        $jobForecast = JobForecast::updateOrCreate(
+            [
+                'job_number' => $jobNumber,
+                'forecast_month' => (new \DateTime($forecastMonth)),
+            ],
+            [
+                'is_locked' => false,
+            ]
+        );
         foreach ($validated['forecast_data'] as $row) {
             $costItem = $row['cost_item'];
 
@@ -309,6 +374,7 @@ class JobForecastController extends Controller
         }
 
         DB::beginTransaction();
+
         try {
 
             foreach ($validated['forecast_data'] as $row) {
@@ -319,12 +385,15 @@ class JobForecastController extends Controller
                     $actualMonth = str_starts_with($month, 'forecast_') ? substr($month, 9) : $month;
 
                     if ($amount !== null && $amount !== '') {
+
+
                         JobForecastData::updateOrCreate(
                             [
                                 'job_number' => $jobNumber,
                                 'grid_type' => $gridType,
                                 'cost_item' => $costItem,
                                 'month' => $actualMonth,
+                                'job_forecast_id' => $jobForecast->id,
                             ],
                             [
                                 'location_id' => $id,
@@ -338,6 +407,7 @@ class JobForecastController extends Controller
                             'grid_type' => $gridType,
                             'cost_item' => $costItem,
                             'month' => $actualMonth,
+                            'job_forecast_id' => $jobForecast->id,
                         ])->delete();
                     }
                 }
