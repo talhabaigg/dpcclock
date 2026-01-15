@@ -99,6 +99,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
                     'current_estimate' => isset($r['Current_Estimate']) ? (float) $r['Current_Estimate'] : null,
                     'estimate_at_completion' => isset($r['Estimate_At_Completion']) ? (float) $r['Estimate_At_Completion'] : null,
                     'estimate_to_completion' => isset($r['Estimate_To_Completion']) ? (float) $r['Estimate_To_Completion'] : null,
+                    'project_manager' => $r['Project_Manager'] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

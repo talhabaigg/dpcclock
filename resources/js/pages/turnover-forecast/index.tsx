@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
@@ -369,7 +370,7 @@ export default function TurnoverForecastIndex({
             {
                 headerName: 'Job Name',
                 field: 'job_name',
-                width: 250,
+                width: 120,
                 pinned: 'left',
                 cellClass: (params) => {
                     if (params.data?.type === 'Profit') {
@@ -406,6 +407,10 @@ export default function TurnoverForecastIndex({
                     }
                 },
             },
+            {
+                headerName: 'Project Manager',
+                field: 'project_manager',
+            },
         ],
         [],
     );
@@ -414,6 +419,27 @@ export default function TurnoverForecastIndex({
     const revenueColumnDefs = useMemo<ColDef[]>(() => {
         const summaryCols: ColDef[] = [
             ...staticCols,
+            {
+                headerName: 'Project Progress',
+                field: 'project_progress',
+                width: 250,
+                cellRenderer: (params) => {
+                    const rowData = params.data as TurnoverRow;
+                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                        return '';
+                    }
+                    const claimedToDate = rowData.claimed_to_date || 0;
+                    const totalContractValue = rowData.total_contract_value || 0;
+                    const progressPercent = totalContractValue > 0 ? (claimedToDate / totalContractValue) * 100 : 0;
+                    return (
+                        <div className="w-full -space-y-2">
+                            <Progress value={progressPercent} className="mt-2 w-full" max={100} />
+                            <div className="text-right text-[6px]">{progressPercent.toFixed(1)}% claimed</div>
+                        </div>
+                    );
+                },
+            },
+
             {
                 headerName: 'Claimed to Date',
                 field: 'claimed_to_date',
@@ -427,6 +453,7 @@ export default function TurnoverForecastIndex({
                     return 'text-right';
                 },
             },
+
             {
                 headerName: `Contract ${fyLabel}`,
                 field: 'revenue_contract_fy',
@@ -536,6 +563,27 @@ export default function TurnoverForecastIndex({
     const costColumnDefs = useMemo<ColDef[]>(() => {
         const summaryCols: ColDef[] = [
             ...staticCols,
+            {
+                headerName: 'Project Progress',
+                field: 'project_progress',
+                width: 250,
+                cellRenderer: (params) => {
+                    const rowData = params.data as TurnoverRow;
+                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                        return '';
+                    }
+                    const claimedToDate = rowData.cost_to_date || 0;
+                    const totalContractValue = rowData.budget || 0;
+                    const progressPercent = totalContractValue > 0 ? (claimedToDate / totalContractValue) * 100 : 0;
+                    return (
+                        <div className="w-full -space-y-2">
+                            <Progress value={progressPercent} className="mt-2 w-full" max={100} />
+                            <div className="text-right text-[6px]">{progressPercent.toFixed(1)}% spent</div>
+                        </div>
+                    );
+                },
+            },
+
             {
                 headerName: 'Cost to Date',
                 field: 'cost_to_date',

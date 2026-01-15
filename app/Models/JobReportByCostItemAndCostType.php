@@ -14,5 +14,6 @@ class JobReportByCostItemAndCostType extends Model
         'current_estimate',
         'estimate_at_completion',
         'estimate_to_completion',
+        'project_manager',
     ];
 }

@@ -83,9 +83,17 @@ class TurnoverForecastController extends Controller
             $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
                 ->sum('estimate_at_completion');
 
+            // ============ Current Revenue ============
+            $currentEstimateRevenue = JobSummary::where('job_number', $jobNumber)
+                ->max('current_estimate_revenue') ?? 0;
+
             // Cost to date (sum of all job cost details)
             $costToDate = JobCostDetail::where('job_number', $jobNumber)
                 ->sum('amount');
+
+            // Load project manager name
+            $projectManager = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->value('project_manager') ?? "Not Assigned";
+
 
             // Get monthly cost actuals
             $costActuals = JobCostDetail::where('job_number', $jobNumber)
@@ -118,6 +126,8 @@ class TurnoverForecastController extends Controller
                 ->get()
                 ->pluck('amount', 'month')
                 ->toArray();
+
+
 
             // ============ FORECAST DATA ============
             // Find last actual month across both cost and revenue
@@ -221,7 +231,10 @@ class TurnoverForecastController extends Controller
                 'type' => 'location',
                 'job_name' => $location->name,
                 'job_number' => $jobNumber,
+                'project_manager' => $projectManager,
                 // Revenue fields
+                'current_estimate_revenue' => (float) $currentEstimateRevenue,
+                'current_estimate_cost' => (float) $budget,
                 'claimed_to_date' => (float) $claimedToDate,
                 'revenue_contract_fy' => (float) $revenueContractFY,
                 'total_contract_value' => (float) $totalContractValue,
@@ -329,6 +342,7 @@ class TurnoverForecastController extends Controller
                 'job_number' => $project->project_number,
                 // Revenue fields
                 'claimed_to_date' => 0,
+                'current_estimate_revenue' => 0,
                 'revenue_contract_fy' => (float) $revenueContractFY,
                 'total_contract_value' => (float) $totalContractValue,
                 'remaining_revenue_value_fy' => (float) $remainingRevenueValueFY,
