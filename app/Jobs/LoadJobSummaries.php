@@ -112,6 +112,11 @@ class LoadJobSummaries implements ShouldQueue
                     'estimated_end_date' => $estimatedEndMs ? Carbon::createFromTimestampMs($estimatedEndMs) : null,
                     'actual_end_date' => $actualEndMs ? Carbon::createFromTimestampMs($actualEndMs) : null,
                     'status' => $r['Status'] ?? null,
+                    'original_estimate_cost' => isset($r['Original_Estimate_Cost']) ? (float) $r['Original_Estimate_Cost'] : null,
+                    'current_estimate_cost' => isset($r['Current_Estimate_Cost']) ? (float) $r['Current_Estimate_Cost'] : null,
+                    'original_estimate_revenue' => isset($r['Original_Estimate_Revenue']) ? (float) $r['Original_Estimate_Revenue'] : null,
+                    'current_estimate_revenue' => isset($r['Current_Estimate_Revenue']) ? (float) $r['Current_Estimate_Revenue'] : null,
+                    'over_under_billing' => isset($r['Over_Under_Billing']) ? (float) $r['Over_Under_Billing'] : null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

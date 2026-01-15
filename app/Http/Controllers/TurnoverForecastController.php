@@ -7,6 +7,7 @@ use App\Models\ForecastProject;
 use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
+use App\Models\JobSummary;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -101,8 +102,8 @@ class TurnoverForecastController extends Controller
                 ->sum('this_app_work_completed');
 
             // Total contract value (latest contract sum)
-            $totalContractValue = ArProgressBillingSummary::where('job_number', $jobNumber)
-                ->max('contract_sum_to_date') ?? 0;
+            $totalContractValue = JobSummary::where('job_number', $jobNumber)
+                ->max('current_estimate_revenue') ?? 0;
 
             // Claimed actuals this FY
             $claimedActualsFY = ArProgressBillingSummary::where('job_number', $jobNumber)

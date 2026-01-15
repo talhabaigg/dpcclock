@@ -14,11 +14,17 @@ class JobSummary extends Model
         'estimated_end_date',
         'actual_end_date',
         'status',
+        'original_estimate_cost',
+        'current_estimate_cost',
+        'original_estimate_revenue',
+        'current_estimate_revenue',
+        'over_under_billing',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'estimated_end_date' => 'date',
         'actual_end_date' => 'date',
+
     ];
 }
