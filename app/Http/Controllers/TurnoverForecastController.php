@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ArProgressBillingSummary;
 use App\Models\ForecastProject;
 use App\Models\JobCostDetail;
+use App\Models\JobForecast;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
@@ -35,6 +36,7 @@ class TurnoverForecastController extends Controller
         $now = now();
         $currentMonth = $now->month;
         $currentYear = $now->year;
+        $currentForecastMonth = $now;
 
         // FY starts in July (month 7)
         if ($currentMonth >= 7) {
@@ -149,27 +151,45 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // Get monthly cost forecasts
-            $costForecastQuery = JobForecastData::where('job_number', $jobNumber)
-                ->where('grid_type', 'cost')
-                ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                ->groupBy('month')
-                ->orderBy('month');
+            $currentJobForecast = JobForecast::where('job_number', $jobNumber)
+                ->whereYear('forecast_month', $currentForecastMonth->year)
+                ->whereMonth('forecast_month', $currentForecastMonth->month)
+                ->latest('forecast_month')
+                ->first();
+            $jobForecastId = $currentJobForecast?->id;
+            if (!$jobForecastId) {
+                $jobForecastId = JobForecast::where('job_number', $jobNumber)
+                    ->latest('forecast_month')
+                    ->value('id');
+            }
 
-            $costForecast = $costForecastQuery->get()
-                ->pluck('amount', 'month')
-                ->toArray();
+            // Get monthly cost forecasts for the current forecast month
+            $costForecast = [];
+            if ($jobForecastId) {
+                $costForecast = JobForecastData::where('job_number', $jobNumber)
+                    ->where('job_forecast_id', $jobForecastId)
+                    ->where('grid_type', 'cost')
+                    ->select('month', DB::raw('SUM(forecast_amount) as amount'))
+                    ->groupBy('month')
+                    ->orderBy('month')
+                    ->get()
+                    ->pluck('amount', 'month')
+                    ->toArray();
+            }
 
-            // Get monthly revenue forecasts
-            $revenueForecastQuery = JobForecastData::where('job_number', $jobNumber)
-                ->where('grid_type', 'revenue')
-                ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                ->groupBy('month')
-                ->orderBy('month');
-
-            $revenueForecast = $revenueForecastQuery->get()
-                ->pluck('amount', 'month')
-                ->toArray();
+            // Get monthly revenue forecasts for the current forecast month
+            $revenueForecast = [];
+            if ($jobForecastId) {
+                $revenueForecast = JobForecastData::where('job_number', $jobNumber)
+                    ->where('job_forecast_id', $jobForecastId)
+                    ->where('grid_type', 'revenue')
+                    ->select('month', DB::raw('SUM(forecast_amount) as amount'))
+                    ->groupBy('month')
+                    ->orderBy('month')
+                    ->get()
+                    ->pluck('amount', 'month')
+                    ->toArray();
+            }
 
             // Track latest forecast month
             if (!empty($costForecast) || !empty($revenueForecast)) {

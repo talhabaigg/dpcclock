@@ -71,6 +71,16 @@ const formatCurrency = (value: number | null | undefined): string => {
     }).format(value);
 };
 
+const formatPercent = (value: number, total: number): string => {
+    if (!total || total <= 0) return '0.0';
+    return ((value / total) * 100).toFixed(1);
+};
+
+const safeNumber = (value: number | null | undefined): number => {
+    if (value === null || value === undefined || Number.isNaN(value)) return 0;
+    return Number(value);
+};
+
 const formatMonthHeader = (month: string): string => {
     const [year, monthNum] = month.split('-');
     const date = new Date(parseInt(year), parseInt(monthNum) - 1);
@@ -361,9 +371,7 @@ export default function TurnoverForecastIndex({
                     if (params.data?.type === 'Total') {
                         return 'font-bold bg-gray-100';
                     }
-                    if (params.data?.type === 'Profit') {
-                        return 'font-bold bg-red-50';
-                    }
+
                     return 'font-medium';
                 },
             },
@@ -373,9 +381,6 @@ export default function TurnoverForecastIndex({
                 width: 120,
                 pinned: 'left',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'font-bold bg-gray-100';
                     }
@@ -391,9 +396,7 @@ export default function TurnoverForecastIndex({
                     if (params.data?.type === 'Total') {
                         return 'bg-gray-100';
                     }
-                    if (params.data?.type === 'Profit') {
-                        return 'font-bold bg-red-50';
-                    }
+
                     return 'text-blue-600 hover:underline cursor-pointer';
                 },
                 onCellClicked: (params: any) => {
@@ -480,7 +483,6 @@ export default function TurnoverForecastIndex({
                     }
                     return 'text-right font-semibold';
                 },
-                headerClass: 'bg-blue-50',
             },
             {
                 headerName: 'Total Contract Value',
@@ -507,7 +509,6 @@ export default function TurnoverForecastIndex({
                     }
                     return 'text-right';
                 },
-                headerClass: 'bg-amber-50',
             },
             {
                 headerName: 'Remaining Order Book',
@@ -603,16 +604,10 @@ export default function TurnoverForecastIndex({
                 field: 'cost_to_date',
                 width: 150,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return formatCurrency(params.data.profit_to_date);
-                    }
                     return formatCurrency(params.value);
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'text-right font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'text-right font-bold bg-gray-100';
                     }
@@ -624,38 +619,25 @@ export default function TurnoverForecastIndex({
                 field: 'cost_contract_fy',
                 width: 150,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return formatCurrency(params.data.profit_contract_fy);
-                    }
                     return formatCurrency(params.value);
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'text-right font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'text-right font-bold bg-gray-100';
                     }
                     return 'text-right font-semibold';
                 },
-                headerClass: 'bg-blue-50',
             },
             {
                 headerName: 'Budget',
                 field: 'budget',
                 width: 170,
                 valueFormatter: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return formatCurrency(params.data.profit_total);
-                    }
                     return formatCurrency(params.value);
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'text-right font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'text-right font-bold bg-gray-100';
                     }
@@ -669,15 +651,11 @@ export default function TurnoverForecastIndex({
                 valueFormatter: (params) => formatCurrency(params.value),
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'text-right font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'text-right font-bold bg-gray-100';
                     }
                     return 'text-right';
                 },
-                headerClass: 'bg-amber-50',
             },
             {
                 headerName: 'Remaining Budget',
@@ -686,9 +664,6 @@ export default function TurnoverForecastIndex({
                 valueFormatter: (params) => formatCurrency(params.value),
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Profit') {
-                        return 'text-right font-bold bg-red-50';
-                    }
                     if (params.data?.type === 'Total') {
                         return 'text-right font-bold bg-gray-100';
                     }
@@ -707,11 +682,6 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     const rowData = params.data as any;
-
-                    if (rowData.type === 'Profit') {
-                        const classes = ['text-right', 'font-bold', 'bg-red-50'];
-                        return classes.join(' ');
-                    }
 
                     if (rowData.type === 'Total') {
                         const classes = ['text-right', 'font-bold', 'bg-gray-100'];
@@ -770,14 +740,18 @@ export default function TurnoverForecastIndex({
 
     // Calculate totals for filtered data
     const totals = useMemo(() => {
+        const monthsToDate = lastActualMonth ? filteredMonths.filter((month) => month < lastActualMonth) : [];
+        const monthsRemaining = lastActualMonth ? filteredMonths.filter((month) => month >= lastActualMonth) : filteredMonths;
         return filteredData.reduce(
             (acc, row) => {
-                acc.budget += row.budget;
-                acc.costToDate += row.cost_to_date;
-                acc.claimedToDate += row.claimed_to_date;
-                acc.revenueContractFY += row.revenue_contract_fy;
-                acc.costContractFY += row.cost_contract_fy;
-                acc.totalContractValue += row.total_contract_value;
+                acc.budget += safeNumber(row.budget);
+                acc.costToDate += safeNumber(row.cost_to_date);
+                acc.claimedToDate += safeNumber(row.claimed_to_date);
+                acc.revenueContractFY += safeNumber(row.revenue_contract_fy);
+                acc.costContractFY += safeNumber(row.cost_contract_fy);
+                acc.totalContractValue += safeNumber(row.total_contract_value);
+                acc.completedTurnoverYTD += monthsToDate.reduce((sum, month) => sum + safeNumber(row.revenue_actuals?.[month]), 0);
+                acc.forecastRevenueYTG += monthsRemaining.reduce((sum, month) => sum + safeNumber(row.revenue_forecast?.[month]), 0);
                 return acc;
             },
             {
@@ -787,9 +761,11 @@ export default function TurnoverForecastIndex({
                 revenueContractFY: 0,
                 costContractFY: 0,
                 totalContractValue: 0,
+                completedTurnoverYTD: 0,
+                forecastRevenueYTG: 0,
             },
         );
-    }, [filteredData]);
+    }, [filteredData, filteredMonths, lastActualMonth]);
 
     const getRowId = useMemo<(params: GetRowIdParams) => string>(() => {
         return (params: GetRowIdParams) => {
@@ -803,6 +779,10 @@ export default function TurnoverForecastIndex({
         };
     }, []);
 
+    const completedTurnoverYTD = totals.completedTurnoverYTD;
+    const workInHandFY = totals.forecastRevenueYTG;
+    const totalFY = completedTurnoverYTD + workInHandFY;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Turnover Forecast" />
@@ -811,9 +791,8 @@ export default function TurnoverForecastIndex({
                 <div className="mb-6 space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
-                            <h1 className="text-2xl font-semibold tracking-tight">Turnover Forecast</h1>
                             <p className="text-muted-foreground text-sm">
-                                Combined view of current and potential projects - Financial Year: {fyLabel}
+                                Combined view of current and potential projects - Financial Year: {selectedFY}
                             </p>
                         </div>
                         <Link href="/forecast-projects" className="sm:flex-shrink-0">
@@ -884,129 +863,61 @@ export default function TurnoverForecastIndex({
                     </div>
                 </div>
 
-                {/* Summary Cards */}
-                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
-                    <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm transition-all hover:shadow-md">
+                {/* Summary Visual */}
+                <div className="mb-6">
+                    <div className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 shadow-sm transition-all hover:shadow-md">
                         <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                                <div className="text-sm font-medium text-slate-600">Total Contract Value</div>
-                                <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-                                    {formatCurrency(totals.totalContractValue)}
-                                </div>
-                                <div className="mt-2 text-xs text-slate-500">Full project value</div>
-                            </div>
-                            <div className="rounded-lg bg-slate-100 p-2.5">
-                                <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-slate-400 to-slate-500"></div>
-                    </div>
-
-                    <div className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm transition-all hover:shadow-md">
-                        <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                                <div className="text-sm font-medium text-blue-700">Revenue Contract {fyLabel}</div>
-                                <div className="mt-2 text-3xl font-bold tracking-tight text-blue-900">{formatCurrency(totals.revenueContractFY)}</div>
-                                <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
-                                    <span className="font-medium">{((totals.revenueContractFY / totals.totalContractValue) * 100).toFixed(1)}%</span>
-                                    <span className="text-blue-500">of total value</span>
-                                </div>
+                            <div className="flex-1 space-y-1">
+                                <div className="text-sm font-medium text-blue-700">FY Turnover Progress</div>
+                                <div className="text-3xl font-bold tracking-tight text-slate-900">{formatCurrency(totalFY)}</div>
+                                <div className="text-xs text-slate-500">Completed YTD + Work in Hand {fyLabel}</div>
                             </div>
                             <div className="rounded-lg bg-blue-100 p-2.5">
                                 <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 15l3-3 3 2 4-5" />
                                 </svg>
                             </div>
                         </div>
-                        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                    </div>
-
-                    <div className="group relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm transition-all hover:shadow-md">
-                        <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                                <div className="text-sm font-medium text-amber-700">Budget</div>
-                                <div className="mt-2 text-3xl font-bold tracking-tight text-amber-900">{formatCurrency(totals.budget)}</div>
-                                <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
-                                    <span className="font-medium">{((totals.budget / totals.totalContractValue) * 100).toFixed(1)}%</span>
-                                    <span className="text-amber-500">cost ratio</span>
-                                </div>
+                        <div className="mt-6 space-y-4">
+                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100">
+                                <div
+                                    className="bg-blue-600"
+                                    style={{ width: `${formatPercent(completedTurnoverYTD, totalFY)}%` }}
+                                    title="Completed turnover YTD"
+                                />
+                                <div
+                                    className="bg-sky-400"
+                                    style={{ width: `${formatPercent(workInHandFY, totalFY)}%` }}
+                                    title="Work in hand FY"
+                                />
                             </div>
-                            <div className="rounded-lg bg-amber-100 p-2.5">
-                                <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                </svg>
+                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Completed YTD</div>
+                                        <div>{formatCurrency(completedTurnoverYTD)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Work in Hand {fyLabel}</div>
+                                        <div>{formatCurrency(workInHandFY)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Total FY</div>
+                                        <div>{formatCurrency(totalFY)}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-amber-400 to-amber-600"></div>
-                    </div>
-
-                    <div className="group relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm transition-all hover:shadow-md">
-                        <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                                <div className="text-sm font-medium text-green-700">Profit to Date</div>
-                                <div className="mt-2 text-3xl font-bold tracking-tight text-green-900">
-                                    {formatCurrency(totals.claimedToDate - totals.costToDate)}
-                                </div>
-                                <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
-                                    <span className="font-medium">
-                                        {totals.claimedToDate > 0
-                                            ? (((totals.claimedToDate - totals.costToDate) / totals.claimedToDate) * 100).toFixed(1)
-                                            : '0.0'}
-                                        %
-                                    </span>
-                                    <span className="text-green-500">margin</span>
-                                </div>
-                            </div>
-                            <div className="rounded-lg bg-green-100 p-2.5">
-                                <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-green-400 to-green-600"></div>
+                        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-400 via-sky-400 to-slate-400" />
                     </div>
                 </div>
-
-                {/* Legend */}
-                {/* <div className="mb-4 flex items-center gap-6 text-sm">
-                    <div className="flex items-center gap-2">
-                        <div className="h-4 w-4 border border-green-200 bg-green-50"></div>
-                        <span>Revenue Actuals</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-4 w-4 border border-yellow-200 bg-yellow-50"></div>
-                        <span>Cost Actuals</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-4 w-4 border border-blue-200 bg-blue-50"></div>
-                        <span>Forecast</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-4 w-4 border border-blue-300 bg-blue-100"></div>
-                        <span>Total Row</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-4 w-4 border border-amber-200 bg-amber-100"></div>
-                        <span>Profit Row (in Cost grid)</span>
-                    </div>
-                </div> */}
 
                 {/* Aligned Grids Container */}
                 <div className="space-y-4">
