@@ -94,6 +94,9 @@ class TurnoverForecastController extends Controller
             // Load project manager name
             $projectManager = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->value('project_manager') ?? "Not Assigned";
 
+            // Load Over Under Billing
+            $over_under_billing = JobSummary::where('job_number', $jobNumber)
+                ->max('over_under_billing') ?? 0;
 
             // Get monthly cost actuals
             $costActuals = JobCostDetail::where('job_number', $jobNumber)
@@ -232,6 +235,7 @@ class TurnoverForecastController extends Controller
                 'job_name' => $location->name,
                 'job_number' => $jobNumber,
                 'project_manager' => $projectManager,
+                'over_under_billing' => (float) $over_under_billing,
                 // Revenue fields
                 'current_estimate_revenue' => (float) $currentEstimateRevenue,
                 'current_estimate_cost' => (float) $budget,

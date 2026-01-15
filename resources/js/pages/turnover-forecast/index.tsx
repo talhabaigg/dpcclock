@@ -411,6 +411,20 @@ export default function TurnoverForecastIndex({
                 headerName: 'Project Manager',
                 field: 'project_manager',
             },
+            {
+                headerName: 'Over/Under Billing',
+                field: 'over_under_billing',
+                valueFormatter: (params) => {
+                    return formatCurrency(params.value);
+                },
+                type: 'numericColumn',
+                cellClass: (params) => {
+                    if (params.value < 0) {
+                        return 'text-right text-red-600 font-bold bg-red-200';
+                    }
+                    return 'text-right text-green-600 font-bold bg-green-50';
+                },
+            },
         ],
         [],
     );
