@@ -37,6 +37,7 @@ export interface JobForecastProps {
     currentMonth?: string;
     availableForecastMonths?: string[];
     selectedForecastMonth?: string;
+    isLocked?: boolean;
     locationId?: number;
     forecastProjectId?: number;
     jobName?: string;

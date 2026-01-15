@@ -118,6 +118,8 @@ class JobForecastController extends Controller
             }
         }
 
+        $isLocked = $jobForecast ? (bool) $jobForecast->is_locked : false;
+
         // Get ALL cost codes with budgets from JobReportByCostItemAndCostType
         // Join with CostCodes table to get descriptions
         $budgetData = JobReportByCostItemAndCostType::where('job_report_by_cost_items_and_cost_types.job_number', $jobNumber)
@@ -158,6 +160,7 @@ class JobForecastController extends Controller
             $forecastMonths[] = $current;
             $current = date('Y-m', strtotime($current . ' +1 month'));
         }
+        $overlapForecastMonths = array_values(array_intersect($forecastMonths, $months));
 
         // Load saved forecast data
         $savedForecasts = collect();
@@ -179,7 +182,7 @@ class JobForecastController extends Controller
 
         // Build cost rows from ALL budget items (not just those with actuals)
         $costRows = $budgetByCostItem
-            ->map(function ($budgetItem) use ($months, $actualsByCostItem, $forecastMonths, $savedForecasts, $currentMonth) {
+            ->map(function ($budgetItem) use ($months, $actualsByCostItem, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth) {
                 $costItem = $budgetItem['cost_item'];
 
                 $row = [
@@ -192,6 +195,9 @@ class JobForecastController extends Controller
                 // Initialize all months to null
                 foreach ($months as $m) {
                     $row[$m] = null;
+                }
+                foreach ($overlapForecastMonths as $m) {
+                    $row['forecast_' . $m] = null;
                 }
 
                 // Fill in actuals if they exist for this cost item
@@ -206,8 +212,7 @@ class JobForecastController extends Controller
                 if (isset($savedForecasts[$forecastKey])) {
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
-                            // If this is the current month, use forecast_ prefix to separate from actual
-                            if ($forecast->month === $currentMonth) {
+                            if (in_array($forecast->month, $overlapForecastMonths)) {
                                 $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
                             } else {
                                 $row[$forecast->month] = (float) $forecast->forecast_amount;
@@ -223,7 +228,7 @@ class JobForecastController extends Controller
             ->all();
 
         $revenueRows = [
-            (function () use ($revenuesByMonth, $months, $forecastMonths, $savedForecasts, $currentMonth) {
+            (function () use ($revenuesByMonth, $months, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth) {
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
@@ -233,6 +238,9 @@ class JobForecastController extends Controller
 
                 foreach ($months as $m) {
                     $row[$m] = null;
+                }
+                foreach ($overlapForecastMonths as $m) {
+                    $row['forecast_' . $m] = null;
                 }
 
                 foreach ($revenuesByMonth as $r) {
@@ -244,8 +252,7 @@ class JobForecastController extends Controller
                 if (isset($savedForecasts[$forecastKey])) {
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
-                            // If this is the current month, use forecast_ prefix to separate from actual
-                            if ($forecast->month === $currentMonth) {
+                            if (in_array($forecast->month, $overlapForecastMonths)) {
                                 $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
                             } else {
                                 $row[$forecast->month] = (float) $forecast->forecast_amount;
@@ -267,6 +274,7 @@ class JobForecastController extends Controller
             'currentMonth' => $currentMonth,
             'availableForecastMonths' => $availableForecastMonths,
             'selectedForecastMonth' => $selectedForecastMonth,
+            'isLocked' => $isLocked,
             'locationId' => $id,
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
@@ -299,7 +307,7 @@ class JobForecastController extends Controller
         $validationErrors = [];
         $currentMonth = date('Y-m');
         $forecastMonth = $validated['forecast_month'];
-        $jobForecast = JobForecast::updateOrCreate(
+        $jobForecast = JobForecast::firstOrCreate(
             [
                 'job_number' => $jobNumber,
                 'forecast_month' => (new \DateTime($forecastMonth)),
@@ -308,6 +316,10 @@ class JobForecastController extends Controller
                 'is_locked' => false,
             ]
         );
+
+        if ($jobForecast->is_locked) {
+            return redirect()->back()->withErrors(['error' => 'This forecast is locked and cannot be edited.']);
+        }
         foreach ($validated['forecast_data'] as $row) {
             $costItem = $row['cost_item'];
 
@@ -426,6 +438,31 @@ class JobForecastController extends Controller
 
             return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
         }
+    }
+
+    public function toggleLock(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+            'is_locked' => 'required|boolean',
+        ]);
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+
+        $jobForecast = JobForecast::firstOrCreate(
+            [
+                'job_number' => $jobNumber,
+                'forecast_month' => (new \DateTime($validated['forecast_month'])),
+            ],
+            [
+                'is_locked' => false,
+            ]
+        );
+
+        $jobForecast->is_locked = (bool) $validated['is_locked'];
+        $jobForecast->save();
+
+        return redirect()->back()->with('success', $jobForecast->is_locked ? 'Forecast locked.' : 'Forecast unlocked.');
     }
 
 }

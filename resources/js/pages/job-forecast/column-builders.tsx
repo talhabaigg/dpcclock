@@ -12,6 +12,7 @@ interface ColumnBuilderParams {
     forecastSumBefore: (row: any, month: string) => number;
     forecastSumThrough: (row: any, month: string) => number;
     updateRowCell: (rowKey: string, field: string, value: any) => void;
+    isLocked?: boolean;
     currentMonth?: string;
 }
 
@@ -22,6 +23,7 @@ export function buildCostColumnDefs({
     forecastSumBefore,
     forecastSumThrough,
     updateRowCell,
+    isLocked = false,
     currentMonth,
 }: ColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
@@ -101,7 +103,8 @@ export function buildCostColumnDefs({
                     ],
                 },
                 ...displayMonths.map((m) => {
-                    const isCurrentMonth = currentMonth && m === currentMonth;
+                    const isOverlapMonth = displayMonths.includes(m);
+                    const isCurrentMonth = isOverlapMonth && currentMonth && m === currentMonth;
                     const headerName = isCurrentMonth ? `${formatMonthHeader(m)} ↓` : formatMonthHeader(m);
                     return {
                         headerName: headerName,
@@ -176,7 +179,7 @@ export function buildCostColumnDefs({
                         // Sum all forecast months including last month (no auto-calculation)
                         let total = 0;
                         for (const fm of forecastMonths) {
-                            const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                            const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                             total += Number(p.data?.[fieldName] ?? 0) || 0;
                         }
                         return total;
@@ -197,7 +200,7 @@ export function buildCostColumnDefs({
                                 // Sum all forecast months including last month (no auto-calculation)
                                 let total = 0;
                                 for (const fm of forecastMonths) {
-                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                     total += Number(p.data?.[fieldName] ?? 0) || 0;
                                 }
                                 return total;
@@ -221,7 +224,7 @@ export function buildCostColumnDefs({
                                 // Sum all forecast months including last month (no auto-calculation)
                                 let forecast = 0;
                                 for (const fm of forecastMonths) {
-                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                                 }
 
@@ -235,7 +238,8 @@ export function buildCostColumnDefs({
                 },
                 ...forecastMonths.map((m, idx) => {
                     const isLastMonth = idx === forecastMonths.length - 1;
-                    const isCurrentMonth = currentMonth && m === currentMonth;
+                    const isOverlapMonth = displayMonths.includes(m);
+                    const isCurrentMonth = isOverlapMonth && currentMonth && m === currentMonth;
                     const headerName = isCurrentMonth ? `↑ ${formatMonthHeader(m)}` : formatMonthHeader(m);
                     return {
                         headerName: headerName,
@@ -244,9 +248,9 @@ export function buildCostColumnDefs({
                             {
                                 headerName: '$',
                                 colId: `${m}__amt`,
-                                field: isCurrentMonth ? `forecast_${m}` : m,
+                                field: isOverlapMonth ? `forecast_${m}` : m,
                                 width: 120,
-                                editable: true,
+                                editable: !isLocked,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
@@ -255,7 +259,7 @@ export function buildCostColumnDefs({
                                     : isLastMonth
                                       ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
                                       : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
-                                valueGetter: isCurrentMonth
+                                valueGetter: isOverlapMonth
                                     ? (p: any) => {
                                           // For current month in forecast, use separate forecast field
                                           return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
@@ -264,7 +268,7 @@ export function buildCostColumnDefs({
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {
                                     const parsed = toNumberOrNull(p.newValue);
-                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    const fieldName = isOverlapMonth ? `forecast_${m}` : m;
                                     updateRowCell(p.data._rowKey, fieldName, parsed);
                                     return true;
                                 },
@@ -275,7 +279,7 @@ export function buildCostColumnDefs({
                                 headerName: '%',
                                 colId: `${m}__pct`,
                                 width: 90,
-                                editable: true,
+                                editable: !isLocked,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
@@ -288,11 +292,10 @@ export function buildCostColumnDefs({
                                     const budget = Number(p.data?.budget ?? 0) || 0;
                                     if (!budget) return null;
 
-                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    // Calculate actuals, but exclude months that are being forecasted
                                     let actuals = 0;
                                     for (const dm of displayMonths) {
-                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                            // Skip current month actual, we'll use forecast instead
+                                        if (forecastMonths.includes(dm)) {
                                             continue;
                                         }
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
@@ -319,11 +322,10 @@ export function buildCostColumnDefs({
 
                                     const targetCum = (pct / 100) * budget;
 
-                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    // Calculate actuals, but exclude months that are being forecasted
                                     let actuals = 0;
                                     for (const dm of displayMonths) {
-                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                            // Skip current month actual, we'll use forecast instead
+                                        if (forecastMonths.includes(dm)) {
                                             continue;
                                         }
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
@@ -380,7 +382,7 @@ export function buildCostColumnDefs({
                 // Calculate forecast, checking for forecast_ prefix for current month
                 let forecast = 0;
                 for (const fm of forecastMonths) {
-                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                 }
 
@@ -407,6 +409,7 @@ export function buildRevenueColumnDefs({
     forecastSumThrough,
     updateRowCell,
     revenueTotals,
+    isLocked = false,
     currentMonth,
 }: RevenueColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
@@ -588,7 +591,7 @@ export function buildRevenueColumnDefs({
                         // Sum all forecast months including last month (no auto-calculation)
                         let total = 0;
                         for (const fm of forecastMonths) {
-                            const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                            const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                             total += Number(p.data?.[fieldName] ?? 0) || 0;
                         }
                         return total;
@@ -609,7 +612,7 @@ export function buildRevenueColumnDefs({
                                 // Sum all forecast months including last month (no auto-calculation)
                                 let total = 0;
                                 for (const fm of forecastMonths) {
-                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                     total += Number(p.data?.[fieldName] ?? 0) || 0;
                                 }
                                 return total;
@@ -632,14 +635,14 @@ export function buildRevenueColumnDefs({
                                     // Sum all profit forecast months (no auto-calculation)
                                     let profitForecast = 0;
                                     for (const fm of forecastMonths) {
-                                        const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                        const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                         profitForecast += Number(p.data?.[fieldName] ?? 0) || 0;
                                     }
 
                                     // Sum all revenue forecast months (no auto-calculation)
                                     let revenueForecast = 0;
                                     for (const fm of forecastMonths) {
-                                        const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                        const fieldName = revenueTotals?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                         revenueForecast += Number(revenueTotals?.[fieldName] ?? 0) || 0;
                                     }
 
@@ -653,7 +656,7 @@ export function buildRevenueColumnDefs({
                                 // Sum all forecast months (no auto-calculation)
                                 let forecast = 0;
                                 for (const fm of forecastMonths) {
-                                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                                 }
 
@@ -667,7 +670,8 @@ export function buildRevenueColumnDefs({
                 },
                 ...forecastMonths.map((m, idx) => {
                     const isLastMonth = idx === forecastMonths.length - 1;
-                    const isCurrentMonth = currentMonth && m === currentMonth;
+                    const isOverlapMonth = displayMonths.includes(m);
+                    const isCurrentMonth = isOverlapMonth && currentMonth && m === currentMonth;
                     const headerName = isCurrentMonth ? `↑ ${formatMonthHeader(m)}` : formatMonthHeader(m);
                     return {
                         headerName: headerName,
@@ -676,9 +680,9 @@ export function buildRevenueColumnDefs({
                             {
                                 headerName: '$',
                                 colId: `${m}__amt`,
-                                field: isCurrentMonth ? `forecast_${m}` : m,
+                                field: isOverlapMonth ? `forecast_${m}` : m,
                                 width: 120,
-                                editable: true,
+                                editable: !isLocked,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
@@ -693,7 +697,7 @@ export function buildRevenueColumnDefs({
                                         ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
                                         : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right';
                                 },
-                                valueGetter: isCurrentMonth
+                                valueGetter: isOverlapMonth
                                     ? (p: any) => {
                                           // For current month in forecast, use separate forecast field
                                           return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
@@ -702,7 +706,7 @@ export function buildRevenueColumnDefs({
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {
                                     const parsed = toNumberOrNull(p.newValue);
-                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    const fieldName = isOverlapMonth ? `forecast_${m}` : m;
                                     updateRowCell(p.data._rowKey, fieldName, parsed);
                                     return true;
                                 },
@@ -713,7 +717,7 @@ export function buildRevenueColumnDefs({
                                 headerName: '%',
                                 colId: `${m}__pct`,
                                 width: 90,
-                                editable: true,
+                                editable: !isLocked,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: (p: any) => {
@@ -731,7 +735,7 @@ export function buildRevenueColumnDefs({
                                 valueGetter: (p: any) => {
                                     // Check if this is the profit row - show margin %
                                     if (p.data?.cost_item_description === 'Profit' && revenueTotals) {
-                                        const fieldName = m === currentMonth ? `forecast_${m}` : m;
+                                        const fieldName = isOverlapMonth ? `forecast_${m}` : m;
                                         const monthProfit = Number(p.data?.[fieldName] ?? 0) || 0;
                                         const monthRevenue = Number(revenueTotals?.[fieldName] ?? 0) || 0;
                                         if (!monthRevenue) return null;
@@ -741,11 +745,10 @@ export function buildRevenueColumnDefs({
                                     const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
                                     if (!budget) return null;
 
-                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    // Calculate actuals, but exclude months that are being forecasted
                                     let actuals = 0;
                                     for (const dm of displayMonths) {
-                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                            // Skip current month actual, we'll use forecast instead
+                                        if (forecastMonths.includes(dm)) {
                                             continue;
                                         }
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
@@ -763,7 +766,7 @@ export function buildRevenueColumnDefs({
                                     if (!rowKey) return false;
 
                                     const pct = toNumberOrNull(p.newValue);
-                                    const fieldName = isCurrentMonth ? `forecast_${m}` : m;
+                                    const fieldName = isOverlapMonth ? `forecast_${m}` : m;
 
                                     if (pct == null) {
                                         updateRowCell(rowKey, fieldName, null);
@@ -772,11 +775,10 @@ export function buildRevenueColumnDefs({
 
                                     const targetCum = (pct / 100) * budget;
 
-                                    // Calculate actuals, but exclude current month if it's in forecast
+                                    // Calculate actuals, but exclude months that are being forecasted
                                     let actuals = 0;
                                     for (const dm of displayMonths) {
-                                        if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                                            // Skip current month actual, we'll use forecast instead
+                                        if (forecastMonths.includes(dm)) {
                                             continue;
                                         }
                                         actuals += Number(p.data?.[dm] ?? 0) || 0;
@@ -821,7 +823,7 @@ export function buildRevenueColumnDefs({
                 // Calculate forecast, checking for forecast_ prefix for current month
                 let forecast = 0;
                 for (const fm of forecastMonths) {
-                    const fieldName = fm === currentMonth ? `forecast_${fm}` : fm;
+                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                 }
 

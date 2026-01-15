@@ -184,6 +184,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::post('/location/{location}/job-forecast', [JobForecastController::class, 'store'])->name('jobForecast.store');
+        Route::post('/location/{location}/job-forecast/lock', [JobForecastController::class, 'toggleLock'])->name('jobForecast.lock');
 
         // Forecast Projects Routes
         Route::get('/forecast-projects', [ForecastProjectController::class, 'index'])->name('forecastProjects.index');

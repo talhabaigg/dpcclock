@@ -13,7 +13,21 @@ import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { ArrowLeft, BarChart3, ChevronLeft, ChevronRight, DollarSign, FileSpreadsheet, FileText, Percent, Plus, Save, Trash2 } from 'lucide-react';
+import {
+    ArrowLeft,
+    BarChart3,
+    ChevronLeft,
+    ChevronRight,
+    DollarSign,
+    FileSpreadsheet,
+    FileText,
+    Lock,
+    Percent,
+    Plus,
+    Save,
+    Trash2,
+    Unlock,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
 import { ExcelUploadDialog } from './ExcelUploadDialog';
@@ -47,6 +61,7 @@ const ShowJobForecastPage = ({
     currentMonth,
     availableForecastMonths,
     selectedForecastMonth: initialForecastMonth,
+    isLocked = false,
     locationId,
     forecastProjectId,
     jobName,
@@ -80,6 +95,7 @@ const ShowJobForecastPage = ({
     const [selectedForecastMonth, setSelectedForecastMonth] = useState(
         initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7),
     );
+    const isEditingLocked = !isForecastProject && isLocked;
 
     // Accrual Summary Dialog State
     const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
@@ -169,6 +185,28 @@ const ShowJobForecastPage = ({
         [locationId],
     );
 
+    const handleToggleLock = useCallback(() => {
+        if (!locationId) return;
+        const targetLock = !isEditingLocked;
+        const message = targetLock
+            ? 'Lock this forecast? It will become view-only.'
+            : 'Unlock this forecast to allow edits?';
+        if (!confirm(message)) return;
+
+        router.post(
+            `/location/${locationId}/job-forecast/lock`,
+            { forecast_month: selectedForecastMonth, is_locked: targetLock },
+            { preserveScroll: true },
+        );
+    }, [isEditingLocked, locationId, selectedForecastMonth]);
+
+    const handleChartOpen = useCallback(
+        (ctx: ChartContext) => {
+            setChartCtx({ ...ctx, editable: ctx.editable && !isEditingLocked });
+        },
+        [isEditingLocked],
+    );
+
     // ===========================
     // Unified Group Show State
     // ===========================
@@ -248,6 +286,12 @@ const ShowJobForecastPage = ({
         console.log('forecastMonths:', forecastMonths);
         console.log('costGridData:', costGridData);
         console.log('revenueGridData:', revenueGridData);
+
+        if (isEditingLocked) {
+            setIsSaving(false);
+            setSaveError('This forecast is locked and cannot be edited.');
+            return;
+        }
 
         if (!isForecastProject && !selectedForecastMonth) {
             setIsSaving(false);
@@ -413,6 +457,7 @@ const ShowJobForecastPage = ({
         isForecastProject,
         pendingDeletedItemIds,
         selectedForecastMonth,
+        isEditingLocked,
     ]);
 
     // ===========================
@@ -588,7 +633,7 @@ const ShowJobForecastPage = ({
         displayMonths,
         forecastMonths,
         currentMonth,
-        onChartOpen: setChartCtx,
+        onChartOpen: handleChartOpen,
     });
 
     const revenueTrendColDef = useTrendColumnDef({
@@ -596,7 +641,7 @@ const ShowJobForecastPage = ({
         displayMonths,
         forecastMonths,
         currentMonth,
-        onChartOpen: setChartCtx,
+        onChartOpen: handleChartOpen,
     });
 
     const costColDefs = useMemo(() => {
@@ -608,6 +653,7 @@ const ShowJobForecastPage = ({
             forecastSumBefore,
             forecastSumThrough,
             updateRowCell: updateCostRowCell,
+            isLocked: isEditingLocked,
             currentMonth,
         });
 
@@ -637,6 +683,7 @@ const ShowJobForecastPage = ({
         forecastSumThrough,
         updateCostRowCell,
         isForecastProject,
+        isEditingLocked,
         currentMonth,
     ]);
 
@@ -682,6 +729,7 @@ const ShowJobForecastPage = ({
             updateRowCell: updateRevenueRowCell,
             budgetField: 'contract_sum_to_date',
             revenueTotals: pinnedBottomRevenueRowData[0],
+            isLocked: isEditingLocked,
             currentMonth,
         });
 
@@ -712,6 +760,7 @@ const ShowJobForecastPage = ({
         updateRevenueRowCell,
         pinnedBottomRevenueRowData,
         isForecastProject,
+        isEditingLocked,
         currentMonth,
     ]);
 
@@ -1162,14 +1211,31 @@ const ShowJobForecastPage = ({
                                 </Button>
                             </div>
                         )}
+                        {!isForecastProject && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={handleToggleLock}
+                                            disabled={!selectedForecastMonth || isSaving}
+                                        >
+                                            {isEditingLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving}>
+                                    <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
                                         <Save className="h-5 w-5" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Save Forecast</TooltipContent>
+                                <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     </div>
