@@ -37,9 +37,7 @@ export const saveGroupShowState = (api: any) => {
     if (!api) return;
     const state = api.getColumnState();
     // Extract only group show state (hide/show for column groups)
-    const groupShowState = state
-        .filter((col: any) => col.hide !== undefined)
-        .map((col: any) => ({ colId: col.colId, hide: col.hide }));
+    const groupShowState = state.filter((col: any) => col.hide !== undefined).map((col: any) => ({ colId: col.colId, hide: col.hide }));
     localStorage.setItem(LS_GROUP_SHOW_STATE, JSON.stringify(groupShowState));
 };
 
@@ -161,12 +159,7 @@ const SparklineCellRenderer = (props: any) => {
     };
 
     return (
-        <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={handleClick}
-            title="View chart"
-        >
+        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={handleClick} title="View chart">
             <Sparkline values={values} />
         </button>
     );
@@ -310,7 +303,7 @@ export function useActiveChartData({
         if (!chartCtx.open) return null;
 
         if (chartCtx.pinned) {
-            return chartCtx.grid === 'cost' ? pinnedBottomRowData?.[0] ?? null : pinnedBottomRevenueRowData?.[0] ?? null;
+            return chartCtx.grid === 'cost' ? (pinnedBottomRowData?.[0] ?? null) : (pinnedBottomRevenueRowData?.[0] ?? null);
         }
 
         const source = chartCtx.grid === 'cost' ? costGridData : revenueGridData;

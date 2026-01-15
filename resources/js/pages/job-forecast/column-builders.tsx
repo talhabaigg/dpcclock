@@ -144,7 +144,10 @@ export function buildCostColumnDefs({
                                             p.data,
                                             displayMonths.filter((dm) => dm <= m),
                                         ) || 0;
-                                    return (cumulative / budget) * 100;
+
+                                    const rounded = Math.round((cumulative / budget) * 100 * 100) / 100;
+
+                                    return rounded;
                                 },
                                 valueFormatter: (p: any) =>
                                     p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
@@ -297,7 +300,10 @@ export function buildCostColumnDefs({
 
                                     const forecastToThisMonth = forecastSumThrough(p.data, m);
                                     const cumulative = actuals + forecastToThisMonth;
-                                    return (cumulative / budget) * 100;
+                                    const percentage = (cumulative / budget) * 100;
+                                    const rounded = Math.round(percentage * 100) / 100;
+
+                                    return rounded;
                                 },
                                 valueSetter: (p: any) => {
                                     const budget = Number(p.data?.budget ?? 0) || 0;
@@ -326,8 +332,9 @@ export function buildCostColumnDefs({
                                     const forecastBeforeThisMonth = forecastSumBefore(p.data, m);
                                     const alreadyBefore = actuals + forecastBeforeThisMonth;
                                     const newAmt = targetCum - alreadyBefore;
+                                    const rounded = Math.round(newAmt * 100) / 100;
 
-                                    updateRowCell(p.data._rowKey, fieldName, Math.max(0, newAmt));
+                                    updateRowCell(p.data._rowKey, fieldName, Math.max(0, rounded));
                                     return true;
                                 },
                                 valueFormatter: (p: any) =>
