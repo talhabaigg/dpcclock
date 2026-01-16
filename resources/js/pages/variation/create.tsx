@@ -45,7 +45,7 @@ const CostTypes = [
 ];
 
 const VariationCreate = ({ locations, costCodes, variation }: { locations: Location[]; costCodes: CostCode[]; variation?: any }) => {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, errors } = useForm({
         location_id: variation ? String(variation.location_id) : '',
         type: variation ? variation.type : 'dayworks',
         co_number: variation ? variation.co_number : '',
@@ -77,7 +77,6 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
               ],
         //
     });
-    console.log(locations);
 
     const addRow = () => {
         setData('line_items', [
@@ -105,24 +104,10 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
     const handleSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (variation.id) {
-            post(`/variations/${variation.id}/update`, {
-                onSuccess: () => {
-                    // Optionally redirect or show a success message
-                },
-                onError: (errors) => {
-                    console.error('Submission errors:', errors);
-                },
-            });
+            post(`/variations/${variation.id}/update`);
             return;
         }
-        post('/variations/store', {
-            onSuccess: () => {
-                // Optionally redirect or show a success message
-            },
-            onError: (errors) => {
-                console.error('Submission errors:', errors);
-            },
-        });
+        post('/variations/store');
     };
     const [open, setOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
@@ -130,12 +115,10 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
     const waste_ratio = costData.find((code) => code.pivot?.waste_ratio)?.pivot.waste_ratio || 0;
 
     useEffect(() => {
-        if (data.location_id) {
-            console.log('Cost Data updated:', costData);
-        }
+        // Update cost data when location changes
     }, [data.location_id, costData]);
 
-    console.log(waste_ratio);
+    void waste_ratio; // Used for calculations
     const generatePrelimLabour = () => {
         if (!genAmount || !data.location_id) {
             alert('Please select a type and enter an amount.');
@@ -209,9 +192,6 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         }));
 
         const PrelimMat = onCostData.filter((item) => item.prelim_type === 'MAT');
-        console.log('Prelim Mat:', PrelimMat);
-
-        console.log('On Cost Data:', onCostData);
         // const onCostData = [
         //     { cost_item: '01-01', cost_type: 'LAB', percent: 0.1, description: 'Wages & Apprentices: Base Rate' },
         //     { cost_item: '02-01', cost_type: 'LOC', percent: 0.05, description: 'Wages & Apprentices Oncosts: Super' },
@@ -242,10 +222,6 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
         setGenAmount('');
     };
-
-    useEffect(() => {
-        console.log('Data updated:', data);
-    }, [data]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

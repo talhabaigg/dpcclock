@@ -53,7 +53,7 @@ export default function AiInputBox() {
             </h1>
 
             <form onSubmit={handleSubmit} className="group/composer w-full">
-                <input ref={fileInputRef} type="file" multiple className="sr-only" onChange={(e) => {}} />
+                <input ref={fileInputRef} type="file" multiple className="sr-only" onChange={() => {}} />
 
                 <div
                     className={cn(

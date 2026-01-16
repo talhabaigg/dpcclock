@@ -33,11 +33,11 @@ type User = {
 };
 
 export default function LocationsList() {
-    const { users, flash, roles } = usePage<{ users: User[]; flash: { success: string; error: string }; roles: any[] }>().props;
+    const { users, roles } = usePage<{ users: User[]; flash: { success: string; error: string }; roles: any[] }>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredUsers = users.filter((user) => user.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put } = useForm({
         userId: 0,
         name: '',
         email: '',
@@ -46,15 +46,8 @@ export default function LocationsList() {
 
     useEffect(() => {
         if (data.userId && data.roles) {
-            console.log(data);
             put(`/users/${data.userId}`, {
                 preserveScroll: true,
-                onSuccess: () => {
-                    console.log('Role updated successfully');
-                },
-                onError: (errors) => {
-                    console.error('Error updating role:', errors);
-                },
             });
         }
     }, [data.userId, data.roles]);

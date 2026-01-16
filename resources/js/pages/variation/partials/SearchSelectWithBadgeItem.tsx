@@ -50,7 +50,7 @@ const SearchSelectWithBadgeItem = ({ options, value, onValueChange, optionName }
                                 <CommandItem
                                     key={option.code}
                                     value={option.code + option.description} // <- search uses this + inner text
-                                    onSelect={(current) => {
+                                    onSelect={() => {
                                         onValueChange(option.code); // toggle off if re-selected
                                         setOpen(false);
                                     }}

@@ -15,7 +15,6 @@ type Props = {
 
 export default function LocationSelector({ listLocations, allLocations, selectedLocation, onChange, disabled }: Props) {
     const [open, setOpen] = React.useState(false);
-    console.log(listLocations, allLocations);
     // prefer kiosk locations; fall back to allLocations; clean + de-dup
     const options = React.useMemo(() => {
         const list = (listLocations?.length ? listLocations : allLocations) ?? [];

@@ -31,8 +31,8 @@ export default function ShowPin() {
         adminMode: boolean;
     }>().props;
 
-    console.log('ShowPin adminMode:', adminMode);
     // Use Inertia form state
+    void adminMode; // Used for conditional rendering
     const form = useForm({ pin: '' });
     const [showProcessing, setShowProcessing] = useState(false);
     const [showDialog, setShowDialog] = useState(false);

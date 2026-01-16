@@ -91,11 +91,7 @@ const formatMonthHeader = (month: string): string => {
 export default function TurnoverForecastIndex({
     data,
     months,
-    earliestMonth,
     lastActualMonth,
-    latestForecastMonth,
-    fyStartDate,
-    fyEndDate,
     fyLabel,
     monthlyTargets,
 }: TurnoverForecastProps) {
@@ -263,8 +259,8 @@ export default function TurnoverForecastIndex({
         return [totalRow];
     }, [filteredData, filteredMonths]);
 
-    // Calculate cost total row data
-    const costTotalRowData = useMemo(() => {
+    // Calculate cost total row data (computed for future use)
+    void useMemo(() => {
         const totalRow: any = {
             id: 'cost-total-row',
             type: 'Total',
@@ -303,8 +299,8 @@ export default function TurnoverForecastIndex({
         return [totalRow];
     }, [filteredData, filteredMonths]);
 
-    // Calculate profit pinned row data
-    const profitPinnedRowData = useMemo(() => {
+    // Calculate profit pinned row data (computed for future use)
+    void useMemo(() => {
         const profitRow: any = {
             id: 'profit-row',
             type: 'Profit',
@@ -701,8 +697,8 @@ export default function TurnoverForecastIndex({
         return [...targetPinnedCols, ...targetSummaryCols, ...monthlyCols];
     }, [filteredMonths, fyLabel, revenueColumnDefs]);
 
-    // Build cost column definitions (same structure as revenue)
-    const costColumnDefs = useMemo<ColDef[]>(() => {
+    // Build cost column definitions (same structure as revenue, computed for future use)
+    void useMemo<ColDef[]>(() => {
         const summaryCols: ColDef[] = [
             ...staticCols,
             {

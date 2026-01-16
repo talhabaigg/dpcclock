@@ -48,10 +48,6 @@ const GenerateTimesheetsDialog = ({ employees, kioskId, event }: GenerateTimeshe
         if (masterRef.current) masterRef.current.indeterminate = isIndeterminate;
     }, [isIndeterminate]);
 
-    const onMasterChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-        setSelectedEhIds(e.target.checked ? allEhIds : []);
-    };
-
     const toggleAll = () => setSelectedEhIds((prev) => (prev.length === allEhIds.length ? [] : allEhIds));
     const clearAll = () => setSelectedEhIds([]);
     const toggleOne = (ehId: number) => setSelectedEhIds((prev) => (prev.includes(ehId) ? prev.filter((x) => x !== ehId) : [...prev, ehId]));

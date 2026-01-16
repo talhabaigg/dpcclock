@@ -99,7 +99,6 @@ export default function ItemList() {
             }
 
             const selectedIds = selectedNodes.map((node) => node.data.id);
-            console.log('Deleting IDs:', selectedIds);
             router.delete('/material-items/delete-multiple', {
                 data: { ids: selectedIds },
                 onSuccess: () => {
@@ -165,7 +164,7 @@ export default function ItemList() {
                     ref={gridRef}
                     rowData={filteredItems}
                     theme={appliedTheme}
-                    // @ts-ignore
+                    // @ts-expect-error AG Grid type mismatch
                     rowSelection={rowSelection}
                     enableCellTextSelection={true}
                     onSelectionChanged={handleSelectionChanged}

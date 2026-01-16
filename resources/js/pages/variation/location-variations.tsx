@@ -32,7 +32,6 @@ const LocationVariations = ({ location, flash }) => {
     const filteredVariations = useMemo(() => {
         return searchQuery ? variations.filter((variation) => variation.co_number.toLowerCase().includes(searchQuery.toLowerCase())) : variations;
     }, [variations, searchQuery]);
-    console.log(flash.error);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

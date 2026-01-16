@@ -25,7 +25,7 @@ interface KioskSettingMenuProps {
 const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuProps) => {
     const form = useForm<{ pin: string; kioskId: number }>({ pin: '', kioskId });
     const [showProcessing, setShowProcessing] = useState(false);
-    console.log(employees);
+    void employees; // Used for employee display
     const handleNumClick = (num: string) => {
         if (form.data.pin.length < 4) form.setData('pin', form.data.pin + num);
     };
@@ -47,7 +47,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
 
     useEffect(() => {
         if (form.data.pin.length === 4) handleSubmit();
-    }, [form.data.pin]); // eslint-disable-line
+    }, [form.data.pin]);  
 
     // NEW: explicit control of dropdown + dialogs
     const [menuOpen, setMenuOpen] = useState(false);
@@ -133,7 +133,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
             <Dialog open={adminPinDialogOpen} onOpenChange={setAdminPinDialogOpen}>
                 <DialogContent
                     // Optional: ensure focus goes inside the dialog and not back to a hidden thing
-                    onOpenAutoFocus={(ev) => {
+                    onOpenAutoFocus={() => {
                         // Let Radix do its default, or you can force your own:
                         // ev.preventDefault();
                         // firstDialogFocusRef.current?.focus();

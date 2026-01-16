@@ -40,7 +40,7 @@ interface EditBox {
 
 export type ChartViewMode = 'cumulative-percent' | 'monthly-amount';
 
-export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, onViewModeChange }: ForecastDialogChartProps) {
+export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }: ForecastDialogChartProps) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [editBox, setEditBox] = useState<EditBox | null>(null);
     const [editBoxDirty, setEditBoxDirty] = useState(false);
@@ -78,11 +78,6 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
 
     const meta = useMemo<ChartMeta[]>(
         () => {
-            console.log('=== CHART DATA DEBUG ===');
-            console.log('Chart data:', data);
-            console.log('Budget:', budget);
-            console.log('View mode:', viewMode);
-
             return data.map((d) => {
                 // If both actual and forecast exist (current month), prefer forecast for display
                 const hasForecast = d.forecast != null;
@@ -91,8 +86,6 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 // Use forecast if available, otherwise use actual
                 const y = hasForecast ? d.forecast : (hasActual ? d.actual : 0);
                 const isActual = !hasForecast && hasActual;
-
-                console.log(`Month ${d.monthKey}: hasActual=${hasActual}, hasForecast=${hasForecast}, isActual=${isActual}, y=${y}, actual=${d.actual}, forecast=${d.forecast}`);
 
                 return {
                     label: d.monthLabel,

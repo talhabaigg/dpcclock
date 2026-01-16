@@ -81,7 +81,6 @@ export default function LocationsList() {
         flash: { success?: string };
         monthlySpending: MonthlySpend[];
     }>().props;
-    console.log('Location data:', location);
 
     const breadcrumbs: BreadcrumbItem[] = [
         {

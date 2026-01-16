@@ -46,7 +46,6 @@ type QueueStatusProps = {
 };
 
 export default function QueueStatus({ initialJobs }: QueueStatusProps) {
-    console.log('Initial jobs from backend:', initialJobs);
     const [jobs, setJobs] = useState<QueueStats>(initialJobs);
     const [processingJobs, setProcessingJobs] = useState<QueueJob[]>([]);
     const [recentlyCompleted, setRecentlyCompleted] = useState<QueueJob[]>([]);
@@ -56,13 +55,6 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     useEffect(() => {
         // Initialize Pusher and Laravel Echo
         window.Pusher = Pusher;
-
-        console.log('Initializing Echo with config:', {
-            key: import.meta.env.VITE_REVERB_APP_KEY,
-            wsHost: import.meta.env.VITE_REVERB_HOST,
-            wsPort: import.meta.env.VITE_REVERB_PORT,
-            scheme: import.meta.env.VITE_REVERB_SCHEME,
-        });
 
         const echo = new Echo({
             broadcaster: 'reverb',
@@ -76,16 +68,14 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
         // Add connection state listeners
         echo.connector.pusher.connection.bind('connected', () => {
-            console.log('Pusher connected successfully');
+            setIsConnected(true);
         });
 
-        echo.connector.pusher.connection.bind('error', (err: any) => {
-            console.error('Pusher connection error:', err);
+        echo.connector.pusher.connection.bind('error', () => {
             setIsConnected(false);
         });
 
         echo.connector.pusher.connection.bind('disconnected', () => {
-            console.log('Pusher disconnected');
             setIsConnected(false);
         });
 
@@ -93,17 +83,14 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
         const channel = echo.channel('queue-status');
 
         channel.subscribed(() => {
-            console.log('Successfully subscribed to queue-status channel');
             setIsConnected(true);
         });
 
-        channel.error((error: Error) => {
-            console.error('Channel subscription error:', error);
+        channel.error(() => {
             setIsConnected(false);
         });
 
         channel.listen('.job.status.updated', (event: { job_id: string; job_name: string; status: string; message?: string; metadata?: any; timestamp: string }) => {
-            console.log('Job status update received:', event);
 
             const newJob: QueueJob = {
                 id: event.job_id,
@@ -115,7 +102,6 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             };
 
             if (event.status === 'processing') {
-                console.log(`Job ${event.job_name} (${event.job_id}) started processing`);
                 // Add to processing jobs
                 setProcessingJobs(prev => {
                     const filtered = prev.filter(j => j.id !== event.job_id);
@@ -132,13 +118,8 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                     },
                 }));
             } else if (event.status === 'completed') {
-                console.log(`Job ${event.job_name} (${event.job_id}) completed successfully`);
                 // Remove from processing - match by either ID or name
-                setProcessingJobs(prev => {
-                    const filtered = prev.filter(j => j.id !== event.job_id);
-                    console.log(`Removed from processing. Remaining: ${filtered.length}`);
-                    return filtered;
-                });
+                setProcessingJobs(prev => prev.filter(j => j.id !== event.job_id));
 
                 // Add to recently completed
                 setRecentlyCompleted(prev => {
@@ -146,13 +127,8 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                     return [newJob, ...filtered].slice(0, 20); // Keep last 20
                 });
             } else if (event.status === 'failed') {
-                console.log(`Job ${event.job_name} (${event.job_id}) failed:`, event.message);
                 // Remove from processing - match by ID
-                setProcessingJobs(prev => {
-                    const filtered = prev.filter(j => j.id !== event.job_id);
-                    console.log(`Removed from processing. Remaining: ${filtered.length}`);
-                    return filtered;
-                });
+                setProcessingJobs(prev => prev.filter(j => j.id !== event.job_id));
 
                 // Remove from pending too, in case it was still there
                 setJobs(prev => ({

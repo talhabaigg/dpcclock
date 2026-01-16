@@ -86,12 +86,10 @@ export default function Clockout() {
         const now = dayjs();
         const defaultClockOutTime = dayjs(`${clockInTime.format('YYYY-MM-DD')}T${kiosk.default_end_time}`);
         if (selectedEndTime) {
-            console.log('Selected end time: ' + selectedEndTime);
             const endTime = dayjs(selectedEndTime, 'HH:mm');
 
             const duration = endTime.diff(clockInTime, 'hours', true);
             setHoursWorked(parseFloat(duration.toFixed(2)));
-            console.log('Selected end time, Duration: ' + duration);
             return;
         }
         if (now < defaultClockOutTime) {

@@ -18,7 +18,7 @@ function formatDMY(d: Date | null) {
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
 }
-const ReviewTimesheets = ({ weekEnding, selectedEmployeeId, locations, selectedLocation, days, employees, flash }) => {
+const ReviewTimesheets = ({ weekEnding, locations, selectedLocation, days, employees, flash }) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: `Timesheet Review - Week Ending ${weekEnding}`, href: '/timesheets' }];
     const [weekEndingDate, setWeekEndingDate] = useState<Date | null>(parseWeekEndingDate(weekEnding)); // Initially set weekEndingDate based on props
     const [selectedWeekEndingDate, setSelectedWeekEndingDate] = useState<Date | null>(weekEndingDate);
@@ -62,7 +62,6 @@ const ReviewTimesheets = ({ weekEnding, selectedEmployeeId, locations, selectedL
                     <Button
                         variant="outline"
                         onClick={() => {
-                            console.log('Syncing timesheets...');
                             const employeeIds = employees.map((emp) => emp.eh_employee_id);
                             const weekEnding = formatDMY(weekEndingDate) || '';
                             const locationId = locationValue || '';

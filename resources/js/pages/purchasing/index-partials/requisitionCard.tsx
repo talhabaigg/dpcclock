@@ -22,7 +22,7 @@ interface RequisitionCardProps {
 }
 
 const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
-    const getInitials = useInitials();
+    useInitials();
     return (
         <Card className="p-2 shadow-md">
             <CardTitle className="flex justify-between">

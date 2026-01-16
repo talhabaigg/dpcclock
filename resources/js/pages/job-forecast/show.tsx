@@ -85,7 +85,7 @@ const ShowJobForecastPage = ({
     // ===========================
     const [costGridData, setCostGridData] = useState<GridRow[]>(() => withRowKeys(costRowData, 'c'));
     const [revenueGridData, setRevenueGridData] = useState<GridRow[]>(() => withRowKeys(revenueRowData, 'r'));
-    const [endDate, setEndDate] = useState(monthsAll[monthsAll.length - 1] + '-01');
+    const [endDate] = useState(monthsAll[monthsAll.length - 1] + '-01');
     const [chartCtx, setChartCtx] = useState<ChartContext>({ open: false });
     const [topGridHeight, setTopGridHeight] = useState(50); // percentage
     const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('cumulative-percent');
@@ -100,9 +100,9 @@ const ShowJobForecastPage = ({
     // Accrual Summary Dialog State
     const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
     const [accrualViewMode, setAccrualViewMode] = useState<AccrualViewMode>('accrual-dollar');
-    const [showCost, setShowCost] = useState(true);
-    const [showRevenue, setShowRevenue] = useState(true);
-    const [showMargin, setShowMargin] = useState(true);
+    const [showCost] = useState(true);
+    const [showRevenue] = useState(true);
+    const [showMargin] = useState(true);
 
     // Revenue Report Dialog State
     const [revenueReportOpen, setRevenueReportOpen] = useState(false);
@@ -215,10 +215,9 @@ const ShowJobForecastPage = ({
     const lastSyncedState = useRef<string | null>(null);
     const editingStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const syncGroupShowState = useCallback(() => {
+    void useCallback(() => {
         // Don't sync if user is currently editing a cell
         if (isEditingRef.current) {
-            console.log('Skipping sync - editing in progress');
             return;
         }
 
@@ -234,12 +233,9 @@ const ShowJobForecastPage = ({
 
                 // Only sync if the state has actually changed
                 if (currentState !== lastSyncedState.current) {
-                    console.log('Syncing group state to localStorage');
                     lastSyncedState.current = currentState;
                     saveGroupShowState(api1);
                     // Don't call restoreGroupShowState here - alignedGrids handles the sync automatically
-                } else {
-                    console.log('State unchanged, skipping sync');
                 }
             }
         }, 100);
@@ -280,12 +276,6 @@ const ShowJobForecastPage = ({
     const saveForecast = useCallback(() => {
         setIsSaving(true);
         setSaveError(null);
-
-        console.log('=== SAVE FORECAST DEBUG ===');
-        console.log('isForecastProject:', isForecastProject);
-        console.log('forecastMonths:', forecastMonths);
-        console.log('costGridData:', costGridData);
-        console.log('revenueGridData:', revenueGridData);
 
         if (isEditingLocked) {
             setIsSaving(false);
@@ -330,9 +320,6 @@ const ShowJobForecastPage = ({
             };
         });
 
-        console.log('costForecastData:', costForecastData);
-        console.log('revenueForecastData:', revenueForecastData);
-
         const saveUrl = isForecastProject ? `/forecast-projects/${forecastProjectId}/forecast` : `/location/${locationId}/job-forecast`;
 
         if (isForecastProject) {
@@ -356,14 +343,10 @@ const ShowJobForecastPage = ({
                 revenueForecastData,
             };
 
-            console.log('Forecast Project Save URL:', saveUrl);
-            console.log('Forecast Project Payload:', payload);
-
             // Send everything in one request using Inertia router
             router.post(saveUrl, payload, {
                 preserveScroll: true,
-                onSuccess: (page) => {
-                    console.log('Forecast project save successful:', page);
+                onSuccess: () => {
                     setIsSaving(false);
                     setSaveSuccess(true);
                     setPendingDeletedItemIds({ cost: [], revenue: [] });
@@ -372,7 +355,6 @@ const ShowJobForecastPage = ({
                     }, 1500);
                 },
                 onError: (errors) => {
-                    console.error('Forecast project save errors:', errors);
                     setIsSaving(false);
                     // Format error messages
                     const errorMessages = Object.entries(errors)
@@ -380,16 +362,9 @@ const ShowJobForecastPage = ({
                         .join('\n');
                     setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
                 },
-                onFinish: () => {
-                    console.log('Forecast project save finished');
-                },
             });
         } else {
             // For regular job forecasts, save cost first, then revenue
-            console.log('Regular Job Forecast Save URL:', saveUrl);
-            console.log('Cost Forecast Data:', costForecastData);
-            console.log('Revenue Forecast Data:', revenueForecastData);
-
             router.post(
                 saveUrl,
                 {
@@ -401,7 +376,6 @@ const ShowJobForecastPage = ({
                     preserveScroll: true,
                     preserveState: true,
                     onSuccess: () => {
-                        console.log('Cost data saved, now saving revenue...');
                         // Save revenue after cost succeeds
                         router.post(
                             saveUrl,
@@ -413,7 +387,6 @@ const ShowJobForecastPage = ({
                             {
                                 preserveScroll: true,
                                 onSuccess: () => {
-                                    console.log('Revenue data saved successfully');
                                     setIsSaving(false);
                                     setSaveSuccess(true);
                                     setTimeout(() => {
@@ -421,29 +394,21 @@ const ShowJobForecastPage = ({
                                     }, 1500);
                                 },
                                 onError: (errors) => {
-                                    console.error('Revenue save errors:', errors);
                                     setIsSaving(false);
                                     const errorMessages = Object.entries(errors)
                                         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                                         .join('\n');
                                     setSaveError(errorMessages || 'Failed to save revenue forecast.');
                                 },
-                                onFinish: () => {
-                                    console.log('Revenue save finished');
-                                },
                             },
                         );
                     },
                     onError: (errors) => {
-                        console.error('Cost save errors:', errors);
                         setIsSaving(false);
                         const errorMessages = Object.entries(errors)
                             .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                             .join('\n');
                         setSaveError(errorMessages || 'Failed to save cost forecast.');
-                    },
-                    onFinish: () => {
-                        console.log('Cost save finished');
                     },
                 },
             );
@@ -649,7 +614,6 @@ const ShowJobForecastPage = ({
             trendColDef: costTrendColDef,
             displayMonths,
             forecastMonths,
-            actualsTotalForRow,
             forecastSumBefore,
             forecastSumThrough,
             updateRowCell: updateCostRowCell,
@@ -723,7 +687,6 @@ const ShowJobForecastPage = ({
             trendColDef: revenueTrendColDef,
             displayMonths,
             forecastMonths,
-            actualsTotalForRow,
             forecastSumThrough,
             forecastSumBefore,
             updateRowCell: updateRevenueRowCell,
@@ -926,8 +889,6 @@ const ShowJobForecastPage = ({
                 accrualData={accrualData}
                 totalCostBudget={totalCostBudget}
                 totalRevenueBudget={totalRevenueBudget}
-                displayMonths={displayMonths}
-                forecastMonths={forecastMonths}
             />
 
             {/* Excel Upload Dialog */}
@@ -1383,12 +1344,10 @@ const ShowJobForecastPage = ({
                                         clearTimeout(editingStopTimeoutRef.current);
                                     }
                                 }}
-                                onCellEditingStarted={(params) => {
-                                    console.log('Revenue grid - Cell editing STARTED', params.colDef?.field);
+                                onCellEditingStarted={() => {
                                     isEditingRef.current = true;
                                 }}
-                                onCellEditingStopped={(params) => {
-                                    console.log('Revenue grid - Cell editing STOPPED', params.colDef?.field);
+                                onCellEditingStopped={() => {
                                     // Delay resetting the editing flag to prevent column group events from firing
                                     if (editingStopTimeoutRef.current) {
                                         clearTimeout(editingStopTimeoutRef.current);

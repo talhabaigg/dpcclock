@@ -404,7 +404,6 @@ export function buildRevenueColumnDefs({
     trendColDef,
     displayMonths,
     forecastMonths,
-    actualsTotalForRow,
     forecastSumBefore,
     forecastSumThrough,
     updateRowCell,

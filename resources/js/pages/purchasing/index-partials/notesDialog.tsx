@@ -11,11 +11,10 @@ const NotesDialog = ({ requisition_id, notes }) => {
         note: '',
     });
 
-    const [open, setOpen] = useState(false);
+    const [, setOpen] = useState(false);
 
     const submitForm = (e) => {
         e.preventDefault();
-        console.log('Submitting form with data:', data);
         post('/requisition/' + requisition_id + '/notes');
         setOpen(false);
     };

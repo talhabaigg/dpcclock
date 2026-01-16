@@ -695,8 +695,8 @@ export function TurnoverReportDialog({ open, onOpenChange, data, months, lastAct
                     printWindow.close();
                 }, 500);
             }
-        } catch (error) {
-            console.error('Error generating print view:', error);
+        } catch {
+            // Error generating print view
         }
     };
 

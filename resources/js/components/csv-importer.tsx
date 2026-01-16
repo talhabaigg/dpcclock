@@ -52,7 +52,6 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
                     cellDates: false,
                     raw: false, // use formatted cell text
                 });
-                console.log(workbook);
 
                 const sheetName = workbook.SheetNames[1] || workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
@@ -62,7 +61,6 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
                     defval: '',
                     raw: false, // again: formatted text, not raw serials
                 });
-                console.log(rows);
 
                 // Get headers from the first row's keys
                 const headers = rows.length > 0 ? Object.keys(rows[0]) : [];

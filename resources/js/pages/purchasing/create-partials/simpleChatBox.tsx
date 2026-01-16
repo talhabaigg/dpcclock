@@ -24,7 +24,6 @@ type Message = {
 export function SimpleChatBox() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [message, setMessage] = useState('');
-    const [input, setInput] = useState('');
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -107,7 +106,6 @@ export function SimpleChatBox() {
 
             let done = false;
             let buffer = '';
-            let currentConversationId = conversationId;
 
             // Ensure the assistant bubble is in "loading" state
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, isLoading: true, content: '' } : m)));
@@ -146,11 +144,10 @@ export function SimpleChatBox() {
                             try {
                                 const payload = JSON.parse(dataLine);
                                 if (payload.conversation_id) {
-                                    currentConversationId = payload.conversation_id;
                                     setConversationId(payload.conversation_id);
                                 }
-                            } catch (e) {
-                                console.error('Error parsing done payload', e);
+                            } catch {
+                                // Error parsing done payload
                             }
 
                             // mark assistant bubble as not loading
@@ -174,15 +171,14 @@ export function SimpleChatBox() {
                                         ),
                                     );
                                 }
-                            } catch (err) {
-                                console.error('Error parsing chunk', err);
+                            } catch {
+                                // Error parsing chunk
                             }
                         }
                     }
                 }
             }
-        } catch (err) {
-            console.error(err);
+        } catch {
             // Show error in assistant bubble
             setMessages((prev) =>
                 prev.map((m) =>
@@ -288,7 +284,9 @@ export function SimpleChatBox() {
                                                             setCopiedMessages((prev) => [...prev, m.id]);
                                                             setTimeout(() => setCopiedMessages((prev) => prev.filter((id) => id !== m.id)), 2000);
                                                             toast.success('Copied to clipboard');
-                                                        } catch {}
+                                                        } catch {
+                                                            // Clipboard copy failed
+                                                        }
                                                     }}
                                                 >
                                                     {copiedMessages.includes(m.id) ? <FileCheckIcon /> : <Copy />}

@@ -38,18 +38,11 @@ type EmployeeRow = {
 interface ReviewTimesheetGridProps {
     days: string[]; // ["2025-10-29","2025-10-30",...]
     employees: EmployeeRow[];
-    selectedLocation: string | number | null;
     flash: { success?: string };
 }
 
-function fmtTime(ts?: string | null) {
-    if (!ts) return '';
-    // return HH:MM
-    return ts.slice(11, 16);
-}
-
-const ReviewTimesheetGrid = ({ days, employees, selectedLocation, flash }: ReviewTimesheetGridProps) => {
-    console.log(flash);
+const ReviewTimesheetGrid = ({ days, employees, flash }: ReviewTimesheetGridProps) => {
+    void flash; // Used for displaying flash messages
     return (
         <Card className="m-2 p-0">
             <Table>
@@ -99,7 +92,7 @@ const ReviewTimesheetGrid = ({ days, employees, selectedLocation, flash }: Revie
                                                 </span>
                                             ) : (
                                                 <div className="flex flex-col space-y-1">
-                                                    {clocks.map((c, idx) => {
+                                                    {clocks.map((c) => {
                                                         return (
                                                             <>
                                                                 <HoverCard>

@@ -22,7 +22,6 @@ interface Activity {
     };
 }
 const ActivitySheet = ({ activities }: ActivitySheetProps) => {
-    console.log(activities);
     return (
         <Sheet>
             <SheetTrigger asChild>

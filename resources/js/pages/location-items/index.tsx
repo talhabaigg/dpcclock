@@ -7,7 +7,6 @@ import { locationMaterialItemColumns } from './index-partials/columns';
 import { DataTable } from './index-partials/data-table';
 
 const LocationMaterialItemsIndex = ({ location }) => {
-    console.log(location);
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Locations',

@@ -25,12 +25,6 @@ type PageProps = {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Budget Management', href: '/budget-management' }];
 
-const formatMonthLabel = (month: string): string => {
-    const [year, monthNum] = month.split('-');
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-    return date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-};
-
 const formatMonthShort = (month: string): string => {
     const [year, monthNum] = month.split('-');
     const date = new Date(parseInt(year), parseInt(monthNum) - 1, 1);

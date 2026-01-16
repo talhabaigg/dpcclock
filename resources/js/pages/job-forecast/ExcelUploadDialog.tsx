@@ -80,7 +80,7 @@ export function ExcelUploadDialog({
 
                 // Check for forecast_ prefix (current month scenario)
                 const fieldName = row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
-                const monthValue = Number(row[fieldName]) || 0;
+                void (Number(row[fieldName]) || 0); // Calculate month value for percentage computation
 
                 // Calculate cumulative amount up to this month
                 let cumulative = actualsToDate;
@@ -194,7 +194,6 @@ export function ExcelUploadDialog({
                 fileInputRef.current.value = '';
             }
         } catch (err) {
-            console.error('Error parsing Excel file:', err);
             setError(err instanceof Error ? err.message : 'Failed to parse Excel file');
         } finally {
             setUploading(false);

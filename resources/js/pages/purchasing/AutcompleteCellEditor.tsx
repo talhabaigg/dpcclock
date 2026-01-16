@@ -45,7 +45,6 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier, selectedL
                 }));
 
                 setItems(mapped);
-                console.log('Fetched items:', mapped);
             } catch (err) {
                 alert('Failed to fetch items. Please try again later. ' + err.message);
                 setItems([]);

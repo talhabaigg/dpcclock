@@ -7,7 +7,12 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(curl:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(npm install)",
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run lint)",
+      "Bash(php -r:*)"
     ]
   }
 }

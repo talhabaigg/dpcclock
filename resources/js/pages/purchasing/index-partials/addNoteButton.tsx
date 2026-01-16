@@ -15,7 +15,6 @@ const AddNoteButton = ({ requisition_id }) => {
 
     const submitForm = (e) => {
         e.preventDefault();
-        console.log('Submitting form with data:', data);
         post('/requisition/' + requisition_id + '/notes');
         setOpen(false);
     };

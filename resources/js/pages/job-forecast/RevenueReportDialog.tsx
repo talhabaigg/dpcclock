@@ -23,8 +23,6 @@ interface RevenueReportDialogProps {
     }>;
     totalCostBudget: number;
     totalRevenueBudget: number;
-    displayMonths: string[];
-    forecastMonths: string[];
 }
 
 export function RevenueReportDialog({
@@ -35,8 +33,6 @@ export function RevenueReportDialog({
     accrualData,
     totalCostBudget,
     totalRevenueBudget,
-    displayMonths,
-    forecastMonths,
 }: RevenueReportDialogProps) {
     const reportRef = useRef<HTMLDivElement>(null);
     const chartRefDollar = useRef<any>(null);
@@ -565,8 +561,8 @@ export function RevenueReportDialog({
                     printWindow.close();
                 }, 500);
             }
-        } catch (error) {
-            console.error('Error generating print view:', error);
+        } catch {
+            // Error generating print view
         }
     };
 

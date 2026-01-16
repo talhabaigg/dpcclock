@@ -112,12 +112,6 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
             return `${year}-${month}-${day}`;
         };
 
-        console.log('Project dates:', { start_date: project.start_date, end_date: project.end_date });
-        console.log('Formatted dates:', {
-            start: formatDate(project.start_date),
-            end: formatDate(project.end_date)
-        });
-
         setFormData({
             name: project.name,
             project_number: project.project_number,

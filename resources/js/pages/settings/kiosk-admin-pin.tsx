@@ -20,7 +20,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function KioskAdminPin() {
     const passwordInput = useRef<HTMLInputElement>(null);
-    const currentPasswordInput = useRef<HTMLInputElement>(null);
 
     const { data, setData, errors, put, reset, processing, recentlySuccessful } = useForm({
         new_pin: '',

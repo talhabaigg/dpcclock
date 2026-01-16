@@ -56,7 +56,6 @@ export default function CostCodeEdit({
             prelim_type: code.pivot.prelim_type ?? '',
         })),
     });
-    console.log(data);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },

@@ -69,7 +69,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
         { title: 'Edit Kiosk', href: `/kiosks/${kiosk.id}/edit` },
     ];
 
-    const handleKioskActiveToggle = (checked) => {
+    const handleKioskActiveToggle = () => {
         router.get(route('kiosk.toggleActive', kiosk.id));
     };
 
