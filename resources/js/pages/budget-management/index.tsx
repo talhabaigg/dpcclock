@@ -106,7 +106,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                     <Input
                                         type="number"
                                         min="0"
-                                        step="1000"
+                                        step="1"
                                         value={row.value}
                                         onChange={(e) =>
                                             setData('targets', {

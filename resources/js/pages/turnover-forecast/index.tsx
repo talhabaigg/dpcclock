@@ -59,6 +59,7 @@ type TurnoverForecastProps = {
     fyStartDate: string;
     fyEndDate: string;
     fyLabel: string;
+    monthlyTargets: Record<string, number>;
 };
 
 const formatCurrency = (value: number | null | undefined): string => {
@@ -96,6 +97,7 @@ export default function TurnoverForecastIndex({
     fyStartDate,
     fyEndDate,
     fyLabel,
+    monthlyTargets,
 }: TurnoverForecastProps) {
     const revenueGridRef = useRef<AgGridReact>(null);
     const costGridRef = useRef<AgGridReact>(null);
@@ -359,6 +361,44 @@ export default function TurnoverForecastIndex({
         return [profitRow];
     }, [filteredData, filteredMonths]);
 
+    const targetRowData = useMemo(() => {
+        const targetRow: any = {
+            id: 'target-row',
+            label: 'Revenue Target',
+        };
+        const actualRow: any = {
+            id: 'actual-row',
+            label: 'Actual + Forecast',
+        };
+        const varianceRow: any = {
+            id: 'variance-row',
+            label: 'Variance',
+        };
+
+        filteredMonths.forEach((month) => {
+            let totalRevenue = 0;
+            filteredData.forEach((row) => {
+                const actualRevenue = Number(row.revenue_actuals?.[month]) || 0;
+                const forecastRevenue = Number(row.revenue_forecast?.[month]) || 0;
+                totalRevenue += actualRevenue || forecastRevenue;
+            });
+
+            const targetValue = Number(monthlyTargets?.[month]) || 0;
+            const varianceValue = totalRevenue - targetValue;
+
+            targetRow[`month_${month}`] = targetValue;
+            actualRow[`month_${month}`] = totalRevenue;
+            varianceRow[`month_${month}`] = varianceValue;
+        });
+
+        const sumMonths = (row: any) => filteredMonths.reduce((sum, month) => sum + (row[`month_${month}`] || 0), 0);
+        targetRow.fyTotal = sumMonths(targetRow);
+        actualRow.fyTotal = sumMonths(actualRow);
+        varianceRow.fyTotal = sumMonths(varianceRow);
+
+        return [targetRow, actualRow, varianceRow];
+    }, [filteredData, filteredMonths, monthlyTargets]);
+
     // Build static column definitions (shared across grids)
     const staticCols = useMemo<ColDef[]>(
         () => [
@@ -413,10 +453,12 @@ export default function TurnoverForecastIndex({
             {
                 headerName: 'Project Manager',
                 field: 'project_manager',
+                width: 160,
             },
             {
                 headerName: 'Over/Under Billing',
                 field: 'over_under_billing',
+                width: 160,
                 valueFormatter: (params) => {
                     return formatCurrency(params.value);
                 },
@@ -573,6 +615,91 @@ export default function TurnoverForecastIndex({
 
         return [...summaryCols, ...monthlyCols];
     }, [filteredMonths, lastActualMonth, fyLabel, staticCols]);
+
+    const targetColumnDefsMemo = useMemo<ColDef[]>(() => {
+        const pinnedCols = revenueColumnDefs.filter((col) => col.pinned === 'left');
+        const summaryCols = revenueColumnDefs.filter(
+            (col) => col.pinned !== 'left' && typeof col.field === 'string' && !col.field.startsWith('month_'),
+        );
+
+        const targetPinnedCols: ColDef[] = pinnedCols.map((col, index) => {
+            if (index === 0) {
+                return {
+                    headerName: 'Metric',
+                    field: 'label',
+                    width: col.width ?? 140,
+                    pinned: 'left',
+                    cellClass: (params) => {
+                        if (params.data?.label === 'Variance') {
+                            return 'font-semibold text-slate-700';
+                        }
+                        return 'font-medium text-slate-700';
+                    },
+                };
+            }
+
+            return {
+                headerName: '',
+                field: `pinned_spacer_${index}`,
+                width: col.width ?? 120,
+                pinned: 'left',
+                sortable: false,
+                filter: false,
+                resizable: false,
+                suppressMenu: true,
+                cellClass: 'bg-slate-50',
+                headerClass: 'bg-slate-50',
+                valueGetter: () => '',
+            };
+        });
+
+        const targetSummaryCols: ColDef[] = summaryCols.map((col, index) => {
+            if (index === 0) {
+                return {
+                    headerName: `Total ${fyLabel}`,
+                    field: 'fyTotal',
+                    width: col.width ?? 160,
+                    valueFormatter: (params) => formatCurrency(params.value),
+                    type: 'numericColumn',
+                    cellClass: (params) => {
+                        if (params.data?.label === 'Variance') {
+                            return params.value < 0 ? 'text-right font-semibold text-red-600' : 'text-right font-semibold text-emerald-600';
+                        }
+                        return 'text-right font-semibold';
+                    },
+                };
+            }
+
+            return {
+                headerName: '',
+                field: `summary_spacer_${index}`,
+                width: col.width ?? 120,
+                sortable: false,
+                filter: false,
+                resizable: false,
+                suppressMenu: true,
+                cellClass: 'bg-slate-50',
+                headerClass: 'bg-slate-50',
+                valueGetter: () => '',
+            };
+        });
+
+        const monthlyCols: ColDef[] = filteredMonths.map((month) => ({
+            headerName: formatMonthHeader(month),
+            field: `month_${month}`,
+            width: 120,
+            type: 'numericColumn',
+            valueFormatter: (params) => formatCurrency(params.value),
+            cellClass: (params) => {
+                if (params.data?.label === 'Variance') {
+                    return params.value < 0 ? 'text-right font-medium text-red-600' : 'text-right font-medium text-emerald-600';
+                }
+                return 'text-right';
+            },
+        }));
+
+        return [...targetPinnedCols, ...targetSummaryCols, ...monthlyCols];
+    }, [filteredMonths, fyLabel, revenueColumnDefs]);
 
     // Build cost column definitions (same structure as revenue)
     const costColumnDefs = useMemo<ColDef[]>(() => {
@@ -769,19 +896,27 @@ export default function TurnoverForecastIndex({
 
     const getRowId = useMemo<(params: GetRowIdParams) => string>(() => {
         return (params: GetRowIdParams) => {
-            if (params.data.type === 'Profit') {
+            if (params.data?.id) {
+                return String(params.data.id);
+            }
+            if (params.data?.type === 'Profit') {
                 return 'profit-row';
             }
-            if (params.data.type === 'Total') {
-                return params.data.id;
+            if (params.data?.type === 'Total') {
+                return 'total-row';
             }
-            return `${params.data.type}-${params.data.id}`;
+            return `${params.data?.type ?? 'row'}-${params.data?.job_number ?? 'unknown'}`;
         };
     }, []);
 
     const completedTurnoverYTD = totals.completedTurnoverYTD;
     const workInHandFY = totals.forecastRevenueYTG;
     const totalFY = completedTurnoverYTD + workInHandFY;
+    const targetMonthsToDate = lastActualMonth ? filteredMonths.filter((month) => month < lastActualMonth) : filteredMonths;
+    const targetTurnoverYTD = targetMonthsToDate.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
+    const turnoverTargetFYTotal = filteredMonths.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
+    const remainingTargetToAchieve = Math.max(turnoverTargetFYTotal - totalFY, 0);
+    const targetBaseline = turnoverTargetFYTotal > 0 ? turnoverTargetFYTotal : totalFY;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -821,14 +956,14 @@ export default function TurnoverForecastIndex({
                                 >
                                     Revenue
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'cost' ? 'default' : 'ghost'}
-                                    onClick={() => setViewMode('cost')}
-                                    className="h-8 flex-1 sm:flex-none"
-                                >
-                                    Cost
-                                </Button>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'cost' ? 'default' : 'ghost'}
+                                onClick={() => setViewMode('cost')}
+                                className="h-8 flex-1 sm:flex-none"
+                            >
+                                Targets
+                            </Button>
                             </div>
                             <Select value={selectedFY} onValueChange={setSelectedFY}>
                                 <SelectTrigger className="h-8 w-[140px]">
@@ -882,20 +1017,25 @@ export default function TurnoverForecastIndex({
                             <div className="flex h-3 overflow-hidden rounded-full bg-blue-100">
                                 <div
                                     className="bg-blue-600"
-                                    style={{ width: `${formatPercent(completedTurnoverYTD, totalFY)}%` }}
+                                    style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}
                                     title="Completed turnover YTD"
                                 />
                                 <div
                                     className="bg-sky-400"
-                                    style={{ width: `${formatPercent(workInHandFY, totalFY)}%` }}
+                                    style={{ width: `${formatPercent(workInHandFY, targetBaseline)}%` }}
                                     title="Work in hand FY"
+                                />
+                                <div
+                                    className="bg-amber-300"
+                                    style={{ width: `${formatPercent(remainingTargetToAchieve, targetBaseline)}%` }}
+                                    title="Remaining target to achieve"
                                 />
                             </div>
                             <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
                                 <div className="flex items-center gap-2">
                                     <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Completed YTD</div>
+                                        <div className="font-medium text-slate-700">Completed Turnover YTD</div>
                                         <div>{formatCurrency(completedTurnoverYTD)}</div>
                                     </div>
                                 </div>
@@ -909,8 +1049,31 @@ export default function TurnoverForecastIndex({
                                 <div className="flex items-center gap-2">
                                     <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Total FY</div>
+                                        <div className="font-medium text-slate-700">Completed Turnover + Work in Hand</div>
                                         <div>{formatCurrency(totalFY)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Budget Turnover YTD</div>
+                                        <div>{formatCurrency(targetTurnoverYTD)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Budget Turnover {fyLabel}</div>
+                                        <div>{formatCurrency(turnoverTargetFYTotal)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Budget Balance to Achieve</div>
+                                        <div>{formatCurrency(remainingTargetToAchieve)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -946,7 +1109,6 @@ export default function TurnoverForecastIndex({
                                     ensureDomOrder={true}
                                     getRowId={getRowId}
                                     pinnedBottomRowData={revenueTotalRowData}
-                                    alignedGrids={[]}
                                     onGridReady={() => {
                                         setGridsReady((prev) => ({ ...prev, revenue: true }));
                                     }}
@@ -962,11 +1124,11 @@ export default function TurnoverForecastIndex({
                         </div>
                     )}
 
-                    {/* Cost Grid with Total and Profit Pinned Rows */}
+                    {/* Revenue Targets Grid */}
                     {(viewMode === 'both' || viewMode === 'cost') && (
                         <div>
                             <div className="mb-2 flex items-center justify-between">
-                                <h2 className="text-sm font-semibold">Cost</h2>
+                                <h2 className="text-sm font-semibold">Revenue Targets</h2>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button onClick={() => handleExportCSV('cost')} variant="outline" size="icon">
@@ -979,15 +1141,13 @@ export default function TurnoverForecastIndex({
                             <div className="rounded-md border bg-white" style={{ height: `${gridHeights.cost}px` }}>
                                 <AgGridReact
                                     ref={costGridRef}
-                                    rowData={filteredData}
-                                    columnDefs={costColumnDefs}
+                                    rowData={targetRowData}
+                                    columnDefs={targetColumnDefsMemo}
                                     defaultColDef={defaultColDef}
                                     theme={shadcnTheme}
                                     enableCellTextSelection={true}
                                     ensureDomOrder={true}
                                     getRowId={getRowId}
-                                    pinnedBottomRowData={[...costTotalRowData, ...profitPinnedRowData]}
-                                    alignedGrids={[]}
                                     onGridReady={() => {
                                         setGridsReady((prev) => ({ ...prev, cost: true }));
                                     }}

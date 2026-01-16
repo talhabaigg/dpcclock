@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArProgressBillingSummary;
+use App\Models\CompanyMonthlyRevenueTarget;
 use App\Models\ForecastProject;
 use App\Models\JobCostDetail;
 use App\Models\JobForecast;
@@ -398,6 +399,12 @@ class TurnoverForecastController extends Controller
         // Generate all months in range
         $allMonths = $this->generateMonthRange($startMonth, $endMonth);
 
+        $monthlyTargets = CompanyMonthlyRevenueTarget::whereIn('month', $allMonths)
+            ->get()
+            ->pluck('target_amount', 'month')
+            ->map(fn($amount) => (float) $amount)
+            ->toArray();
+
         // Determine the last actual month globally (for coloring columns)
         $lastActualMonthGlobal = null;
         foreach ($combinedData as $row) {
@@ -424,6 +431,7 @@ class TurnoverForecastController extends Controller
             'fyStartDate' => $fyStartDate,
             'fyEndDate' => $fyEndDate,
             'fyLabel' => "FY{$fyStartYear}-" . substr($fyEndYear, 2, 2),
+            'monthlyTargets' => $monthlyTargets,
         ]);
     }
 }
