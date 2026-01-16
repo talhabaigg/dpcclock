@@ -858,7 +858,7 @@ export default function TurnoverForecastIndex({
         [],
     );
 
-    const handleExportCSV = (gridType: 'revenue' | 'cost') => {
+    const handleExportCSV = (gridType: 'revenue' | 'target') => {
         const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
         gridRef.current?.api?.exportDataAsCsv({
             fileName: `turnover-forecast-${gridType}-${new Date().toISOString().split('T')[0]}.csv`,
@@ -956,14 +956,14 @@ export default function TurnoverForecastIndex({
                                 >
                                     Revenue
                                 </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'cost' ? 'default' : 'ghost'}
-                                onClick={() => setViewMode('cost')}
-                                className="h-8 flex-1 sm:flex-none"
-                            >
-                                Targets
-                            </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'cost' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('cost')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Targets
+                                </Button>
                             </div>
                             <Select value={selectedFY} onValueChange={setSelectedFY}>
                                 <SelectTrigger className="h-8 w-[140px]">
@@ -1047,33 +1047,46 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                                    <div>
+                                        <div className="font-medium text-slate-700">Budget Balance to Achieve</div>
+                                        <div>{formatCurrency(remainingTargetToAchieve)}</div>
+                                    </div>
+                                </div>
+                                {/* <div className="flex items-center gap-2">
                                     <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
                                     <div>
                                         <div className="font-medium text-slate-700">Completed Turnover + Work in Hand</div>
                                         <div>{formatCurrency(totalFY)}</div>
                                     </div>
-                                </div>
+                                </div> */}
                             </div>
-                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100">
+                                <div
+                                    className="bg-amber-600"
+                                    style={{ width: `${formatPercent(targetTurnoverYTD, targetBaseline)}%` }}
+                                    title="Completed turnover YTD"
+                                />
+                                <div
+                                    className="bg-amber-300"
+                                    style={{ width: `${formatPercent(turnoverTargetFYTotal, targetBaseline)}%` }}
+                                    title="Budget turnover FY"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-2">
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
                                     <div>
                                         <div className="font-medium text-slate-700">Budget Turnover YTD</div>
                                         <div>{formatCurrency(targetTurnoverYTD)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
                                     <div>
                                         <div className="font-medium text-slate-700">Budget Turnover {fyLabel}</div>
                                         <div>{formatCurrency(turnoverTargetFYTotal)}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                                    <div>
-                                        <div className="font-medium text-slate-700">Budget Balance to Achieve</div>
-                                        <div>{formatCurrency(remainingTargetToAchieve)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -1131,7 +1144,7 @@ export default function TurnoverForecastIndex({
                                 <h2 className="text-sm font-semibold">Revenue Targets</h2>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button onClick={() => handleExportCSV('cost')} variant="outline" size="icon">
+                                        <Button onClick={() => handleExportCSV('target')} variant="outline" size="icon">
                                             <Download className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
