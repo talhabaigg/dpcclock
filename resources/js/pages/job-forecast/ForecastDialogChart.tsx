@@ -43,8 +43,12 @@ export type ChartViewMode = 'cumulative-percent' | 'monthly-amount';
 export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, onViewModeChange }: ForecastDialogChartProps) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [editBox, setEditBox] = useState<EditBox | null>(null);
+    const [editBoxDirty, setEditBoxDirty] = useState(false);
 
-    const closeEditBox = () => setEditBox(null);
+    const closeEditBox = () => {
+        setEditBox(null);
+        setEditBoxDirty(false);
+    };
 
     const commitEditBox = () => {
         if (!editBox) return;
@@ -130,7 +134,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
     }, [meta, viewMode, budget, cumulativeData]);
 
     useEffect(() => {
-        if (!editBox) return;
+        if (!editBox || editBoxDirty) return;
         const nextInput = getEditBoxInput(editBox.index);
         if (!nextInput) return;
 
@@ -145,7 +149,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 inputMode: nextInput.inputMode,
             };
         });
-    }, [editBox, getEditBoxInput]);
+    }, [editBox, editBoxDirty, getEditBoxInput]);
 
     // Calculate display values based on view mode
     const displayValues = useMemo(() => {
@@ -349,6 +353,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                 left = Math.max(4, Math.min(left, wrapRect.width - boxW - 4));
                 top = Math.max(4, Math.min(top, wrapRect.height - boxH - 4));
 
+                setEditBoxDirty(false);
                 setEditBox({
                     left,
                     top,
@@ -423,7 +428,10 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode, 
                             inputMode="numeric"
                             className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm font-medium outline-none ring-offset-background transition-colors focus:border-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:h-10 sm:w-36 sm:px-3"
                             value={editBox.value}
-                            onChange={(e) => setEditBox((s) => (s ? { ...s, value: e.target.value } : s))}
+                            onChange={(e) => {
+                                setEditBoxDirty(true);
+                                setEditBox((s) => (s ? { ...s, value: e.target.value } : s));
+                            }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') commitEditBox();
                                 if (e.key === 'Escape') closeEditBox();
