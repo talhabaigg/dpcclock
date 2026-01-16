@@ -228,11 +228,11 @@ class JobForecastController extends Controller
             ->all();
 
         $revenueRows = [
-            (function () use ($revenuesByMonth, $months, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth) {
+            (function () use ($revenuesByMonth, $months, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth, $JobSummary) {
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
-                    'contract_sum_to_date' => $revenuesByMonth->max('contract_sum_to_date'),
+                    'contract_sum_to_date' => $JobSummary->current_estimate_revenue ?? 0,
                     'type' => 'actual',
                 ];
 
