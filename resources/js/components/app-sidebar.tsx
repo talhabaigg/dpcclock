@@ -21,6 +21,7 @@ import {
     Hourglass,
     LayoutGrid,
     Pickaxe,
+    Target,
     UsersRound,
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -49,6 +50,13 @@ const mainNavItems: NavItem[] = [
         href: '/cash-forecast',
         icon: ChartArea,
         permission: 'view all requisitions',
+    },
+    {
+        title: 'Budget Management',
+        href: '/budget-management',
+        icon: Target,
+        adminOnly: true,
+        permission: null,
     },
     {
         title: 'Employees',
@@ -206,6 +214,7 @@ type PageProps = {
     auth: {
         user: AuthUser;
         permissions: string[];
+        isAdmin: boolean;
         // add other auth properties if needed
     };
     // add other props if needed
@@ -215,8 +224,14 @@ export function AppSidebar() {
     const { props } = usePage<PageProps>();
     // const permissions: string[] = props?.auth?.user?.permissions ?? [];
     const permissions: string[] = props?.auth?.permissions ?? [];
+    const isAdmin = props?.auth?.isAdmin ?? false;
 
-    const filteredMainNavItems = mainNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredMainNavItems = mainNavItems.filter((item) => {
+        if (item.adminOnly && !isAdmin) {
+            return false;
+        }
+        return !item.permission || permissions.includes(item.permission);
+    });
     const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));

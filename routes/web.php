@@ -3,6 +3,7 @@
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ClockController;
+use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\ForecastProjectController;
@@ -211,6 +212,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
 
         Route::get('/cash-forecast', CashForecastController::class)->name('cashForecast.show');
+
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');
+            Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store');
+        });
         // Queue Status Monitor
         Route::get('/queue-status', [QueueStatusController::class, 'index'])->name('queueStatus.index');
         Route::get('/queue-status/stats', [QueueStatusController::class, 'stats'])->name('queueStatus.stats');
