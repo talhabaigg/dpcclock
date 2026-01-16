@@ -242,13 +242,13 @@ export default function TurnoverForecastIndex({
             let totalRevenue = 0;
 
             filteredData.forEach((row) => {
-                const actualRevenue = row.revenue_actuals?.[month] || 0;
-                const forecastRevenue = row.revenue_forecast?.[month] || 0;
+                const actualRevenue = safeNumber(row.revenue_actuals?.[month]);
+                const forecastRevenue = safeNumber(row.revenue_forecast?.[month]);
                 const revenue = actualRevenue || forecastRevenue;
                 totalRevenue += revenue;
             });
 
-            totalRow[`month_${month}`] = totalRevenue;
+            totalRow[`month_${month}`] = safeNumber(totalRevenue);
         });
 
         // Calculate summary fields
@@ -599,7 +599,7 @@ export default function TurnoverForecastIndex({
 
                     // For total row, use pre-calculated value
                     if (rowData.type === 'Total') {
-                        return rowData[`month_${month}`] || 0;
+                        return safeNumber(rowData[`month_${month}`]);
                     }
 
                     if (rowData.revenue_actuals && rowData.revenue_actuals[month]) {
