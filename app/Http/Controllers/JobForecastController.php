@@ -376,9 +376,9 @@ class JobForecastController extends Controller
             $total = $actualsExcludingCurrentMonth + $forecastTotal;
             $remaining = $budget - $total;
 
-            if ($remaining < -0.01) { // Allow small rounding errors
-                $validationErrors[] = "Cost item {$costItem}: Total (actuals + forecast) exceeds budget by " . number_format(abs($remaining), 2);
-            }
+            // if ($remaining < -0.01) { // Allow small rounding errors
+            //     $validationErrors[] = "Cost item {$costItem}: Total (actuals + forecast) exceeds budget by " . number_format(abs($remaining), 2);
+            // }
         }
 
         if (!empty($validationErrors)) {
