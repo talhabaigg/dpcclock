@@ -8,11 +8,11 @@ import AppLayout from '@/layouts/app-layout';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import type { ColDef, GetRowIdParams } from 'ag-grid-community';
+import type { ColDef, ColumnState, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, FileText, Filter } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, FileText, Filter, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -21,6 +21,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Turnover Forecast', href: '/tur
 
 const STORAGE_KEY = 'turnover-forecast-excluded-jobs';
 const GRID_HEIGHTS_KEY = 'turnover-forecast-grid-heights';
+const GRID_COLUMN_STATE_KEY = 'turnover-forecast-grid-column-state';
 
 type MonthlyData = {
     [month: string]: number;
@@ -147,6 +148,52 @@ export default function TurnoverForecastIndex({
         document.addEventListener('mousemove', handleDrag);
         document.addEventListener('mouseup', handleDragEnd);
     };
+
+    // Column state persistence handlers
+    const saveColumnState = useCallback((gridType: 'revenue' | 'target') => {
+        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+        const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
+        try {
+            const state = gridRef.current?.api?.getColumnState();
+            if (state) {
+                localStorage.setItem(key, JSON.stringify(state));
+            }
+        } catch {
+            // Ignore storage errors
+        }
+    }, []);
+
+    const restoreColumnState = useCallback((gridType: 'revenue' | 'target') => {
+        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+        const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
+        try {
+            localStorage.removeItem(key);
+            // Temporarily disable aligned grids to prevent syncing reset to the other grid
+            gridRef.current?.api?.setGridOption('alignedGrids', []);
+            gridRef.current?.api?.resetColumnState();
+            // Re-enable aligned grids
+            if (revenueGridRef.current?.api && costGridRef.current?.api) {
+                revenueGridRef.current.api.setGridOption('alignedGrids', [costGridRef.current.api]);
+                costGridRef.current.api.setGridOption('alignedGrids', [revenueGridRef.current.api]);
+            }
+        } catch {
+            // Ignore storage errors
+        }
+    }, []);
+
+    const applyStoredColumnState = useCallback((gridType: 'revenue' | 'target') => {
+        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+        const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
+        try {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                const state = JSON.parse(stored) as ColumnState[];
+                gridRef.current?.api?.applyColumnState({ state, applyOrder: true });
+            }
+        } catch {
+            // Ignore storage errors
+        }
+    }, []);
 
     // Financial Year filter - generate available FYs based on data
     const availableFYs = useMemo(() => {
@@ -1098,14 +1145,24 @@ export default function TurnoverForecastIndex({
                         <div>
                             <div className="mb-2 flex items-center justify-between">
                                 <h2 className="text-sm font-semibold">Revenue</h2>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button onClick={() => handleExportCSV('revenue')} variant="outline" size="icon">
-                                            <Download className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
-                                </Tooltip>
+                                <div className="flex gap-1">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => restoreColumnState('revenue')} variant="outline" size="icon">
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Reset column layout</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => handleExportCSV('revenue')} variant="outline" size="icon">
+                                                <Download className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                    </Tooltip>
+                                </div>
                             </div>
                             <div className="rounded-md border bg-white" style={{ height: `${gridHeights.revenue}px` }}>
                                 <AgGridReact
@@ -1120,7 +1177,12 @@ export default function TurnoverForecastIndex({
                                     pinnedBottomRowData={revenueTotalRowData}
                                     onGridReady={() => {
                                         setGridsReady((prev) => ({ ...prev, revenue: true }));
+                                        applyStoredColumnState('revenue');
                                     }}
+                                    onColumnMoved={() => saveColumnState('revenue')}
+                                    onColumnResized={() => saveColumnState('revenue')}
+                                    onColumnVisible={() => saveColumnState('revenue')}
+                                    onColumnPinned={() => saveColumnState('revenue')}
                                 />
                             </div>
                             <div
@@ -1138,14 +1200,24 @@ export default function TurnoverForecastIndex({
                         <div>
                             <div className="mb-2 flex items-center justify-between">
                                 <h2 className="text-sm font-semibold">Revenue Targets</h2>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button onClick={() => handleExportCSV('target')} variant="outline" size="icon">
-                                            <Download className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
-                                </Tooltip>
+                                <div className="flex gap-1">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => restoreColumnState('target')} variant="outline" size="icon">
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Reset column layout</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => handleExportCSV('target')} variant="outline" size="icon">
+                                                <Download className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                    </Tooltip>
+                                </div>
                             </div>
                             <div className="rounded-md border bg-white" style={{ height: `${gridHeights.cost}px` }}>
                                 <AgGridReact
@@ -1159,7 +1231,12 @@ export default function TurnoverForecastIndex({
                                     getRowId={getRowId}
                                     onGridReady={() => {
                                         setGridsReady((prev) => ({ ...prev, cost: true }));
+                                        applyStoredColumnState('target');
                                     }}
+                                    onColumnMoved={() => saveColumnState('target')}
+                                    onColumnResized={() => saveColumnState('target')}
+                                    onColumnVisible={() => saveColumnState('target')}
+                                    onColumnPinned={() => saveColumnState('target')}
                                 />
                             </div>
                             <div
