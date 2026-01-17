@@ -11,7 +11,7 @@ import { Head, Link } from '@inertiajs/react';
 import type { ColDef, ColumnState, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, FileText, Filter, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Clock, Download, FileText, Filter, MinusCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 
@@ -32,6 +32,9 @@ type TurnoverRow = {
     type: 'location' | 'forecast_project';
     job_name: string;
     job_number: string;
+    // Forecast status fields
+    forecast_status: 'not_started' | 'draft' | 'submitted';
+    last_submitted_at: string | null;
     // Revenue fields
     claimed_to_date: number;
     revenue_contract_fy: number;
@@ -511,6 +514,62 @@ export default function TurnoverForecastIndex({
                         return 'text-right text-red-600 font-bold bg-red-200';
                     }
                     return 'text-right text-green-600 font-bold bg-green-50';
+                },
+            },
+            {
+                headerName: 'Forecast Status',
+                field: 'forecast_status',
+                width: 140,
+                cellRenderer: (params: { data: TurnoverRow }) => {
+                    const rowData = params.data as any;
+                    if (rowData?.type === 'Total' || rowData?.type === 'Profit') {
+                        return '';
+                    }
+                    const status = rowData?.forecast_status as TurnoverRow['forecast_status'];
+                    if (status === 'submitted') {
+                        return (
+                            <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                <span className="text-sm font-medium text-green-700">Submitted</span>
+                            </div>
+                        );
+                    }
+                    if (status === 'draft') {
+                        return (
+                            <div className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-amber-500" />
+                                <span className="text-sm font-medium text-amber-600">Draft</span>
+                            </div>
+                        );
+                    }
+                    return (
+                        <div className="flex items-center gap-1.5">
+                            <MinusCircle className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm text-gray-500">Not Started</span>
+                        </div>
+                    );
+                },
+            },
+            {
+                headerName: 'Last Submitted',
+                field: 'last_submitted_at',
+                width: 160,
+                valueFormatter: (params) => {
+                    if (!params.value) return '-';
+                    const date = new Date(params.value);
+                    return date.toLocaleDateString('en-AU', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
+                },
+                cellClass: (params) => {
+                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                        return 'bg-gray-100';
+                    }
+                    return 'text-gray-600 text-sm';
                 },
             },
         ],

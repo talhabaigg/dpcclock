@@ -250,6 +250,15 @@ class TurnoverForecastController extends Controller
             // Remaining budget = total budget - cost to date
             $remainingBudget = $budget - $costToDate;
 
+            // Determine forecast submission status for current month
+            $forecastStatus = 'not_started';
+            $lastSubmittedAt = null;
+
+            if ($currentJobForecast) {
+                $forecastStatus = $currentJobForecast->is_locked ? 'submitted' : 'draft';
+                $lastSubmittedAt = $currentJobForecast->updated_at?->toIso8601String();
+            }
+
             $combinedData[] = [
                 'id' => $location->id,
                 'type' => 'location',
@@ -257,6 +266,9 @@ class TurnoverForecastController extends Controller
                 'job_number' => $jobNumber,
                 'project_manager' => $projectManager,
                 'over_under_billing' => (float) $over_under_billing,
+                // Forecast status fields
+                'forecast_status' => $forecastStatus,
+                'last_submitted_at' => $lastSubmittedAt,
                 // Revenue fields
                 'current_estimate_revenue' => (float) $currentEstimateRevenue,
                 'current_estimate_cost' => (float) $budget,
@@ -360,11 +372,18 @@ class TurnoverForecastController extends Controller
             // Remaining budget = total budget (no costs yet)
             $remainingBudget = $budget;
 
+            // Forecast projects don't have the same submission tracking as locations
+            // They are always considered as having forecast data if they have cost/revenue items
+            $forecastProjectStatus = (!empty($costForecast) || !empty($revenueForecast)) ? 'draft' : 'not_started';
+
             $combinedData[] = [
                 'id' => $project->id,
                 'type' => 'forecast_project',
                 'job_name' => $project->name,
                 'job_number' => $project->project_number,
+                // Forecast status fields
+                'forecast_status' => $forecastProjectStatus,
+                'last_submitted_at' => null,
                 // Revenue fields
                 'claimed_to_date' => 0,
                 'current_estimate_revenue' => 0,
