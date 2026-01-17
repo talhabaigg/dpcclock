@@ -10,6 +10,7 @@ use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class CashForecastController extends Controller
@@ -28,9 +29,22 @@ class CashForecastController extends Controller
         // Get actuals from past months (costs and revenue)
         $actualData = $this->getActualData($rules);
 
-        // Get forecast data for current month onwards
-        $forecastData = JobForecastData::select('month', 'cost_item', 'forecast_amount', 'job_number')
-            ->where('month', '>=', $currentMonth)
+        // Get forecast data for current month onwards (latest forecast per job)
+        $latestForecasts = \App\Models\JobForecast::query()
+            ->select('job_number', DB::raw('MAX(forecast_month) as forecast_month'))
+            ->groupBy('job_number');
+        $forecastData = JobForecastData::select(
+            'job_forecast_data.month',
+            'job_forecast_data.cost_item',
+            'job_forecast_data.forecast_amount',
+            'job_forecast_data.job_number'
+        )
+            ->join('job_forecasts as jf', 'job_forecast_data.job_forecast_id', '=', 'jf.id')
+            ->joinSub($latestForecasts, 'latest_forecasts', function ($join) {
+                $join->on('jf.job_number', '=', 'latest_forecasts.job_number')
+                    ->on('jf.forecast_month', '=', 'latest_forecasts.forecast_month');
+            })
+            ->where('job_forecast_data.month', '>=', $currentMonth)
             ->get();
 
         // Combine actuals and forecasts

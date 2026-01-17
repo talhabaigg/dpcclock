@@ -470,6 +470,12 @@ class JobForecastController extends Controller
 
         $jobNumber = Location::where('id', $location)->value('external_id');
         $month = $request->query('month');
+        $latestForecast = JobForecast::where('job_number', $jobNumber)
+            ->orderBy('forecast_month', 'desc')
+            ->first();
+        $latestForecastMonth = $latestForecast
+            ? Carbon::parse($latestForecast->forecast_month)->format('Y-m')
+            : null;
 
         if (!$month) {
             return Inertia::render('compare-forecast/show', [
@@ -479,6 +485,7 @@ class JobForecastController extends Controller
                 ],
                 'months' => [],
                 'selectedForecastMonth' => null,
+                'latestForecastMonth' => $latestForecastMonth,
                 'jobNumber' => $jobNumber,
                 'locationId' => $location,
             ]);
@@ -600,6 +607,7 @@ class JobForecastController extends Controller
             ],
             'months' => $months,
             'selectedForecastMonth' => $month,
+            'latestForecastMonth' => $latestForecastMonth,
             'jobNumber' => $jobNumber,
             'locationId' => $location,
         ]);

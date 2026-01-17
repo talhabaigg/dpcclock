@@ -2,6 +2,19 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import React, { useState, useMemo, useCallback } from 'react';
+import {
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    LineElement,
+    PointElement,
+    Tooltip,
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
 type Props = {
     months: MonthNode[];
@@ -129,55 +142,83 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: {
 // Bar chart component
 const BarChart = ({ data, height = 200, showLabels = true }: {
     data: { label: string; cashIn: number; cashOut: number; net: number }[];
-    height?: number;
+    height?: number | string;
     showLabels?: boolean;
 }) => {
-    const maxValue = Math.max(...data.flatMap(d => [Math.abs(d.cashIn), Math.abs(d.cashOut), Math.abs(d.net)]));
-    const scale = maxValue > 0 ? (height - 60) / maxValue : 1;
-
     const formatValue = (val: number) => {
-        if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
-        if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+        if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+        if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
         return `$${val.toFixed(0)}`;
     };
 
+    const heightStyle = typeof height === 'number' ? `${height}px` : height;
+    const isFluid = typeof height === 'string';
+
+    const chartData = {
+        labels: data.map((d) => d.label),
+        datasets: [
+            {
+                label: 'Cash In',
+                data: data.map((d) => d.cashIn),
+                backgroundColor: '#22c55e',
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+            {
+                label: 'Cash Out',
+                data: data.map((d) => d.cashOut),
+                backgroundColor: '#ef4444',
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+            {
+                label: 'Net',
+                data: data.map((d) => d.net),
+                backgroundColor: data.map((d) => (d.net >= 0 ? '#3b82f6' : '#f97316')),
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+        ],
+    };
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 900,
+            easing: 'easeOutQuart',
+        },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label(context: any) {
+                        return `${context.dataset.label}: ${formatValue(context.parsed.y)}`;
+                    },
+                },
+            },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: showLabels ? { color: '#64748b', font: { size: 10 } } : { display: false },
+            },
+            y: {
+                grid: { color: '#e2e8f0' },
+                ticks: {
+                    color: '#64748b',
+                    callback(value: number) {
+                        return formatValue(value);
+                    },
+                },
+            },
+        },
+    } as const;
+
     return (
-        <div className="w-full overflow-x-auto">
-            <div className="flex items-end gap-2 min-w-max px-4" style={{ height: `${height}px` }}>
-                {data.map((item, idx) => (
-                    <div key={idx} className="flex flex-col items-center group" style={{ minWidth: showLabels ? '70px' : '50px' }}>
-                        <div className="flex items-end gap-1 mb-2" style={{ height: `${height - 60}px` }}>
-                            <div className="relative">
-                                <div
-                                    className="w-5 bg-green-500 rounded-t transition-all hover:bg-green-600"
-                                    style={{ height: `${Math.max(item.cashIn * scale, 4)}px` }}
-                                />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
-                                    In: {formatValue(item.cashIn)}
-                                </div>
-                            </div>
-                            <div className="relative">
-                                <div
-                                    className="w-5 bg-red-500 rounded-t transition-all hover:bg-red-600"
-                                    style={{ height: `${Math.max(item.cashOut * scale, 4)}px` }}
-                                />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
-                                    Out: {formatValue(item.cashOut)}
-                                </div>
-                            </div>
-                            <div className="relative">
-                                <div
-                                    className={`w-5 rounded-t transition-all ${item.net >= 0 ? 'bg-blue-500 hover:bg-blue-600' : 'bg-orange-500 hover:bg-orange-600'}`}
-                                    style={{ height: `${Math.max(Math.abs(item.net) * scale, 4)}px` }}
-                                />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
-                                    Net: {formatValue(item.net)}
-                                </div>
-                            </div>
-                        </div>
-                        {showLabels && <span className="text-xs text-slate-500 font-medium">{item.label}</span>}
-                    </div>
-                ))}
+        <div className={`w-full px-2 ${isFluid ? 'h-full' : ''}`} style={isFluid ? { height: heightStyle } : undefined}>
+            <div style={{ height: isFluid ? '100%' : heightStyle }}>
+                <Bar data={chartData} options={chartOptions} />
             </div>
             <div className="flex justify-center gap-6 mt-4 text-xs">
                 <div className="flex items-center gap-1.5">
@@ -204,32 +245,13 @@ const BarChart = ({ data, height = 200, showLabels = true }: {
 // Cumulative line chart
 const CumulativeChart = ({ data, height = 120, startingBalance = 0 }: {
     data: { label: string; value: number }[];
-    height?: number;
+    height?: number | string;
     startingBalance?: number;
 }) => {
-    // Adjust values to include starting balance
-    const adjustedData = data.map((d, i) => ({
+    const adjustedData = data.map((d) => ({
         ...d,
         value: startingBalance + d.value,
     }));
-
-    const values = adjustedData.map(d => d.value);
-    const minVal = Math.min(...values, 0);
-    const maxVal = Math.max(...values, 0);
-    const range = maxVal - minVal || 1;
-    const padding = 20;
-    const chartHeight = height - padding * 2;
-
-    const getY = (val: number) => padding + (maxVal - val) / range * chartHeight;
-    const zeroY = getY(0);
-
-    const points = adjustedData.map((d, i) => ({
-        x: (i / (adjustedData.length - 1)) * 100,
-        y: getY(d.value),
-    }));
-
-    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    const areaD = `${pathD} L 100 ${zeroY} L 0 ${zeroY} Z`;
 
     const formatValue = (val: number) => {
         if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
@@ -237,27 +259,202 @@ const CumulativeChart = ({ data, height = 120, startingBalance = 0 }: {
         return `$${val.toFixed(0)}`;
     };
 
+    const chartData = {
+        labels: adjustedData.map((d) => d.label),
+        datasets: [
+            {
+                label: 'Cumulative Cash',
+                data: adjustedData.map((d) => d.value),
+                borderColor: '#0ea5e9',
+                backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 4,
+                pointBackgroundColor: '#0ea5e9',
+            },
+        ],
+    };
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 900,
+            easing: 'easeOutQuart',
+        },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label(context: any) {
+                        return `${context.label}: ${formatValue(context.parsed.y)}`;
+                    },
+                },
+            },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: '#64748b', font: { size: 10 } },
+            },
+            y: {
+                grid: { color: '#e2e8f0' },
+                ticks: {
+                    color: '#64748b',
+                    callback(value: number) {
+                        return formatValue(value);
+                    },
+                },
+            },
+        },
+    } as const;
+
+    const heightStyle = typeof height === 'number' ? `${height}px` : height;
+    const isFluid = typeof height === 'string';
+
     return (
-        <div className="w-full px-4">
-            <svg viewBox={`0 0 100 ${height}`} className="w-full" preserveAspectRatio="none" style={{ height: `${height}px` }}>
-                {/* Zero line */}
-                <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="#cbd5e1" strokeWidth="0.3" strokeDasharray="2,2" />
-                {/* Area fill */}
-                <path d={areaD} fill={values[values.length - 1] >= 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)'} />
-                {/* Line */}
-                <path d={pathD} fill="none" stroke={values[values.length - 1] >= 0 ? '#22c55e' : '#ef4444'} strokeWidth="2" />
-                {/* Points */}
-                {points.map((p, i) => (
-                    <g key={i}>
-                        <circle cx={p.x} cy={p.y} r="3" fill={adjustedData[i].value >= 0 ? '#22c55e' : '#ef4444'} />
-                        <title>{adjustedData[i].label}: {formatValue(adjustedData[i].value)}</title>
-                    </g>
-                ))}
-            </svg>
-            <div className="flex justify-between text-xs text-slate-500 mt-1">
-                {data.filter((_, i) => i % 3 === 0 || i === data.length - 1).map((d, i) => (
-                    <span key={i}>{d.label}</span>
-                ))}
+        <div className={`w-full px-2 ${isFluid ? 'h-full' : ''}`} style={isFluid ? { height: heightStyle } : undefined}>
+            <div style={{ height: isFluid ? '100%' : heightStyle }}>
+                <Line data={chartData} options={chartOptions} />
+            </div>
+        </div>
+    );
+};
+
+const WaterfallChart = ({ data, height = 200 }: {
+    data: { label: string; value: number }[];
+    height?: number | string;
+}) => {
+    const cumulative = data.reduce<number[]>((acc, item, idx) => {
+        const prev = idx === 0 ? 0 : acc[idx - 1];
+        acc.push(prev + item.value);
+        return acc;
+    }, []);
+
+    const total = cumulative[cumulative.length - 1] ?? 0;
+    const totalLabel = 'Total';
+    const extended = [...data, { label: totalLabel, value: total }];
+
+    const formatValue = (val: number) => {
+        if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+        if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+        return `$${val.toFixed(0)}`;
+    };
+
+    const waterfallLabelsPlugin = {
+        id: 'waterfallLabels',
+        afterDatasetsDraw(chart: ChartJS) {
+            const { ctx } = chart;
+            const meta = chart.getDatasetMeta(0);
+            const dataset = chart.data.datasets[0] as { data: Array<any> };
+            ctx.save();
+            ctx.fillStyle = '#0f172a';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            meta.data.forEach((bar: any, index: number) => {
+                const raw = dataset.data[index];
+                if (!raw) return;
+                const value = raw.isTotal ? raw.total : raw.delta;
+                const label = formatValue(value);
+                const y = bar.y - 6;
+                ctx.fillText(label, bar.x, y);
+            });
+            ctx.restore();
+        },
+    };
+
+    const dataPoints = extended.map((item, idx) => {
+        const isTotal = idx === extended.length - 1;
+        const start = isTotal ? 0 : (idx === 0 ? 0 : cumulative[idx - 1]);
+        const end = isTotal ? total : start + item.value;
+        return {
+            x: item.label,
+            y: [start, end],
+            delta: item.value,
+            total,
+            isTotal,
+        };
+    });
+
+    const backgroundColors = extended.map((item, idx) => {
+        const isTotal = idx === extended.length - 1;
+        if (isTotal) return '#64748b';
+        return item.value >= 0 ? '#14b8a6' : '#ef4444';
+    });
+
+    const chartData = {
+        labels: extended.map((item) => item.label),
+        datasets: [
+            {
+                label: 'Net Cashflow',
+                data: dataPoints,
+                backgroundColor: backgroundColors,
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+        ],
+    };
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 900,
+            easing: 'easeOutQuart',
+        },
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                callbacks: {
+                    label(context: any) {
+                        const raw = context.raw;
+                        const value = raw.isTotal ? raw.total : raw.delta;
+                        return `${context.label}: ${formatValue(value)}`;
+                    },
+                },
+            },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: '#64748b', font: { size: 10 } },
+            },
+            y: {
+                grid: { color: '#e2e8f0' },
+                ticks: {
+                    color: '#64748b',
+                    callback(value: number) {
+                        return formatValue(value);
+                    },
+                },
+            },
+        },
+    } as const;
+
+    const heightStyle = typeof height === 'number' ? `${height}px` : height;
+    const isFluid = typeof height === 'string';
+
+    return (
+        <div className={`w-full px-2 ${isFluid ? 'h-full flex flex-col' : ''}`} style={isFluid ? { height: heightStyle } : undefined}>
+            <div style={{ height: isFluid ? '100%' : heightStyle }} className={isFluid ? 'flex-1 min-h-0' : undefined}>
+                <Bar data={chartData} options={chartOptions} plugins={[waterfallLabelsPlugin]} />
+            </div>
+            <div className="flex justify-center gap-6 mt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-teal-500 rounded" />
+                    <span className="text-slate-600">Increase</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-red-500 rounded" />
+                    <span className="text-slate-600">Decrease</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-slate-500 rounded" />
+                    <span className="text-slate-600">Total</span>
+                </div>
             </div>
         </div>
     );
@@ -269,7 +466,7 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
     const [expandedCostItems, setExpandedCostItems] = useState<Set<string>>(new Set());
     const [showSettings, setShowSettings] = useState(false);
     const [showGeneralCosts, setShowGeneralCosts] = useState(false);
-    const [showFullscreenChart, setShowFullscreenChart] = useState<'bar' | 'cumulative' | null>(null);
+    const [showFullscreenChart, setShowFullscreenChart] = useState<'bar' | 'cumulative' | 'waterfall' | null>(null);
     const [startingBalance, setStartingBalance] = useState(settings.startingBalance);
     const [newCost, setNewCost] = useState<Partial<GeneralCost>>({
         type: 'recurring',
@@ -325,6 +522,13 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
             value: balance,
         }));
     }, [runningBalances, months]);
+
+    const waterfallData = useMemo(() => {
+        return months.map((month) => ({
+            label: formatMonthShort(month.month),
+            value: month.net ?? 0,
+        }));
+    }, [months]);
 
     const endingBalance = startingBalance + (runningBalances[runningBalances.length - 1] ?? 0);
 
@@ -470,7 +674,7 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
                 </div>
 
                 {/* Charts Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-semibold text-slate-700">Monthly Cash Flow</h3>
@@ -507,6 +711,22 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
                             </span>
                         </div>
                     </div>
+
+                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-slate-700">Net Cashflow Waterfall</h3>
+                            <button
+                                onClick={() => setShowFullscreenChart('waterfall')}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                title="Fullscreen"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                </svg>
+                            </button>
+                        </div>
+                        <WaterfallChart data={waterfallData} height={200} />
+                    </div>
                 </div>
 
                 {/* Main Cashflow Table */}
@@ -525,9 +745,8 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
                                     {months.map((month) => (
                                         <th
                                             key={month.month}
-                                            className={`px-3 py-3 text-right font-semibold text-slate-600 min-w-[95px] ${
-                                                month.month === currentMonth ? 'bg-blue-50' : ''
-                                            }`}
+                                            className={`px-3 py-3 text-right font-semibold text-slate-600 min-w-[95px] ${month.month === currentMonth ? 'bg-blue-50' : ''
+                                                }`}
                                         >
                                             <div>{formatMonthHeader(month.month)}</div>
                                             {month.month === currentMonth && (
@@ -987,10 +1206,24 @@ const ShowCashForecast = ({ months, currentMonth, costCodeDescriptions = {}, set
             </Modal>
 
             {/* Fullscreen Chart Modal */}
-            <Modal isOpen={showFullscreenChart !== null} onClose={() => setShowFullscreenChart(null)} title={showFullscreenChart === 'bar' ? 'Monthly Cash Flow' : 'Cumulative Cash Position'} size="full">
-                <div className="h-[70vh]">
-                    {showFullscreenChart === 'bar' && <BarChart data={chartData} height={500} />}
-                    {showFullscreenChart === 'cumulative' && <CumulativeChart data={cumulativeData} height={500} startingBalance={startingBalance} />}
+            <Modal
+                isOpen={showFullscreenChart !== null}
+                onClose={() => setShowFullscreenChart(null)}
+                title={
+                    showFullscreenChart === 'bar'
+                        ? 'Monthly Cash Flow'
+                        : showFullscreenChart === 'cumulative'
+                            ? 'Cumulative Cash Position'
+                            : 'Net Cashflow Waterfall'
+                }
+                size="full"
+            >
+                <div className="h-[70vh] w-full">
+                    {showFullscreenChart === 'bar' && <BarChart data={chartData} height={600} />}
+                    {showFullscreenChart === 'cumulative' && (
+                        <CumulativeChart data={cumulativeData} height="100%" startingBalance={startingBalance} />
+                    )}
+                    {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
                 </div>
             </Modal>
         </AppLayout>

@@ -62,6 +62,7 @@ type Props = {
     };
     months: string[];
     selectedForecastMonth: string | null;
+    latestForecastMonth: string | null;
     jobNumber: string | null;
     locationId: number | string;
 };
@@ -491,6 +492,7 @@ export default function CompareForecastShow({
     comparisonData,
     months,
     selectedForecastMonth,
+    latestForecastMonth,
     jobNumber,
     locationId,
 }: Props) {
@@ -512,6 +514,9 @@ export default function CompareForecastShow({
     }>({ open: false, title: '', actuals: [], forecasts: [] });
 
     const activeMonth = selectedForecastMonth ?? '';
+    const showOutdatedNotice = Boolean(
+        selectedForecastMonth && latestForecastMonth && selectedForecastMonth !== latestForecastMonth
+    );
 
     const addMonths = (value: string, delta: number): string => {
         const parts = value.split('-');
@@ -900,6 +905,16 @@ export default function CompareForecastShow({
             <Head title="Forecast vs Actuals" />
 
             <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
+                {showOutdatedNotice && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                        <div className="text-sm font-medium">Forecast may be outdated</div>
+                        <div className="mt-1 text-xs md:text-sm">
+                            This view is using the {formatMonthLabel(selectedForecastMonth)} forecast. Latest is{' '}
+                            {formatMonthLabel(latestForecastMonth)}. This view may use outdated data from a previous
+                            forecast.
+                        </div>
+                    </div>
+                )}
                 {/* Header */}
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
