@@ -80,7 +80,7 @@ export function buildCostColumnDefs({
                             valueGetter: (p: any) => (p?.data ? sumMonths(p.data, displayMonths) : null),
                             valueFormatter: (p: any) =>
                                 p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
-                            cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                            cellClass: 'bg-gray-50 dark:bg-yellow-950/30 font-semibold text-right',
                             headerClass: 'ag-right-aligned-header',
                         },
                         {
@@ -98,7 +98,7 @@ export function buildCostColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
-                            cellClass: 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                            cellClass: 'bg-gray-50 dark:bg-yellow-950/30 font-semibold text-right',
                         },
                     ],
                 },
@@ -123,7 +123,7 @@ export function buildCostColumnDefs({
                                 headerClass: 'ag-right-aligned-header',
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
-                                    : 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                                    : 'bg-gray-50 dark:bg-yellow-950/30 font-semibold text-right',
                                 valueFormatter: (p: any) =>
                                     p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
@@ -136,7 +136,7 @@ export function buildCostColumnDefs({
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
-                                    : 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold text-right',
+                                    : 'bg-gray-50 dark:bg-yellow-950/30 font-semibold text-right',
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
                                     const budget = Number(p.data?.budget ?? 0) || 0;
@@ -185,7 +185,7 @@ export function buildCostColumnDefs({
                         return total;
                     },
                     valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
-                    headerClass: 'ag-right-aligned-header',
+                    headerClass: 'ag-right-aligned-header bg-blue-100 dark:bg-blue-950/30 font-bold',
                     children: [
                         {
                             headerName: '$',
@@ -207,8 +207,8 @@ export function buildCostColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
-                            cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
-                            headerClass: 'ag-right-aligned-header',
+                            cellClass: 'bg-blue-100 dark:bg-blue-950/30 font-semibold text-right',
+                            headerClass: 'ag-right-aligned-header bg-blue-100 dark:bg-blue-950/30 font-bold',
                         },
                         {
                             headerName: '%',
@@ -216,7 +216,7 @@ export function buildCostColumnDefs({
                             filter: false,
                             width: 70,
                             type: 'numericColumn',
-                            headerClass: 'ag-right-aligned-header',
+                            headerClass: 'ag-right-aligned-header bg-blue-100 dark:bg-blue-950/30 font-bold',
                             valueGetter: (p: any) => {
                                 const budget = Number(p.data?.budget ?? 0) || 0;
                                 if (!budget) return null;
@@ -232,7 +232,8 @@ export function buildCostColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
-                            cellClass: 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+                            cellClass: 'bg-blue-100 dark:bg-blue-950/30 font-bold text-right',
+
                         },
                     ],
                 },
@@ -256,14 +257,13 @@ export function buildCostColumnDefs({
                                 headerClass: 'ag-right-aligned-header',
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right border-l-2 border-orange-400'
-                                    : isLastMonth
-                                      ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
-                                      : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+
+                                    : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 valueGetter: isOverlapMonth
                                     ? (p: any) => {
-                                          // For current month in forecast, use separate forecast field
-                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                      }
+                                        // For current month in forecast, use separate forecast field
+                                        return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
+                                    }
                                     : undefined,
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {
@@ -284,9 +284,8 @@ export function buildCostColumnDefs({
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
                                     ? 'bg-orange-100 dark:bg-orange-900/40 font-semibold text-right'
-                                    : isLastMonth
-                                      ? 'bg-blue-100 dark:bg-blue-900/40 font-semibold text-right'
-                                      : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
+
+                                    : 'bg-blue-50 dark:bg-blue-950/30 font-semibold text-right',
                                 headerClass: 'ag-right-aligned-header',
                                 valueGetter: (p: any) => {
                                     const budget = Number(p.data?.budget ?? 0) || 0;
@@ -698,9 +697,9 @@ export function buildRevenueColumnDefs({
                                 },
                                 valueGetter: isOverlapMonth
                                     ? (p: any) => {
-                                          // For current month in forecast, use separate forecast field
-                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                      }
+                                        // For current month in forecast, use separate forecast field
+                                        return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
+                                    }
                                     : undefined,
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {

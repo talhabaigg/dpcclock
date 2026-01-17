@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import {
@@ -25,6 +25,7 @@ import {
     Percent,
     Plus,
     Save,
+    Scale,
     Trash2,
     Unlock,
 } from 'lucide-react';
@@ -71,14 +72,14 @@ const ShowJobForecastPage = ({
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
-              { title: 'Forecast Projects', href: '/forecast-projects' },
-              { title: jobName || 'Forecast Project', href: '#' },
-          ]
+            { title: 'Forecast Projects', href: '/forecast-projects' },
+            { title: jobName || 'Forecast Project', href: '#' },
+        ]
         : [
-              { title: 'Locations', href: '/locations' },
-              { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
-              { title: 'Job Forecast', href: '#' },
-          ];
+            { title: 'Locations', href: '/locations' },
+            { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
+            { title: 'Job Forecast', href: '#' },
+        ];
 
     // ===========================
     // State Management
@@ -1124,6 +1125,18 @@ const ShowJobForecastPage = ({
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Excel Import/Export</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Link href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`} target="_blank" rel="noopener noreferrer">
+                                        <Button variant="ghost" size="icon" >
+                                            <Scale className="h-5 w-5" />
+                                        </Button>
+                                    </Link>
+
+                                </TooltipTrigger>
+                                <TooltipContent>Forecast v/s Actual</TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                         <div className="flex flex-col">

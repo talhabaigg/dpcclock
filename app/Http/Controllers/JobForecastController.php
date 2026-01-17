@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Carbon\Carbon;
 
 class JobForecastController extends Controller
 {
@@ -463,6 +464,145 @@ class JobForecastController extends Controller
         $jobForecast->save();
 
         return redirect()->back()->with('success', $jobForecast->is_locked ? 'Forecast locked.' : 'Forecast unlocked.');
+    }
+
+    public function compareForecast($location, Request $request) {
+
+        $jobNumber = Location::where('id', $location)->value('external_id');
+        $month = $request->query('month');
+
+        if (!$month) {
+            return Inertia::render('compare-forecast/show', [
+                'comparisonData' => [
+                    'cost' => [],
+                    'revenue' => [],
+                ],
+                'months' => [],
+                'selectedForecastMonth' => null,
+                'jobNumber' => $jobNumber,
+                'locationId' => $location,
+            ]);
+        }
+
+        $forecastMonth = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $jobForecast = JobForecast::with('data')
+            ->where('forecast_month', $forecastMonth->format('Y-m-d'))
+            ->where('job_number', $jobNumber)
+            ->first();
+
+        $forecastData = $jobForecast
+            ? $jobForecast->data->groupBy(function ($item) {
+                return $item->grid_type . '_' . $item->cost_item;
+            })
+            : collect();
+
+        $actualsByMonth = JobCostDetail::where('job_number', $jobNumber)
+            ->whereRaw("DATE_FORMAT(transaction_date, '%Y-%m') >= ?", [$month])
+            ->selectRaw("
+                DATE_FORMAT(transaction_date, '%Y-%m') as month,
+                cost_item,
+                cost_item_description,
+                SUM(amount) as actual
+            ")
+            ->groupBy('cost_item', 'cost_item_description', 'month')
+            ->orderBy('month')
+            ->orderBy('cost_item')
+            ->get();
+
+        $revenuesByMonth = ArProgressBillingSummary::where('job_number', $jobNumber)
+            ->whereRaw("DATE_FORMAT(period_end_date, '%Y-%m') >= ?", [$month])
+            ->selectRaw("
+                DATE_FORMAT(period_end_date, '%Y-%m') as month,
+                '99-99' as cost_item,
+                'Revenue' as cost_item_description,
+                SUM(this_app_work_completed) as actual
+            ")
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+        $costComparison = $actualsByMonth
+            ->groupBy('cost_item')
+            ->map(function ($items) use ($forecastData) {
+                $first = $items->first();
+                $months = [];
+
+                foreach ($items as $item) {
+                    $forecastAmount = null;
+                    $forecastKey = 'cost_' . $item->cost_item;
+                    if (isset($forecastData[$forecastKey])) {
+                        $forecastRecord = $forecastData[$forecastKey]->firstWhere('month', $item->month);
+                        if ($forecastRecord) {
+                            $forecastAmount = (float) $forecastRecord->forecast_amount;
+                        }
+                    }
+
+                    $months[$item->month] = [
+                        'actual' => (float) $item->actual,
+                        'forecast' => $forecastAmount,
+                    ];
+                }
+
+                return [
+                    'cost_item' => $first->cost_item,
+                    'cost_item_description' => $first->cost_item_description ?? '',
+                    'months' => $months,
+                ];
+            })
+            ->sortBy('cost_item')
+            ->values()
+            ->all();
+
+        $revenueComparison = $revenuesByMonth
+            ->groupBy('cost_item')
+            ->map(function ($items) use ($forecastData) {
+                $first = $items->first();
+                $months = [];
+
+                foreach ($items as $item) {
+                    $forecastAmount = null;
+                    $forecastKey = 'revenue_' . $item->cost_item;
+                    if (isset($forecastData[$forecastKey])) {
+                        $forecastRecord = $forecastData[$forecastKey]->firstWhere('month', $item->month);
+                        if ($forecastRecord) {
+                            $forecastAmount = (float) $forecastRecord->forecast_amount;
+                        }
+                    }
+
+                    $months[$item->month] = [
+                        'actual' => (float) $item->actual,
+                        'forecast' => $forecastAmount,
+                    ];
+                }
+
+                return [
+                    'cost_item' => $first->cost_item,
+                    'cost_item_description' => $first->cost_item_description ?? '',
+                    'months' => $months,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $months = $actualsByMonth
+            ->pluck('month')
+            ->merge($revenuesByMonth->pluck('month'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        
+        return Inertia::render('compare-forecast/show', [
+            'comparisonData' => [
+                'cost' => $costComparison,
+                'revenue' => $revenueComparison,
+            ],
+            'months' => $months,
+            'selectedForecastMonth' => $month,
+            'jobNumber' => $jobNumber,
+            'locationId' => $location,
+        ]);
     }
 
 }

@@ -207,6 +207,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Forecast Project Forecast Data
         Route::post('/forecast-projects/{id}/forecast', [ForecastProjectController::class, 'storeForecast'])->name('forecastProjects.storeForecast');
+        
+        //Compare Forecast vs Actuals
+        Route::get('/location/{location}/compare-forecast-actuals', [JobForecastController::class, 'compareForecast'])->name('forecast.compareForecast');
 
         // Turnover Forecast
         Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
