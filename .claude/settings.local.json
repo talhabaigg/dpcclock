@@ -12,7 +12,9 @@
       "Bash(npm view:*)",
       "Bash(npm install:*)",
       "Bash(npm run lint)",
-      "Bash(php -r:*)"
+      "Bash(php -r:*)",
+      "Bash(php -l:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

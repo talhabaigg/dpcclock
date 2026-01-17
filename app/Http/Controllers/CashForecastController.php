@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArProgressBillingSummary;
+use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -11,22 +13,74 @@ class CashForecastController extends Controller
 {
     public function __invoke(Request $request)
     {
-        // Base forecast data for the next 12 months.
-        $forecastData = JobForecastData::select('month', 'cost_item', 'forecast_amount', 'job_number')->get();
         $rules = $this->getForecastRules();
+        $currentMonth = Carbon::now()->format('Y-m');
+
+        // Get actuals from past months (costs and revenue)
+        $actualData = $this->getActualData($rules);
+
+        // Get forecast data for current month onwards
+        $forecastData = JobForecastData::select('month', 'cost_item', 'forecast_amount', 'job_number')
+            ->where('month', '>=', $currentMonth)
+            ->get();
+
+        // Combine actuals and forecasts
+        $combinedData = $actualData->concat($forecastData);
+
+        // Generate month range starting from current month
         $allMonths = $this->generateMonthRange(Carbon::now(), 12);
 
-        $forecastRows = $this->applyRules($forecastData, $rules);
-        $gstPayableRows = $this->calculateQuarterlyGstPayable($forecastRows, $rules);
+        $transformedRows = $this->applyRules($combinedData, $rules);
+        $gstPayableRows = $this->calculateQuarterlyGstPayable($transformedRows, $rules);
 
         $allMonthsWithCostSummary = $this->buildMonthHierarchy(
             $allMonths,
-            $forecastRows->concat($gstPayableRows)
+            $transformedRows->concat($gstPayableRows)
         );
 
         return Inertia::render('cash-forecast/show', [
             'months' => $allMonthsWithCostSummary,
+            'currentMonth' => $currentMonth,
         ]);
+    }
+
+    /**
+     * Get actual cost and revenue data from JobCostDetail and ArProgressBillingSummary.
+     * This provides the historical data needed for cash flow calculations with delays.
+     */
+    private function getActualData(array $rules): \Illuminate\Support\Collection
+    {
+        $cashInCode = $rules['cash_in_code'];
+
+        // Get cost actuals - need data from past months to account for payment delays
+        $costActuals = JobCostDetail::select('job_number', 'cost_item', 'transaction_date', 'amount')
+            ->where('transaction_date', '>=', Carbon::now()->subMonths(3)->startOfMonth())
+            ->get()
+            ->map(function ($item) {
+                return (object) [
+                    'job_number' => $item->job_number,
+                    'cost_item' => $item->cost_item,
+                    'month' => Carbon::parse($item->transaction_date)->format('Y-m'),
+                    'forecast_amount' => (float) $item->amount,
+                    'is_actual' => true,
+                ];
+            });
+
+        // Get revenue actuals
+        $revenueActuals = ArProgressBillingSummary::select('job_number', 'period_end_date', 'this_app_work_completed')
+            ->where('period_end_date', '>=', Carbon::now()->subMonths(3)->startOfMonth())
+            ->get()
+            ->map(function ($item) use ($cashInCode) {
+                return (object) [
+                    'job_number' => $item->job_number,
+                    'cost_item' => $cashInCode,
+                    'month' => Carbon::parse($item->period_end_date)->format('Y-m'),
+                    'forecast_amount' => (float) $item->this_app_work_completed,
+                    'is_actual' => true,
+                ];
+            });
+
+        return $costActuals->concat($revenueActuals);
     }
 
     private function getForecastRules()
@@ -36,47 +90,58 @@ class CashForecastController extends Controller
             'cash_in_code' => '99-99',
             // Cost item code to represent GST payable in the cash flow.
             'gst_payable_code' => 'GST-PAYABLE',
-            // Delay rules in months by cost item code.
-            'cost_item_delays' => [
-                '01-01' => 1,
-                '99-99' => 2,
-            ],
-            // Split rules by cost item code. Each entry is [delayMonths, ratio].
+
+            // =================================================================
+            // RULE 1: Wages (01-01, 03-01, 05-01, 07-01)
+            // Split 30% tax (paid +1 month) / 70% wages (paid same month)
+            // NO GST on wages
+            // =================================================================
             'cost_item_delay_splits' => [
                 '01-01' => [
-                    ['delay' => 1, 'ratio' => 0.30],
-                    ['delay' => 0, 'ratio' => 0.70],
+                    ['delay' => 0, 'ratio' => 0.70],  // 70% wages paid same month
+                    ['delay' => 1, 'ratio' => 0.30],  // 30% tax paid next month
                 ],
                 '03-01' => [
-                    ['delay' => 1, 'ratio' => 0.30],
                     ['delay' => 0, 'ratio' => 0.70],
+                    ['delay' => 1, 'ratio' => 0.30],
                 ],
                 '05-01' => [
-                    ['delay' => 1, 'ratio' => 0.30],
                     ['delay' => 0, 'ratio' => 0.70],
+                    ['delay' => 1, 'ratio' => 0.30],
                 ],
                 '07-01' => [
-                    ['delay' => 1, 'ratio' => 0.30],
                     ['delay' => 0, 'ratio' => 0.70],
+                    ['delay' => 1, 'ratio' => 0.30],
                 ],
             ],
-            // GST rates by cost item code (e.g., 0.10 for 10%).
-            'cost_item_gst_rates' => [
-                '01-01' => 0.10,
-                '99-99' => 0.10,
-            ],
-            // Prefix-based GST rule.
-            'gst_prefix' => [
+
+            // Wage codes - NO GST applied (explicitly listed to exclude from GST)
+            'wage_codes' => ['01-01', '03-01', '05-01', '07-01'],
+
+            // =================================================================
+            // RULE 2: Oncosts (prefixes 02, 04, 06, 08)
+            // Paid +1 month, NO GST
+            // =================================================================
+            'oncost_prefixes' => [2, 4, 6, 8],
+            'oncost_delay_months' => 1,
+
+            // =================================================================
+            // RULE 3: Vendor costs (prefixes 20-98)
+            // GST 10% (multiplier 1.1) + delay +1 month (30 day terms)
+            // =================================================================
+            'vendor_cost_prefix' => [
                 'min' => 20,
                 'max' => 98,
-                'rate' => 0.10,
+                'gst_rate' => 0.10,
+                'delay_months' => 1,
             ],
-            // Prefix-based base delay rule.
-            'delay_prefix' => [
-                'min' => 20,
-                'max' => 98,
-                'months' => 1,
-            ],
+
+            // =================================================================
+            // RULE 4: Revenue (99-99)
+            // GST 10% collected + delay +2 months
+            // =================================================================
+            'revenue_gst_rate' => 0.10,
+            'revenue_delay_months' => 2,
         ];
     }
 
@@ -97,55 +162,119 @@ class CashForecastController extends Controller
 
     private function applyRules($forecastData, array $rules)
     {
-        $costItemDelays = $rules['cost_item_delays'] ?? [];
+        $cashInCode = $rules['cash_in_code'];
+        $wageCodes = $rules['wage_codes'] ?? [];
         $costItemDelaySplits = $rules['cost_item_delay_splits'] ?? [];
-        $costItemGstRates = $rules['cost_item_gst_rates'] ?? [];
-        $gstPrefix = $rules['gst_prefix'] ?? [];
-        $delayPrefix = $rules['delay_prefix'] ?? [];
+        $oncostPrefixes = $rules['oncost_prefixes'] ?? [];
+        $oncostDelayMonths = $rules['oncost_delay_months'] ?? 1;
+        $vendorCostPrefix = $rules['vendor_cost_prefix'] ?? [];
+        $revenueGstRate = $rules['revenue_gst_rate'] ?? 0.10;
+        $revenueDelayMonths = $rules['revenue_delay_months'] ?? 2;
 
-        return $forecastData->flatMap(function ($item) use ($costItemDelays, $costItemDelaySplits, $costItemGstRates, $gstPrefix, $delayPrefix) {
-            $prefix = $this->getCostItemPrefix($item->cost_item);
-            $gstRate = $costItemGstRates[$item->cost_item] ?? 0;
-            if ($gstRate === 0 && $this->isPrefixInRange($prefix, $gstPrefix['min'] ?? null, $gstPrefix['max'] ?? null)) {
-                $gstRate = $gstPrefix['rate'] ?? 0;
+        return $forecastData->flatMap(function ($item) use (
+            $cashInCode,
+            $wageCodes,
+            $costItemDelaySplits,
+            $oncostPrefixes,
+            $oncostDelayMonths,
+            $vendorCostPrefix,
+            $revenueGstRate,
+            $revenueDelayMonths
+        ) {
+            $costItem = $item->cost_item;
+            $prefix = $this->getCostItemPrefix($costItem);
+            $amount = (float) $item->forecast_amount;
+
+            // =================================================================
+            // RULE 4: Revenue (99-99) - 10% GST + 2 month delay
+            // =================================================================
+            if ($costItem === $cashInCode) {
+                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                    ->addMonths($revenueDelayMonths)
+                    ->format('Y-m');
+
+                return [
+                    (object) [
+                        'month' => $delayedMonth,
+                        'cost_item' => $costItem,
+                        'job_number' => $item->job_number,
+                        'forecast_amount' => $amount * (1 + $revenueGstRate),
+                        'gst_rate' => $revenueGstRate,
+                    ],
+                ];
             }
 
-            $baseDelayMonths = 0;
-            if ($this->isPrefixInRange($prefix, $delayPrefix['min'] ?? null, $delayPrefix['max'] ?? null)) {
-                $baseDelayMonths = (int) ($delayPrefix['months'] ?? 0);
-            }
-
-            // GST applies after any delay/split logic, so keep a single multiplier.
-            $gstMultiplier = 1 + $gstRate;
-
-            if (isset($costItemDelaySplits[$item->cost_item])) {
-                // Split a single forecast row into multiple delayed rows by ratio.
-                return collect($costItemDelaySplits[$item->cost_item])->map(function ($split) use ($item, $gstMultiplier, $baseDelayMonths) {
+            // =================================================================
+            // RULE 1: Wages (01-01, 03-01, 05-01, 07-01)
+            // Split 70% wages (same month) / 30% tax (+1 month), NO GST
+            // =================================================================
+            if (in_array($costItem, $wageCodes) && isset($costItemDelaySplits[$costItem])) {
+                return collect($costItemDelaySplits[$costItem])->map(function ($split) use ($item, $amount) {
                     $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
-                        ->addMonths($baseDelayMonths + $split['delay'])
+                        ->addMonths($split['delay'])
                         ->format('Y-m');
 
                     return (object) [
                         'month' => $delayedMonth,
                         'cost_item' => $item->cost_item,
                         'job_number' => $item->job_number,
-                        'forecast_amount' => (float) $item->forecast_amount * (float) $split['ratio'] * $gstMultiplier,
+                        'forecast_amount' => $amount * (float) $split['ratio'],
+                        'gst_rate' => 0, // No GST on wages
                     ];
                 });
             }
 
-            // Default path: apply a single delay and GST multiplier.
-            $delayMonths = $baseDelayMonths + ($costItemDelays[$item->cost_item] ?? 0);
-            $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
-                ->addMonths($delayMonths)
-                ->format('Y-m');
+            // =================================================================
+            // RULE 2: Oncosts (prefixes 02, 04, 06, 08) - +1 month delay, NO GST
+            // =================================================================
+            if (in_array($prefix, $oncostPrefixes)) {
+                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                    ->addMonths($oncostDelayMonths)
+                    ->format('Y-m');
 
+                return [
+                    (object) [
+                        'month' => $delayedMonth,
+                        'cost_item' => $costItem,
+                        'job_number' => $item->job_number,
+                        'forecast_amount' => $amount, // No GST multiplier
+                        'gst_rate' => 0,
+                    ],
+                ];
+            }
+
+            // =================================================================
+            // RULE 3: Vendor costs (prefixes 20-98) - 10% GST + 1 month delay
+            // =================================================================
+            if ($this->isPrefixInRange($prefix, $vendorCostPrefix['min'] ?? null, $vendorCostPrefix['max'] ?? null)) {
+                $gstRate = $vendorCostPrefix['gst_rate'] ?? 0.10;
+                $delayMonths = $vendorCostPrefix['delay_months'] ?? 1;
+
+                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                    ->addMonths($delayMonths)
+                    ->format('Y-m');
+
+                return [
+                    (object) [
+                        'month' => $delayedMonth,
+                        'cost_item' => $costItem,
+                        'job_number' => $item->job_number,
+                        'forecast_amount' => $amount * (1 + $gstRate),
+                        'gst_rate' => $gstRate,
+                    ],
+                ];
+            }
+
+            // =================================================================
+            // Default: No delay, no GST (other cost items)
+            // =================================================================
             return [
                 (object) [
-                    'month' => $delayedMonth,
-                    'cost_item' => $item->cost_item,
+                    'month' => $item->month,
+                    'cost_item' => $costItem,
                     'job_number' => $item->job_number,
-                    'forecast_amount' => (float) $item->forecast_amount * $gstMultiplier,
+                    'forecast_amount' => $amount,
+                    'gst_rate' => 0,
                 ],
             ];
         });
@@ -237,41 +366,50 @@ class CashForecastController extends Controller
         return null;
     }
 
+    /**
+     * RULE 5: Quarterly GST calculation
+     * GST is calculated on CASH BASIS (after delays are applied).
+     * Net GST (collected - paid) is due the month after quarter ends.
+     * Q1 (Jan-Mar) -> paid in April
+     * Q2 (Apr-Jun) -> paid in July
+     * Q3 (Jul-Sep) -> paid in October
+     * Q4 (Oct-Dec) -> paid in January
+     */
     private function calculateQuarterlyGstPayable($forecastRows, array $rules)
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
         $gstPayableCode = $rules['gst_payable_code'] ?? 'GST-PAYABLE';
-        $costItemGstRates = $rules['cost_item_gst_rates'] ?? [];
-        $gstPrefix = $rules['gst_prefix'] ?? [];
 
-        $monthlyGst = $forecastRows->reduce(function ($carry, $row) use ($cashInCode, $costItemGstRates, $gstPrefix) {
-            $gstRate = $costItemGstRates[$row->cost_item] ?? 0;
-            if ($gstRate === 0) {
-                $prefix = $this->getCostItemPrefix($row->cost_item);
-                if ($this->isPrefixInRange($prefix, $gstPrefix['min'] ?? null, $gstPrefix['max'] ?? null)) {
-                    $gstRate = $gstPrefix['rate'] ?? 0;
-                }
-            }
+        // Group GST by month using the gst_rate attached to each row
+        // This uses cash-method dates (delays already applied)
+        $monthlyGst = $forecastRows->reduce(function ($carry, $row) use ($cashInCode) {
+            // Use the gst_rate that was set during applyRules
+            $gstRate = $row->gst_rate ?? 0;
 
             if ($gstRate <= 0) {
                 return $carry;
             }
 
+            // Extract GST component from the gross amount
             $gstAmount = $this->extractGstFromGross((float) $row->forecast_amount, (float) $gstRate);
             $monthKey = $row->month;
+
             if (!isset($carry[$monthKey])) {
                 $carry[$monthKey] = ['collected' => 0.0, 'paid' => 0.0];
             }
 
             if ($row->cost_item === $cashInCode) {
+                // GST collected from revenue
                 $carry[$monthKey]['collected'] += $gstAmount;
             } else {
+                // GST paid on costs
                 $carry[$monthKey]['paid'] += $gstAmount;
             }
 
             return $carry;
         }, []);
 
+        // Group monthly GST into quarters
         $quarterBuckets = [];
         foreach ($monthlyGst as $month => $amounts) {
             $date = Carbon::createFromFormat('Y-m', $month);
@@ -290,14 +428,19 @@ class CashForecastController extends Controller
             $quarterBuckets[$key]['paid'] += $amounts['paid'];
         }
 
+        // Create GST payable rows for each quarter
         $rows = collect();
         foreach ($quarterBuckets as $bucket) {
+            // Net GST = collected - paid
+            // Positive = owe to ATO, Negative = refund from ATO
             $netGst = $bucket['collected'] - $bucket['paid'];
+
             if (abs($netGst) < 0.01) {
                 continue;
             }
 
-            // Net GST for the quarter is paid the following month.
+            // Net GST for the quarter is paid the month after quarter ends
+            // Q1 ends March -> April, Q2 ends June -> July, etc.
             $payableMonth = Carbon::create($bucket['year'], $bucket['quarter'] * 3, 1)
                 ->addMonth()
                 ->format('Y-m');
@@ -307,6 +450,7 @@ class CashForecastController extends Controller
                 'cost_item' => $gstPayableCode,
                 'job_number' => 'GST',
                 'forecast_amount' => (float) $netGst,
+                'gst_rate' => 0, // GST payable itself has no GST
             ]);
         }
 
