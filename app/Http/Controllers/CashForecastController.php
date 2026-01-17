@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArProgressBillingSummary;
+use App\Models\CashForecastGeneralCost;
+use App\Models\CashForecastSetting;
+use App\Models\CostCode;
 use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
 use Carbon\Carbon;
@@ -15,6 +18,12 @@ class CashForecastController extends Controller
     {
         $rules = $this->getForecastRules();
         $currentMonth = Carbon::now()->format('Y-m');
+
+        // Get settings (starting balance)
+        $settings = CashForecastSetting::current();
+
+        // Get cost code descriptions for display
+        $costCodeDescriptions = $this->getCostCodeDescriptions();
 
         // Get actuals from past months (costs and revenue)
         $actualData = $this->getActualData($rules);
@@ -31,17 +40,148 @@ class CashForecastController extends Controller
         $allMonths = $this->generateMonthRange(Carbon::now(), 12);
 
         $transformedRows = $this->applyRules($combinedData, $rules);
+
+        // Add general costs
+        $generalCostRows = $this->getGeneralCostRows($allMonths);
+        $transformedRows = $transformedRows->concat($generalCostRows);
+
         $gstPayableRows = $this->calculateQuarterlyGstPayable($transformedRows, $rules);
 
         $allMonthsWithCostSummary = $this->buildMonthHierarchy(
             $allMonths,
-            $transformedRows->concat($gstPayableRows)
+            $transformedRows->concat($gstPayableRows),
+            $costCodeDescriptions
         );
+
+        // Get general costs for the settings panel
+        $generalCosts = CashForecastGeneralCost::where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('cash-forecast/show', [
             'months' => $allMonthsWithCostSummary,
             'currentMonth' => $currentMonth,
+            'costCodeDescriptions' => $costCodeDescriptions,
+            'settings' => [
+                'startingBalance' => (float) $settings->starting_balance,
+                'startingBalanceDate' => $settings->starting_balance_date?->format('Y-m-d'),
+            ],
+            'generalCosts' => $generalCosts,
+            'categories' => CashForecastGeneralCost::getCategories(),
+            'frequencies' => CashForecastGeneralCost::getFrequencies(),
         ]);
+    }
+
+    /**
+     * Update cash forecast settings.
+     */
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'starting_balance' => 'required|numeric',
+            'starting_balance_date' => 'nullable|date',
+        ]);
+
+        $settings = CashForecastSetting::current();
+        $settings->update($validated);
+
+        return back()->with('success', 'Settings updated successfully.');
+    }
+
+    /**
+     * Store a new general cost.
+     */
+    public function storeGeneralCost(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:255',
+            'type' => 'required|in:one_off,recurring',
+            'amount' => 'required|numeric|min:0',
+            'includes_gst' => 'boolean',
+            'frequency' => 'nullable|in:weekly,fortnightly,monthly,quarterly,annually',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'category' => 'nullable|string|max:50',
+        ]);
+
+        CashForecastGeneralCost::create($validated);
+
+        return back()->with('success', 'General cost added successfully.');
+    }
+
+    /**
+     * Update a general cost.
+     */
+    public function updateGeneralCost(Request $request, CashForecastGeneralCost $generalCost)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:255',
+            'type' => 'required|in:one_off,recurring',
+            'amount' => 'required|numeric|min:0',
+            'includes_gst' => 'boolean',
+            'frequency' => 'nullable|in:weekly,fortnightly,monthly,quarterly,annually',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'category' => 'nullable|string|max:50',
+            'is_active' => 'boolean',
+        ]);
+
+        $generalCost->update($validated);
+
+        return back()->with('success', 'General cost updated successfully.');
+    }
+
+    /**
+     * Delete a general cost.
+     */
+    public function destroyGeneralCost(CashForecastGeneralCost $generalCost)
+    {
+        $generalCost->delete();
+
+        return back()->with('success', 'General cost deleted successfully.');
+    }
+
+    /**
+     * Get cost code descriptions from the database.
+     */
+    private function getCostCodeDescriptions(): array
+    {
+        return CostCode::pluck('description', 'code')->toArray();
+    }
+
+    /**
+     * Get general cost rows for the forecast period.
+     */
+    private function getGeneralCostRows(array $months): \Illuminate\Support\Collection
+    {
+        $generalCosts = CashForecastGeneralCost::where('is_active', true)->get();
+        $rows = collect();
+
+        if ($generalCosts->isEmpty()) {
+            return $rows;
+        }
+
+        $startMonth = Carbon::createFromFormat('Y-m', $months[0])->startOfMonth();
+        $endMonth = Carbon::createFromFormat('Y-m', end($months))->endOfMonth();
+
+        foreach ($generalCosts as $cost) {
+            $cashflows = $cost->getCashflowsForRange($startMonth, $endMonth);
+
+            foreach ($cashflows as $month => $amount) {
+                $rows->push((object) [
+                    'month' => $month,
+                    'cost_item' => 'GENERAL-' . strtoupper($cost->category ?? 'OTHER'),
+                    'job_number' => $cost->name,
+                    'forecast_amount' => $amount,
+                    'gst_rate' => $cost->includes_gst ? 0.10 : 0,
+                    'is_general_cost' => true,
+                ]);
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -90,6 +230,8 @@ class CashForecastController extends Controller
             'cash_in_code' => '99-99',
             // Cost item code to represent GST payable in the cash flow.
             'gst_payable_code' => 'GST-PAYABLE',
+            // General cost code prefix
+            'general_cost_prefix' => 'GENERAL-',
 
             // =================================================================
             // RULE 1: Wages (01-01, 03-01, 05-01, 07-01)
@@ -170,6 +312,7 @@ class CashForecastController extends Controller
         $vendorCostPrefix = $rules['vendor_cost_prefix'] ?? [];
         $revenueGstRate = $rules['revenue_gst_rate'] ?? 0.10;
         $revenueDelayMonths = $rules['revenue_delay_months'] ?? 2;
+        $generalCostPrefix = $rules['general_cost_prefix'] ?? 'GENERAL-';
 
         return $forecastData->flatMap(function ($item) use (
             $cashInCode,
@@ -179,11 +322,26 @@ class CashForecastController extends Controller
             $oncostDelayMonths,
             $vendorCostPrefix,
             $revenueGstRate,
-            $revenueDelayMonths
+            $revenueDelayMonths,
+            $generalCostPrefix
         ) {
             $costItem = $item->cost_item;
             $prefix = $this->getCostItemPrefix($costItem);
             $amount = (float) $item->forecast_amount;
+
+            // Skip general costs - they're already processed
+            if (str_starts_with($costItem, $generalCostPrefix)) {
+                return [
+                    (object) [
+                        'month' => $item->month,
+                        'cost_item' => $costItem,
+                        'job_number' => $item->job_number,
+                        'forecast_amount' => $amount,
+                        'gst_rate' => $item->gst_rate ?? 0,
+                        'is_general_cost' => true,
+                    ],
+                ];
+            }
 
             // =================================================================
             // RULE 4: Revenue (99-99) - 10% GST + 2 month delay
@@ -280,13 +438,13 @@ class CashForecastController extends Controller
         });
     }
 
-    private function buildMonthHierarchy(array $months, $forecastRows)
+    private function buildMonthHierarchy(array $months, $forecastRows, array $costCodeDescriptions = [])
     {
         // Organize rows so the UI can render month -> cash in/out -> cost item -> job.
         $forecastByMonth = $forecastRows->groupBy('month');
         $cashInCode = $this->getForecastRules()['cash_in_code'] ?? '99-99';
 
-        return collect($months)->map(function ($month) use ($forecastByMonth, $cashInCode) {
+        return collect($months)->map(function ($month) use ($forecastByMonth, $cashInCode, $costCodeDescriptions) {
             $monthItems = $forecastByMonth->get($month, collect());
             $cashInItems = $monthItems->filter(function ($item) use ($cashInCode) {
                 return $item->cost_item === $cashInCode;
@@ -297,7 +455,7 @@ class CashForecastController extends Controller
 
             $cashInCostItems = $cashInItems
                 ->groupBy('cost_item')
-                ->map(function ($items, $costItem) {
+                ->map(function ($items, $costItem) use ($costCodeDescriptions) {
                     $jobs = $items
                         ->groupBy('job_number')
                         ->map(function ($jobItems, $jobNumber) {
@@ -310,15 +468,17 @@ class CashForecastController extends Controller
 
                     return [
                         'cost_item' => $costItem,
+                        'description' => $costCodeDescriptions[$costItem] ?? null,
                         'total' => (float) $items->sum('forecast_amount'),
                         'jobs' => $jobs,
                     ];
                 })
                 ->sortBy('cost_item')
                 ->values();
+
             $cashOutCostItems = $cashOutItems
                 ->groupBy('cost_item')
-                ->map(function ($items, $costItem) {
+                ->map(function ($items, $costItem) use ($costCodeDescriptions) {
                     $jobs = $items
                         ->groupBy('job_number')
                         ->map(function ($jobItems, $jobNumber) {
@@ -331,6 +491,7 @@ class CashForecastController extends Controller
 
                     return [
                         'cost_item' => $costItem,
+                        'description' => $costCodeDescriptions[$costItem] ?? null,
                         'total' => (float) $items->sum('forecast_amount'),
                         'jobs' => $jobs,
                     ];
