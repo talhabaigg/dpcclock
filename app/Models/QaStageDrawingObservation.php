@@ -5,24 +5,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 
-class QaStageDrawing extends Model
+class QaStageDrawingObservation extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'qa_stage_id',
-        'name',
-        'file_path',
-        'file_name',
-        'file_type',
-        'file_size',
+        'qa_stage_drawing_id',
+        'page_number',
+        'x',
+        'y',
+        'type',
+        'description',
+        'photo_path',
+        'photo_name',
+        'photo_type',
+        'photo_size',
         'created_by',
         'updated_by',
     ];
 
-    protected $appends = ['file_url'];
+    protected $appends = ['photo_url'];
 
     protected static function booted()
     {
@@ -35,14 +38,9 @@ class QaStageDrawing extends Model
         });
     }
 
-    public function qaStage()
+    public function drawing()
     {
-        return $this->belongsTo(QaStage::class);
-    }
-
-    public function observations()
-    {
-        return $this->hasMany(QaStageDrawingObservation::class, 'qa_stage_drawing_id');
+        return $this->belongsTo(QaStageDrawing::class, 'qa_stage_drawing_id');
     }
 
     public function createdBy()
@@ -55,9 +53,12 @@ class QaStageDrawing extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
-    public function getFileUrlAttribute()
+    public function getPhotoUrlAttribute()
     {
-        // Return relative URL so it works in both local and production
-        return '/storage/' . $this->file_path;
+        if (!$this->photo_path) {
+            return null;
+        }
+
+        return '/storage/' . $this->photo_path;
     }
 }

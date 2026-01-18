@@ -7,6 +7,7 @@ use App\Models\QaStageDrawing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class QaStageDrawingController extends Controller
 {
@@ -65,5 +66,18 @@ class QaStageDrawingController extends Controller
         }
 
         return response()->download($path, $drawing->file_name);
+    }
+
+    public function show(QaStageDrawing $drawing)
+    {
+        $drawing->load([
+            'qaStage.location',
+            'createdBy',
+            'observations.createdBy',
+        ]);
+
+        return Inertia::render('qa-stages/drawings/show', [
+            'drawing' => $drawing,
+        ]);
     }
 }

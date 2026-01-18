@@ -21,6 +21,7 @@ use App\Http\Controllers\TimesheetEventController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\QaStageController;
 use App\Http\Controllers\QaStageDrawingController;
+use App\Http\Controllers\QaStageDrawingObservationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -262,7 +263,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/qa-stages/{qaStage}', [QaStageController::class, 'destroy'])->name('qa-stages.destroy');
 
         // QA Stage Drawings routes
+        Route::get('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'show'])->name('qa-stage-drawings.show');
         Route::post('/qa-stages/{qaStage}/drawings', [QaStageDrawingController::class, 'store'])->name('qa-stage-drawings.store');
+        Route::post('/qa-stage-drawings/{drawing}/observations', [QaStageDrawingObservationController::class, 'store'])->name('qa-stage-drawings.observations.store');
+        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'update'])->name('qa-stage-drawings.observations.update');
         Route::delete('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'destroy'])->name('qa-stage-drawings.destroy');
         Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download');
 
