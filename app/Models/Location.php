@@ -70,5 +70,8 @@ class Location extends Model
         return $this->hasMany(MaterialItemPriceListUpload::class);
     }
 
-
+    public function qaStages()
+    {
+        return $this->hasMany(QaStage::class);
+    }
 }

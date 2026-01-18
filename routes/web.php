@@ -19,6 +19,8 @@ use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\TimesheetEventController;
 use App\Http\Controllers\VariationController;
+use App\Http\Controllers\QaStageController;
+use App\Http\Controllers\QaStageDrawingController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -253,6 +255,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/variations/{variation}/send-to-premier', [VariationController::class, 'sendToPremier'])->name('variations.send');
         Route::get('/variations/{variation}/duplicate', [VariationController::class, 'duplicate'])->name('variations.duplicate');
 
+        // QA Stages routes
+        Route::get('/qa-stages', [QaStageController::class, 'index'])->name('qa-stages.index');
+        Route::post('/qa-stages', [QaStageController::class, 'store'])->name('qa-stages.store');
+        Route::get('/qa-stages/{qaStage}', [QaStageController::class, 'show'])->name('qa-stages.show');
+        Route::delete('/qa-stages/{qaStage}', [QaStageController::class, 'destroy'])->name('qa-stages.destroy');
+
+        // QA Stage Drawings routes
+        Route::post('/qa-stages/{qaStage}/drawings', [QaStageDrawingController::class, 'store'])->name('qa-stage-drawings.store');
+        Route::delete('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'destroy'])->name('qa-stage-drawings.destroy');
+        Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download');
 
         Route::get('/php-limits', fn() => response()->json([
             'sapi' => php_sapi_name(),
