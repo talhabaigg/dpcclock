@@ -273,14 +273,26 @@ export default function TurnoverForecastIndex({
     const revenueTotalRowData = useMemo(() => {
         const totalRow: any = {
             id: 'revenue-total-row',
-            type: 'Total',
+            type: '',
             job_name: '',
-            job_number: '',
+            job_number: 'Total',
             claimed_to_date: 0,
             revenue_contract_fy: 0,
             total_contract_value: 0,
             remaining_revenue_value_fy: 0,
             remaining_order_book: 0,
+        };
+
+        const labourRow: any = {
+            id: 'labour-requirement-row',
+            type: '',
+            job_name: '',
+            job_number: 'Labour Req',
+            claimed_to_date: null,
+            revenue_contract_fy: null,
+            total_contract_value: null,
+            remaining_revenue_value_fy: null,
+            remaining_order_book: null,
         };
 
         // Calculate totals for each month
@@ -295,6 +307,8 @@ export default function TurnoverForecastIndex({
             });
 
             totalRow[`month_${month}`] = safeNumber(totalRevenue);
+            // Labour requirement = total revenue / $26,000 per worker
+            labourRow[`month_${month}`] = totalRevenue / 26000;
         });
 
         // Calculate summary fields
@@ -306,7 +320,7 @@ export default function TurnoverForecastIndex({
             totalRow.remaining_order_book += row.remaining_order_book || 0;
         });
 
-        return [totalRow];
+        return [totalRow, labourRow];
     }, [filteredData, filteredMonths]);
 
     // Calculate cost total row data (computed for future use)
@@ -454,8 +468,11 @@ export default function TurnoverForecastIndex({
                 width: 100,
                 pinned: 'left',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'font-semibold bg-purple-50 text-purple-700';
                     }
 
                     return 'font-medium';
@@ -467,8 +484,11 @@ export default function TurnoverForecastIndex({
                 width: 120,
                 pinned: 'left',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'font-medium';
                 },
@@ -479,15 +499,18 @@ export default function TurnoverForecastIndex({
                 width: 120,
                 pinned: 'left',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'font-semibold bg-purple-50 text-purple-700';
                     }
 
                     return 'text-blue-600 hover:underline cursor-pointer';
                 },
                 onCellClicked: (params: any) => {
                     const rowData = params.data;
-                    if (rowData.type !== 'Total' && rowData.type !== 'Profit' && rowData.job_number) {
+                    if (rowData.job_number !== 'Total' && rowData.type !== 'Profit' && rowData.job_number !== 'Labour Req' && rowData.job_number) {
                         if (rowData.type === 'forecast_project') {
                             window.location.href = `/forecast-projects/${rowData.id}`;
                         } else {
@@ -522,7 +545,7 @@ export default function TurnoverForecastIndex({
                 width: 140,
                 cellRenderer: (params: { data: TurnoverRow }) => {
                     const rowData = params.data as any;
-                    if (rowData?.type === 'Total' || rowData?.type === 'Profit') {
+                    if (rowData?.job_number === 'Total' || rowData?.type === 'Profit' || rowData?.job_number === 'Labour Req') {
                         return '';
                     }
                     const status = rowData?.forecast_status as TurnoverRow['forecast_status'];
@@ -566,8 +589,11 @@ export default function TurnoverForecastIndex({
                     });
                 },
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                    if (params.data?.job_number === 'Total' || params.data?.type === 'Profit') {
                         return 'bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-gray-600 text-sm';
                 },
@@ -586,7 +612,7 @@ export default function TurnoverForecastIndex({
                 width: 250,
                 cellRenderer: (params) => {
                     const rowData = params.data as TurnoverRow;
-                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                    if (params.data?.job_number === 'Total' || params.data?.type === 'Profit' || params.data?.job_number === 'Labour Req') {
                         return '';
                     }
                     const claimedToDate = rowData.claimed_to_date || 0;
@@ -605,11 +631,17 @@ export default function TurnoverForecastIndex({
                 headerName: 'Claimed to Date',
                 field: 'claimed_to_date',
                 width: 150,
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    if (params.data?.job_number === 'Labour Req') return '';
+                    return formatCurrency(params.value);
+                },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-right';
                 },
@@ -619,11 +651,17 @@ export default function TurnoverForecastIndex({
                 headerName: `Contract ${fyLabel}`,
                 field: 'revenue_contract_fy',
                 width: 150,
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    if (params.data?.job_number === 'Labour Req') return '';
+                    return formatCurrency(params.value);
+                },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-right font-semibold';
                 },
@@ -632,11 +670,17 @@ export default function TurnoverForecastIndex({
                 headerName: 'Total Contract Value',
                 field: 'total_contract_value',
                 width: 170,
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    if (params.data?.job_number === 'Labour Req') return '';
+                    return formatCurrency(params.value);
+                },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-right';
                 },
@@ -645,11 +689,17 @@ export default function TurnoverForecastIndex({
                 headerName: `Remaining Value ${fyLabel}`,
                 field: 'remaining_revenue_value_fy',
                 width: 180,
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    if (params.data?.job_number === 'Labour Req') return '';
+                    return formatCurrency(params.value);
+                },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-right';
                 },
@@ -658,11 +708,17 @@ export default function TurnoverForecastIndex({
                 headerName: 'Remaining Order Book',
                 field: 'remaining_order_book',
                 width: 180,
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    if (params.data?.job_number === 'Labour Req') return '';
+                    return formatCurrency(params.value);
+                },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
+                    if (params.data?.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+                    if (params.data?.job_number === 'Labour Req') {
+                        return 'bg-purple-50';
                     }
                     return 'text-right';
                 },
@@ -680,8 +736,12 @@ export default function TurnoverForecastIndex({
                 cellClass: (params) => {
                     const rowData = params.data as any;
 
-                    if (rowData.type === 'Total') {
+                    if (rowData.job_number === 'Total') {
                         return 'text-right font-bold bg-gray-100';
+                    }
+
+                    if (rowData.job_number === 'Labour Req') {
+                        return 'text-right font-semibold bg-purple-50 text-purple-700';
                     }
 
                     const hasActual = rowData.revenue_actuals && rowData.revenue_actuals[month];
@@ -699,8 +759,8 @@ export default function TurnoverForecastIndex({
                 valueGetter: (params) => {
                     const rowData = params.data as any;
 
-                    // For total row, use pre-calculated value
-                    if (rowData.type === 'Total') {
+                    // For total or labour req row, use pre-calculated value
+                    if (rowData.job_number === 'Total' || rowData.job_number === 'Labour Req') {
                         return safeNumber(rowData[`month_${month}`]);
                     }
 
@@ -711,7 +771,14 @@ export default function TurnoverForecastIndex({
                     }
                     return 0;
                 },
-                valueFormatter: (params) => formatCurrency(params.value),
+                valueFormatter: (params) => {
+                    const rowData = params.data as any;
+                    // For labour requirement row, show number of workers (rounded up, no decimals)
+                    if (rowData?.job_number === 'Labour Req') {
+                        return params.value ? Math.ceil(params.value).toString() : '0';
+                    }
+                    return formatCurrency(params.value);
+                },
             };
         });
 
@@ -1004,8 +1071,11 @@ export default function TurnoverForecastIndex({
             if (params.data?.type === 'Profit') {
                 return 'profit-row';
             }
-            if (params.data?.type === 'Total') {
+            if (params.data?.job_number === 'Total') {
                 return 'total-row';
+            }
+            if (params.data?.job_number === 'Labour Req') {
+                return 'labour-req-row';
             }
             return `${params.data?.type ?? 'row'}-${params.data?.job_number ?? 'unknown'}`;
         };
