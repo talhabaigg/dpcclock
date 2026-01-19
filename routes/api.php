@@ -36,12 +36,10 @@ Route::post('/login', function (Request $request) {
     ]);
 });
 
-Route::match(['options'], 'qa-stage-drawings/{qaStageDrawing}/file', [QaStageDrawingController::class, 'file'])
-    ->name('qa-stage-drawings.file.options');
-Route::get('qa-stage-drawings/{qaStageDrawing}/file', [QaStageDrawingController::class, 'file'])
-    ->name('qa-stage-drawings.file');
-
 Route::middleware('auth:sanctum')->group(function () {
+    // File download route - needs to be inside auth middleware for token processing
+    Route::get('qa-stage-drawings/{qaStageDrawing}/file', [QaStageDrawingController::class, 'file'])
+        ->name('qa-stage-drawings.file');
     Route::get('/user', function (Request $request) {
         return $request->user();
     });

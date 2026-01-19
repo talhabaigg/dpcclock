@@ -77,32 +77,22 @@ class QaStageDrawingController extends Controller
 
     public function file(Request $request, QaStageDrawing $qaStageDrawing)
     {
-        if ($request->isMethod('options')) {
-            return response('', 204)->withHeaders($this->corsHeaders($request));
-        }
-
-        $user = Auth::guard('sanctum')->user();
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401)
-                ->withHeaders($this->corsHeaders($request));
-        }
+        Log::info('File download requested', [
+            'drawing_id' => $qaStageDrawing->id,
+            'file_path' => $qaStageDrawing->file_path,
+            'user_id' => $request->user()?->id,
+        ]);
 
         if (!Storage::disk('public')->exists($qaStageDrawing->file_path)) {
-            return response()->json(['message' => 'File not found.'], 404)
-                ->withHeaders($this->corsHeaders($request));
+            Log::error('File not found on disk', ['path' => $qaStageDrawing->file_path]);
+            return response()->json(['message' => 'File not found.'], 404);
         }
 
-        $response = Storage::disk('public')->response(
+        return Storage::disk('public')->response(
             $qaStageDrawing->file_path,
             $qaStageDrawing->file_name,
             ['Content-Type' => $qaStageDrawing->file_type]
         );
-
-        foreach ($this->corsHeaders($request) as $header => $value) {
-            $response->headers->set($header, $value);
-        }
-
-        return $response;
     }
 
     public function update(Request $request, QaStageDrawing $qaStageDrawing)

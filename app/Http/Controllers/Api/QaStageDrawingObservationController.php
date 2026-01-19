@@ -100,6 +100,7 @@ class QaStageDrawingObservationController extends Controller
             'x' => 'sometimes|required|numeric|min:0|max:1',
             'y' => 'sometimes|required|numeric|min:0|max:1',
             'photo' => 'nullable|file|mimetypes:image/*|max:5120',
+            'remove_photo' => 'sometimes|boolean',
         ]);
 
         $photoPath = $qaStageDrawingObservation->photo_path;
@@ -107,7 +108,16 @@ class QaStageDrawingObservationController extends Controller
         $photoType = $qaStageDrawingObservation->photo_type;
         $photoSize = $qaStageDrawingObservation->photo_size;
 
-        if ($request->hasFile('photo')) {
+        // Handle photo removal
+        if ($request->boolean('remove_photo')) {
+            if ($qaStageDrawingObservation->photo_path) {
+                Storage::disk('public')->delete($qaStageDrawingObservation->photo_path);
+            }
+            $photoPath = null;
+            $photoName = null;
+            $photoType = null;
+            $photoSize = null;
+        } elseif ($request->hasFile('photo')) {
             $photo = $request->file('photo');
             $photoName = $photo->getClientOriginalName();
             $photoType = $photo->getClientMimeType();

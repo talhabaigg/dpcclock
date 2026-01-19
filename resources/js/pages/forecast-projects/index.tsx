@@ -150,15 +150,15 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
     const getStatusBadgeColor = (status: string) => {
         switch (status) {
             case 'potential':
-                return 'bg-gray-200 text-gray-800';
+                return 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
             case 'likely':
-                return 'bg-blue-200 text-blue-800';
+                return 'bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300';
             case 'confirmed':
-                return 'bg-green-200 text-green-800';
+                return 'bg-green-200 dark:bg-green-900/50 text-green-800 dark:text-green-300';
             case 'cancelled':
-                return 'bg-red-200 text-red-800';
+                return 'bg-red-200 dark:bg-red-900/50 text-red-800 dark:text-red-300';
             default:
-                return 'bg-gray-200 text-gray-800';
+                return 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
         }
     };
 
@@ -178,7 +178,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                     </Button>
                 </div>
 
-                <div className="rounded-md border bg-white">
+                <div className="rounded-md border bg-white dark:bg-gray-900">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -218,7 +218,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="outline" size="sm" onClick={() => handleDelete(project.id)}>
-                                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                                    <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                                                 </Button>
                                             </div>
                                         </TableCell>

@@ -43,7 +43,7 @@ export const darkTheme = themeQuartz.withParams({
 export const shadcnTheme = themeQuartz.withParams({
     accentColor: 'hsl(var(--primary))',
     backgroundColor: 'hsl(var(--background))',
-    borderColor: '#e5e7eb',
+    borderColor: 'hsl(var(--border))',
     borderWidth: 1,
     browserColorScheme: 'inherit',
     cellHorizontalPaddingScale: 0.55,
@@ -63,9 +63,8 @@ export const shadcnTheme = themeQuartz.withParams({
     wrapperBorder: true,
     wrapperBorderRadius: '12px',
     borderRadius: '12px',
-    menuBackgroundColor: '#FFFFFF',
-    pickerListBackgroundColor: '#FFFFFF',
+    menuBackgroundColor: 'hsl(var(--popover))',
+    pickerListBackgroundColor: 'hsl(var(--popover))',
     listItemHeight: 20,
-
-    menuShadow: { radius: 10, spread: 5, color: '#e5e7eb' },
+    menuShadow: { radius: 10, spread: 5, color: 'hsl(var(--border))' },
 });

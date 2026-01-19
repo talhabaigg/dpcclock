@@ -469,10 +469,10 @@ export default function TurnoverForecastIndex({
                 pinned: 'left',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'font-bold bg-gray-100';
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'font-semibold bg-purple-50 text-purple-700';
+                        return 'font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
                     }
 
                     return 'font-medium';
@@ -485,10 +485,10 @@ export default function TurnoverForecastIndex({
                 pinned: 'left',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'font-bold bg-gray-100';
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'font-medium';
                 },
@@ -500,13 +500,13 @@ export default function TurnoverForecastIndex({
                 pinned: 'left',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'font-bold bg-gray-100';
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'font-semibold bg-purple-50 text-purple-700';
+                        return 'font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
                     }
 
-                    return 'text-blue-600 hover:underline cursor-pointer';
+                    return 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer';
                 },
                 onCellClicked: (params: any) => {
                     const rowData = params.data;
@@ -534,9 +534,9 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.value < 0) {
-                        return 'text-right text-red-600 font-bold bg-red-200';
+                        return 'text-right text-red-600 dark:text-red-400 font-bold bg-red-200 dark:bg-red-900/40';
                     }
-                    return 'text-right text-green-600 font-bold bg-green-50';
+                    return 'text-right text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/30';
                 },
             },
             {
@@ -552,23 +552,23 @@ export default function TurnoverForecastIndex({
                     if (status === 'submitted') {
                         return (
                             <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                <span className="text-sm font-medium text-green-700">Submitted</span>
+                                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                <span className="text-sm font-medium text-green-700 dark:text-green-300">Submitted</span>
                             </div>
                         );
                     }
                     if (status === 'draft') {
                         return (
                             <div className="flex items-center gap-1.5">
-                                <Clock className="h-4 w-4 text-amber-500" />
-                                <span className="text-sm font-medium text-amber-600">Draft</span>
+                                <Clock className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                                <span className="text-sm font-medium text-amber-600 dark:text-amber-400">Draft</span>
                             </div>
                         );
                     }
                     return (
                         <div className="flex items-center gap-1.5">
-                            <MinusCircle className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm text-gray-500">Not Started</span>
+                            <MinusCircle className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Not Started</span>
                         </div>
                     );
                 },
@@ -590,12 +590,12 @@ export default function TurnoverForecastIndex({
                 },
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total' || params.data?.type === 'Profit') {
-                        return 'bg-gray-100';
+                        return 'bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
-                    return 'text-gray-600 text-sm';
+                    return 'text-gray-600 dark:text-gray-400 text-sm';
                 },
             },
         ],
@@ -638,10 +638,10 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'text-right';
                 },
@@ -658,10 +658,10 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'text-right font-semibold';
                 },
@@ -677,10 +677,10 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'text-right';
                 },
@@ -696,10 +696,10 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'text-right';
                 },
@@ -715,10 +715,10 @@ export default function TurnoverForecastIndex({
                 type: 'numericColumn',
                 cellClass: (params) => {
                     if (params.data?.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     if (params.data?.job_number === 'Labour Req') {
-                        return 'bg-purple-50';
+                        return 'bg-purple-50 dark:bg-purple-900/30';
                     }
                     return 'text-right';
                 },
@@ -737,11 +737,11 @@ export default function TurnoverForecastIndex({
                     const rowData = params.data as any;
 
                     if (rowData.job_number === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
 
                     if (rowData.job_number === 'Labour Req') {
-                        return 'text-right font-semibold bg-purple-50 text-purple-700';
+                        return 'text-right font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
                     }
 
                     const hasActual = rowData.revenue_actuals && rowData.revenue_actuals[month];
@@ -749,13 +749,13 @@ export default function TurnoverForecastIndex({
 
                     const classes = ['text-right'];
                     if (hasActual) {
-                        classes.push('bg-green-50 font-medium');
+                        classes.push('bg-green-50 dark:bg-emerald-950/30 font-medium');
                     } else if (hasForecast) {
-                        classes.push('bg-blue-50 italic');
+                        classes.push('bg-blue-50 dark:bg-blue-950/30 italic');
                     }
                     return classes.join(' ');
                 },
-                headerClass: isActualColumn ? 'bg-green-50 font-semibold' : 'bg-blue-100',
+                headerClass: isActualColumn ? 'bg-green-50 dark:bg-emerald-950/30 font-semibold' : 'bg-blue-100 dark:bg-blue-950/30',
                 valueGetter: (params) => {
                     const rowData = params.data as any;
 
@@ -800,9 +800,9 @@ export default function TurnoverForecastIndex({
                     pinned: 'left',
                     cellClass: (params) => {
                         if (params.data?.label === 'Variance') {
-                            return 'font-semibold text-slate-700';
+                            return 'font-semibold text-slate-700 dark:text-slate-300';
                         }
-                        return 'font-medium text-slate-700';
+                        return 'font-medium text-slate-700 dark:text-slate-300';
                     },
                 };
             }
@@ -816,8 +816,8 @@ export default function TurnoverForecastIndex({
                 filter: false,
                 resizable: false,
                 suppressMenu: true,
-                cellClass: 'bg-slate-50',
-                headerClass: 'bg-slate-50',
+                cellClass: 'bg-slate-50 dark:bg-slate-800/50',
+                headerClass: 'bg-slate-50 dark:bg-slate-800/50',
                 valueGetter: () => '',
             };
         });
@@ -832,7 +832,7 @@ export default function TurnoverForecastIndex({
                     type: 'numericColumn',
                     cellClass: (params) => {
                         if (params.data?.label === 'Variance') {
-                            return params.value < 0 ? 'text-right font-semibold text-red-600' : 'text-right font-semibold text-emerald-600';
+                            return params.value < 0 ? 'text-right font-semibold text-red-600 dark:text-red-400' : 'text-right font-semibold text-emerald-600 dark:text-emerald-400';
                         }
                         return 'text-right font-semibold';
                     },
@@ -847,8 +847,8 @@ export default function TurnoverForecastIndex({
                 filter: false,
                 resizable: false,
                 suppressMenu: true,
-                cellClass: 'bg-slate-50',
-                headerClass: 'bg-slate-50',
+                cellClass: 'bg-slate-50 dark:bg-slate-800/50',
+                headerClass: 'bg-slate-50 dark:bg-slate-800/50',
                 valueGetter: () => '',
             };
         });
@@ -861,7 +861,7 @@ export default function TurnoverForecastIndex({
             valueFormatter: (params) => formatCurrency(params.value),
             cellClass: (params) => {
                 if (params.data?.label === 'Variance') {
-                    return params.value < 0 ? 'text-right font-medium text-red-600' : 'text-right font-medium text-emerald-600';
+                    return params.value < 0 ? 'text-right font-medium text-red-600 dark:text-red-400' : 'text-right font-medium text-emerald-600 dark:text-emerald-400';
                 }
                 return 'text-right';
             },
@@ -1111,7 +1111,7 @@ export default function TurnoverForecastIndex({
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50/50 p-1">
+                            <div className="flex gap-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 p-1">
                                 <Button
                                     size="sm"
                                     variant={viewMode === 'both' ? 'default' : 'ghost'}
@@ -1172,56 +1172,56 @@ export default function TurnoverForecastIndex({
 
                 {/* Summary Visual */}
                 <div className="mb-6">
-                    <div className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 shadow-sm transition-all hover:shadow-md">
+                    <div className="group relative overflow-hidden rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 via-white to-slate-50 dark:from-blue-950/30 dark:via-gray-900 dark:to-slate-900 p-6 shadow-sm transition-all hover:shadow-md">
                         <div className="flex items-start justify-between">
                             <div className="flex-1 space-y-1">
-                                <div className="text-sm font-medium text-blue-700">FY Turnover Progress</div>
-                                <div className="text-3xl font-bold tracking-tight text-slate-900">{formatCurrency(totalFY)}</div>
-                                <div className="text-xs text-slate-500">Completed YTD + Work in Hand {fyLabel}</div>
+                                <div className="text-sm font-medium text-blue-700 dark:text-blue-400">FY Turnover Progress</div>
+                                <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{formatCurrency(totalFY)}</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">Completed YTD + Work in Hand {fyLabel}</div>
                             </div>
-                            <div className="rounded-lg bg-blue-100 p-2.5">
-                                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="rounded-lg bg-blue-100 dark:bg-blue-900/50 p-2.5">
+                                <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 15l3-3 3 2 4-5" />
                                 </svg>
                             </div>
                         </div>
                         <div className="mt-6 space-y-4">
-                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100">
+                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
                                 <div
-                                    className="bg-blue-600"
+                                    className="bg-blue-600 dark:bg-blue-500"
                                     style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}
                                     title="Completed turnover YTD"
                                 />
                                 <div
-                                    className="bg-sky-400"
+                                    className="bg-sky-400 dark:bg-sky-500"
                                     style={{ width: `${formatPercent(workInHandFY, targetBaseline)}%` }}
                                     title="Work in hand FY"
                                 />
                                 <div
-                                    className="bg-amber-300"
+                                    className="bg-amber-300 dark:bg-amber-500"
                                     style={{ width: `${formatPercent(remainingTargetToAchieve, targetBaseline)}%` }}
                                     title="Remaining target to achieve"
                                 />
                             </div>
-                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3">
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-500" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Completed Turnover YTD</div>
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">Completed Turnover YTD</div>
                                         <div>{formatCurrency(completedTurnoverYTD)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Work in Hand {fyLabel}</div>
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">Work in Hand {fyLabel}</div>
                                         <div>{formatCurrency(workInHandFY)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-500" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Budget Balance to Achieve</div>
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">Budget Balance to Achieve</div>
                                         <div>{formatCurrency(remainingTargetToAchieve)}</div>
                                     </div>
                                 </div>
@@ -1233,31 +1233,31 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </div> */}
                             </div>
-                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100">
+                            <div className="flex h-3 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
                                 <div
-                                    className="bg-amber-600"
+                                    className="bg-amber-600 dark:bg-amber-500"
                                     style={{ width: `${formatPercent(targetTurnoverYTD, targetBaseline)}%` }}
                                     title="Completed turnover YTD"
                                 />
                                 <div
-                                    className="bg-amber-300"
+                                    className="bg-amber-300 dark:bg-amber-600"
                                     style={{ width: `${formatPercent(turnoverTargetFYTotal, targetBaseline)}%` }}
                                     title="Budget turnover FY"
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2">
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-500" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Budget Turnover YTD</div>
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">Budget Turnover YTD</div>
                                         <div>{formatCurrency(targetTurnoverYTD)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-600" />
                                     <div>
-                                        <div className="font-medium text-slate-700">Budget Turnover {fyLabel}</div>
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">Budget Turnover {fyLabel}</div>
                                         <div>{formatCurrency(turnoverTargetFYTotal)}</div>
                                     </div>
                                 </div>
@@ -1293,7 +1293,7 @@ export default function TurnoverForecastIndex({
                                     </Tooltip>
                                 </div>
                             </div>
-                            <div className="rounded-md border bg-white" style={{ height: `${gridHeights.revenue}px` }}>
+                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.revenue}px` }}>
                                 <AgGridReact
                                     ref={revenueGridRef}
                                     rowData={filteredData}
@@ -1315,11 +1315,11 @@ export default function TurnoverForecastIndex({
                                 />
                             </div>
                             <div
-                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100"
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
                                 onMouseDown={handleGridResizeStart('revenue')}
                                 title="Drag to resize grid"
                             >
-                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500" />
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
                             </div>
                         </div>
                     )}
@@ -1348,7 +1348,7 @@ export default function TurnoverForecastIndex({
                                     </Tooltip>
                                 </div>
                             </div>
-                            <div className="rounded-md border bg-white" style={{ height: `${gridHeights.cost}px` }}>
+                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.cost}px` }}>
                                 <AgGridReact
                                     ref={costGridRef}
                                     rowData={targetRowData}
@@ -1369,11 +1369,11 @@ export default function TurnoverForecastIndex({
                                 />
                             </div>
                             <div
-                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100"
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
                                 onMouseDown={handleGridResizeStart('cost')}
                                 title="Drag to resize grid"
                             >
-                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500" />
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
                             </div>
                         </div>
                     )}
