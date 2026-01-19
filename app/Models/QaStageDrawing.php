@@ -57,7 +57,7 @@ class QaStageDrawing extends Model
 
     public function getFileUrlAttribute()
     {
-        // Return relative URL so it works in both local and production
-        return '/storage/' . $this->file_path;
+        // Use Storage::url() to properly generate the URL with encoding
+        return Storage::disk('public')->url($this->file_path);
     }
 }

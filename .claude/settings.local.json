@@ -17,7 +17,13 @@
       "Bash(npx eslint:*)",
       "Bash(npm run types:*)",
       "Bash(php:*)",
-      "Bash(composer show:*)"
+      "Bash(composer show:*)",
+      "Bash(powershell:*)",
+      "Bash(where:*)",
+      "Bash(herd which-php:*)",
+      "Bash(cmd /c \"C:\\\\Users\\\\Talha.SUPGROUP\\\\.config\\\\herd\\\\bin\\\\herd.bat\" which-php)",
+      "Bash(cmd /c \"C:\\\\Users\\\\Talha.SUPGROUP\\\\.config\\\\herd\\\\bin\\\\herd.bat\" restart)",
+      "Bash(dir \"C:\\\\Laravel\\\\dpcclock\\\\storage\\\\app\\\\public\\\\qa-drawings\" /s /b)"
     ]
   }
 }
