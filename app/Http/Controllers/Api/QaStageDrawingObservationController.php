@@ -8,7 +8,6 @@ use App\Models\QaStageDrawingObservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class QaStageDrawingObservationController extends Controller
 {
@@ -34,14 +33,25 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable', // Loosened to allow base64/data URIs
+            'photo' => 'nullable|file|mimetypes:image/*|max:5120', // 5MB max
         ]);
 
-        $photo = $this->processPhoto($request, (int) $validated['qa_stage_drawing_id']);
-        $photoPath = $photo['path'];
-        $photoName = $photo['name'];
-        $photoType = $photo['type'];
-        $photoSize = $photo['size'];
+        $photoPath = null;
+        $photoName = null;
+        $photoType = null;
+        $photoSize = null;
+
+        if ($request->hasFile('photo')) {
+            $photo = $request->file('photo');
+            $photoName = $photo->getClientOriginalName();
+            $photoType = $photo->getClientMimeType();
+            $photoSize = $photo->getSize();
+            $photoPath = $photo->storeAs(
+                'qa-drawing-observations/' . $validated['qa_stage_drawing_id'],
+                time() . '_' . $photoName,
+                'public'
+            );
+        }
 
         try {
             $observation = QaStageDrawingObservation::create([
@@ -89,14 +99,29 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'sometimes|required|integer|min:1',
             'x' => 'sometimes|required|numeric|min:0|max:1',
             'y' => 'sometimes|required|numeric|min:0|max:1',
-            'photo' => 'nullable', // Loosened to allow base64/data URIs
+            'photo' => 'nullable|file|mimetypes:image/*|max:5120',
         ]);
 
-        $photo = $this->processPhoto($request, $qaStageDrawingObservation->qa_stage_drawing_id, $qaStageDrawingObservation);
-        $photoPath = $photo['path'];
-        $photoName = $photo['name'];
-        $photoType = $photo['type'];
-        $photoSize = $photo['size'];
+        $photoPath = $qaStageDrawingObservation->photo_path;
+        $photoName = $qaStageDrawingObservation->photo_name;
+        $photoType = $qaStageDrawingObservation->photo_type;
+        $photoSize = $qaStageDrawingObservation->photo_size;
+
+        if ($request->hasFile('photo')) {
+            $photo = $request->file('photo');
+            $photoName = $photo->getClientOriginalName();
+            $photoType = $photo->getClientMimeType();
+            $photoSize = $photo->getSize();
+            $photoPath = $photo->storeAs(
+                'qa-drawing-observations/' . $qaStageDrawingObservation->qa_stage_drawing_id,
+                time() . '_' . $photoName,
+                'public'
+            );
+
+            if ($qaStageDrawingObservation->photo_path) {
+                Storage::disk('public')->delete($qaStageDrawingObservation->photo_path);
+            }
+        }
 
         try {
             $qaStageDrawingObservation->update([
@@ -133,55 +158,5 @@ class QaStageDrawingObservationController extends Controller
         $qaStageDrawingObservation->delete();
 
         return response()->json(['message' => 'Observation deleted successfully']);
-    }
-
-    private function processPhoto(Request $request, int $drawingId, ?QaStageDrawingObservation $existing = null): array
-    {
-        $photoPath = $existing?->photo_path;
-        $photoName = $existing?->photo_name;
-        $photoType = $existing?->photo_type;
-        $photoSize = $existing?->photo_size;
-
-        if ($request->hasFile('photo')) {
-            $photo = $request->file('photo');
-            $photoName = $photo->getClientOriginalName();
-            $photoType = $photo->getClientMimeType();
-            $photoSize = $photo->getSize();
-            $photoPath = $photo->storeAs(
-                'qa-drawing-observations/' . $drawingId,
-                time() . '_' . $photoName,
-                'public'
-            );
-
-            if ($existing?->photo_path) {
-                Storage::disk('public')->delete($existing->photo_path);
-            }
-        } elseif ($request->filled('photo')) {
-            $payload = $request->input('photo');
-            if (is_string($payload) && Str::startsWith($payload, 'data:image/')) {
-                [$meta, $base64] = explode(',', $payload, 2);
-                $mime = explode(';', str_replace('data:', '', $meta))[0] ?: 'image/jpeg';
-                $extension = explode('/', $mime)[1] ?? 'jpg';
-                $binary = base64_decode($base64);
-                if ($binary !== false) {
-                    $photoName = 'photo_' . time() . '.' . $extension;
-                    $photoType = $mime;
-                    $photoSize = strlen($binary);
-                    $photoPath = 'qa-drawing-observations/' . $drawingId . '/' . $photoName;
-                    Storage::disk('public')->put($photoPath, $binary);
-
-                    if ($existing?->photo_path) {
-                        Storage::disk('public')->delete($existing->photo_path);
-                    }
-                }
-            }
-        }
-
-        return [
-            'path' => $photoPath,
-            'name' => $photoName,
-            'type' => $photoType,
-            'size' => $photoSize,
-        ];
     }
 }

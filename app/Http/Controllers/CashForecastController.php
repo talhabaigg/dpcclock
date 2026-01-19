@@ -46,6 +46,7 @@ class CashForecastController extends Controller
         $actualData = $this->getActualData($rules);
 
         // Get forecast data for current month onwards (latest forecast per job)
+        // NOTE: Forecast data does NOT have vendor information - only actuals have vendor breakdowns
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
         $latestForecasts = $this->getLatestForecastsSubquery();
         $forecastData = JobForecastData::select(
@@ -53,7 +54,7 @@ class CashForecastController extends Controller
             'job_forecast_data.cost_item',
             'job_forecast_data.forecast_amount',
             'job_forecast_data.job_number',
-            DB::raw("CASE WHEN job_forecast_data.cost_item = '{$cashInCode}' THEN NULL ELSE 'GL' END as vendor"),
+            DB::raw("NULL as vendor"),
             DB::raw("'forecast' as source")
         )
             ->join('job_forecasts as jf', 'job_forecast_data.job_forecast_id', '=', 'jf.id')
@@ -63,6 +64,10 @@ class CashForecastController extends Controller
             })
             ->where('job_forecast_data.month', '>=', $currentMonth)
             ->get();
+
+        // For current month: calculate "remaining forecast" = forecast - actuals
+        // This ensures we don't double-count when both actual invoices and forecasts exist
+        $forecastData = $this->adjustCurrentMonthForecasts($forecastData, $actualData, $currentMonth, $cashInCode);
 
         // Combine actuals and forecasts
         $combinedData = $actualData->concat($forecastData);
@@ -510,6 +515,59 @@ class CashForecastController extends Controller
         return $costActuals->concat($revenueActuals);
     }
 
+    /**
+     * Adjust forecast data for current month by subtracting actuals.
+     *
+     * For the current month, we have both:
+     * - Actuals: invoices already received/processed (with vendor breakdown)
+     * - Forecasts: total expected for the month
+     *
+     * To avoid double-counting, we calculate "remaining forecast" = forecast - actuals
+     * at the job+cost_item level. If remaining is positive, it represents expected
+     * costs still to come. If zero or negative, the forecast is fully covered by actuals.
+     */
+    private function adjustCurrentMonthForecasts(
+        \Illuminate\Support\Collection $forecastData,
+        \Illuminate\Support\Collection $actualData,
+        string $currentMonth,
+        string $cashInCode
+    ): \Illuminate\Support\Collection {
+        // Calculate actual totals for current month by job+cost_item
+        $currentMonthActualTotals = $actualData
+            ->filter(fn($item) => $item->month === $currentMonth)
+            ->groupBy(fn($item) => $item->job_number . '|' . $item->cost_item)
+            ->map(fn($items) => $items->sum('forecast_amount'));
+
+        return $forecastData->map(function ($item) use ($currentMonth, $currentMonthActualTotals, $cashInCode) {
+            // Only adjust current month forecasts
+            if ($item->month !== $currentMonth) {
+                return $item;
+            }
+
+            $key = $item->job_number . '|' . $item->cost_item;
+            $actualTotal = $currentMonthActualTotals->get($key, 0);
+
+            // Calculate remaining forecast (what's still expected to come)
+            $remainingForecast = (float) $item->forecast_amount - $actualTotal;
+
+            // If remaining is zero or negative, the forecast is fully covered by actuals
+            // Return null to filter out, or return with zero amount
+            if ($remainingForecast <= 0) {
+                return null;
+            }
+
+            // Return adjusted forecast with remaining amount
+            return (object) [
+                'month' => $item->month,
+                'cost_item' => $item->cost_item,
+                'forecast_amount' => $remainingForecast,
+                'job_number' => $item->job_number,
+                'vendor' => null,
+                'source' => 'forecast',
+            ];
+        })->filter(); // Remove null entries
+    }
+
     private function getForecastRules()
     {
         return [
@@ -949,7 +1007,8 @@ class CashForecastController extends Controller
             $cashOutCostItems = $cashOutItems
                 ->groupBy('cost_item')
                 ->map(function ($items, $costItem) use ($costCodeDescriptions) {
-                    $vendors = $items
+                    // Vendors from ACTUAL data only (real vendor breakdown from invoices)
+                    $actualVendors = $items
                         ->filter(function ($vendorItem) {
                             return ($vendorItem->source ?? null) === 'actual';
                         })
@@ -971,9 +1030,39 @@ class CashForecastController extends Controller
                                 'vendor' => $vendorName,
                                 'total' => (float) $vendorItems->sum('forecast_amount'),
                                 'jobs' => $jobs,
+                                'source' => 'actual',
                             ];
                         })
                         ->values();
+
+                    // FORECAST data as a separate pseudo-vendor "Remaining Forecast"
+                    // This represents expected costs still to come (no vendor breakdown available)
+                    $forecastItems = $items->filter(function ($item) {
+                        return ($item->source ?? null) === 'forecast';
+                    });
+
+                    $forecastVendor = collect();
+                    if ($forecastItems->isNotEmpty()) {
+                        $forecastJobs = $forecastItems
+                            ->groupBy('job_number')
+                            ->map(function ($jobItems, $jobNumber) {
+                                return [
+                                    'job_number' => $jobNumber,
+                                    'total' => (float) $jobItems->sum('forecast_amount'),
+                                ];
+                            })
+                            ->values();
+
+                        $forecastVendor = collect([[
+                            'vendor' => 'Remaining Forecast',
+                            'total' => (float) $forecastItems->sum('forecast_amount'),
+                            'jobs' => $forecastJobs,
+                            'source' => 'forecast',
+                        ]]);
+                    }
+
+                    // Combine actual vendors + forecast pseudo-vendor
+                    $vendors = $actualVendors->concat($forecastVendor)->values();
 
                     $jobs = $items
                         ->groupBy('job_number')
@@ -1223,10 +1312,18 @@ class CashForecastController extends Controller
                     'job_number' => $jobNumber,
                     'month' => $month,
                     'amount' => (float) $items->sum('this_app_work_completed'),
+                    'source' => 'actual',
                 ];
             })
             ->values();
 
+        // Calculate actual totals for current month by job (for remaining forecast calculation)
+        $currentMonthActualTotals = $actuals
+            ->filter(fn($item) => $item['month'] === $currentMonth)
+            ->groupBy('job_number')
+            ->map(fn($items) => $items->sum('amount'));
+
+        // For current month, we calculate "remaining forecast" = forecast - actuals
         $latestForecasts = $this->getLatestForecastsSubquery();
         $forecasts = JobForecastData::select(
             'job_forecast_data.month',
@@ -1242,13 +1339,28 @@ class CashForecastController extends Controller
             ->where('job_forecast_data.cost_item', $cashInCode)
             ->groupBy('job_forecast_data.month', 'job_forecast_data.job_number')
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($currentMonth, $currentMonthActualTotals) {
+                $amount = (float) $row->amount;
+
+                // For current month, subtract actuals to get "remaining forecast"
+                if ($row->month === $currentMonth) {
+                    $actualTotal = $currentMonthActualTotals->get($row->job_number, 0);
+                    $amount = $amount - $actualTotal;
+
+                    // If remaining is zero or negative, skip this forecast entry
+                    if ($amount <= 0) {
+                        return null;
+                    }
+                }
+
                 return [
                     'job_number' => $row->job_number,
                     'month' => $row->month,
-                    'amount' => (float) $row->amount,
+                    'amount' => $amount,
+                    'source' => 'forecast',
                 ];
-            });
+            })
+            ->filter(); // Remove null entries
 
         return $actuals->concat($forecasts)->values()->all();
     }
@@ -1274,6 +1386,14 @@ class CashForecastController extends Controller
                 ];
             });
 
+        // Calculate actual totals for current month by job+cost_item (for remaining forecast calculation)
+        $currentMonthActualTotals = $actuals
+            ->filter(fn($item) => $item['month'] === $currentMonth)
+            ->groupBy(fn($item) => $item['job_number'] . '|' . $item['cost_item'])
+            ->map(fn($items) => $items->sum('amount'));
+
+        // NOTE: Forecast data does NOT have vendor - only actuals have vendor breakdowns
+        // For current month, we calculate "remaining forecast" = forecast - actuals
         $latestForecasts = $this->getLatestForecastsSubquery();
         $forecasts = JobForecastData::select(
             'job_forecast_data.month',
@@ -1292,16 +1412,31 @@ class CashForecastController extends Controller
             ->where('job_forecast_data.cost_item', 'not like', 'GENERAL-%')
             ->groupBy('job_forecast_data.month', 'job_forecast_data.cost_item', 'job_forecast_data.job_number')
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($currentMonth, $currentMonthActualTotals) {
+                $amount = (float) $row->amount;
+
+                // For current month, subtract actuals to get "remaining forecast"
+                if ($row->month === $currentMonth) {
+                    $key = $row->job_number . '|' . $row->cost_item;
+                    $actualTotal = $currentMonthActualTotals->get($key, 0);
+                    $amount = $amount - $actualTotal;
+
+                    // If remaining is zero or negative, skip this forecast entry
+                    if ($amount <= 0) {
+                        return null;
+                    }
+                }
+
                 return [
                     'job_number' => $row->job_number,
                     'cost_item' => $row->cost_item,
-                    'vendor' => 'GL',
+                    'vendor' => null,  // Forecast data has no vendor
                     'month' => $row->month,
-                    'amount' => (float) $row->amount,
+                    'amount' => $amount,
                     'source' => 'forecast',
                 ];
-            });
+            })
+            ->filter(); // Remove null entries
 
         return $actuals->concat($forecasts)->values()->all();
     }
