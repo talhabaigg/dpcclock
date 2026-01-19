@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
     BarElement,
     CategoryScale,
@@ -29,6 +29,7 @@ type Props = {
     frequencies: Record<string, string>;
     cashInSources: CashInSource[];
     cashInAdjustments: CashInAdjustment[];
+    costTypeByCostItem: Record<string, string | null>;
 };
 
 type MonthNode = {
@@ -87,6 +88,8 @@ type CashInSplit = {
     receipt_month: string;
     amount: number;
 };
+
+const WATERFALL_ORDER = ['REV', 'LAB', 'LOC', 'MAT', 'SIT', 'GEN', 'EQH', 'PRO', 'OVH'] as const;
 
 const GENERAL_COST_LABELS: Record<string, string> = {
     'GENERAL-RENT': 'Rent & Lease',
@@ -491,6 +494,7 @@ const ShowCashForecast = ({
     frequencies,
     cashInSources,
     cashInAdjustments,
+    costTypeByCostItem,
 }: Props) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
     const [expandedSection, setExpandedSection] = useState<'in' | 'out' | null>(null);
@@ -516,6 +520,8 @@ const ShowCashForecast = ({
         includes_gst: true,
         start_date: new Date().toISOString().split('T')[0],
     });
+    const [waterfallStartMonth, setWaterfallStartMonth] = useState(months[0]?.month ?? '');
+    const [waterfallEndMonth, setWaterfallEndMonth] = useState(months[months.length - 1]?.month ?? '');
 
     const formatAmount = (value: number) =>
         value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -549,6 +555,22 @@ const ShowCashForecast = ({
         { cashIn: 0, cashOut: 0, net: 0 },
     );
 
+    useEffect(() => {
+        if (!months.length) {
+            setWaterfallStartMonth('');
+            setWaterfallEndMonth('');
+            return;
+        }
+
+        if (!waterfallStartMonth || !months.some((month) => month.month === waterfallStartMonth)) {
+            setWaterfallStartMonth(months[0]?.month ?? '');
+        }
+
+        if (!waterfallEndMonth || !months.some((month) => month.month === waterfallEndMonth)) {
+            setWaterfallEndMonth(months[months.length - 1]?.month ?? '');
+        }
+    }, [months, waterfallStartMonth, waterfallEndMonth]);
+
     const runningBalances = useMemo(() => {
         let balance = 0;
         return months.map((month) => {
@@ -574,11 +596,50 @@ const ShowCashForecast = ({
     }, [runningBalances, months]);
 
     const waterfallData = useMemo(() => {
-        return months.map((month) => ({
-            label: formatMonthShort(month.month),
-            value: month.net ?? 0,
+        if (!months.length) {
+            return [];
+        }
+
+        const start = waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth
+            ? waterfallEndMonth
+            : waterfallStartMonth;
+        const end = waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth
+            ? waterfallStartMonth
+            : waterfallEndMonth;
+
+        const sums = new Map<string, number>();
+        WATERFALL_ORDER.forEach((code) => sums.set(code, 0));
+        const allowedTypes = new Set(WATERFALL_ORDER);
+
+        months
+            .filter((month) => month.month >= start && month.month <= end)
+            .forEach((month) => {
+                month.cash_in?.cost_items?.forEach((item) => {
+                    if (!item?.total) return;
+                    sums.set('REV', (sums.get('REV') ?? 0) + item.total);
+                });
+
+                month.cash_out?.cost_items?.forEach((item) => {
+                    if (!item?.total) return;
+                    const costItemCode = item.cost_item ?? '';
+                    if (costItemCode.startsWith('GENERAL-')) {
+                        sums.set('OVH', (sums.get('OVH') ?? 0) - item.total);
+                        return;
+                    }
+
+                    const mappedType = costTypeByCostItem[costItemCode] ?? null;
+                    const costType = mappedType && allowedTypes.has(mappedType) && mappedType !== 'REV'
+                        ? mappedType
+                        : 'GEN';
+                    sums.set(costType, (sums.get(costType) ?? 0) - item.total);
+                });
+            });
+
+        return WATERFALL_ORDER.map((code) => ({
+            label: code,
+            value: sums.get(code) ?? 0,
         }));
-    }, [months]);
+    }, [months, waterfallStartMonth, waterfallEndMonth, costTypeByCostItem]);
 
     const endingBalance = startingBalance + (runningBalances[runningBalances.length - 1] ?? 0);
 
@@ -588,6 +649,8 @@ const ShowCashForecast = ({
         cashInSources.forEach((source) => allMonths.add(source.month));
         return Array.from(allMonths).sort();
     }, [months, cashInSources]);
+
+    const waterfallMonthOptions = useMemo(() => months.map((month) => month.month), [months]);
 
     const cashInAdjustmentJobs = useMemo(() => {
         return new Set(cashInAdjustments.map((adjustment) => adjustment.job_number));
@@ -900,17 +963,46 @@ const ShowCashForecast = ({
                     </div>
 
                     <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-slate-700">Net Cashflow Waterfall</h3>
-                            <button
-                                onClick={() => setShowFullscreenChart('waterfall')}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
-                                title="Fullscreen"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
-                            </button>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-700">Cash Waterfall</h3>
+                                <p className="text-xs text-slate-500">Summarized by cost type for the selected range</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <label className="text-slate-500">Start</label>
+                                <select
+                                    value={waterfallStartMonth}
+                                    onChange={(e) => setWaterfallStartMonth(e.target.value)}
+                                    className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {waterfallMonthOptions.map((month) => (
+                                        <option key={`waterfall-start-${month}`} value={month}>
+                                            {formatMonthHeader(month)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <label className="text-slate-500">End</label>
+                                <select
+                                    value={waterfallEndMonth}
+                                    onChange={(e) => setWaterfallEndMonth(e.target.value)}
+                                    className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {waterfallMonthOptions.map((month) => (
+                                        <option key={`waterfall-end-${month}`} value={month}>
+                                            {formatMonthHeader(month)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={() => setShowFullscreenChart('waterfall')}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                    title="Fullscreen"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                         <WaterfallChart data={waterfallData} height={200} />
                     </div>
@@ -1581,7 +1673,7 @@ const ShowCashForecast = ({
                         ? 'Monthly Cash Flow'
                         : showFullscreenChart === 'cumulative'
                             ? 'Cumulative Cash Position'
-                            : 'Net Cashflow Waterfall'
+                            : 'Cash Waterfall'
                 }
                 size="full"
             >

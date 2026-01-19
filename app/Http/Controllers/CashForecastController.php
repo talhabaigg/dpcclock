@@ -31,6 +31,7 @@ class CashForecastController extends Controller
 
         // Get cost code descriptions for display
         $costCodeDescriptions = $this->getCostCodeDescriptions();
+        $costTypeByCostItem = $this->getCostTypeByCostItem();
 
         // Get actuals from past months (costs and revenue)
         $actualData = $this->getActualData($rules);
@@ -82,6 +83,7 @@ class CashForecastController extends Controller
             'months' => $allMonthsWithCostSummary,
             'currentMonth' => $currentMonth,
             'costCodeDescriptions' => $costCodeDescriptions,
+            'costTypeByCostItem' => $costTypeByCostItem,
             'settings' => [
                 'startingBalance' => (float) $settings->starting_balance,
                 'startingBalanceDate' => $settings->starting_balance_date?->format('Y-m-d'),
@@ -231,6 +233,16 @@ class CashForecastController extends Controller
         return CostCode::pluck('description', 'code')->toArray();
     }
 
+    private function getCostTypeByCostItem(): array
+    {
+        return CostCode::with('costType')
+            ->get()
+            ->mapWithKeys(function (CostCode $costCode) {
+                return [$costCode->code => $costCode->costType?->code];
+            })
+            ->toArray();
+    }
+
     /**
      * Get general cost rows for the forecast period.
      */
@@ -252,6 +264,7 @@ class CashForecastController extends Controller
             foreach ($cashflows as $month => $amount) {
                 $rows->push((object) [
                     'month' => $month,
+                    'source_month' => $month,
                     'cost_item' => 'GENERAL-' . strtoupper($cost->category ?? 'OTHER'),
                     'job_number' => $cost->name,
                     'forecast_amount' => $amount,
@@ -422,6 +435,7 @@ class CashForecastController extends Controller
                 return [
                     (object) [
                         'month' => $item->month,
+                        'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
                         'forecast_amount' => $amount,
@@ -443,6 +457,7 @@ class CashForecastController extends Controller
                     $rows = collect($adjustments)->map(function ($adjustment) use ($item, $revenueGstRate) {
                         return (object) [
                             'month' => $adjustment['receipt_month'],
+                            'source_month' => $item->month,
                             'cost_item' => $item->cost_item,
                             'job_number' => $item->job_number,
                             'forecast_amount' => (float) $adjustment['amount'] * (1 + $revenueGstRate),
@@ -458,6 +473,7 @@ class CashForecastController extends Controller
 
                         $rows->push((object) [
                             'month' => $delayedMonth,
+                            'source_month' => $item->month,
                             'cost_item' => $costItem,
                             'job_number' => $item->job_number,
                             'forecast_amount' => $remaining * (1 + $revenueGstRate),
@@ -475,6 +491,7 @@ class CashForecastController extends Controller
                 return [
                     (object) [
                         'month' => $delayedMonth,
+                        'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
                         'forecast_amount' => $amount * (1 + $revenueGstRate),
@@ -495,6 +512,7 @@ class CashForecastController extends Controller
 
                     return (object) [
                         'month' => $delayedMonth,
+                        'source_month' => $item->month,
                         'cost_item' => $item->cost_item,
                         'job_number' => $item->job_number,
                         'forecast_amount' => $amount * (float) $split['ratio'],
@@ -514,6 +532,7 @@ class CashForecastController extends Controller
                 return [
                     (object) [
                         'month' => $delayedMonth,
+                        'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
                         'forecast_amount' => $amount, // No GST multiplier
@@ -536,6 +555,7 @@ class CashForecastController extends Controller
                 return [
                     (object) [
                         'month' => $delayedMonth,
+                        'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
                         'forecast_amount' => $amount * (1 + $gstRate),
@@ -550,6 +570,7 @@ class CashForecastController extends Controller
             return [
                 (object) [
                     'month' => $item->month,
+                    'source_month' => $item->month,
                     'cost_item' => $costItem,
                     'job_number' => $item->job_number,
                     'forecast_amount' => $amount,
@@ -674,7 +695,7 @@ class CashForecastController extends Controller
 
             // Extract GST component from the gross amount
             $gstAmount = $this->extractGstFromGross((float) $row->forecast_amount, (float) $gstRate);
-            $monthKey = $row->month;
+            $monthKey = $row->source_month ?? $row->month;
 
             if (!isset($carry[$monthKey])) {
                 $carry[$monthKey] = ['collected' => 0.0, 'paid' => 0.0];
@@ -729,6 +750,7 @@ class CashForecastController extends Controller
 
             $rows->push((object) [
                 'month' => $payableMonth,
+                'source_month' => $payableMonth,
                 'cost_item' => $gstPayableCode,
                 'job_number' => 'GST',
                 'forecast_amount' => (float) $netGst,
