@@ -10,6 +10,7 @@ use App\Models\CashForecastSetting;
 use App\Models\CostCode;
 use App\Models\JobCostDetail;
 use App\Models\JobForecastData;
+use App\Models\VendorPaymentDelay;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +97,7 @@ class CashForecastController extends Controller
 
         $cashInSources = $this->getCashInSources($rules, $currentMonth, $rangeStart);
         $cashOutSources = $this->getCashOutSources($rules, $currentMonth, $rangeStart);
+        $vendorPaymentDelays = $this->getVendorPaymentDelays($rangeStart, $rangeEnd);
 
         return Inertia::render('cash-forecast/show', [
             'months' => $allMonthsWithCostSummary,
@@ -117,6 +119,7 @@ class CashForecastController extends Controller
             'cashInAdjustments' => $cashInAdjustments['list'],
             'cashOutSources' => $cashOutSources,
             'cashOutAdjustments' => $cashOutAdjustments['list'],
+            'vendorPaymentDelays' => $vendorPaymentDelays,
         ]);
     }
 
@@ -319,6 +322,54 @@ class CashForecastController extends Controller
         });
 
         return back()->with('success', 'Cash-out adjustments saved successfully.');
+    }
+
+    /**
+     * Store vendor payment delays for a vendor + source month.
+     */
+    public function storeVendorPaymentDelays(Request $request)
+    {
+        $validated = $request->validate([
+            'vendor' => 'required|string',
+            'source_month' => 'required|date_format:Y-m',
+            'splits' => 'nullable|array',
+            'splits.*.payment_month' => 'required_with:splits|date_format:Y-m',
+            'splits.*.amount' => 'required_with:splits|numeric|min:0',
+        ]);
+
+        $vendor = $validated['vendor'];
+        $sourceMonth = Carbon::createFromFormat('Y-m', $validated['source_month'])->startOfMonth();
+        $splits = collect($validated['splits'] ?? []);
+
+        DB::transaction(function () use ($vendor, $sourceMonth, $splits) {
+            VendorPaymentDelay::where('vendor', $vendor)
+                ->whereDate('source_month', $sourceMonth)
+                ->delete();
+
+            if ($splits->isEmpty()) {
+                return;
+            }
+
+            $rows = $splits
+                ->filter(fn($split) => (float) $split['amount'] > 0)
+                ->map(function ($split) use ($vendor, $sourceMonth) {
+                    return [
+                        'vendor' => $vendor,
+                        'source_month' => $sourceMonth->copy(),
+                        'payment_month' => Carbon::createFromFormat('Y-m', $split['payment_month'])->startOfMonth(),
+                        'amount' => (float) $split['amount'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                })
+                ->all();
+
+            if (!empty($rows)) {
+                VendorPaymentDelay::insert($rows);
+            }
+        });
+
+        return back()->with('success', 'Vendor payment delays saved successfully.');
     }
 
     /**
@@ -1293,6 +1344,27 @@ class CashForecastController extends Controller
             'list' => $list->all(),
             'by_source' => $bySource,
         ];
+    }
+
+    private function getVendorPaymentDelays(Carbon $startMonth, Carbon $endMonth): array
+    {
+        return VendorPaymentDelay::query()
+            ->whereBetween('source_month', [$startMonth, $endMonth])
+            ->orderBy('vendor')
+            ->orderBy('source_month')
+            ->orderBy('payment_month')
+            ->get()
+            ->map(function (VendorPaymentDelay $delay) {
+                return [
+                    'id' => $delay->id,
+                    'vendor' => $delay->vendor,
+                    'source_month' => Carbon::parse($delay->source_month)->format('Y-m'),
+                    'payment_month' => Carbon::parse($delay->payment_month)->format('Y-m'),
+                    'amount' => (float) $delay->amount,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function getCashInSources(array $rules, string $currentMonth, Carbon $startMonth): array

@@ -19,7 +19,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { formatAmount, formatMonthHeader, getMonthOptions } from '../utils';
-import type { GeneralCost, CashInSplit, CashOutSplit } from '../types';
+import type { GeneralCost, CashInSplit, CashOutSplit, VendorPaymentDelaySplit } from '../types';
 import { Trash2 } from 'lucide-react';
 
 // Settings Modal
@@ -803,6 +803,180 @@ export const CashOutAdjustmentModal = ({
                             </Button>
                             <Button type="button" onClick={onSave} disabled={isOverBudget}>
                                 Save Adjustments
+                            </Button>
+                        </DialogFooter>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// Vendor Payment Delay Modal
+type VendorPaymentDelayModalProps = {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    vendor: string | null;
+    sourceMonth: string | null;
+    sourceMonths: string[];
+    splits: VendorPaymentDelaySplit[];
+    sourceAmount: number;
+    splitTotal: number;
+    isOverBudget: boolean;
+    monthOptions: string[];
+    onSourceMonthChange: (month: string) => void;
+    onSplitChange: (index: number, changes: Partial<VendorPaymentDelaySplit>) => void;
+    onAddSplit: () => void;
+    onRemoveSplit: (index: number) => void;
+    onSetSingleSplit: (offsetMonths: number) => void;
+    onSave: () => void;
+    onReset: () => void;
+};
+
+export const VendorPaymentDelayModal = ({
+    open,
+    onOpenChange,
+    vendor,
+    sourceMonth,
+    sourceMonths,
+    splits,
+    sourceAmount,
+    splitTotal,
+    isOverBudget,
+    monthOptions,
+    onSourceMonthChange,
+    onSplitChange,
+    onAddSplit,
+    onRemoveSplit,
+    onSetSingleSplit,
+    onSave,
+    onReset,
+}: VendorPaymentDelayModalProps) => {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>
+                        Delay Vendor Payments{vendor ? ` — ${vendor}` : ''}
+                    </DialogTitle>
+                </DialogHeader>
+                {vendor && (
+                    <div className="space-y-5">
+                        <p className="text-sm text-muted-foreground">
+                            Delay all payments for this vendor from a source month to different payment months.
+                        </p>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium mb-1">Source Month</label>
+                                <Select value={sourceMonth ?? ''} onValueChange={onSourceMonthChange}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select month" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {sourceMonths.map((month) => (
+                                            <SelectItem key={month} value={month}>
+                                                {formatMonthHeader(month)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium mb-1">Total Amount</label>
+                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                    ${formatAmount(sourceAmount)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-border overflow-hidden">
+                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted">
+                                <div className="col-span-5">Payment Month</div>
+                                <div className="col-span-5">Amount</div>
+                                <div className="col-span-2 text-right">Action</div>
+                            </div>
+                            {splits.length === 0 && (
+                                <div className="px-3 py-3 text-sm text-muted-foreground">
+                                    No delays configured. Add a split to delay payments.
+                                </div>
+                            )}
+                            {splits.map((split, index) => (
+                                <SplitRow
+                                    key={`${split.payment_month}-${index}`}
+                                    index={index}
+                                    monthValue={split.payment_month}
+                                    amount={split.amount}
+                                    monthOptions={monthOptions}
+                                    onMonthChange={(value) =>
+                                        onSplitChange(index, { payment_month: value })
+                                    }
+                                    onAmountChange={(value) => onSplitChange(index, { amount: value })}
+                                    onRemove={() => onRemoveSplit(index)}
+                                    monthLabel="Payment Month"
+                                />
+                            ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={onAddSplit}>
+                                Add Split
+                            </Button>
+                            <div className="h-4 w-px bg-border" />
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onSetSingleSplit(0)}
+                            >
+                                Same Month
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onSetSingleSplit(1)}
+                            >
+                                +1 Month
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onSetSingleSplit(2)}
+                            >
+                                +2 Months
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onSetSingleSplit(3)}
+                            >
+                                +3 Months
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <div>
+                                Total split: ${formatAmount(splitTotal)} / ${formatAmount(sourceAmount)}
+                            </div>
+                            {isOverBudget ? (
+                                <span className="text-destructive font-medium">
+                                    Split exceeds source amount
+                                </span>
+                            ) : (
+                                <span className="text-emerald-600 font-medium">
+                                    Remaining: ${formatAmount(sourceAmount - splitTotal)}
+                                </span>
+                            )}
+                        </div>
+
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={onReset}>
+                                Reset to Default
+                            </Button>
+                            <Button type="button" onClick={onSave} disabled={isOverBudget}>
+                                Save Delays
                             </Button>
                         </DialogFooter>
                     </div>

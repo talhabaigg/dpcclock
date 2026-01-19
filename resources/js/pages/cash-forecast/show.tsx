@@ -5,13 +5,19 @@ import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Settings, Maximize2 } from 'lucide-react';
+import { Plus, Settings, Maximize2, Clock } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Local imports
 import type { CashForecastProps, GeneralCost } from './types';
 import { formatAmount, formatMonthHeader } from './utils';
 import { useCashForecastData, useWaterfallData } from './hooks';
-import { useCashInAdjustments, useCashOutAdjustments } from './hooks';
+import { useCashInAdjustments, useCashOutAdjustments, useVendorPaymentDelays } from './hooks';
 import {
     CashFlowBarChart,
     CumulativeLineChart,
@@ -30,6 +36,7 @@ import {
     GeneralCostsModal,
     CashInAdjustmentModal,
     CashOutAdjustmentModal,
+    VendorPaymentDelayModal,
     FullscreenChartModal,
     PaymentRulesLegend,
 } from './components';
@@ -46,6 +53,7 @@ const ShowCashForecast = ({
     cashInAdjustments,
     cashOutSources,
     cashOutAdjustments,
+    vendorPaymentDelays,
     costTypeByCostItem,
 }: CashForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
@@ -122,6 +130,11 @@ const ShowCashForecast = ({
     const cashOutAdjustmentHook = useCashOutAdjustments({
         cashOutSources,
         cashOutAdjustments,
+    });
+
+    const vendorDelayHook = useVendorPaymentDelays({
+        cashOutSources,
+        vendorPaymentDelays,
     });
 
     // Computed values
@@ -316,6 +329,29 @@ const ShowCashForecast = ({
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="gap-2">
+                                    <Clock className="w-4 h-4" />
+                                    Vendor Delays
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                                {vendorDelayHook.getVendors().map((vendor) => (
+                                    <DropdownMenuItem
+                                        key={vendor}
+                                        onClick={() => vendorDelayHook.openModal(vendor)}
+                                    >
+                                        {vendor}
+                                    </DropdownMenuItem>
+                                ))}
+                                {vendorDelayHook.getVendors().length === 0 && (
+                                    <DropdownMenuItem disabled>
+                                        No vendors found
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button onClick={() => setShowGeneralCosts(true)} variant="outline" className="gap-2">
                             <Plus className="w-4 h-4" />
                             General Transactions
@@ -564,6 +600,32 @@ const ShowCashForecast = ({
                 onSetSingleSplit={cashOutAdjustmentHook.setSingleSplit}
                 onSave={cashOutAdjustmentHook.saveAdjustments}
                 onReset={cashOutAdjustmentHook.resetAdjustments}
+            />
+
+            <VendorPaymentDelayModal
+                open={vendorDelayHook.modalState.open}
+                onOpenChange={(open) => {
+                    if (!open) vendorDelayHook.closeModal();
+                }}
+                vendor={vendorDelayHook.modalState.vendor}
+                sourceMonth={vendorDelayHook.modalState.sourceMonth}
+                sourceMonths={
+                    vendorDelayHook.modalState.vendor
+                        ? vendorDelayHook.getSourceMonths(vendorDelayHook.modalState.vendor)
+                        : []
+                }
+                splits={vendorDelayHook.modalState.splits}
+                sourceAmount={vendorDelayHook.sourceAmount}
+                splitTotal={vendorDelayHook.splitTotal}
+                isOverBudget={vendorDelayHook.isOverBudget}
+                monthOptions={cashOutMonthOptions}
+                onSourceMonthChange={vendorDelayHook.updateSourceMonth}
+                onSplitChange={vendorDelayHook.updateSplit}
+                onAddSplit={vendorDelayHook.addSplit}
+                onRemoveSplit={vendorDelayHook.removeSplit}
+                onSetSingleSplit={vendorDelayHook.setSingleSplit}
+                onSave={vendorDelayHook.saveDelays}
+                onReset={vendorDelayHook.resetDelays}
             />
 
             <FullscreenChartModal

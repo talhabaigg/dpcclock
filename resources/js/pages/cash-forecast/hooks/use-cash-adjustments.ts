@@ -10,6 +10,9 @@ import type {
     CashOutSplit,
     CashInModalState,
     CashOutModalState,
+    VendorPaymentDelay,
+    VendorPaymentDelaySplit,
+    VendorDelayModalState,
 } from '../types';
 
 type UseCashInAdjustmentsProps = {
@@ -486,6 +489,208 @@ export const useCashOutAdjustments = ({
         saveAdjustments,
         resetAdjustments,
         getSourceMonths,
+        splitTotal,
+        sourceAmount,
+        isOverBudget,
+    };
+};
+
+type UseVendorPaymentDelaysProps = {
+    cashOutSources: CashOutSource[];
+    vendorPaymentDelays: VendorPaymentDelay[];
+};
+
+export const useVendorPaymentDelays = ({
+    cashOutSources,
+    vendorPaymentDelays,
+}: UseVendorPaymentDelaysProps) => {
+    const [modalState, setModalState] = useState<VendorDelayModalState>({
+        open: false,
+        vendor: null,
+        sourceMonth: null,
+        splits: [],
+    });
+
+    const getSourceAmount = useCallback(
+        (vendor: string | null, sourceMonth: string | null): number => {
+            if (!vendor || !sourceMonth) return 0;
+            return cashOutSources
+                .filter((source) => source.vendor === vendor && source.month === sourceMonth)
+                .reduce((sum, source) => sum + source.amount, 0);
+        },
+        [cashOutSources]
+    );
+
+    const getSplits = useCallback(
+        (vendor: string, sourceMonth: string | null): VendorPaymentDelaySplit[] => {
+            if (!sourceMonth) return [];
+            const existing = vendorPaymentDelays.filter(
+                (delay) => delay.vendor === vendor && delay.source_month === sourceMonth
+            );
+            if (existing.length > 0) {
+                return existing.map((delay) => ({
+                    payment_month: delay.payment_month,
+                    amount: delay.amount,
+                }));
+            }
+
+            const sourceAmount = getSourceAmount(vendor, sourceMonth);
+            if (!sourceAmount) return [];
+            return [
+                {
+                    payment_month: addMonthsToString(sourceMonth, 1),
+                    amount: sourceAmount,
+                },
+            ];
+        },
+        [vendorPaymentDelays, getSourceAmount]
+    );
+
+    const getSourceMonths = useCallback(
+        (vendor: string): string[] => {
+            const months = cashOutSources
+                .filter((source) => source.vendor === vendor)
+                .map((source) => source.month);
+            return Array.from(new Set(months)).sort();
+        },
+        [cashOutSources]
+    );
+
+    const getVendors = useCallback((): string[] => {
+        const vendors = cashOutSources
+            .map((source) => source.vendor)
+            .filter((vendor): vendor is string => vendor !== null);
+        return Array.from(new Set(vendors)).sort();
+    }, [cashOutSources]);
+
+    const openModal = useCallback(
+        (vendor: string) => {
+            const sources = getSourceMonths(vendor);
+            const sourceMonth = sources[0] ?? null;
+            setModalState({
+                open: true,
+                vendor,
+                sourceMonth,
+                splits: getSplits(vendor, sourceMonth),
+            });
+        },
+        [getSourceMonths, getSplits]
+    );
+
+    const closeModal = useCallback(() => {
+        setModalState({ open: false, vendor: null, sourceMonth: null, splits: [] });
+    }, []);
+
+    const updateSourceMonth = useCallback(
+        (sourceMonth: string) => {
+            if (!modalState.vendor) return;
+            setModalState((prev) => ({
+                ...prev,
+                sourceMonth,
+                splits: getSplits(modalState.vendor!, sourceMonth),
+            }));
+        },
+        [modalState.vendor, getSplits]
+    );
+
+    const updateSplit = useCallback((index: number, changes: Partial<VendorPaymentDelaySplit>) => {
+        setModalState((prev) => ({
+            ...prev,
+            splits: prev.splits.map((split, idx) =>
+                idx === index ? { ...split, ...changes } : split
+            ),
+        }));
+    }, []);
+
+    const addSplit = useCallback(() => {
+        if (!modalState.sourceMonth) return;
+        setModalState((prev) => ({
+            ...prev,
+            splits: [...prev.splits, { payment_month: addMonthsToString(modalState.sourceMonth!, 1), amount: 0 }],
+        }));
+    }, [modalState.sourceMonth]);
+
+    const removeSplit = useCallback((index: number) => {
+        setModalState((prev) => ({
+            ...prev,
+            splits: prev.splits.filter((_, idx) => idx !== index),
+        }));
+    }, []);
+
+    const setSingleSplit = useCallback(
+        (offsetMonths: number) => {
+            if (!modalState.sourceMonth || !modalState.vendor) return;
+            const amount = getSourceAmount(modalState.vendor, modalState.sourceMonth);
+            setModalState((prev) => ({
+                ...prev,
+                splits: [
+                    {
+                        payment_month: addMonthsToString(modalState.sourceMonth!, offsetMonths),
+                        amount,
+                    },
+                ],
+            }));
+        },
+        [modalState.sourceMonth, modalState.vendor, getSourceAmount]
+    );
+
+    const saveDelays = useCallback(() => {
+        if (!modalState.vendor || !modalState.sourceMonth) return;
+        router.post(
+            '/cash-forecast/vendor-payment-delays',
+            {
+                vendor: modalState.vendor,
+                source_month: modalState.sourceMonth,
+                splits: modalState.splits.filter((split) => split.amount > 0),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: closeModal,
+            }
+        );
+    }, [modalState, closeModal]);
+
+    const resetDelays = useCallback(() => {
+        if (!modalState.vendor || !modalState.sourceMonth) return;
+        router.post(
+            '/cash-forecast/vendor-payment-delays',
+            {
+                vendor: modalState.vendor,
+                source_month: modalState.sourceMonth,
+                splits: [],
+            },
+            {
+                preserveScroll: true,
+                onSuccess: closeModal,
+            }
+        );
+    }, [modalState, closeModal]);
+
+    const splitTotal = useMemo(
+        () => modalState.splits.reduce((sum, split) => sum + split.amount, 0),
+        [modalState.splits]
+    );
+
+    const sourceAmount = useMemo(
+        () => getSourceAmount(modalState.vendor, modalState.sourceMonth),
+        [getSourceAmount, modalState.vendor, modalState.sourceMonth]
+    );
+
+    const isOverBudget = splitTotal > sourceAmount + 0.01;
+
+    return {
+        modalState,
+        openModal,
+        closeModal,
+        updateSourceMonth,
+        updateSplit,
+        addSplit,
+        removeSplit,
+        setSingleSplit,
+        saveDelays,
+        resetDelays,
+        getSourceMonths,
+        getVendors,
         splitTotal,
         sourceAmount,
         isOverBudget,

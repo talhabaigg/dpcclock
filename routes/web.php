@@ -225,6 +225,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/cash-forecast/general-costs/{generalCost}', [CashForecastController::class, 'destroyGeneralCost'])->name('cashForecast.destroyGeneralCost');
         Route::post('/cash-forecast/cash-in-adjustments', [CashForecastController::class, 'storeCashInAdjustments'])->name('cashForecast.storeCashInAdjustments');
         Route::post('/cash-forecast/cash-out-adjustments', [CashForecastController::class, 'storeCashOutAdjustments'])->name('cashForecast.storeCashOutAdjustments');
+        Route::post('/cash-forecast/vendor-payment-delays', [CashForecastController::class, 'storeVendorPaymentDelays'])->name('cashForecast.storeVendorPaymentDelays');
 
         Route::middleware('role:admin')->group(function () {
             Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');

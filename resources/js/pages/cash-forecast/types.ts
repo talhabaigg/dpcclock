@@ -95,6 +95,19 @@ export type CashOutSplit = {
     amount: number;
 };
 
+export type VendorPaymentDelay = {
+    id: number;
+    vendor: string;
+    source_month: string;
+    payment_month: string;
+    amount: number;
+};
+
+export type VendorPaymentDelaySplit = {
+    payment_month: string;
+    amount: number;
+};
+
 export type CashForecastSettings = {
     startingBalance: number;
     startingBalanceDate: string | null;
@@ -116,7 +129,15 @@ export type CashForecastProps = {
     cashInAdjustments: CashInAdjustment[];
     cashOutSources: CashOutSource[];
     cashOutAdjustments: CashOutAdjustment[];
+    vendorPaymentDelays: VendorPaymentDelay[];
     costTypeByCostItem: Record<string, string | null>;
+};
+
+export type VendorDelayModalState = {
+    open: boolean;
+    vendor: string | null;
+    sourceMonth: string | null;
+    splits: VendorPaymentDelaySplit[];
 };
 
 // Chart data types
