@@ -49,97 +49,103 @@ class LoadArProgressBillingSummaries implements ShouldQueue
         Log::info('LoadArProgressBillingSummaries: Job started');
 
         try {
-            $url = config('premier.api.base_url') . config('premier.endpoints.ar_progress_billing');
+            $baseUrl = config('premier.api.base_url') . config('premier.endpoints.ar_progress_billing');
+            $insertBatchSize = 100; // Smaller batch size for inserts due to many columns
+            $pageSize = 200; // Smaller OData page size for API requests
+            $skip = 0;
+            $totalProcessed = 0;
+            $isFirstBatch = true;
 
-            $response = Http::timeout(config('premier.api.timeout', 300))
-                ->withBasicAuth(
-                    config('premier.api.username'),
-                    config('premier.api.password')
-                )
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'DataServiceVersion' => '2.0',
-                    'MaxDataServiceVersion' => '2.0',
-                ])
-                ->get($url);
+            do {
+                // Fetch data in pages using OData $skip and $top
+                $url = $baseUrl . '?$top=' . $pageSize . '&$skip=' . $skip;
 
-            if (!$response->successful()) {
-                throw new \RuntimeException(
-                    "API request failed with status {$response->status()}: {$response->body()}"
-                );
-            }
+                Log::info("LoadArProgressBillingSummaries: Fetching page", [
+                    'skip' => $skip,
+                    'top' => $pageSize
+                ]);
 
-            $json = $response->json();
+                $response = Http::timeout(config('premier.api.timeout', 300))
+                    ->withBasicAuth(
+                        config('premier.api.username'),
+                        config('premier.api.password')
+                    )
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'DataServiceVersion' => '2.0',
+                        'MaxDataServiceVersion' => '2.0',
+                    ])
+                    ->get($url);
 
-            // Validate response structure
-            if (!isset($json['d'])) {
-                throw new \RuntimeException('Invalid API response structure: missing "d" property');
-            }
-
-            // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
-            $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
-
-            if (!is_array($rows)) {
-                throw new \RuntimeException('Invalid API response: expected array of rows');
-            }
-
-            if (count($rows) === 0) {
-                Log::warning('LoadArProgressBillingSummaries: ERP returned 0 rows, skipping database update');
-                return;
-            }
-
-            Log::info('LoadArProgressBillingSummaries: Processing records', ['count' => count($rows)]);
-
-            // Process data
-            $data = [];
-            foreach ($rows as $r) {
-                $fromMs = null;
-                $periodMs = null;
-
-                if (!empty($r['From_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['From_Date'], $m)) {
-                    $fromMs = (int) $m[1];
+                if (!$response->successful()) {
+                    throw new \RuntimeException(
+                        "API request failed with status {$response->status()}: {$response->body()}"
+                    );
                 }
 
-                if (!empty($r['Period_End_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Period_End_Date'], $m)) {
-                    $periodMs = (int) $m[1];
+                $json = $response->json();
+                unset($response); // Free response memory immediately
+
+                // Validate response structure
+                if (!isset($json['d'])) {
+                    throw new \RuntimeException('Invalid API response structure: missing "d" property');
                 }
 
-                $data[] = [
-                    'job_number' => $r['Job_Number'] ?? null,
-                    'application_number' => $r['Application_Number'] ?? null,
-                    'description' => $r['Description'] ?? null,
-                    'from_date' => $fromMs ? Carbon::createFromTimestampMsUTC($fromMs)->toDateString() : null,
-                    'period_end_date' => $periodMs ? Carbon::createFromTimestampMsUTC($periodMs)->toDateString() : null,
-                    'status_name' => $r['Status_Name'] ?? null,
-                    'this_app_work_completed' => isset($r['This_App_Work_Completed']) ? (float) $r['This_App_Work_Completed'] : null,
-                    'contract_sum_to_date' => isset($r['Contract_Sum_To_Date']) ? (float) $r['Contract_Sum_To_Date'] : null,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
+                // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
+                $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
+                unset($json); // Free json memory immediately
 
-            $conn = ArProgressBillingSummary::query()->getConnection();
-            $batchSize = config('premier.jobs.batch_size', 1000);
-
-            $conn->transaction(function () use ($data, $batchSize) {
-                // Delete all records (don't use truncate inside transaction as it auto-commits)
-                ArProgressBillingSummary::query()->delete();
-
-                $chunks = array_chunk($data, $batchSize);
-                foreach ($chunks as $index => $chunk) {
-                    $chunkNumber = $index + 1;
-                    Log::info("LoadArProgressBillingSummaries: Inserting chunk {$chunkNumber}", [
-                        'rows' => count($chunk),
-                        'total_chunks' => count($chunks)
-                    ]);
-
-                    ArProgressBillingSummary::insert($chunk);
+                if (!is_array($rows)) {
+                    throw new \RuntimeException('Invalid API response: expected array of rows');
                 }
-            });
+
+                $rowCount = count($rows);
+
+                if ($rowCount === 0 && $isFirstBatch) {
+                    Log::warning('LoadArProgressBillingSummaries: ERP returned 0 rows, skipping database update');
+                    return;
+                }
+
+                if ($rowCount === 0) {
+                    break; // No more records to fetch
+                }
+
+                Log::info('LoadArProgressBillingSummaries: Processing page', [
+                    'rows' => $rowCount,
+                    'skip' => $skip
+                ]);
+
+                // On first batch, delete all existing records
+                if ($isFirstBatch) {
+                    ArProgressBillingSummary::query()->delete();
+                    $isFirstBatch = false;
+                }
+
+                // Process and insert data in smaller chunks to reduce memory usage
+                $chunks = array_chunk($rows, $insertBatchSize);
+                unset($rows); // Free rows memory
+
+                foreach ($chunks as $chunk) {
+                    $data = [];
+                    foreach ($chunk as $r) {
+                        $data[] = $this->mapRowToRecord($r);
+                    }
+                    ArProgressBillingSummary::insert($data);
+                    unset($data);
+                }
+                unset($chunks);
+
+                $totalProcessed += $rowCount;
+                $skip += $pageSize;
+
+                // Force garbage collection
+                gc_collect_cycles();
+
+            } while ($rowCount === $pageSize); // Continue if we got a full page
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadArProgressBillingSummaries: Job completed successfully', [
-                'records_processed' => count($data),
+                'records_processed' => $totalProcessed,
                 'duration_seconds' => $duration
             ]);
 
@@ -152,6 +158,69 @@ class LoadArProgressBillingSummaries implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Map an API row to a database record.
+     */
+    private function mapRowToRecord(array $r): array
+    {
+        $fromMs = null;
+        $periodMs = null;
+        $insertMs = null;
+        $updateMs = null;
+
+        if (!empty($r['From_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['From_Date'], $m)) {
+            $fromMs = (int) $m[1];
+        }
+
+        if (!empty($r['Period_End_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Period_End_Date'], $m)) {
+            $periodMs = (int) $m[1];
+        }
+
+        if (!empty($r['Insert_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Insert_Date'], $m)) {
+            $insertMs = (int) $m[1];
+        }
+
+        if (!empty($r['Update_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Update_Date'], $m)) {
+            $updateMs = (int) $m[1];
+        }
+
+        return [
+            'client_id' => $r['ClientId'] ?? null,
+            'company_code' => $r['Company_Code'] ?? null,
+            'job_number' => $r['Job_Number'] ?? null,
+            'progress_billing_report_number' => $r['Progress_Billing_Report_Number'] ?? null,
+            'application_number' => $r['Application_Number'] ?? null,
+            'description' => $r['Description'] ?? null,
+            'from_date' => $fromMs ? Carbon::createFromTimestampMsUTC($fromMs)->toDateString() : null,
+            'period_end_date' => $periodMs ? Carbon::createFromTimestampMsUTC($periodMs)->toDateString() : null,
+            'status_name' => $r['Status_Name'] ?? null,
+            'this_app_work_completed' => isset($r['This_App_Work_Completed']) ? (float) $r['This_App_Work_Completed'] : null,
+            'materials_stored' => isset($r['Materials_Stored']) ? (float) $r['Materials_Stored'] : null,
+            'total_completed_and_stored_to_date' => isset($r['Total_Completed_And_Stored_To_Date']) ? (float) $r['Total_Completed_And_Stored_To_Date'] : null,
+            'percentage' => isset($r['Percentage']) ? (float) $r['Percentage'] : null,
+            'balance_to_finish' => isset($r['Balance_To_Finish']) ? (float) $r['Balance_To_Finish'] : null,
+            'this_app_retainage' => isset($r['This_App_Retainage']) ? (float) $r['This_App_Retainage'] : null,
+            'application_retainage_released' => isset($r['Application_Retainage_Released']) ? (float) $r['Application_Retainage_Released'] : null,
+            'original_contract_sum' => isset($r['Original_Contract_Sum']) ? (float) $r['Original_Contract_Sum'] : null,
+            'authorized_changes_to_date' => isset($r['Authorized_Changes_To_Date']) ? (float) $r['Authorized_Changes_To_Date'] : null,
+            'contract_sum_to_date' => isset($r['Contract_Sum_To_Date']) ? (float) $r['Contract_Sum_To_Date'] : null,
+            'retainage_to_date' => isset($r['Retainage_To_Date']) ? (float) $r['Retainage_To_Date'] : null,
+            'total_earned_less_retainage' => isset($r['Total_Earned_Less_Retainage']) ? (float) $r['Total_Earned_Less_Retainage'] : null,
+            'less_previous_applications' => isset($r['Less_Previous_Applications']) ? (float) $r['Less_Previous_Applications'] : null,
+            'amount_payable_this_application' => isset($r['Amount_Payable_This_Application']) ? (float) $r['Amount_Payable_This_Application'] : null,
+            'balance_to_finish_including_retainage' => isset($r['Balance_To_Finish_Including_Retainage']) ? (float) $r['Balance_To_Finish_Including_Retainage'] : null,
+            'previous_materials_stored' => isset($r['Previous_Materials_Stored']) ? (float) $r['Previous_Materials_Stored'] : null,
+            'invoice_number' => $r['Invoice_Number'] ?? null,
+            'active' => $r['Active'] ?? null,
+            'insert_user' => $r['Insert_User'] ?? null,
+            'insert_date' => $insertMs ? Carbon::createFromTimestampMsUTC($insertMs)->toDateString() : null,
+            'update_user' => $r['Update_User'] ?? null,
+            'update_date' => $updateMs ? Carbon::createFromTimestampMsUTC($updateMs)->toDateString() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
     }
 
     /**

@@ -11,7 +11,7 @@ import { Head, Link } from '@inertiajs/react';
 import type { ColDef, ColumnState, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { CheckCircle2, Clock, Download, FileText, Filter, MinusCircle, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Download, FileText, Filter, MinusCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 
@@ -204,9 +204,9 @@ export default function TurnoverForecastIndex({
         const currentMonth = new Date().getMonth() + 1;
         const currentFY = currentMonth >= 7 ? currentYear : currentYear - 1;
 
-        // Generate FY options from 5 years ago to 2 years ahead
+        // Generate FY options from 5 years ago to 5 years ahead
         const fys = [{ value: 'all', label: 'All Time' }];
-        for (let year = currentFY - 5; year <= currentFY + 2; year++) {
+        for (let year = currentFY - 5; year <= currentFY + 5; year++) {
             fys.push({
                 value: year.toString(),
                 label: `FY${year}-${String(year + 1).slice(2)}`,
@@ -220,6 +220,19 @@ export default function TurnoverForecastIndex({
         const currentMonth = new Date().getMonth() + 1;
         return currentMonth >= 7 ? currentYear.toString() : (currentYear - 1).toString();
     });
+
+    // Navigation handlers for FY arrows (unlimited navigation)
+    const goToPreviousFY = () => {
+        if (selectedFY === 'all') return;
+        const currentFYYear = parseInt(selectedFY);
+        setSelectedFY((currentFYYear - 1).toString());
+    };
+
+    const goToNextFY = () => {
+        if (selectedFY === 'all') return;
+        const currentFYYear = parseInt(selectedFY);
+        setSelectedFY((currentFYYear + 1).toString());
+    };
 
     // Filter months based on selected FY
     const filteredMonths = useMemo(() => {
@@ -1137,18 +1150,40 @@ export default function TurnoverForecastIndex({
                                     Targets
                                 </Button>
                             </div>
-                            <Select value={selectedFY} onValueChange={setSelectedFY}>
-                                <SelectTrigger className="h-8 w-[140px]">
-                                    <SelectValue placeholder="Select FY" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableFYs.map((fy) => (
-                                        <SelectItem key={fy.value} value={fy.value}>
-                                            {fy.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={goToPreviousFY}
+                                    disabled={selectedFY === 'all'}
+                                    title="Previous FY"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Select value={selectedFY} onValueChange={setSelectedFY}>
+                                    <SelectTrigger className="h-8 w-[140px]">
+                                        <SelectValue placeholder="Select FY" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableFYs.map((fy) => (
+                                            <SelectItem key={fy.value} value={fy.value}>
+                                                {fy.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={goToNextFY}
+                                    disabled={selectedFY === 'all'}
+                                    title="Next FY"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
                         <div className="flex gap-2">
                             <Button onClick={() => setReportDialogOpen(true)} variant="default" size="sm" className="w-full sm:w-auto">

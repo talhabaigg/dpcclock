@@ -496,8 +496,8 @@ class CashForecastController extends Controller
                 ];
             });
 
-        // Get revenue actuals
-        $revenueActuals = ArProgressBillingSummary::select('job_number', 'period_end_date', 'this_app_work_completed')
+        // Get revenue actuals (use amount_payable_this_application which is after retention)
+        $revenueActuals = ArProgressBillingSummary::select('job_number', 'period_end_date', 'amount_payable_this_application')
             ->where('period_end_date', '>=', Carbon::now()->subMonths(3)->startOfMonth())
             ->get()
             ->map(function ($item) use ($cashInCode) {
@@ -505,7 +505,7 @@ class CashForecastController extends Controller
                     'job_number' => $item->job_number,
                     'cost_item' => $cashInCode,
                     'month' => Carbon::parse($item->period_end_date)->format('Y-m'),
-                    'forecast_amount' => (float) $item->this_app_work_completed,
+                    'forecast_amount' => (float) $item->amount_payable_this_application,
                     'vendor' => null,
                     'is_actual' => true,
                     'source' => 'actual',
@@ -1299,7 +1299,8 @@ class CashForecastController extends Controller
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
 
-        $actuals = ArProgressBillingSummary::select('job_number', 'period_end_date', 'this_app_work_completed')
+        // Use amount_payable_this_application which is after retention
+        $actuals = ArProgressBillingSummary::select('job_number', 'period_end_date', 'amount_payable_this_application')
             ->where('period_end_date', '>=', $startMonth)
             ->get()
             ->groupBy(function ($item) {
@@ -1311,7 +1312,7 @@ class CashForecastController extends Controller
                 return [
                     'job_number' => $jobNumber,
                     'month' => $month,
-                    'amount' => (float) $items->sum('this_app_work_completed'),
+                    'amount' => (float) $items->sum('amount_payable_this_application'),
                     'source' => 'actual',
                 ];
             })
