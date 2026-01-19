@@ -1,7 +1,14 @@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     BarElement,
     CategoryScale,
@@ -23,12 +30,18 @@ type Props = {
     settings: {
         startingBalance: number;
         startingBalanceDate: string | null;
+        gstQ1PayMonth: number;
+        gstQ2PayMonth: number;
+        gstQ3PayMonth: number;
+        gstQ4PayMonth: number;
     };
     generalCosts: GeneralCost[];
     categories: Record<string, string>;
     frequencies: Record<string, string>;
     cashInSources: CashInSource[];
     cashInAdjustments: CashInAdjustment[];
+    cashOutSources: CashOutSource[];
+    cashOutAdjustments: CashOutAdjustment[];
     costTypeByCostItem: Record<string, string | null>;
 };
 
@@ -43,7 +56,8 @@ type CostItemNode = {
     cost_item: string;
     description?: string | null;
     total: number;
-    jobs: JobNode[];
+    jobs?: JobNode[];
+    vendors?: VendorNode[];
 };
 
 type CashFlowNode = {
@@ -54,6 +68,12 @@ type CashFlowNode = {
 type JobNode = {
     job_number: string;
     total: number;
+};
+
+type VendorNode = {
+    vendor: string;
+    total: number;
+    jobs?: JobNode[];
 };
 
 type GeneralCost = {
@@ -68,6 +88,7 @@ type GeneralCost = {
     end_date: string | null;
     category: string | null;
     is_active: boolean;
+    flow_type: 'cash_in' | 'cash_out';
 };
 
 type CashInSource = {
@@ -84,12 +105,36 @@ type CashInAdjustment = {
     amount: number;
 };
 
+type CashOutSource = {
+    job_number: string;
+    cost_item: string;
+    vendor: string;
+    month: string;
+    amount: number;
+    source: 'actual' | 'forecast';
+};
+
+type CashOutAdjustment = {
+    id: number;
+    job_number: string;
+    cost_item: string;
+    vendor: string;
+    source_month: string;
+    payment_month: string;
+    amount: number;
+};
+
 type CashInSplit = {
     receipt_month: string;
     amount: number;
 };
 
-const WATERFALL_ORDER = ['REV', 'LAB', 'LOC', 'MAT', 'SIT', 'GEN', 'EQH', 'PRO', 'OVH'] as const;
+type CashOutSplit = {
+    payment_month: string;
+    amount: number;
+};
+
+const WATERFALL_ORDER = ['REV', 'LAB', 'LOC', 'MAT', 'SIT', 'GEN', 'EQH', 'PRO', 'GST', 'UNM', 'OVH'] as const;
 
 const GENERAL_COST_LABELS: Record<string, string> = {
     'GENERAL-RENT': 'Rent & Lease',
@@ -126,43 +171,6 @@ const getCostItemLabel = (costItem: string | undefined | null, description?: str
     return 'Other';
 };
 
-// Modal component
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }: {
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    children: React.ReactNode;
-    size?: 'md' | 'lg' | 'xl' | 'full';
-}) => {
-    if (!isOpen) return null;
-
-    const sizeClasses = {
-        md: 'max-w-lg',
-        lg: 'max-w-2xl',
-        xl: 'max-w-4xl',
-        full: 'max-w-[95vw] max-h-[95vh]',
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-                <div className="fixed inset-0 transition-opacity bg-slate-900/50" onClick={onClose} />
-                <div className={`relative inline-block w-full ${sizeClasses[size]} p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl`}>
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-                        <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // Bar chart component
 const BarChart = ({ data, height = 200, showLabels = true }: {
     data: { label: string; cashIn: number; cashOut: number; net: number }[];
@@ -184,21 +192,21 @@ const BarChart = ({ data, height = 200, showLabels = true }: {
             {
                 label: 'Cash In',
                 data: data.map((d) => d.cashIn),
-                backgroundColor: '#22c55e',
+                backgroundColor: '#86efac',
                 borderRadius: 4,
                 borderSkipped: false,
             },
             {
                 label: 'Cash Out',
                 data: data.map((d) => d.cashOut),
-                backgroundColor: '#ef4444',
+                backgroundColor: '#fca5a5',
                 borderRadius: 4,
                 borderSkipped: false,
             },
             {
                 label: 'Net',
                 data: data.map((d) => d.net),
-                backgroundColor: data.map((d) => (d.net >= 0 ? '#3b82f6' : '#f97316')),
+                backgroundColor: data.map((d) => (d.net >= 0 ? '#93c5fd' : '#fdba74')),
                 borderRadius: 4,
                 borderSkipped: false,
             },
@@ -246,20 +254,20 @@ const BarChart = ({ data, height = 200, showLabels = true }: {
             </div>
             <div className="flex justify-center gap-6 mt-4 text-xs">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-green-500 rounded" />
-                    <span className="text-slate-600">Cash In</span>
+                    <div className="w-3 h-3 bg-green-300 rounded" />
+                    <span className="text-muted-foreground">Cash In</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-red-500 rounded" />
-                    <span className="text-slate-600">Cash Out</span>
+                    <div className="w-3 h-3 bg-red-300 rounded" />
+                    <span className="text-muted-foreground">Cash Out</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-blue-500 rounded" />
-                    <span className="text-slate-600">Net (+)</span>
+                    <div className="w-3 h-3 bg-blue-300 rounded" />
+                    <span className="text-muted-foreground">Net (+)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-orange-500 rounded" />
-                    <span className="text-slate-600">Net (-)</span>
+                    <div className="w-3 h-3 bg-orange-300 rounded" />
+                    <span className="text-muted-foreground">Net (-)</span>
                 </div>
             </div>
         </div>
@@ -289,8 +297,8 @@ const CumulativeChart = ({ data, height = 120, startingBalance = 0 }: {
             {
                 label: 'Cumulative Cash',
                 data: adjustedData.map((d) => d.value),
-                borderColor: '#0ea5e9',
-                backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                borderColor: '#7dd3fc',
+                backgroundColor: 'rgba(125, 211, 252, 0.2)',
                 fill: true,
                 tension: 0.35,
                 pointRadius: 3,
@@ -403,8 +411,8 @@ const WaterfallChart = ({ data, height = 200 }: {
 
     const backgroundColors = extended.map((item, idx) => {
         const isTotal = idx === extended.length - 1;
-        if (isTotal) return '#64748b';
-        return item.value >= 0 ? '#14b8a6' : '#ef4444';
+        if (isTotal) return '#94a3b8';
+        return item.value >= 0 ? '#5eead4' : '#fca5a5';
     });
 
     const chartData = {
@@ -468,16 +476,16 @@ const WaterfallChart = ({ data, height = 200 }: {
             </div>
             <div className="flex justify-center gap-6 mt-3 text-xs">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-teal-500 rounded" />
-                    <span className="text-slate-600">Increase</span>
+                    <div className="w-3 h-3 bg-teal-300 rounded" />
+                    <span className="text-muted-foreground">Increase</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-red-500 rounded" />
-                    <span className="text-slate-600">Decrease</span>
+                    <div className="w-3 h-3 bg-red-300 rounded" />
+                    <span className="text-muted-foreground">Decrease</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-slate-500 rounded" />
-                    <span className="text-slate-600">Total</span>
+                    <div className="w-3 h-3 bg-slate-300 rounded" />
+                    <span className="text-muted-foreground">Total</span>
                 </div>
             </div>
         </div>
@@ -494,6 +502,8 @@ const ShowCashForecast = ({
     frequencies,
     cashInSources,
     cashInAdjustments,
+    cashOutSources,
+    cashOutAdjustments,
     costTypeByCostItem,
 }: Props) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
@@ -503,6 +513,12 @@ const ShowCashForecast = ({
     const [showGeneralCosts, setShowGeneralCosts] = useState(false);
     const [showFullscreenChart, setShowFullscreenChart] = useState<'bar' | 'cumulative' | 'waterfall' | null>(null);
     const [startingBalance, setStartingBalance] = useState(settings.startingBalance);
+    const [gstPayMonths, setGstPayMonths] = useState({
+        q1: settings.gstQ1PayMonth,
+        q2: settings.gstQ2PayMonth,
+        q3: settings.gstQ3PayMonth,
+        q4: settings.gstQ4PayMonth,
+    });
     const [cashInModal, setCashInModal] = useState<{
         open: boolean;
         jobNumber: string | null;
@@ -514,10 +530,26 @@ const ShowCashForecast = ({
         sourceMonth: null,
         splits: [],
     });
+    const [cashOutModal, setCashOutModal] = useState<{
+        open: boolean;
+        jobNumber: string | null;
+        costItem: string | null;
+        vendor: string | null;
+        sourceMonth: string | null;
+        splits: CashOutSplit[];
+    }>({
+        open: false,
+        jobNumber: null,
+        costItem: null,
+        vendor: null,
+        sourceMonth: null,
+        splits: [],
+    });
     const [newCost, setNewCost] = useState<Partial<GeneralCost>>({
         type: 'recurring',
         frequency: 'monthly',
         includes_gst: true,
+        flow_type: 'cash_out',
         start_date: new Date().toISOString().split('T')[0],
     });
     const [waterfallStartMonth, setWaterfallStartMonth] = useState(months[0]?.month ?? '');
@@ -537,6 +569,14 @@ const ShowCashForecast = ({
         const date = new Date(2000, parseInt(monthNum) - 1);
         return date.toLocaleDateString(undefined, { month: 'short' });
     };
+
+    const gstMonthOptions = useMemo(() => {
+        return Array.from({ length: 12 }, (_, idx) => {
+            const month = idx + 1;
+            const label = new Date(2000, idx, 1).toLocaleDateString(undefined, { month: 'short' });
+            return { value: month, label };
+        });
+    }, []);
 
     const addMonthsToString = (month: string, delta: number) => {
         const [year, monthNum] = month.split('-').map(Number);
@@ -622,6 +662,10 @@ const ShowCashForecast = ({
                 month.cash_out?.cost_items?.forEach((item) => {
                     if (!item?.total) return;
                     const costItemCode = item.cost_item ?? '';
+                    if (costItemCode === 'GST-PAYABLE') {
+                        sums.set('GST', (sums.get('GST') ?? 0) - item.total);
+                        return;
+                    }
                     if (costItemCode.startsWith('GENERAL-')) {
                         sums.set('OVH', (sums.get('OVH') ?? 0) - item.total);
                         return;
@@ -630,7 +674,7 @@ const ShowCashForecast = ({
                     const mappedType = costTypeByCostItem[costItemCode] ?? null;
                     const costType = mappedType && allowedTypes.has(mappedType) && mappedType !== 'REV'
                         ? mappedType
-                        : 'GEN';
+                        : 'UNM';
                     sums.set(costType, (sums.get(costType) ?? 0) - item.total);
                 });
             });
@@ -650,11 +694,27 @@ const ShowCashForecast = ({
         return Array.from(allMonths).sort();
     }, [months, cashInSources]);
 
+    const cashOutMonthOptions = useMemo(() => {
+        const allMonths = new Set<string>();
+        months.forEach((month) => allMonths.add(month.month));
+        cashOutSources.forEach((source) => allMonths.add(source.month));
+        return Array.from(allMonths).sort();
+    }, [months, cashOutSources]);
+
     const waterfallMonthOptions = useMemo(() => months.map((month) => month.month), [months]);
 
     const cashInAdjustmentJobs = useMemo(() => {
         return new Set(cashInAdjustments.map((adjustment) => adjustment.job_number));
     }, [cashInAdjustments]);
+
+    const cashOutAdjustmentVendors = useMemo(() => {
+        return new Set(
+            cashOutAdjustments.map(
+                (adjustment) =>
+                    `${adjustment.cost_item}|${adjustment.vendor}`,
+            ),
+        );
+    }, [cashOutAdjustments]);
 
     const getAllJobs = useCallback((flowType: 'cash_in' | 'cash_out', costItemCode: string) => {
         const jobs = new Map<string, number>();
@@ -665,6 +725,49 @@ const ShowCashForecast = ({
                 jobs.set(job.job_number, (jobs.get(job.job_number) ?? 0) + job.total);
             });
         });
+        return Array.from(jobs.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([jobNumber, total]) => ({ jobNumber, total }));
+    }, [months]);
+
+    const getAllCashOutVendors = useCallback((costItemCode: string) => {
+        const vendorMap = new Map<string, { total: number; jobs: Map<string, number> }>();
+        months.forEach((month) => {
+            const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
+            costItem?.vendors?.forEach((vendor) => {
+                if (!vendorMap.has(vendor.vendor)) {
+                    vendorMap.set(vendor.vendor, { total: 0, jobs: new Map() });
+                }
+                const vendorEntry = vendorMap.get(vendor.vendor) as { total: number; jobs: Map<string, number> };
+                vendorEntry.total += vendor.total;
+                vendor.jobs?.forEach((job) => {
+                    vendorEntry.jobs.set(job.job_number, (vendorEntry.jobs.get(job.job_number) ?? 0) + job.total);
+                });
+            });
+        });
+
+        return Array.from(vendorMap.entries())
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([vendor, data]) => ({
+                vendor,
+                total: data.total,
+                jobs: Array.from(data.jobs.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([jobNumber, total]) => ({ jobNumber, total })),
+            }));
+    }, [months]);
+
+    const getAllCashOutJobs = useCallback((costItemCode: string) => {
+        const jobs = new Map<string, number>();
+        months.forEach((month) => {
+            const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
+            costItem?.vendors?.forEach((vendor) => {
+                vendor.jobs?.forEach((job) => {
+                    jobs.set(job.job_number, (jobs.get(job.job_number) ?? 0) + job.total);
+                });
+            });
+        });
+
         return Array.from(jobs.entries())
             .sort((a, b) => b[1] - a[1])
             .map(([jobNumber, total]) => ({ jobNumber, total }));
@@ -711,11 +814,86 @@ const ShowCashForecast = ({
         ];
     }, [cashInAdjustments, getCashInSourceAmount]);
 
-    const openCashInModal = useCallback((jobNumber: string) => {
-        const sources = cashInSources
+    const getCashOutSourceAmount = useCallback((
+        jobNumber: string | null,
+        costItem: string | null,
+        vendor: string | null,
+        sourceMonth: string | null,
+    ) => {
+        if (!jobNumber || !costItem || !sourceMonth) return 0;
+        const vendorKey = vendor || 'GL';
+        if (jobNumber === 'ALL') {
+            return cashOutSources
+                .filter(
+                    (source) =>
+                        source.cost_item === costItem &&
+                        source.vendor === vendorKey &&
+                        source.month === sourceMonth,
+                )
+                .reduce((sum, source) => sum + source.amount, 0);
+        }
+
+        return cashOutSources.find(
+            (source) =>
+                source.job_number === jobNumber &&
+                source.cost_item === costItem &&
+                source.vendor === vendorKey &&
+                source.month === sourceMonth,
+        )?.amount ?? 0;
+    }, [cashOutSources]);
+
+    const getCashOutSplits = useCallback((
+        jobNumber: string,
+        costItem: string,
+        vendor: string,
+        sourceMonth: string | null,
+    ) => {
+        if (!sourceMonth) return [];
+        const existing = cashOutAdjustments.filter(
+            (adjustment) =>
+                adjustment.job_number === jobNumber &&
+                adjustment.cost_item === costItem &&
+                adjustment.vendor === vendor &&
+                adjustment.source_month === sourceMonth,
+        );
+        if (existing.length > 0) {
+            return existing.map((adjustment) => ({
+                payment_month: adjustment.payment_month,
+                amount: adjustment.amount,
+            }));
+        }
+
+        const sourceAmount = getCashOutSourceAmount(jobNumber, costItem, vendor, sourceMonth);
+        if (!sourceAmount) return [];
+        return [
+            {
+                payment_month: sourceMonth,
+                amount: sourceAmount,
+            },
+        ];
+    }, [cashOutAdjustments, getCashOutSourceAmount]);
+
+    const getCashInSourceMonths = useCallback((jobNumber: string) => {
+        const months = cashInSources
             .filter((source) => source.job_number === jobNumber)
-            .map((source) => source.month)
-            .sort();
+            .map((source) => source.month);
+        return Array.from(new Set(months)).sort();
+    }, [cashInSources]);
+
+    const getCashOutSourceMonths = useCallback((jobNumber: string, costItem: string, vendor: string) => {
+        const months = cashOutSources
+            .filter((source) => {
+                if (source.cost_item !== costItem) return false;
+                if (source.vendor !== vendor) return false;
+                if (jobNumber === 'ALL') return true;
+                return source.job_number === jobNumber;
+            })
+            .map((source) => source.month);
+        return Array.from(new Set(months)).sort();
+    }, [cashOutSources]);
+
+    const openCashInModal = useCallback((jobNumber: string) => {
+        const sources = getCashInSourceMonths(jobNumber);
         const sourceMonth = sources[0] ?? null;
         setCashInModal({
             open: true,
@@ -723,7 +901,7 @@ const ShowCashForecast = ({
             sourceMonth,
             splits: getCashInSplits(jobNumber, sourceMonth),
         });
-    }, [cashInSources, getCashInSplits]);
+    }, [getCashInSourceMonths, getCashInSplits]);
 
     const updateCashInSourceMonth = (sourceMonth: string) => {
         if (!cashInModal.jobNumber) return;
@@ -809,6 +987,117 @@ const ShowCashForecast = ({
         );
     };
 
+    const openCashOutModal = useCallback((jobNumber: string, costItem: string, vendor: string) => {
+        const sources = getCashOutSourceMonths(jobNumber, costItem, vendor);
+        const sourceMonth = sources[0] ?? null;
+        setCashOutModal({
+            open: true,
+            jobNumber,
+            costItem,
+            vendor,
+            sourceMonth,
+            splits: getCashOutSplits(jobNumber, costItem, vendor, sourceMonth),
+        });
+    }, [getCashOutSourceMonths, getCashOutSplits]);
+
+    const updateCashOutSourceMonth = (sourceMonth: string) => {
+        if (!cashOutModal.jobNumber || !cashOutModal.costItem || !cashOutModal.vendor) return;
+        setCashOutModal((prev) => ({
+            ...prev,
+            sourceMonth,
+            splits: getCashOutSplits(
+                cashOutModal.jobNumber as string,
+                cashOutModal.costItem as string,
+                cashOutModal.vendor as string,
+                sourceMonth,
+            ),
+        }));
+    };
+
+    const updateCashOutSplit = (index: number, changes: Partial<CashOutSplit>) => {
+        setCashOutModal((prev) => ({
+            ...prev,
+            splits: prev.splits.map((split, idx) => (idx === index ? { ...split, ...changes } : split)),
+        }));
+    };
+
+    const addCashOutSplit = () => {
+        if (!cashOutModal.sourceMonth) return;
+        setCashOutModal((prev) => ({
+            ...prev,
+            splits: [
+                ...prev.splits,
+                { payment_month: cashOutModal.sourceMonth as string, amount: 0 },
+            ],
+        }));
+    };
+
+    const removeCashOutSplit = (index: number) => {
+        setCashOutModal((prev) => ({
+            ...prev,
+            splits: prev.splits.filter((_, idx) => idx !== index),
+        }));
+    };
+
+    const setSingleCashOutSplit = (offsetMonths: number) => {
+        if (!cashOutModal.sourceMonth || !cashOutModal.jobNumber || !cashOutModal.costItem || !cashOutModal.vendor) return;
+        const amount = getCashOutSourceAmount(
+            cashOutModal.jobNumber,
+            cashOutModal.costItem,
+            cashOutModal.vendor,
+            cashOutModal.sourceMonth,
+        );
+        setCashOutModal((prev) => ({
+            ...prev,
+            splits: [
+                {
+                    payment_month: addMonthsToString(cashOutModal.sourceMonth as string, offsetMonths),
+                    amount,
+                },
+            ],
+        }));
+    };
+
+    const handleSaveCashOutAdjustments = () => {
+        if (!cashOutModal.jobNumber || !cashOutModal.costItem || !cashOutModal.vendor || !cashOutModal.sourceMonth) return;
+        router.post(
+            '/cash-forecast/cash-out-adjustments',
+            {
+                job_number: cashOutModal.jobNumber,
+                cost_item: cashOutModal.costItem,
+                vendor: cashOutModal.vendor,
+                source_month: cashOutModal.sourceMonth,
+                splits: cashOutModal.splits.filter((split) => split.amount > 0),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setCashOutModal({ open: false, jobNumber: null, costItem: null, vendor: null, sourceMonth: null, splits: [] });
+                },
+            },
+        );
+    };
+
+    const handleResetCashOutAdjustments = () => {
+        if (!cashOutModal.jobNumber || !cashOutModal.costItem || !cashOutModal.vendor || !cashOutModal.sourceMonth) return;
+        router.post(
+            '/cash-forecast/cash-out-adjustments',
+            {
+                job_number: cashOutModal.jobNumber,
+                cost_item: cashOutModal.costItem,
+                vendor: cashOutModal.vendor,
+                source_month: cashOutModal.sourceMonth,
+                splits: [],
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setCashOutModal({ open: false, jobNumber: null, costItem: null, vendor: null, sourceMonth: null, splits: [] });
+                },
+            },
+        );
+    };
+
 
     const getUniqueCostItems = useCallback((flowType: 'cash_in' | 'cash_out') => {
         const items = new Map<string, string | null>();
@@ -829,6 +1118,10 @@ const ShowCashForecast = ({
         router.post('/cash-forecast/settings', {
             starting_balance: startingBalance,
             starting_balance_date: settings.startingBalanceDate,
+            gst_q1_pay_month: gstPayMonths.q1,
+            gst_q2_pay_month: gstPayMonths.q2,
+            gst_q3_pay_month: gstPayMonths.q3,
+            gst_q4_pay_month: gstPayMonths.q4,
         }, { preserveScroll: true });
         setShowSettings(false);
     };
@@ -845,6 +1138,7 @@ const ShowCashForecast = ({
                     type: 'recurring',
                     frequency: 'monthly',
                     includes_gst: true,
+                    flow_type: 'cash_out',
                     start_date: new Date().toISOString().split('T')[0],
                 });
             },
@@ -860,180 +1154,211 @@ const ShowCashForecast = ({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashflow Forecast" />
-            <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+            <div className="p-4 sm:p-6 space-y-6 bg-background text-foreground min-h-screen">
                 {/* Header */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800">Cashflow Forecast</h1>
-                        <p className="text-sm text-slate-500 mt-1">12-month rolling forecast with payment timing rules applied</p>
+                        <h1 className="text-2xl font-bold">Cashflow Forecast</h1>
+                        <p className="text-sm text-muted-foreground mt-1">12-month rolling forecast with payment timing rules applied</p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button
+                        <Button
                             onClick={() => setShowGeneralCosts(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+                            variant="outline"
+                            className="gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                             </svg>
-                            General Costs
-                        </button>
-                        <button
+                            General Transactions
+                        </Button>
+                        <Button
                             onClick={() => setShowSettings(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                            className="gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                             Settings
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="text-sm font-medium text-slate-500">Starting Balance</div>
-                        <div className="text-2xl font-bold text-slate-700 mt-1">${formatAmount(startingBalance)}</div>
-                        <div className="text-xs text-slate-400 mt-1">Opening cash position</div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="text-sm font-medium text-slate-500">Total Cash In</div>
-                        <div className="text-2xl font-bold text-green-600 mt-1">${formatAmount(totals.cashIn)}</div>
-                        <div className="text-xs text-slate-400 mt-1">Revenue + GST collected</div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="text-sm font-medium text-slate-500">Total Cash Out</div>
-                        <div className="text-2xl font-bold text-red-600 mt-1">${formatAmount(totals.cashOut)}</div>
-                        <div className="text-xs text-slate-400 mt-1">Wages, costs, vendors, GST</div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="text-sm font-medium text-slate-500">Net Cashflow</div>
-                        <div className={`text-2xl font-bold mt-1 ${totals.net >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                            ${formatAmount(totals.net)}
-                        </div>
-                        <div className="text-xs text-slate-400 mt-1">12-month change</div>
-                    </div>
-                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-5 shadow-sm text-white">
-                        <div className="text-sm font-medium text-slate-300">Ending Balance</div>
-                        <div className={`text-2xl font-bold mt-1 ${endingBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            ${formatAmount(endingBalance)}
-                        </div>
-                        <div className="text-xs text-slate-400 mt-1">Projected position</div>
-                    </div>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>Starting Balance</CardDescription>
+                            <CardTitle className="text-2xl">${formatAmount(startingBalance)}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs text-muted-foreground/70">Opening cash position</CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>Total Cash In</CardDescription>
+                            <CardTitle className="text-2xl text-green-600">${formatAmount(totals.cashIn)}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs text-muted-foreground/70">Revenue + GST collected</CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>Total Cash Out</CardDescription>
+                            <CardTitle className="text-2xl text-red-600">${formatAmount(totals.cashOut)}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs text-muted-foreground/70">Wages, costs, vendors, GST</CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>Net Cashflow</CardDescription>
+                            <CardTitle className={`text-2xl ${totals.net >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                                ${formatAmount(totals.net)}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs text-muted-foreground/70">12-month change</CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>Ending Balance</CardDescription>
+                            <CardTitle className={`text-2xl ${endingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                ${formatAmount(endingBalance)}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-xs text-muted-foreground/70">Projected position</CardContent>
+                    </Card>
                 </div>
 
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-slate-700">Monthly Cash Flow</h3>
-                            <button
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-sm">Monthly Cash Flow</CardTitle>
+                            <Button
                                 onClick={() => setShowFullscreenChart('bar')}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                variant="ghost"
+                                size="icon"
                                 title="Fullscreen"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                 </svg>
-                            </button>
-                        </div>
-                        <BarChart data={chartData} height={200} />
-                    </div>
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <BarChart data={chartData} height={200} />
+                        </CardContent>
+                    </Card>
 
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-slate-700">Cumulative Cash Position</h3>
-                            <button
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-sm">Cumulative Cash Position</CardTitle>
+                            <Button
                                 onClick={() => setShowFullscreenChart('cumulative')}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                variant="ghost"
+                                size="icon"
                                 title="Fullscreen"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                 </svg>
-                            </button>
-                        </div>
-                        <CumulativeChart data={cumulativeData} height={200} startingBalance={startingBalance} />
-                        <div className="text-center mt-2">
-                            <span className={`text-sm font-medium ${endingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                Ending: ${formatAmount(endingBalance)}
-                            </span>
-                        </div>
-                    </div>
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <CumulativeChart data={cumulativeData} height={200} startingBalance={startingBalance} />
+                            <div className="text-center mt-2">
+                                <span className={`text-sm font-medium ${endingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    Ending: ${formatAmount(endingBalance)}
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-700">Cash Waterfall</h3>
-                                <p className="text-xs text-slate-500">Summarized by cost type for the selected range</p>
+                    <Card>
+                        <CardHeader className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <CardTitle className="text-sm">Cash Waterfall</CardTitle>
+                                    <CardDescription>Summarized by cost type for the selected range</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        onClick={() => setShowFullscreenChart('waterfall')}
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Fullscreen"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                        </svg>
+                                    </Button>
+                                    <Button variant="secondary" size="sm" asChild>
+                                        <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
+                                            View Unmapped
+                                        </Link>
+                                    </Button>
+                                </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <label className="text-slate-500">Start</label>
-                                <select
-                                    value={waterfallStartMonth}
-                                    onChange={(e) => setWaterfallStartMonth(e.target.value)}
-                                    className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {waterfallMonthOptions.map((month) => (
-                                        <option key={`waterfall-start-${month}`} value={month}>
-                                            {formatMonthHeader(month)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <label className="text-slate-500">End</label>
-                                <select
-                                    value={waterfallEndMonth}
-                                    onChange={(e) => setWaterfallEndMonth(e.target.value)}
-                                    className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {waterfallMonthOptions.map((month) => (
-                                        <option key={`waterfall-end-${month}`} value={month}>
-                                            {formatMonthHeader(month)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <button
-                                    onClick={() => setShowFullscreenChart('waterfall')}
-                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
-                                    title="Fullscreen"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                    </svg>
-                                </button>
+                                <span className="text-muted-foreground">Start</span>
+                                <Select value={waterfallStartMonth} onValueChange={setWaterfallStartMonth}>
+                                    <SelectTrigger className="h-8 w-[140px] text-xs">
+                                        <SelectValue placeholder="Start month" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {waterfallMonthOptions.map((month) => (
+                                            <SelectItem key={`waterfall-start-${month}`} value={month}>
+                                                {formatMonthHeader(month)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <span className="text-muted-foreground">End</span>
+                                <Select value={waterfallEndMonth} onValueChange={setWaterfallEndMonth}>
+                                    <SelectTrigger className="h-8 w-[140px] text-xs">
+                                        <SelectValue placeholder="End month" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {waterfallMonthOptions.map((month) => (
+                                            <SelectItem key={`waterfall-end-${month}`} value={month}>
+                                                {formatMonthHeader(month)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        </div>
-                        <WaterfallChart data={waterfallData} height={200} />
-                    </div>
+                        </CardHeader>
+                        <CardContent>
+                            <WaterfallChart data={waterfallData} height={200} />
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Main Cashflow Table */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-                        <h2 className="text-lg font-semibold text-slate-800">Detailed Monthly Breakdown</h2>
-                        <p className="text-sm text-slate-500 mt-1">Click rows to expand and see project-level details</p>
-                    </div>
-                    <div className="overflow-x-auto">
+                <Card className="overflow-hidden">
+                    <CardHeader className="border-b border-border bg-muted/40">
+                        <CardTitle>Detailed Monthly Breakdown</CardTitle>
+                        <CardDescription>Click rows to expand and see project-level details</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0 overflow-x-auto">
                         <table className="min-w-full text-sm">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 sticky left-0 bg-slate-50 z-10 min-w-[220px]">
+                                <tr className="bg-muted/50 border-b border-border">
+                                    <th className="px-4 py-3 text-left font-semibold text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[220px]">
                                         Category
                                     </th>
                                     {months.map((month) => (
                                         <th
                                             key={month.month}
-                                            className={`px-3 py-3 text-right font-semibold text-slate-600 min-w-[95px] ${month.month === currentMonth ? 'bg-blue-50' : ''
+                                            className={`px-3 py-3 text-right font-semibold text-muted-foreground min-w-[95px] ${month.month === currentMonth ? 'bg-primary/10' : ''
                                                 }`}
                                         >
                                             <div>{formatMonthHeader(month.month)}</div>
                                             {month.month === currentMonth && (
-                                                <div className="text-xs font-normal text-blue-500">Current</div>
+                                                <div className="text-xs font-normal text-primary">Current</div>
                                             )}
                                         </th>
                                     ))}
-                                    <th className="px-4 py-3 text-right font-semibold text-slate-600 bg-slate-100 min-w-[110px]">Total</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-muted-foreground bg-muted min-w-[110px]">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1070,8 +1395,8 @@ const ShowCashForecast = ({
 
                                     return (
                                         <React.Fragment key={`in-${costItemCode}`}>
-                                            <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => toggleCostItem(`in-${costItemCode}`)}>
-                                                <td className="px-4 py-2.5 pl-8 text-slate-600 sticky left-0 bg-white z-10">
+                                            <tr className="border-b border-slate-100 bg-background hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => toggleCostItem(`in-${costItemCode}`)}>
+                                                <td className="px-4 py-2.5 pl-8 text-slate-600 sticky left-0 bg-background z-10">
                                                     <span className="inline-flex items-center gap-2">
                                                         {jobs.length > 0 && (
                                                             <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1105,18 +1430,20 @@ const ShowCashForecast = ({
                                                                 </svg>
                                                                 <span className="font-mono text-xs">{job.jobNumber}</span>
                                                                 {cashInAdjustmentJobs.has(job.jobNumber) && (
-                                                                    <span className="text-[10px] uppercase tracking-wide text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                                                                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
                                                                         Adj
-                                                                    </span>
+                                                                    </Badge>
                                                                 )}
                                                             </span>
-                                                            <button
+                                                            <Button
                                                                 type="button"
+                                                                variant="link"
+                                                                size="sm"
                                                                 onClick={() => openCashInModal(job.jobNumber)}
-                                                                className="text-[10px] uppercase tracking-wide text-blue-600 hover:text-blue-800"
+                                                                className="h-auto p-0 text-[10px] uppercase tracking-wide"
                                                             >
                                                                 Adjust
-                                                            </button>
+                                                            </Button>
                                                         </div>
                                                     </td>
                                                     {months.map((month) => {
@@ -1160,7 +1487,9 @@ const ShowCashForecast = ({
                                 {/* Cash Out Details */}
                                 {expandedSection === 'out' && getUniqueCostItems('cash_out').map(({ code: costItemCode, description }) => {
                                     const isExpanded = expandedCostItems.has(`out-${costItemCode}`);
-                                    const jobs = getAllJobs('cash_out', costItemCode);
+                                    const vendors = getAllCashOutVendors(costItemCode);
+                                    const jobs = getAllCashOutJobs(costItemCode);
+                                    const hasVendors = vendors.length > 0;
                                     const costItemTotal = months.reduce((sum, m) => {
                                         const item = m.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
                                         return sum + (item?.total ?? 0);
@@ -1168,8 +1497,8 @@ const ShowCashForecast = ({
 
                                     return (
                                         <React.Fragment key={`out-${costItemCode}`}>
-                                            <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => toggleCostItem(`out-${costItemCode}`)}>
-                                                <td className="px-4 py-2.5 pl-8 text-slate-600 sticky left-0 bg-white z-10">
+                                            <tr className="border-b border-slate-100 bg-background hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => toggleCostItem(`out-${costItemCode}`)}>
+                                                <td className="px-4 py-2.5 pl-8 text-slate-600 sticky left-0 bg-background z-10">
                                                     <span className="inline-flex items-center gap-2">
                                                         {jobs.length > 0 && (
                                                             <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1193,19 +1522,92 @@ const ShowCashForecast = ({
                                                 <td className="px-4 py-2.5 text-right font-medium text-slate-700 bg-slate-50">{formatAmount(costItemTotal)}</td>
                                             </tr>
 
-                                            {isExpanded && jobs.map((job) => (
+                                            {isExpanded && hasVendors && vendors.map((vendor) => (
+                                                <React.Fragment key={`out-${costItemCode}-${vendor.vendor}`}>
+                                                    <tr className="border-b border-slate-50 bg-slate-50/50">
+                                                        <td className="px-4 py-2 pl-16 text-slate-500 sticky left-0 bg-slate-50/50 z-10">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="inline-flex items-center gap-2">
+                                                                    <svg className="w-3 h-3 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                    <span className="text-xs">{vendor.vendor}</span>
+                                                                    {cashOutAdjustmentVendors.has(`${costItemCode}|${vendor.vendor}`) && (
+                                                                        <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                                                                            Adj
+                                                                        </Badge>
+                                                                    )}
+                                                                </span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="link"
+                                                                    size="sm"
+                                                                    onClick={() => openCashOutModal('ALL', costItemCode, vendor.vendor)}
+                                                                    className="h-auto p-0 text-[10px] uppercase tracking-wide"
+                                                                >
+                                                                    Adjust
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                        {months.map((month) => {
+                                                            const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
+                                                            const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor.vendor);
+                                                            return (
+                                                                <td key={month.month} className={`px-3 py-2 text-right text-slate-500 text-xs ${month.month === currentMonth ? 'bg-blue-50/30' : ''}`}>
+                                                                    {vendorData ? formatAmount(vendorData.total) : '-'}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className="px-4 py-2 text-right text-slate-500 text-xs bg-slate-100/50">{formatAmount(vendor.total)}</td>
+                                                    </tr>
+                                                    {vendor.jobs?.map((job) => (
+                                                        <tr key={`out-${costItemCode}-${vendor.vendor}-${job.jobNumber}`} className="border-b border-slate-50 bg-background">
+                                                            <td className="px-4 py-2 pl-24 text-slate-500 sticky left-0 bg-background z-10">
+                                                                <span className="inline-flex items-center gap-2">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                                                    <span className="font-mono text-xs">{job.jobNumber}</span>
+                                                                </span>
+                                                            </td>
+                                                            {months.map((month) => {
+                                                                const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
+                                                                const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor.vendor);
+                                                                const jobData = vendorData?.jobs?.find((j) => j.job_number === job.jobNumber);
+                                                                return (
+                                                                    <td key={month.month} className={`px-3 py-2 text-right text-slate-500 text-xs ${month.month === currentMonth ? 'bg-blue-50/20' : ''}`}>
+                                                                        {jobData ? formatAmount(jobData.total) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                            <td className="px-4 py-2 text-right text-slate-500 text-xs bg-slate-50">{formatAmount(job.total)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </React.Fragment>
+                                            ))}
+                                            {isExpanded && !hasVendors && jobs.map((job) => (
                                                 <tr key={`out-${costItemCode}-${job.jobNumber}`} className="border-b border-slate-50 bg-slate-50/50">
                                                     <td className="px-4 py-2 pl-16 text-slate-500 sticky left-0 bg-slate-50/50 z-10">
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <svg className="w-3 h-3 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                            </svg>
-                                                            <span className="font-mono text-xs">{job.jobNumber}</span>
-                                                        </span>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="inline-flex items-center gap-2">
+                                                                <svg className="w-3 h-3 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                                <span className="font-mono text-xs">{job.jobNumber}</span>
+                                                            </span>
+                                                            <Button
+                                                                type="button"
+                                                                variant="link"
+                                                                size="sm"
+                                                                onClick={() => openCashOutModal(job.jobNumber, costItemCode, 'GL')}
+                                                                className="h-auto p-0 text-[10px] uppercase tracking-wide"
+                                                            >
+                                                                Adjust
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                     {months.map((month) => {
                                                         const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
-                                                        const jobData = costItem?.jobs?.find((j) => j.job_number === job.jobNumber);
+                                                        const vendorData = costItem?.vendors?.find((v) => v.vendor === 'GL');
+                                                        const jobData = vendorData?.jobs?.find((j) => j.job_number === job.jobNumber);
                                                         return (
                                                             <td key={month.month} className={`px-3 py-2 text-right text-slate-500 text-xs ${month.month === currentMonth ? 'bg-blue-50/30' : ''}`}>
                                                                 {jobData ? formatAmount(jobData.total) : '-'}
@@ -1255,12 +1657,15 @@ const ShowCashForecast = ({
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
 
                 {/* Payment Rules Legend */}
-                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                    <h3 className="font-semibold text-slate-700 mb-4">Payment Timing Rules</h3>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Payment Timing Rules</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                         <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
                             <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -1324,64 +1729,141 @@ const ShowCashForecast = ({
                                 </svg>
                             </div>
                             <div>
-                                <span className="font-medium text-slate-900">General Costs</span>
-                                <p className="text-slate-500 mt-1">Overheads, rent, subscriptions, etc.</p>
+                                <span className="font-medium text-slate-900">General Transactions</span>
+                                <p className="text-slate-500 mt-1">Overheads, rent, subscriptions, and income items.</p>
                             </div>
                         </div>
                     </div>
-                </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Settings Modal */}
-            <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="Cashflow Settings">
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Starting Balance</label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                            <input
-                                type="number"
-                                value={startingBalance}
-                                onChange={(e) => setStartingBalance(parseFloat(e.target.value) || 0)}
-                                className="w-full pl-8 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="0.00"
-                            />
+            <Dialog open={showSettings} onOpenChange={setShowSettings}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cashflow Settings</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Starting Balance</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                <Input
+                                    type="number"
+                                    value={startingBalance}
+                                    onChange={(e) => setStartingBalance(parseFloat(e.target.value) || 0)}
+                                    className="pl-8"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Opening cash balance for the forecast period</p>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Opening cash balance for the forecast period</p>
+                        <div className="border-t border-border pt-4">
+                            <h4 className="text-sm font-semibold mb-3">GST Payable Months</h4>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                    <label className="block text-xs font-medium mb-1">Q1 (Jan - Mar)</label>
+                                    <Select value={String(gstPayMonths.q1)} onValueChange={(value) => setGstPayMonths({ ...gstPayMonths, q1: parseInt(value, 10) })}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="Select month" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {gstMonthOptions.map((option) => (
+                                                <SelectItem key={`gst-q1-${option.value}`} value={String(option.value)}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1">Q2 (Apr - Jun)</label>
+                                    <Select value={String(gstPayMonths.q2)} onValueChange={(value) => setGstPayMonths({ ...gstPayMonths, q2: parseInt(value, 10) })}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="Select month" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {gstMonthOptions.map((option) => (
+                                                <SelectItem key={`gst-q2-${option.value}`} value={String(option.value)}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1">Q3 (Jul - Sep)</label>
+                                    <Select value={String(gstPayMonths.q3)} onValueChange={(value) => setGstPayMonths({ ...gstPayMonths, q3: parseInt(value, 10) })}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="Select month" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {gstMonthOptions.map((option) => (
+                                                <SelectItem key={`gst-q3-${option.value}`} value={String(option.value)}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1">Q4 (Oct - Dec)</label>
+                                    <Select value={String(gstPayMonths.q4)} onValueChange={(value) => setGstPayMonths({ ...gstPayMonths, q4: parseInt(value, 10) })}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="Select month" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {gstMonthOptions.map((option) => (
+                                                <SelectItem key={`gst-q4-${option.value}`} value={String(option.value)}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">These months determine when each quarter's GST is paid.</p>
+                        </div>
                     </div>
-                    <div className="flex justify-end gap-3 pt-4">
-                        <button onClick={() => setShowSettings(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200">
-                            Cancel
-                        </button>
-                        <button onClick={handleSaveSettings} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-                            Save Settings
-                        </button>
-                    </div>
-                </div>
-            </Modal>
+                    <DialogFooter className="pt-2">
+                        <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
+                        <Button onClick={handleSaveSettings}>Save Settings</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            {/* General Costs Modal */}
-            <Modal isOpen={showGeneralCosts} onClose={() => setShowGeneralCosts(false)} title="General Costs & Overheads" size="xl">
-                <div className="space-y-6">
+            {/* General Transactions Modal */}
+            <Dialog open={showGeneralCosts} onOpenChange={setShowGeneralCosts}>
+                <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>General Transactions</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6">
                     {/* Existing Costs */}
                     {generalCosts.length > 0 && (
                         <div>
-                            <h4 className="text-sm font-medium text-slate-700 mb-3">Active Costs</h4>
+                            <h4 className="text-sm font-medium text-slate-700 mb-3">Active Transactions</h4>
                             <div className="space-y-2 max-h-48 overflow-y-auto">
                                 {generalCosts.map((cost) => (
                                     <div key={cost.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                                         <div>
-                                            <div className="font-medium text-slate-800">{cost.name}</div>
+                                            <div className="font-medium text-slate-800 flex items-center gap-2">
+                                                {cost.name}
+                                                <Badge variant={cost.flow_type === 'cash_in' ? 'secondary' : 'outline'} className="text-[10px] uppercase tracking-wide">
+                                                    {cost.flow_type === 'cash_in' ? 'In' : 'Out'}
+                                                </Badge>
+                                            </div>
                                             <div className="text-xs text-slate-500">
                                                 ${cost.amount.toLocaleString()} {cost.type === 'recurring' ? `/ ${frequencies[cost.frequency ?? 'monthly']}` : '(one-off)'}
                                                 {cost.category && ` • ${categories[cost.category]}`}
                                             </div>
                                         </div>
-                                        <button onClick={() => handleDeleteGeneralCost(cost.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded">
+                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteGeneralCost(cost.id)} className="text-destructive">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
-                                        </button>
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
@@ -1390,15 +1872,14 @@ const ShowCashForecast = ({
 
                     {/* Add New Cost */}
                     <div className="border-t border-slate-200 pt-4">
-                        <h4 className="text-sm font-medium text-slate-700 mb-3">Add New Cost</h4>
+                        <h4 className="text-sm font-medium text-slate-700 mb-3">Add New Transaction</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
-                                <input
+                                <Input
                                     type="text"
                                     value={newCost.name ?? ''}
                                     onChange={(e) => setNewCost({ ...newCost, name: e.target.value })}
-                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                     placeholder="e.g., Office Rent"
                                 />
                             </div>
@@ -1406,130 +1887,145 @@ const ShowCashForecast = ({
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
-                                    <input
+                                    <Input
                                         type="number"
                                         value={newCost.amount ?? ''}
                                         onChange={(e) => setNewCost({ ...newCost, amount: parseFloat(e.target.value) || 0 })}
-                                        className="w-full pl-8 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="pl-8"
                                         placeholder="0.00"
                                     />
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-                                <select
-                                    value={newCost.type ?? 'recurring'}
-                                    onChange={(e) => setNewCost({ ...newCost, type: e.target.value as 'one_off' | 'recurring' })}
-                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="recurring">Recurring</option>
-                                    <option value="one_off">One-off</option>
-                                </select>
+                                <Select value={newCost.type ?? 'recurring'} onValueChange={(value) => setNewCost({ ...newCost, type: value as 'one_off' | 'recurring' })}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="recurring">Recurring</SelectItem>
+                                        <SelectItem value="one_off">One-off</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">Cash Flow</label>
+                                <Select value={newCost.flow_type ?? 'cash_out'} onValueChange={(value) => setNewCost({ ...newCost, flow_type: value as 'cash_in' | 'cash_out' })}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Cash flow" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="cash_out">Cash Out</SelectItem>
+                                        <SelectItem value="cash_in">Cash In</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             {newCost.type === 'recurring' && (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">Frequency</label>
-                                    <select
-                                        value={newCost.frequency ?? 'monthly'}
-                                        onChange={(e) => setNewCost({ ...newCost, frequency: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        {Object.entries(frequencies).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
-                                        ))}
-                                    </select>
+                                    <Select value={newCost.frequency ?? 'monthly'} onValueChange={(value) => setNewCost({ ...newCost, frequency: value })}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select frequency" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(frequencies).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             )}
                             <div>
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
-                                <select
-                                    value={newCost.category ?? ''}
-                                    onChange={(e) => setNewCost({ ...newCost, category: e.target.value })}
-                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                <Select
+                                    value={newCost.category ?? 'none'}
+                                    onValueChange={(value) => setNewCost({ ...newCost, category: value === 'none' ? '' : value })}
                                 >
-                                    <option value="">Select category</option>
-                                    {Object.entries(categories).map(([key, label]) => (
-                                        <option key={key} value={key}>{label}</option>
-                                    ))}
-                                </select>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Select category</SelectItem>
+                                        {Object.entries(categories).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Start Date *</label>
-                                <input
+                                <Input
                                     type="date"
                                     value={newCost.start_date ?? ''}
                                     onChange={(e) => setNewCost({ ...newCost, start_date: e.target.value })}
-                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             {newCost.type === 'recurring' && (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
-                                    <input
-                                        type="date"
-                                        value={newCost.end_date ?? ''}
-                                        onChange={(e) => setNewCost({ ...newCost, end_date: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    />
+                                <Input
+                                    type="date"
+                                    value={newCost.end_date ?? ''}
+                                    onChange={(e) => setNewCost({ ...newCost, end_date: e.target.value })}
+                                />
                                 </div>
                             )}
-                            <div className="col-span-2">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={newCost.includes_gst ?? true}
-                                        onChange={(e) => setNewCost({ ...newCost, includes_gst: e.target.checked })}
-                                        className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-slate-600">Amount includes GST</span>
-                                </label>
+                            <div className="col-span-2 flex items-center gap-2">
+                                <Checkbox
+                                    checked={newCost.includes_gst ?? true}
+                                    onCheckedChange={(checked) => setNewCost({ ...newCost, includes_gst: Boolean(checked) })}
+                                />
+                                <span className="text-sm text-muted-foreground">Amount includes GST</span>
                             </div>
                         </div>
                         <div className="flex justify-end mt-4">
-                            <button
+                            <Button
                                 onClick={handleAddGeneralCost}
                                 disabled={!newCost.name || !newCost.amount || !newCost.start_date}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Add Cost
-                            </button>
+                                Add Transaction
+                            </Button>
                         </div>
                     </div>
-                </div>
-            </Modal>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowGeneralCosts(false)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Cash In Adjustment Modal */}
-            <Modal
-                isOpen={cashInModal.open}
-                onClose={() => setCashInModal({ open: false, jobNumber: null, sourceMonth: null, splits: [] })}
-                title={`Adjust Cash In${cashInModal.jobNumber ? ` — ${cashInModal.jobNumber}` : ''}`}
-                size="lg"
-            >
-                {cashInModal.jobNumber && (
-                    <div className="space-y-5">
+            <Dialog open={cashInModal.open} onOpenChange={(open) => {
+                if (!open) {
+                    setCashInModal({ open: false, jobNumber: null, sourceMonth: null, splits: [] });
+                }
+            }}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Adjust Cash In{cashInModal.jobNumber ? ` — ${cashInModal.jobNumber}` : ''}</DialogTitle>
+                    </DialogHeader>
+                    {cashInModal.jobNumber && (
+                        <div className="space-y-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Billing Month</label>
-                                <select
-                                    value={cashInModal.sourceMonth ?? ''}
-                                    onChange={(e) => updateCashInSourceMonth(e.target.value)}
-                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="" disabled>Select month</option>
-                                    {cashInSources
-                                        .filter((source) => source.job_number === cashInModal.jobNumber)
-                                        .map((source) => source.month)
-                                        .sort()
-                                        .map((month) => (
-                                            <option key={month} value={month}>
-                                                {formatMonthHeader(month)}
-                                            </option>
-                                        ))}
-                                </select>
+                                <label className="block text-xs font-medium mb-1">Billing Month</label>
+                                <Select value={cashInModal.sourceMonth ?? ''} onValueChange={updateCashInSourceMonth}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select month" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {getCashInSourceMonths(cashInModal.jobNumber)
+                                            .map((month) => (
+                                                <SelectItem key={month} value={month}>
+                                                    {formatMonthHeader(month)}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Billed Amount</label>
-                                <div className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-700">
+                                <label className="block text-xs font-medium mb-1">Billed Amount</label>
+                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
                                     ${formatAmount(getCashInSourceAmount(cashInModal.jobNumber, cashInModal.sourceMonth))}
                                 </div>
                             </div>
@@ -1547,79 +2043,46 @@ const ShowCashForecast = ({
                             {cashInModal.splits.map((split, index) => (
                                 <div key={`${split.receipt_month}-${index}`} className="grid grid-cols-12 gap-2 px-3 py-2 border-t border-slate-100">
                                     <div className="col-span-5">
-                                        <select
-                                            value={split.receipt_month}
-                                            onChange={(e) => updateCashInSplit(index, { receipt_month: e.target.value })}
-                                            className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                                        >
-                                            {monthOptions.map((month) => (
-                                                <option key={month} value={month}>
-                                                    {formatMonthHeader(month)}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Select value={split.receipt_month} onValueChange={(value) => updateCashInSplit(index, { receipt_month: value })}>
+                                            <SelectTrigger className="h-9 text-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {monthOptions.map((month) => (
+                                                    <SelectItem key={month} value={month}>
+                                                        {formatMonthHeader(month)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div className="col-span-5">
                                         <div className="relative">
                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                                            <input
+                                            <Input
                                                 type="number"
                                                 value={split.amount}
                                                 onChange={(e) => updateCashInSplit(index, { amount: parseFloat(e.target.value) || 0 })}
-                                                className="w-full pl-5 pr-2 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                                className="h-9 pl-5 text-sm"
                                             />
                                         </div>
                                     </div>
                                     <div className="col-span-2 flex items-center justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => removeCashInSplit(index)}
-                                            className="text-xs text-red-500 hover:text-red-700"
-                                        >
+                                        <Button variant="ghost" size="sm" onClick={() => removeCashInSplit(index)} className="text-destructive">
                                             Remove
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={addCashInSplit}
-                                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
-                            >
-                                Add Split
-                            </button>
-                            <div className="h-4 w-px bg-slate-200" />
-                            <button
-                                type="button"
-                                onClick={() => setSingleCashInSplit(0)}
-                                className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100"
-                            >
-                                Same Month
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSingleCashInSplit(1)}
-                                className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
-                            >
-                                +1 Month
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSingleCashInSplit(2)}
-                                className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
-                            >
-                                +2 Months
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSingleCashInSplit(3)}
-                                className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
-                            >
-                                +3 Months
-                            </button>
+                            <Button type="button" variant="outline" size="sm" onClick={addCashInSplit}>Add Split</Button>
+                            <div className="h-4 w-px bg-border" />
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashInSplit(0)}>Same Month</Button>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashInSplit(1)}>+1 Month</Button>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashInSplit(2)}>+2 Months</Button>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashInSplit(3)}>+3 Months</Button>
                         </div>
 
                         <div className="flex items-center justify-between text-xs text-slate-500">
@@ -1640,51 +2103,208 @@ const ShowCashForecast = ({
                             )}
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={handleResetCashInAdjustments}
-                                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
-                            >
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={handleResetCashInAdjustments}>
                                 Reset to Default
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
                                 onClick={handleSaveCashInAdjustments}
                                 disabled={
                                     cashInModal.splits.reduce((sum, split) => sum + split.amount, 0) >
                                     getCashInSourceAmount(cashInModal.jobNumber, cashInModal.sourceMonth) + 0.01
                                 }
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Save Adjustments
-                            </button>
-                        </div>
+                            </Button>
+                        </DialogFooter>
                     </div>
-                )}
-            </Modal>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Cash Out Adjustment Modal */}
+            <Dialog open={cashOutModal.open} onOpenChange={(open) => {
+                if (!open) {
+                    setCashOutModal({ open: false, jobNumber: null, costItem: null, vendor: null, sourceMonth: null, splits: [] });
+                }
+            }}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Adjust Cash Out{cashOutModal.jobNumber ? ` — ${cashOutModal.jobNumber}` : ''}</DialogTitle>
+                    </DialogHeader>
+                    {cashOutModal.jobNumber && cashOutModal.costItem && cashOutModal.vendor && (
+                        <div className="space-y-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium mb-1">Cost Item</label>
+                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                    {cashOutModal.costItem} · {cashOutModal.vendor} · {cashOutModal.jobNumber === 'ALL' ? 'All Jobs' : cashOutModal.jobNumber}
+                                </div>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium mb-1">Source Month</label>
+                                <Select value={cashOutModal.sourceMonth ?? ''} onValueChange={updateCashOutSourceMonth}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select month" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {getCashOutSourceMonths(
+                                            cashOutModal.jobNumber,
+                                            cashOutModal.costItem,
+                                            cashOutModal.vendor,
+                                        ).map((month) => (
+                                                <SelectItem key={month} value={month}>
+                                                    {formatMonthHeader(month)}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium mb-1">Source Amount</label>
+                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                    ${formatAmount(getCashOutSourceAmount(
+                                        cashOutModal.jobNumber,
+                                        cashOutModal.costItem,
+                                        cashOutModal.vendor,
+                                        cashOutModal.sourceMonth,
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
+                                <div className="col-span-5">Payment Month</div>
+                                <div className="col-span-5">Amount</div>
+                                <div className="col-span-2 text-right">Action</div>
+                            </div>
+                            {cashOutModal.splits.length === 0 && (
+                                <div className="px-3 py-3 text-sm text-slate-500">No adjustments saved. Add a split to move payments.</div>
+                            )}
+                            {cashOutModal.splits.map((split, index) => (
+                                <div key={`${split.payment_month}-${index}`} className="grid grid-cols-12 gap-2 px-3 py-2 border-t border-slate-100">
+                                    <div className="col-span-5">
+                                        <Select value={split.payment_month} onValueChange={(value) => updateCashOutSplit(index, { payment_month: value })}>
+                                            <SelectTrigger className="h-9 text-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {cashOutMonthOptions.map((month) => (
+                                                    <SelectItem key={month} value={month}>
+                                                        {formatMonthHeader(month)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="col-span-5">
+                                        <div className="relative">
+                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                            <Input
+                                                type="number"
+                                                value={split.amount}
+                                                onChange={(e) => updateCashOutSplit(index, { amount: parseFloat(e.target.value) || 0 })}
+                                                className="h-9 pl-5 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2 flex items-center justify-end">
+                                        <Button variant="ghost" size="sm" onClick={() => removeCashOutSplit(index)} className="text-destructive">
+                                            Remove
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={addCashOutSplit}>Add Split</Button>
+                            <div className="h-4 w-px bg-border" />
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashOutSplit(0)}>Same Month</Button>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashOutSplit(1)}>+1 Month</Button>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setSingleCashOutSplit(2)}>+2 Months</Button>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                            <div>
+                                Total split: ${formatAmount(cashOutModal.splits.reduce((sum, split) => sum + split.amount, 0))} / $
+                                {formatAmount(getCashOutSourceAmount(
+                                    cashOutModal.jobNumber,
+                                    cashOutModal.costItem,
+                                    cashOutModal.vendor,
+                                    cashOutModal.sourceMonth,
+                                ))}
+                            </div>
+                            {cashOutModal.splits.reduce((sum, split) => sum + split.amount, 0) >
+                            getCashOutSourceAmount(cashOutModal.jobNumber, cashOutModal.costItem, cashOutModal.vendor, cashOutModal.sourceMonth) + 0.01 ? (
+                                <span className="text-red-600 font-medium">Split exceeds source amount</span>
+                            ) : (
+                                <span className="text-emerald-600 font-medium">
+                                    Remaining: ${formatAmount(
+                                        getCashOutSourceAmount(
+                                            cashOutModal.jobNumber,
+                                            cashOutModal.costItem,
+                                            cashOutModal.vendor,
+                                            cashOutModal.sourceMonth,
+                                        ) -
+                                        cashOutModal.splits.reduce((sum, split) => sum + split.amount, 0),
+                                    )}
+                                </span>
+                            )}
+                        </div>
+
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={handleResetCashOutAdjustments}>
+                                Reset to Default
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleSaveCashOutAdjustments}
+                                disabled={
+                                    cashOutModal.splits.reduce((sum, split) => sum + split.amount, 0) >
+                                    getCashOutSourceAmount(
+                                        cashOutModal.jobNumber,
+                                        cashOutModal.costItem,
+                                        cashOutModal.vendor,
+                                        cashOutModal.sourceMonth,
+                                    ) + 0.01
+                                }
+                            >
+                                Save Adjustments
+                            </Button>
+                        </DialogFooter>
+                    </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             {/* Fullscreen Chart Modal */}
-            <Modal
-                isOpen={showFullscreenChart !== null}
-                onClose={() => setShowFullscreenChart(null)}
-                title={
-                    showFullscreenChart === 'bar'
-                        ? 'Monthly Cash Flow'
-                        : showFullscreenChart === 'cumulative'
-                            ? 'Cumulative Cash Position'
-                            : 'Cash Waterfall'
+            <Dialog open={showFullscreenChart !== null} onOpenChange={(open) => {
+                if (!open) {
+                    setShowFullscreenChart(null);
                 }
-                size="full"
-            >
-                <div className="h-[70vh] w-full">
-                    {showFullscreenChart === 'bar' && <BarChart data={chartData} height={600} />}
-                    {showFullscreenChart === 'cumulative' && (
-                        <CumulativeChart data={cumulativeData} height="100%" startingBalance={startingBalance} />
-                    )}
-                    {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
-                </div>
-            </Modal>
+            }}>
+                <DialogContent className="max-w-[95vw] max-h-[95vh]">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {showFullscreenChart === 'bar'
+                                ? 'Monthly Cash Flow'
+                                : showFullscreenChart === 'cumulative'
+                                    ? 'Cumulative Cash Position'
+                                    : 'Cash Waterfall'}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="h-[70vh] w-full">
+                        {showFullscreenChart === 'bar' && <BarChart data={chartData} height={600} />}
+                        {showFullscreenChart === 'cumulative' && (
+                            <CumulativeChart data={cumulativeData} height="100%" startingBalance={startingBalance} />
+                        )}
+                        {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 };

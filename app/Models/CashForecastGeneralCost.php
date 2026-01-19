@@ -21,6 +21,7 @@ class CashForecastGeneralCost extends Model
         'end_date',
         'category',
         'is_active',
+        'flow_type',
     ];
 
     protected $casts = [
@@ -29,6 +30,7 @@ class CashForecastGeneralCost extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'is_active' => 'boolean',
+        'flow_type' => 'string',
     ];
 
     /**

@@ -218,11 +218,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index');
 
         Route::get('/cash-forecast', CashForecastController::class)->name('cashForecast.show');
+        Route::get('/cash-forecast/unmapped', [CashForecastController::class, 'unmappedTransactions'])->name('cashForecast.unmapped');
         Route::post('/cash-forecast/settings', [CashForecastController::class, 'updateSettings'])->name('cashForecast.updateSettings');
         Route::post('/cash-forecast/general-costs', [CashForecastController::class, 'storeGeneralCost'])->name('cashForecast.storeGeneralCost');
         Route::put('/cash-forecast/general-costs/{generalCost}', [CashForecastController::class, 'updateGeneralCost'])->name('cashForecast.updateGeneralCost');
         Route::delete('/cash-forecast/general-costs/{generalCost}', [CashForecastController::class, 'destroyGeneralCost'])->name('cashForecast.destroyGeneralCost');
         Route::post('/cash-forecast/cash-in-adjustments', [CashForecastController::class, 'storeCashInAdjustments'])->name('cashForecast.storeCashInAdjustments');
+        Route::post('/cash-forecast/cash-out-adjustments', [CashForecastController::class, 'storeCashOutAdjustments'])->name('cashForecast.storeCashOutAdjustments');
 
         Route::middleware('role:admin')->group(function () {
             Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');

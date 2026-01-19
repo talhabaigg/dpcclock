@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArProgressBillingSummary;
+use App\Models\CashOutAdjustment;
 use App\Models\CashInAdjustment;
 use App\Models\CashForecastGeneralCost;
 use App\Models\CashForecastSetting;
@@ -25,9 +26,17 @@ class CashForecastController extends Controller
 
         $cashInAdjustments = $this->getCashInAdjustments($rangeStart, $rangeEnd);
         $rules['cash_in_adjustments'] = $cashInAdjustments['by_source'];
+        $cashOutAdjustments = $this->getCashOutAdjustments($rangeStart, $rangeEnd);
+        $rules['cash_out_adjustments'] = $cashOutAdjustments['by_source'];
 
         // Get settings (starting balance)
         $settings = CashForecastSetting::current();
+        $rules['gst_pay_months'] = [
+            1 => (int) ($settings->gst_q1_pay_month ?? 4),
+            2 => (int) ($settings->gst_q2_pay_month ?? 8),
+            3 => (int) ($settings->gst_q3_pay_month ?? 11),
+            4 => (int) ($settings->gst_q4_pay_month ?? 2),
+        ];
 
         // Get cost code descriptions for display
         $costCodeDescriptions = $this->getCostCodeDescriptions();
@@ -37,12 +46,15 @@ class CashForecastController extends Controller
         $actualData = $this->getActualData($rules);
 
         // Get forecast data for current month onwards (latest forecast per job)
+        $cashInCode = $rules['cash_in_code'] ?? '99-99';
         $latestForecasts = $this->getLatestForecastsSubquery();
         $forecastData = JobForecastData::select(
             'job_forecast_data.month',
             'job_forecast_data.cost_item',
             'job_forecast_data.forecast_amount',
-            'job_forecast_data.job_number'
+            'job_forecast_data.job_number',
+            DB::raw("CASE WHEN job_forecast_data.cost_item = '{$cashInCode}' THEN NULL ELSE 'GL' END as vendor"),
+            DB::raw("'forecast' as source")
         )
             ->join('job_forecasts as jf', 'job_forecast_data.job_forecast_id', '=', 'jf.id')
             ->joinSub($latestForecasts, 'latest_forecasts', function ($join) {
@@ -78,6 +90,7 @@ class CashForecastController extends Controller
             ->get();
 
         $cashInSources = $this->getCashInSources($rules, $currentMonth, $rangeStart);
+        $cashOutSources = $this->getCashOutSources($rules, $currentMonth, $rangeStart);
 
         return Inertia::render('cash-forecast/show', [
             'months' => $allMonthsWithCostSummary,
@@ -87,12 +100,18 @@ class CashForecastController extends Controller
             'settings' => [
                 'startingBalance' => (float) $settings->starting_balance,
                 'startingBalanceDate' => $settings->starting_balance_date?->format('Y-m-d'),
+                'gstQ1PayMonth' => (int) ($settings->gst_q1_pay_month ?? 4),
+                'gstQ2PayMonth' => (int) ($settings->gst_q2_pay_month ?? 8),
+                'gstQ3PayMonth' => (int) ($settings->gst_q3_pay_month ?? 11),
+                'gstQ4PayMonth' => (int) ($settings->gst_q4_pay_month ?? 2),
             ],
             'generalCosts' => $generalCosts,
             'categories' => CashForecastGeneralCost::getCategories(),
             'frequencies' => CashForecastGeneralCost::getFrequencies(),
             'cashInSources' => $cashInSources,
             'cashInAdjustments' => $cashInAdjustments['list'],
+            'cashOutSources' => $cashOutSources,
+            'cashOutAdjustments' => $cashOutAdjustments['list'],
         ]);
     }
 
@@ -104,6 +123,10 @@ class CashForecastController extends Controller
         $validated = $request->validate([
             'starting_balance' => 'required|numeric',
             'starting_balance_date' => 'nullable|date',
+            'gst_q1_pay_month' => 'required|integer|min:1|max:12',
+            'gst_q2_pay_month' => 'required|integer|min:1|max:12',
+            'gst_q3_pay_month' => 'required|integer|min:1|max:12',
+            'gst_q4_pay_month' => 'required|integer|min:1|max:12',
         ]);
 
         $settings = CashForecastSetting::current();
@@ -127,6 +150,7 @@ class CashForecastController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'category' => 'nullable|string|max:50',
+            'flow_type' => 'required|in:cash_in,cash_out',
         ]);
 
         CashForecastGeneralCost::create($validated);
@@ -150,6 +174,7 @@ class CashForecastController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'category' => 'nullable|string|max:50',
             'is_active' => 'boolean',
+            'flow_type' => 'required|in:cash_in,cash_out',
         ]);
 
         $generalCost->update($validated);
@@ -226,6 +251,169 @@ class CashForecastController extends Controller
     }
 
     /**
+     * Store cash-out adjustments for a job + cost item + vendor + source month.
+     */
+    public function storeCashOutAdjustments(Request $request)
+    {
+        $validated = $request->validate([
+            'job_number' => 'nullable|string',
+            'cost_item' => 'required|string',
+            'vendor' => 'nullable|string',
+            'source_month' => 'required|date_format:Y-m',
+            'splits' => 'nullable|array',
+            'splits.*.payment_month' => 'required_with:splits|date_format:Y-m',
+            'splits.*.amount' => 'required_with:splits|numeric|min:0',
+        ]);
+
+        $jobNumber = $validated['job_number'] ?? 'ALL';
+        $costItem = $validated['cost_item'];
+        $vendor = $validated['vendor'] ?? null;
+        $sourceMonth = Carbon::createFromFormat('Y-m', $validated['source_month'])->startOfMonth();
+        $splits = collect($validated['splits'] ?? []);
+
+        $sourceAmount = $this->getCashOutSourceAmount($jobNumber, $costItem, $vendor, $sourceMonth);
+        if ($sourceAmount === null) {
+            return back()->withErrors(['source_month' => 'No source amount found for this job/cost item/month.']);
+        }
+
+        $splitTotal = $splits->sum('amount');
+        if ($splitTotal - $sourceAmount > 0.01) {
+            return back()->withErrors(['splits' => 'Split total cannot exceed source amount.']);
+        }
+
+        DB::transaction(function () use ($jobNumber, $costItem, $vendor, $sourceMonth, $splits) {
+            CashOutAdjustment::where('job_number', $jobNumber)
+                ->where('cost_item', $costItem)
+                ->where('vendor', $vendor)
+                ->whereDate('source_month', $sourceMonth)
+                ->delete();
+
+            if ($splits->isEmpty()) {
+                return;
+            }
+
+            $rows = $splits
+                ->filter(fn ($split) => (float) $split['amount'] > 0)
+                ->map(function ($split) use ($jobNumber, $costItem, $vendor, $sourceMonth) {
+                    return [
+                        'job_number' => $jobNumber,
+                        'cost_item' => $costItem,
+                        'vendor' => $vendor,
+                        'source_month' => $sourceMonth->copy(),
+                        'payment_month' => Carbon::createFromFormat('Y-m', $split['payment_month'])->startOfMonth(),
+                        'amount' => (float) $split['amount'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                })
+                ->all();
+
+            if (!empty($rows)) {
+                CashOutAdjustment::insert($rows);
+            }
+        });
+
+        return back()->with('success', 'Cash-out adjustments saved successfully.');
+    }
+
+    /**
+     * Show unmapped job cost items within a month range.
+     */
+    public function unmappedTransactions(Request $request)
+    {
+        $rules = $this->getForecastRules();
+        $cashInCode = $rules['cash_in_code'] ?? '99-99';
+
+        $startMonth = $this->resolveMonthInput($request->query('start_month')) ?? Carbon::now()->startOfMonth();
+        $endMonth = $this->resolveMonthInput($request->query('end_month')) ?? Carbon::now()->addMonths(12)->startOfMonth();
+
+        if ($startMonth->gt($endMonth)) {
+            [$startMonth, $endMonth] = [$endMonth, $startMonth];
+        }
+
+        $months = $this->generateMonthRangeByEnd($startMonth, $endMonth);
+
+        $monthExpression = $this->getMonthExpression('job_cost_details.transaction_date');
+        $actualRows = JobCostDetail::query()
+            ->leftJoin('cost_codes', 'job_cost_details.cost_item', '=', 'cost_codes.code')
+            ->whereNull('cost_codes.cost_type_id')
+            ->where('job_cost_details.cost_item', '!=', $cashInCode)
+            ->where('job_cost_details.cost_item', 'not like', 'GENERAL-%')
+            ->whereBetween('job_cost_details.transaction_date', [
+                $startMonth->copy()->startOfMonth(),
+                $endMonth->copy()->endOfMonth(),
+            ])
+            ->groupBy(
+                'job_cost_details.job_number',
+                'job_cost_details.cost_item',
+                DB::raw($monthExpression),
+                'cost_codes.description'
+            )
+            ->select(
+                'job_cost_details.job_number',
+                'job_cost_details.cost_item',
+                DB::raw($monthExpression . ' as month'),
+                DB::raw('SUM(job_cost_details.amount) as amount'),
+                'cost_codes.description as description'
+            )
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'job_number' => $row->job_number,
+                    'cost_item' => $row->cost_item,
+                    'description' => $row->description,
+                    'month' => $row->month,
+                    'amount' => (float) $row->amount,
+                    'source' => 'actual',
+                ];
+            });
+
+        $latestForecasts = $this->getLatestForecastsSubquery();
+        $forecastRows = JobForecastData::query()
+            ->leftJoin('cost_codes', 'job_forecast_data.cost_item', '=', 'cost_codes.code')
+            ->join('job_forecasts as jf', 'job_forecast_data.job_forecast_id', '=', 'jf.id')
+            ->joinSub($latestForecasts, 'latest_forecasts', function ($join) {
+                $join->on('jf.job_number', '=', 'latest_forecasts.job_number')
+                    ->on('jf.forecast_month', '=', 'latest_forecasts.forecast_month');
+            })
+            ->whereNull('cost_codes.cost_type_id')
+            ->where('job_forecast_data.cost_item', '!=', $cashInCode)
+            ->where('job_forecast_data.cost_item', 'not like', 'GENERAL-%')
+            ->whereBetween('job_forecast_data.month', [$startMonth->format('Y-m'), $endMonth->format('Y-m')])
+            ->groupBy('job_forecast_data.job_number', 'job_forecast_data.cost_item', 'job_forecast_data.month', 'cost_codes.description')
+            ->select(
+                'job_forecast_data.job_number',
+                'job_forecast_data.cost_item',
+                'job_forecast_data.month',
+                DB::raw('SUM(job_forecast_data.forecast_amount) as amount'),
+                'cost_codes.description as description'
+            )
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'job_number' => $row->job_number,
+                    'cost_item' => $row->cost_item,
+                    'description' => $row->description,
+                    'month' => $row->month,
+                    'amount' => (float) $row->amount,
+                    'source' => 'forecast',
+                ];
+            });
+
+        $rows = $actualRows
+            ->concat($forecastRows)
+            ->sortBy(['month', 'job_number', 'cost_item'])
+            ->values();
+
+        return Inertia::render('cash-forecast/unmapped', [
+            'rows' => $rows,
+            'months' => $months,
+            'startMonth' => $startMonth->format('Y-m'),
+            'endMonth' => $endMonth->format('Y-m'),
+        ]);
+    }
+
+    /**
      * Get cost code descriptions from the database.
      */
     private function getCostCodeDescriptions(): array
@@ -267,9 +455,11 @@ class CashForecastController extends Controller
                     'source_month' => $month,
                     'cost_item' => 'GENERAL-' . strtoupper($cost->category ?? 'OTHER'),
                     'job_number' => $cost->name,
+                    'vendor' => null,
                     'forecast_amount' => $amount,
                     'gst_rate' => $cost->includes_gst ? 0.10 : 0,
                     'is_general_cost' => true,
+                    'flow_type' => $cost->flow_type ?? 'cash_out',
                 ]);
             }
         }
@@ -286,7 +476,7 @@ class CashForecastController extends Controller
         $cashInCode = $rules['cash_in_code'];
 
         // Get cost actuals - need data from past months to account for payment delays
-        $costActuals = JobCostDetail::select('job_number', 'cost_item', 'transaction_date', 'amount')
+        $costActuals = JobCostDetail::select('job_number', 'cost_item', 'transaction_date', 'amount', 'vendor')
             ->where('transaction_date', '>=', Carbon::now()->subMonths(3)->startOfMonth())
             ->get()
             ->map(function ($item) {
@@ -295,7 +485,9 @@ class CashForecastController extends Controller
                     'cost_item' => $item->cost_item,
                     'month' => Carbon::parse($item->transaction_date)->format('Y-m'),
                     'forecast_amount' => (float) $item->amount,
+                    'vendor' => $item->vendor ?: 'GL',
                     'is_actual' => true,
+                    'source' => 'actual',
                 ];
             });
 
@@ -309,7 +501,9 @@ class CashForecastController extends Controller
                     'cost_item' => $cashInCode,
                     'month' => Carbon::parse($item->period_end_date)->format('Y-m'),
                     'forecast_amount' => (float) $item->this_app_work_completed,
+                    'vendor' => null,
                     'is_actual' => true,
+                    'source' => 'actual',
                 ];
             });
 
@@ -401,6 +595,43 @@ class CashForecastController extends Controller
         return $months;
     }
 
+    private function generateMonthRangeByEnd(Carbon $start, Carbon $end): array
+    {
+        $months = [];
+        $period = $start->copy()->startOfMonth();
+        $endMonth = $end->copy()->startOfMonth();
+
+        while ($period->format('Y-m') <= $endMonth->format('Y-m')) {
+            $months[] = $period->format('Y-m');
+            $period->addMonth();
+        }
+
+        return $months;
+    }
+
+    private function resolveMonthInput(?string $input): ?Carbon
+    {
+        if (!$input) {
+            return null;
+        }
+
+        $parsed = Carbon::createFromFormat('Y-m', $input);
+        if ($parsed && $parsed->format('Y-m') === $input) {
+            return $parsed->startOfMonth();
+        }
+
+        return null;
+    }
+
+    private function getMonthExpression(string $column): string
+    {
+        if (DB::getDriverName() === 'sqlite') {
+            return "strftime('%Y-%m', {$column})";
+        }
+
+        return "DATE_FORMAT({$column}, '%Y-%m')";
+    }
+
     private function applyRules($forecastData, array $rules)
     {
         $cashInCode = $rules['cash_in_code'];
@@ -413,6 +644,24 @@ class CashForecastController extends Controller
         $revenueDelayMonths = $rules['revenue_delay_months'] ?? 2;
         $generalCostPrefix = $rules['general_cost_prefix'] ?? 'GENERAL-';
         $cashInAdjustments = $rules['cash_in_adjustments'] ?? [];
+        $cashOutAdjustments = $rules['cash_out_adjustments'] ?? [];
+
+        $vendorTotals = $forecastData->reduce(function ($carry, $item) use ($cashInCode, $generalCostPrefix) {
+            if ($item->cost_item === $cashInCode) {
+                return $carry;
+            }
+            if (str_starts_with($item->cost_item, $generalCostPrefix)) {
+                return $carry;
+            }
+            if (($item->source ?? null) !== 'actual') {
+                return $carry;
+            }
+            $vendorKey = $item->vendor ?: 'GL';
+            $key = $vendorKey . '|' . $item->cost_item . '|' . $item->month;
+            $carry[$key] = ($carry[$key] ?? 0) + (float) $item->forecast_amount;
+
+            return $carry;
+        }, []);
 
         return $forecastData->flatMap(function ($item) use (
             $cashInCode,
@@ -424,11 +673,14 @@ class CashForecastController extends Controller
             $revenueGstRate,
             $revenueDelayMonths,
             $generalCostPrefix,
-            $cashInAdjustments
+            $cashInAdjustments,
+            $cashOutAdjustments,
+            $vendorTotals
         ) {
             $costItem = $item->cost_item;
             $prefix = $this->getCostItemPrefix($costItem);
             $amount = (float) $item->forecast_amount;
+            $vendor = $item->vendor ?? null;
 
             // Skip general costs - they're already processed
             if (str_starts_with($costItem, $generalCostPrefix)) {
@@ -438,9 +690,12 @@ class CashForecastController extends Controller
                         'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
+                        'vendor' => $vendor,
                         'forecast_amount' => $amount,
                         'gst_rate' => $item->gst_rate ?? 0,
                         'is_general_cost' => true,
+                        'flow_type' => $item->flow_type ?? null,
+                        'source' => $item->source ?? null,
                     ],
                 ];
             }
@@ -460,8 +715,10 @@ class CashForecastController extends Controller
                             'source_month' => $item->month,
                             'cost_item' => $item->cost_item,
                             'job_number' => $item->job_number,
+                            'vendor' => $item->vendor ?? null,
                             'forecast_amount' => (float) $adjustment['amount'] * (1 + $revenueGstRate),
                             'gst_rate' => $revenueGstRate,
+                            'source' => $item->source ?? null,
                         ];
                     });
 
@@ -476,8 +733,10 @@ class CashForecastController extends Controller
                             'source_month' => $item->month,
                             'cost_item' => $costItem,
                             'job_number' => $item->job_number,
+                            'vendor' => $item->vendor ?? null,
                             'forecast_amount' => $remaining * (1 + $revenueGstRate),
                             'gst_rate' => $revenueGstRate,
+                            'source' => $item->source ?? null,
                         ]);
                     }
 
@@ -494,10 +753,63 @@ class CashForecastController extends Controller
                         'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
+                        'vendor' => $item->vendor ?? null,
                         'forecast_amount' => $amount * (1 + $revenueGstRate),
                         'gst_rate' => $revenueGstRate,
+                        'source' => $item->source ?? null,
                     ],
                 ];
+            }
+
+            $vendorKey = $vendor ?: 'GL';
+            $adjustmentKey = $item->job_number . '|' . $costItem . '|' . $vendorKey . '|' . $item->month;
+            $vendorAdjustmentKey = 'ALL' . '|' . $costItem . '|' . $vendorKey . '|' . $item->month;
+            $adjustments = $cashOutAdjustments[$adjustmentKey] ?? null;
+            $adjustmentRows = collect();
+            $hasAdjustments = false;
+            $isVendorLevel = false;
+            if (empty($adjustments)) {
+                $adjustments = $cashOutAdjustments[$vendorAdjustmentKey] ?? null;
+                $isVendorLevel = !empty($adjustments);
+            }
+
+            if (!empty($adjustments)) {
+                if ($isVendorLevel && ($item->source ?? null) !== 'actual') {
+                    $adjustments = null;
+                }
+            }
+
+            if (!empty($adjustments)) {
+                $gstRate = 0;
+                if ($this->isPrefixInRange($prefix, $vendorCostPrefix['min'] ?? null, $vendorCostPrefix['max'] ?? null)) {
+                    $gstRate = $vendorCostPrefix['gst_rate'] ?? 0.10;
+                }
+
+                $vendorTotalKey = $vendorKey . '|' . $costItem . '|' . $item->month;
+                $vendorTotal = (float) ($vendorTotals[$vendorTotalKey] ?? 0);
+                $portion = ($isVendorLevel && $vendorTotal > 0) ? min(1, $amount / $vendorTotal) : 1;
+
+                $adjustedTotal = collect($adjustments)->sum('amount') * $portion;
+                $adjustmentRows = collect($adjustments)->map(function ($adjustment) use ($item, $gstRate, $portion) {
+                    return (object) [
+                        'month' => $adjustment['payment_month'],
+                        'source_month' => $item->month,
+                        'cost_item' => $item->cost_item,
+                        'job_number' => $item->job_number,
+                        'vendor' => $item->vendor ?? null,
+                        'forecast_amount' => (float) $adjustment['amount'] * $portion * (1 + $gstRate),
+                        'gst_rate' => $gstRate,
+                        'source' => $item->source ?? null,
+                    ];
+                });
+
+                $remaining = $amount - $adjustedTotal;
+                if ($remaining <= 0.01) {
+                    return $adjustmentRows;
+                }
+
+                $amount = $remaining;
+                $hasAdjustments = true;
             }
 
             // =================================================================
@@ -505,7 +817,7 @@ class CashForecastController extends Controller
             // Split 70% wages (same month) / 30% tax (+1 month), NO GST
             // =================================================================
             if (in_array($costItem, $wageCodes) && isset($costItemDelaySplits[$costItem])) {
-                return collect($costItemDelaySplits[$costItem])->map(function ($split) use ($item, $amount) {
+                $rows = collect($costItemDelaySplits[$costItem])->map(function ($split) use ($item, $amount) {
                     $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
                         ->addMonths($split['delay'])
                         ->format('Y-m');
@@ -515,10 +827,14 @@ class CashForecastController extends Controller
                         'source_month' => $item->month,
                         'cost_item' => $item->cost_item,
                         'job_number' => $item->job_number,
+                        'vendor' => $item->vendor ?? null,
                         'forecast_amount' => $amount * (float) $split['ratio'],
                         'gst_rate' => 0, // No GST on wages
+                        'source' => $item->source ?? null,
                     ];
                 });
+
+                return $hasAdjustments ? $adjustmentRows->concat($rows) : $rows;
             }
 
             // =================================================================
@@ -529,16 +845,20 @@ class CashForecastController extends Controller
                     ->addMonths($oncostDelayMonths)
                     ->format('Y-m');
 
-                return [
+                $rows = collect([
                     (object) [
                         'month' => $delayedMonth,
                         'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
+                        'vendor' => $item->vendor ?? null,
                         'forecast_amount' => $amount, // No GST multiplier
                         'gst_rate' => 0,
+                        'source' => $item->source ?? null,
                     ],
-                ];
+                ]);
+
+                return $hasAdjustments ? $adjustmentRows->concat($rows) : $rows;
             }
 
             // =================================================================
@@ -552,31 +872,39 @@ class CashForecastController extends Controller
                     ->addMonths($delayMonths)
                     ->format('Y-m');
 
-                return [
+                $rows = collect([
                     (object) [
                         'month' => $delayedMonth,
                         'source_month' => $item->month,
                         'cost_item' => $costItem,
                         'job_number' => $item->job_number,
+                        'vendor' => $item->vendor ?? null,
                         'forecast_amount' => $amount * (1 + $gstRate),
                         'gst_rate' => $gstRate,
+                        'source' => $item->source ?? null,
                     ],
-                ];
+                ]);
+
+                return $hasAdjustments ? $adjustmentRows->concat($rows) : $rows;
             }
 
             // =================================================================
             // Default: No delay, no GST (other cost items)
             // =================================================================
-            return [
+            $rows = collect([
                 (object) [
                     'month' => $item->month,
                     'source_month' => $item->month,
                     'cost_item' => $costItem,
                     'job_number' => $item->job_number,
+                    'vendor' => $item->vendor ?? null,
                     'forecast_amount' => $amount,
                     'gst_rate' => 0,
+                    'source' => $item->source ?? null,
                 ],
-            ];
+            ]);
+
+            return $hasAdjustments ? $adjustmentRows->concat($rows) : $rows;
         });
     }
 
@@ -589,10 +917,10 @@ class CashForecastController extends Controller
         return collect($months)->map(function ($month) use ($forecastByMonth, $cashInCode, $costCodeDescriptions) {
             $monthItems = $forecastByMonth->get($month, collect());
             $cashInItems = $monthItems->filter(function ($item) use ($cashInCode) {
-                return $item->cost_item === $cashInCode;
+                return ($item->flow_type ?? null) === 'cash_in' || $item->cost_item === $cashInCode;
             });
             $cashOutItems = $monthItems->filter(function ($item) use ($cashInCode) {
-                return $item->cost_item !== $cashInCode;
+                return !((($item->flow_type ?? null) === 'cash_in') || $item->cost_item === $cashInCode);
             });
 
             $cashInCostItems = $cashInItems
@@ -621,6 +949,32 @@ class CashForecastController extends Controller
             $cashOutCostItems = $cashOutItems
                 ->groupBy('cost_item')
                 ->map(function ($items, $costItem) use ($costCodeDescriptions) {
+                    $vendors = $items
+                        ->filter(function ($vendorItem) {
+                            return ($vendorItem->source ?? null) === 'actual';
+                        })
+                        ->groupBy(function ($vendorItem) {
+                            return $vendorItem->vendor ?? 'GL';
+                        })
+                        ->map(function ($vendorItems, $vendorName) {
+                            $jobs = $vendorItems
+                                ->groupBy('job_number')
+                                ->map(function ($jobItems, $jobNumber) {
+                                    return [
+                                        'job_number' => $jobNumber,
+                                        'total' => (float) $jobItems->sum('forecast_amount'),
+                                    ];
+                                })
+                                ->values();
+
+                            return [
+                                'vendor' => $vendorName,
+                                'total' => (float) $vendorItems->sum('forecast_amount'),
+                                'jobs' => $jobs,
+                            ];
+                        })
+                        ->values();
+
                     $jobs = $items
                         ->groupBy('job_number')
                         ->map(function ($jobItems, $jobNumber) {
@@ -635,6 +989,7 @@ class CashForecastController extends Controller
                         'cost_item' => $costItem,
                         'description' => $costCodeDescriptions[$costItem] ?? null,
                         'total' => (float) $items->sum('forecast_amount'),
+                        'vendors' => $vendors,
                         'jobs' => $jobs,
                     ];
                 })
@@ -701,7 +1056,7 @@ class CashForecastController extends Controller
                 $carry[$monthKey] = ['collected' => 0.0, 'paid' => 0.0];
             }
 
-            if ($row->cost_item === $cashInCode) {
+            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode) {
                 // GST collected from revenue
                 $carry[$monthKey]['collected'] += $gstAmount;
             } else {
@@ -733,6 +1088,8 @@ class CashForecastController extends Controller
 
         // Create GST payable rows for each quarter
         $rows = collect();
+        $payMonths = $rules['gst_pay_months'] ?? [];
+
         foreach ($quarterBuckets as $bucket) {
             // Net GST = collected - paid
             // Positive = owe to ATO, Negative = refund from ATO
@@ -742,11 +1099,17 @@ class CashForecastController extends Controller
                 continue;
             }
 
-            // Net GST for the quarter is paid the month after quarter ends
-            // Q1 ends March -> April, Q2 ends June -> July, etc.
-            $payableMonth = Carbon::create($bucket['year'], $bucket['quarter'] * 3, 1)
-                ->addMonth()
-                ->format('Y-m');
+            $quarter = (int) $bucket['quarter'];
+            $quarterEndMonth = $quarter * 3;
+            $payMonth = (int) ($payMonths[$quarter] ?? ($quarterEndMonth + 1));
+            if ($payMonth > 12) {
+                $payMonth -= 12;
+            }
+            $payYear = $bucket['year'];
+            if ($payMonth <= $quarterEndMonth) {
+                $payYear += 1;
+            }
+            $payableMonth = Carbon::create($payYear, $payMonth, 1)->format('Y-m');
 
             $rows->push((object) [
                 'month' => $payableMonth,
@@ -809,6 +1172,40 @@ class CashForecastController extends Controller
         ];
     }
 
+    private function getCashOutAdjustments(Carbon $startMonth, Carbon $endMonth): array
+    {
+        $list = CashOutAdjustment::query()
+            ->whereBetween('source_month', [$startMonth, $endMonth])
+            ->orderBy('job_number')
+            ->orderBy('cost_item')
+            ->orderBy('vendor')
+            ->orderBy('source_month')
+            ->orderBy('payment_month')
+            ->get()
+            ->map(function (CashOutAdjustment $adjustment) {
+                return [
+                    'id' => $adjustment->id,
+                    'job_number' => $adjustment->job_number,
+                    'cost_item' => $adjustment->cost_item,
+                    'vendor' => $adjustment->vendor ?? 'GL',
+                    'source_month' => Carbon::parse($adjustment->source_month)->format('Y-m'),
+                    'payment_month' => Carbon::parse($adjustment->payment_month)->format('Y-m'),
+                    'amount' => (float) $adjustment->amount,
+                ];
+            })
+            ->values();
+
+        $bySource = $list
+            ->groupBy(fn ($adjustment) => $adjustment['job_number'] . '|' . $adjustment['cost_item'] . '|' . ($adjustment['vendor'] ?? 'GL') . '|' . $adjustment['source_month'])
+            ->map(fn ($items) => $items->values()->all())
+            ->all();
+
+        return [
+            'list' => $list->all(),
+            'by_source' => $bySource,
+        ];
+    }
+
     private function getCashInSources(array $rules, string $currentMonth, Carbon $startMonth): array
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
@@ -856,6 +1253,59 @@ class CashForecastController extends Controller
         return $actuals->concat($forecasts)->values()->all();
     }
 
+    private function getCashOutSources(array $rules, string $currentMonth, Carbon $startMonth): array
+    {
+        $cashInCode = $rules['cash_in_code'] ?? '99-99';
+
+        $actuals = JobCostDetail::select('job_number', 'cost_item', 'transaction_date', 'amount', 'vendor')
+            ->where('transaction_date', '>=', $startMonth)
+            ->where('cost_item', '!=', $cashInCode)
+            ->where('cost_item', '!=', 'GST-PAYABLE')
+            ->where('cost_item', 'not like', 'GENERAL-%')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'job_number' => $item->job_number,
+                    'cost_item' => $item->cost_item,
+                    'vendor' => $item->vendor ?: 'GL',
+                    'month' => Carbon::parse($item->transaction_date)->format('Y-m'),
+                    'amount' => (float) $item->amount,
+                    'source' => 'actual',
+                ];
+            });
+
+        $latestForecasts = $this->getLatestForecastsSubquery();
+        $forecasts = JobForecastData::select(
+            'job_forecast_data.month',
+            'job_forecast_data.cost_item',
+            'job_forecast_data.job_number',
+            DB::raw('SUM(job_forecast_data.forecast_amount) as amount')
+        )
+            ->join('job_forecasts as jf', 'job_forecast_data.job_forecast_id', '=', 'jf.id')
+            ->joinSub($latestForecasts, 'latest_forecasts', function ($join) {
+                $join->on('jf.job_number', '=', 'latest_forecasts.job_number')
+                    ->on('jf.forecast_month', '=', 'latest_forecasts.forecast_month');
+            })
+            ->where('job_forecast_data.month', '>=', $currentMonth)
+            ->where('job_forecast_data.cost_item', '!=', $cashInCode)
+            ->where('job_forecast_data.cost_item', '!=', 'GST-PAYABLE')
+            ->where('job_forecast_data.cost_item', 'not like', 'GENERAL-%')
+            ->groupBy('job_forecast_data.month', 'job_forecast_data.cost_item', 'job_forecast_data.job_number')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'job_number' => $row->job_number,
+                    'cost_item' => $row->cost_item,
+                    'vendor' => 'GL',
+                    'month' => $row->month,
+                    'amount' => (float) $row->amount,
+                    'source' => 'forecast',
+                ];
+            });
+
+        return $actuals->concat($forecasts)->values()->all();
+    }
+
     private function getCashInSourceAmount(string $jobNumber, Carbon $sourceMonth): ?float
     {
         $rules = $this->getForecastRules();
@@ -871,6 +1321,46 @@ class CashForecastController extends Controller
                 continue;
             }
             return (float) $source['amount'];
+        }
+
+        return null;
+    }
+
+    private function getCashOutSourceAmount(string $jobNumber, string $costItem, ?string $vendor, Carbon $sourceMonth): ?float
+    {
+        $rules = $this->getForecastRules();
+        $currentMonth = Carbon::now()->format('Y-m');
+        $startMonth = Carbon::now()->subMonths(3)->startOfMonth();
+
+        $sources = $this->getCashOutSources($rules, $currentMonth, $startMonth);
+        $vendorKey = $vendor ?: 'GL';
+        $isVendorLevel = $jobNumber === 'ALL';
+        $total = 0.0;
+        foreach ($sources as $source) {
+            if ($source['cost_item'] !== $costItem) {
+                continue;
+            }
+            if (($source['vendor'] ?? 'GL') !== $vendorKey) {
+                continue;
+            }
+            if ($source['month'] !== $sourceMonth->format('Y-m')) {
+                continue;
+            }
+
+            if ($isVendorLevel) {
+                $total += (float) $source['amount'];
+                continue;
+            }
+
+            if ($source['job_number'] !== $jobNumber) {
+                continue;
+            }
+
+            return (float) $source['amount'];
+        }
+
+        if ($isVendorLevel) {
+            return $total > 0 ? $total : null;
         }
 
         return null;
