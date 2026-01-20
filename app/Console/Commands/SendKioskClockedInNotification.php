@@ -33,17 +33,21 @@ class SendKioskClockedInNotification extends Command
         // Retrieve all kiosks
         $kiosks = Kiosk::all();
 
+        $today = now()->startOfDay();
+
         // Iterate over each kiosk
         foreach ($kiosks as $kiosk) {
-            // Retrieve employees from the current kiosk that are clocked in
-            $employees = $kiosk->employees()->whereHas('clocks', function ($query) use ($kiosk) {
+            // Retrieve employees from the current kiosk that are clocked in TODAY only
+            $employees = $kiosk->employees()->whereHas('clocks', function ($query) use ($kiosk, $today) {
                 $query->whereNull('clock_out')
-                    ->where('eh_kiosk_id', $kiosk->eh_kiosk_id); // Ensure the clock belongs to this kiosk
+                    ->where('eh_kiosk_id', $kiosk->eh_kiosk_id)
+                    ->whereDate('clock_in', $today); // Only include clocks from today
             })
                 ->with([
-                    'clocks' => function ($query) use ($kiosk) {
+                    'clocks' => function ($query) use ($kiosk, $today) {
                         $query->whereNull('clock_out')
-                            ->where('eh_kiosk_id', $kiosk->eh_kiosk_id); // Ensure the clock belongs to this kiosk
+                            ->where('eh_kiosk_id', $kiosk->eh_kiosk_id)
+                            ->whereDate('clock_in', $today); // Only include clocks from today
                     }
                 ])
                 ->get();
