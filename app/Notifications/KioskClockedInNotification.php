@@ -94,7 +94,7 @@ class KioskClockedInNotification extends Notification implements ShouldQueue
             ->icon('/icon-192x192.png')
             ->badge('/icon-192x192.png')
             ->tag('clocked-in-' . now()->format('Y-m-d'))
-            ->data(['url' => route('timesheets.index')])
+            ->data(['url' => route('timesheets.view')])
             ->options(['TTL' => 3600]); // 1 hour
     }
 
@@ -120,7 +120,7 @@ class KioskClockedInNotification extends Notification implements ShouldQueue
             'kiosk_name' => $this->kioskName,
             'employee_count' => $employeeCount,
             'employee_names' => $employeeNames,
-            'url' => route('timesheets.index'),
+            'url' => route('timesheets.view'),
         ];
     }
 }
