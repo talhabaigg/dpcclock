@@ -32,6 +32,7 @@ use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\PushSubscriptionController;
 
 
 
@@ -54,6 +55,12 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
     }
     return redirect()->back();
 })->name('notifications.markRead');
+
+// Push Notification Subscription Routes
+Route::middleware('auth')->group(function () {
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+});
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])
     ->name('requisition.updateStatusFromBuildMetrix');

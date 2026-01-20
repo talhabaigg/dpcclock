@@ -6,6 +6,8 @@ use App\Models\JobForecast;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushChannel;
+use NotificationChannels\WebPush\WebPushMessage;
 
 class JobForecastStatusNotification extends Notification
 {
@@ -43,7 +45,37 @@ class JobForecastStatusNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        $channels = ['database'];
+
+        // Add WebPush channel if user has push subscriptions
+        if ($notifiable->pushSubscriptions()->exists()) {
+            $channels[] = WebPushChannel::class;
+        }
+
+        return $channels;
+    }
+
+    /**
+     * Get the web push representation of the notification.
+     */
+    public function toWebPush(object $notifiable, $notification): WebPushMessage
+    {
+        $data = $this->toArray($notifiable);
+
+        // Build URL to the forecast page
+        $location = \App\Models\Location::where('external_id', $this->forecast->job_number)->first();
+        $url = $location
+            ? route('jobForecast.show', ['location' => $location->id])
+            : route('dashboard');
+
+        return (new WebPushMessage)
+            ->title($data['title'])
+            ->body($data['body'])
+            ->icon('/icon-192x192.png')
+            ->badge('/icon-192x192.png')
+            ->tag('forecast-' . $this->forecast->id)
+            ->data(['url' => $url])
+            ->options(['TTL' => 86400]); // 24 hours
     }
 
     /**

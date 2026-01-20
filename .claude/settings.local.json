@@ -23,7 +23,16 @@
       "Bash(herd which-php:*)",
       "Bash(cmd /c \"C:\\\\Users\\\\Talha.SUPGROUP\\\\.config\\\\herd\\\\bin\\\\herd.bat\" which-php)",
       "Bash(cmd /c \"C:\\\\Users\\\\Talha.SUPGROUP\\\\.config\\\\herd\\\\bin\\\\herd.bat\" restart)",
-      "Bash(dir \"C:\\\\Laravel\\\\dpcclock\\\\storage\\\\app\\\\public\\\\qa-drawings\" /s /b)"
+      "Bash(dir \"C:\\\\Laravel\\\\dpcclock\\\\storage\\\\app\\\\public\\\\qa-drawings\" /s /b)",
+      "Bash(find:*)",
+      "Bash(composer require:*)",
+      "Bash(composer dump-autoload:*)",
+      "Bash(C:UsersTalha.SUPGROUP.configherdbinphp.bat -m)",
+      "Bash(\"C:\\\\Users\\\\Talha.SUPGROUP\\\\.config\\\\herd\\\\bin\\\\php.bat\" -m)",
+      "Bash(ls:*)",
+      "Bash(export OPENSSL_CONF=\"C:/php-8.3/extras/ssl/openssl.cnf\":*)",
+      "Bash(dir \"C:\\\\php-8.3\\\\extras\\\\ssl\\\\openssl.cnf\")",
+      "Bash(dir:*)"
     ]
   }
 }

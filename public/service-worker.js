@@ -1,9 +1,89 @@
-const CACHE_NAME = 'dpcclock-cache-v5';
+const CACHE_NAME = 'dpcclock-cache-v6';
 const DRAWINGS_CACHE_NAME = 'qa-drawings-cache-v1';
 
 // Install the service worker
 self.addEventListener('install', (event) => {
     self.skipWaiting();
+});
+
+// Push notification event handler
+self.addEventListener('push', (event) => {
+    if (!event.data) {
+        console.log('Push event but no data');
+        return;
+    }
+
+    let data;
+    try {
+        data = event.data.json();
+    } catch (e) {
+        // Fallback if not JSON
+        data = {
+            title: 'Notification',
+            body: event.data.text(),
+        };
+    }
+
+    const options = {
+        body: data.body || '',
+        icon: data.icon || '/icon-192x192.png',
+        badge: data.badge || '/icon-192x192.png',
+        vibrate: data.vibrate || [100, 50, 100],
+        data: {
+            url: data.url || data.action_url || '/',
+            ...data.data,
+        },
+        actions: data.actions || [],
+        tag: data.tag || 'default',
+        renotify: data.renotify || false,
+        requireInteraction: data.requireInteraction || false,
+    };
+
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'Clock Me In', options)
+    );
+});
+
+// Notification click event handler
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+
+    const urlToOpen = event.notification.data?.url || '/';
+
+    // Handle action buttons
+    if (event.action) {
+        const action = event.notification.data?.actions?.find(a => a.action === event.action);
+        if (action?.url) {
+            event.waitUntil(clients.openWindow(action.url));
+            return;
+        }
+    }
+
+    // Default: open URL or focus existing window
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // Check if there's already a window open
+            for (const client of windowClients) {
+                if (client.url.includes(self.location.origin) && 'focus' in client) {
+                    client.focus();
+                    if (urlToOpen !== '/') {
+                        client.navigate(urlToOpen);
+                    }
+                    return;
+                }
+            }
+            // If not, open a new window
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
+});
+
+// Notification close event handler
+self.addEventListener('notificationclose', (event) => {
+    // Optional: Track notification dismissal
+    console.log('Notification closed', event.notification.tag);
 });
 
 // Activate and clean up old caches

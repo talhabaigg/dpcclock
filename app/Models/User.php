@@ -10,10 +10,12 @@ use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
+use NotificationChannels\WebPush\HasPushSubscriptions;
+
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords, HasPushSubscriptions;
 
     /**
      * The attributes that are mass assignable.

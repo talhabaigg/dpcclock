@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Notifications\TestPushNotification;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -31,4 +32,27 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
+
+    Route::get('settings/notifications', function () {
+        return Inertia::render('settings/notifications');
+    })->name('notifications');
+
+    // Test push notification route
+    Route::post('settings/notifications/test', function () {
+        $user = auth()->user();
+
+        if (!$user->pushSubscriptions()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No push subscriptions found. Please enable notifications first.',
+            ], 400);
+        }
+
+        $user->notify(new TestPushNotification());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test notification sent successfully!',
+        ]);
+    })->name('notifications.test');
 });
