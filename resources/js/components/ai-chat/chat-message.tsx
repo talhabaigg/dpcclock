@@ -300,13 +300,50 @@ export const ChatMessage = memo(function ChatMessage({
 
 function StreamingIndicator() {
     return (
-        <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-                <span className="bg-muted-foreground/60 size-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
-                <span className="bg-muted-foreground/60 size-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
-                <span className="bg-muted-foreground/60 size-2 animate-bounce rounded-full" />
+        <div className="space-y-3">
+            {/* Animated thinking text with sparkle */}
+            <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-violet-500 animate-pulse" />
+                <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                    Thinking...
+                </span>
             </div>
-            <span className="text-muted-foreground text-sm">Thinking...</span>
+
+            {/* Skeleton shimmer lines */}
+            <div className="space-y-2">
+                <div className="h-4 w-full overflow-hidden rounded bg-muted/50">
+                    <div className="ai-shimmer h-full w-full" />
+                </div>
+                <div className="h-4 w-4/5 overflow-hidden rounded bg-muted/50">
+                    <div className="ai-shimmer h-full w-full" />
+                </div>
+                <div className="h-4 w-3/5 overflow-hidden rounded bg-muted/50">
+                    <div className="ai-shimmer h-full w-full" />
+                </div>
+            </div>
+
+            {/* CSS for shimmer animation */}
+            <style>{`
+                @keyframes shimmer {
+                    0% {
+                        transform: translateX(-100%);
+                    }
+                    100% {
+                        transform: translateX(100%);
+                    }
+                }
+                .ai-shimmer {
+                    background: linear-gradient(
+                        90deg,
+                        transparent,
+                        rgba(139, 92, 246, 0.15),
+                        rgba(168, 85, 247, 0.2),
+                        rgba(139, 92, 246, 0.15),
+                        transparent
+                    );
+                    animation: shimmer 1.5s ease-in-out infinite;
+                }
+            `}</style>
         </div>
     );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { usePage } from '@inertiajs/react';
 import { ArrowRight, ArrowUp, Mic, Plus, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SuggestedPrompt } from './types';
@@ -25,6 +25,95 @@ interface ChatWelcomeProps {
     onVoiceCall?: () => void;
 }
 
+// Animated text component for typing effect
+function AnimatedGreeting({ userName }: { userName?: string }) {
+    const greeting = userName ? `Hi ${userName}` : 'Hello';
+    const subtitle = "I'm ready to help you.";
+
+    const [displayedGreeting, setDisplayedGreeting] = useState('');
+    const [displayedSubtitle, setDisplayedSubtitle] = useState('');
+    const [showSubtitle, setShowSubtitle] = useState(false);
+    const [isComplete, setIsComplete] = useState(false);
+
+    useEffect(() => {
+        let greetingIndex = 0;
+        let subtitleIndex = 0;
+
+        // Type greeting first
+        const greetingInterval = setInterval(() => {
+            if (greetingIndex < greeting.length) {
+                setDisplayedGreeting(greeting.slice(0, greetingIndex + 1));
+                greetingIndex++;
+            } else {
+                clearInterval(greetingInterval);
+                // Small delay before starting subtitle
+                setTimeout(() => {
+                    setShowSubtitle(true);
+                    // Type subtitle
+                    const subtitleInterval = setInterval(() => {
+                        if (subtitleIndex < subtitle.length) {
+                            setDisplayedSubtitle(subtitle.slice(0, subtitleIndex + 1));
+                            subtitleIndex++;
+                        } else {
+                            clearInterval(subtitleInterval);
+                            setIsComplete(true);
+                        }
+                    }, 20);
+                }, 300);
+            }
+        }, 50);
+
+        return () => {
+            clearInterval(greetingInterval);
+        };
+    }, [greeting, subtitle]);
+
+    return (
+        <div className="mb-10 w-full max-w-2xl">
+            {/* Greeting with gradient */}
+            <h1 className="flex items-center gap-3 text-4xl font-medium tracking-tight md:text-5xl">
+                <Sparkles className="ai-sparkle size-8 text-violet-500 md:size-10" />
+                <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+                    {displayedGreeting}
+                    {!showSubtitle && <span className="animate-pulse">|</span>}
+                </span>
+            </h1>
+            {/* Subtitle */}
+            {showSubtitle && (
+                <p className="mt-3 text-2xl font-light text-foreground/80 md:text-3xl">
+                    {displayedSubtitle}
+                    {!isComplete && <span className="animate-pulse">|</span>}
+                </p>
+            )}
+
+            {/* Sparkle animation keyframes */}
+            <style>{`
+                @keyframes sparkle-rotate {
+                    0%, 100% {
+                        transform: rotate(0deg) scale(1);
+                        opacity: 1;
+                    }
+                    25% {
+                        transform: rotate(-15deg) scale(1.1);
+                        opacity: 0.8;
+                    }
+                    50% {
+                        transform: rotate(15deg) scale(0.95);
+                        opacity: 1;
+                    }
+                    75% {
+                        transform: rotate(-10deg) scale(1.05);
+                        opacity: 0.9;
+                    }
+                }
+                .ai-sparkle {
+                    animation: sparkle-rotate 3s ease-in-out infinite;
+                }
+            `}</style>
+        </div>
+    );
+}
+
 export function ChatWelcome({
     title = 'Superior AI',
     subtitle = 'How can I help you today?',
@@ -40,6 +129,10 @@ export function ChatWelcome({
     const [inputValue, setInputValue] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isFocused, setIsFocused] = useState(false);
+
+    // Get user name from Inertia props
+    const { auth } = usePage<{ auth: { user?: { name?: string } } }>().props;
+    const userName = auth?.user?.name?.split(' ')[0]; // Get first name
 
     // Auto-resize textarea
     useEffect(() => {
@@ -72,10 +165,8 @@ export function ChatWelcome({
     if (centered) {
         return (
             <div className={cn('flex h-full flex-col items-center justify-center px-4', className)}>
-                {/* Title - Gemini style greeting */}
-                <h1 className="mb-10 text-center text-4xl font-medium tracking-tight">
-                    {subtitle}
-                </h1>
+                {/* Animated greeting like Gemini */}
+                <AnimatedGreeting userName={userName} />
 
                 {/* Large centered input with rainbow glow */}
                 <div className="w-full max-w-2xl">
@@ -85,7 +176,6 @@ export function ChatWelcome({
                         <div
                             className={cn(
                                 'absolute -inset-[2px] rounded-[28px] opacity-60 blur-sm transition-opacity duration-300',
-                                'bg-gradient-to-r from-blue-500 via-purple-500 via-pink-500 via-red-500 via-orange-500 via-yellow-500 to-green-500',
                                 isFocused ? 'opacity-80' : 'opacity-40'
                             )}
                             style={{
@@ -95,20 +185,20 @@ export function ChatWelcome({
                             }}
                         />
                         {/* Inner card */}
-                        <div className="relative rounded-3xl border border-border/50 bg-background/95 backdrop-blur-sm">
-                            <div className="flex items-start gap-3 p-4">
+                        <div className="relative rounded-3xl border border-border/50 bg-card shadow-lg">
+                            <div className="flex items-center gap-2 p-3 md:gap-3 md:p-4">
                                 {/* Plus button */}
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="mt-1 size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+                                    className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                                 >
                                     <Plus className="size-5" />
                                 </Button>
 
-                                {/* Textarea */}
-                                <Textarea
+                                {/* Textarea - plain element for clean look */}
+                                <textarea
                                     ref={textareaRef}
                                     value={inputValue}
                                     onChange={(e) => setInputValue(e.target.value)}
@@ -118,28 +208,29 @@ export function ChatWelcome({
                                     placeholder={placeholder}
                                     disabled={isLoading}
                                     className={cn(
-                                        'min-h-[40px] max-h-[200px] flex-1 resize-none border-0 bg-transparent p-0 pt-1 text-lg leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0',
-                                        'placeholder:text-muted-foreground/50'
+                                        'min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none md:text-lg',
+                                        'placeholder:text-muted-foreground/60',
+                                        'disabled:cursor-not-allowed disabled:opacity-50'
                                     )}
                                     rows={1}
                                 />
 
-                                {/* Send button (appears when there's content) */}
+                                {/* Voice/Send button */}
                                 {canSubmit ? (
                                     <Button
                                         type="button"
                                         size="icon"
-                                        className="mt-1 size-8 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
+                                        className="size-9 shrink-0 rounded-full bg-foreground text-background shadow-md transition-transform hover:scale-105 hover:bg-foreground/90"
                                         onClick={handleSubmit}
                                     >
-                                        <ArrowUp className="size-4" />
+                                        <ArrowUp className="size-5" />
                                     </Button>
                                 ) : (
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="mt-1 size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-primary/10"
+                                        className="size-9 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                         onClick={onVoiceCall}
                                         title="Start voice call"
                                     >
@@ -159,15 +250,15 @@ export function ChatWelcome({
                             return (
                                 <button
                                     key={index}
-                                    className="group flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                                    className="group flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-all hover:bg-muted/60 hover:translate-x-1"
                                     onClick={() => onPromptClick?.(item.prompt)}
                                 >
                                     {Icon ? (
-                                        <Icon className="size-5 text-muted-foreground" />
+                                        <Icon className="size-5 text-muted-foreground transition-colors group-hover:text-violet-500" />
                                     ) : (
-                                        <Sparkles className="size-5 text-muted-foreground" />
+                                        <Sparkles className="size-5 text-muted-foreground transition-colors group-hover:text-violet-500" />
                                     )}
-                                    <span className="text-base text-muted-foreground group-hover:text-foreground">
+                                    <span className="text-base text-muted-foreground transition-colors group-hover:text-foreground">
                                         {item.label}
                                     </span>
                                 </button>

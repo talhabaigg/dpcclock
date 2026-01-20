@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Sparkles } from 'lucide-react';
 import { useEffect, useCallback } from 'react';
 import { useVoiceCall, VoiceCallStatus } from './use-voice-call';
 
@@ -13,15 +13,133 @@ interface VoiceCallModalProps {
 }
 
 const statusMessages: Record<VoiceCallStatus, string> = {
-    idle: 'Ready to start',
+    idle: 'Tap to start',
     connecting: 'Connecting...',
     connected: 'Connected',
     listening: 'Listening...',
-    speaking: 'You are speaking...',
-    processing: 'Processing...',
-    error: 'Connection error',
+    speaking: 'You\'re speaking',
+    processing: 'Thinking...',
+    error: 'Connection failed',
     disconnected: 'Call ended',
 };
+
+// Animated sound wave bars component
+function SoundWave({ isActive, variant }: { isActive: boolean; variant: 'listening' | 'speaking' | 'processing' }) {
+    const barCount = 5;
+    const colors = {
+        listening: 'bg-violet-500',
+        speaking: 'bg-emerald-500',
+        processing: 'bg-purple-500',
+    };
+
+    return (
+        <div className="flex items-center justify-center gap-1 h-12">
+            {Array.from({ length: barCount }).map((_, i) => (
+                <div
+                    key={i}
+                    className={cn(
+                        'w-1 rounded-full transition-all duration-300',
+                        isActive ? colors[variant] : 'bg-muted-foreground/30',
+                        isActive && 'voice-wave-bar'
+                    )}
+                    style={{
+                        height: isActive ? '100%' : '8px',
+                        animationDelay: `${i * 0.1}s`,
+                    }}
+                />
+            ))}
+        </div>
+    );
+}
+
+// Floating orb with smooth animations
+function VoiceOrb({ status }: { status: VoiceCallStatus }) {
+    const isListening = status === 'listening';
+    const isSpeaking = status === 'speaking';
+    const isProcessing = status === 'processing';
+    const isConnecting = status === 'connecting';
+    const isActive = isListening || isSpeaking || isProcessing;
+
+    return (
+        <div className="relative flex items-center justify-center">
+            {/* Outer glow rings - smooth breathing animation */}
+            <div
+                className={cn(
+                    'absolute rounded-full transition-all duration-1000 ease-in-out',
+                    isActive && 'voice-glow-outer'
+                )}
+                style={{
+                    width: 200,
+                    height: 200,
+                    background: isListening
+                        ? 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)'
+                        : isSpeaking
+                          ? 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)'
+                          : isProcessing
+                            ? 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)'
+                            : 'radial-gradient(circle, rgba(100, 100, 100, 0.1) 0%, transparent 70%)',
+                }}
+            />
+
+            {/* Middle ring */}
+            <div
+                className={cn(
+                    'absolute rounded-full transition-all duration-700 ease-in-out',
+                    isActive && 'voice-glow-middle'
+                )}
+                style={{
+                    width: 160,
+                    height: 160,
+                    background: isListening
+                        ? 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, transparent 70%)'
+                        : isSpeaking
+                          ? 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)'
+                          : isProcessing
+                            ? 'radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%)'
+                            : 'radial-gradient(circle, rgba(100, 100, 100, 0.15) 0%, transparent 70%)',
+                }}
+            />
+
+            {/* Main orb */}
+            <div
+                className={cn(
+                    'relative flex size-28 items-center justify-center rounded-full shadow-2xl transition-all duration-500',
+                    status === 'idle' && 'bg-gradient-to-br from-zinc-700 to-zinc-800',
+                    isConnecting && 'bg-gradient-to-br from-amber-500 to-orange-600 voice-orb-connecting',
+                    isListening && 'bg-gradient-to-br from-violet-500 to-purple-600',
+                    isSpeaking && 'bg-gradient-to-br from-emerald-500 to-teal-600',
+                    isProcessing && 'bg-gradient-to-br from-purple-500 to-pink-600',
+                    status === 'error' && 'bg-gradient-to-br from-red-500 to-rose-600',
+                    status === 'disconnected' && 'bg-gradient-to-br from-zinc-600 to-zinc-700'
+                )}
+            >
+                {/* Inner glow */}
+                <div
+                    className={cn(
+                        'absolute inset-2 rounded-full opacity-50 blur-md transition-all duration-500',
+                        isListening && 'bg-violet-400',
+                        isSpeaking && 'bg-emerald-400',
+                        isProcessing && 'bg-purple-400'
+                    )}
+                />
+
+                {/* Content */}
+                <div className="relative z-10">
+                    {isProcessing ? (
+                        <div className="flex items-center justify-center">
+                            <Sparkles className="size-10 text-white voice-sparkle" />
+                        </div>
+                    ) : (
+                        <SoundWave
+                            isActive={isListening || isSpeaking}
+                            variant={isSpeaking ? 'speaking' : 'listening'}
+                        />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalProps) {
     const {
@@ -69,117 +187,82 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
 
     if (!isOpen) return null;
 
-    const isListening = status === 'listening';
-    const isSpeaking = status === 'speaking';
-    const isProcessing = status === 'processing';
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
+            {/* Backdrop with gradient */}
             <div
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+                className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/90 to-background/95 backdrop-blur-md"
                 onClick={handleClose}
             />
 
             {/* Modal */}
             <div
                 className={cn(
-                    'relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl border border-border bg-background p-8 shadow-2xl',
+                    'relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl border border-border/50 bg-card/80 p-8 shadow-2xl backdrop-blur-sm',
                     className
                 )}
             >
-                {/* Status indicator */}
-                <div className="mb-6 text-center">
-                    <h2 className="text-xl font-semibold">Voice Call</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{statusMessages[status]}</p>
+                {/* Header */}
+                <div className="mb-2 flex items-center gap-2">
+                    <Sparkles className="size-5 text-violet-500" />
+                    <h2 className="text-lg font-semibold">Superior AI</h2>
                 </div>
 
-                {/* Animated orb */}
-                <div className="relative mb-8">
-                    {/* Outer glow rings */}
-                    <div
-                        className={cn(
-                            'absolute inset-0 rounded-full transition-all duration-300',
-                            isListening && 'animate-pulse bg-blue-500/20',
-                            isSpeaking && 'animate-ping bg-green-500/20',
-                            isProcessing && 'animate-pulse bg-purple-500/20'
-                        )}
-                        style={{
-                            width: 160,
-                            height: 160,
-                            top: -20,
-                            left: -20,
-                        }}
-                    />
-                    <div
-                        className={cn(
-                            'absolute inset-0 rounded-full transition-all duration-300',
-                            isListening && 'animate-pulse bg-blue-500/30 delay-75',
-                            isSpeaking && 'animate-pulse bg-green-500/30 delay-100',
-                            isProcessing && 'animate-pulse bg-purple-500/30 delay-75'
-                        )}
-                        style={{
-                            width: 140,
-                            height: 140,
-                            top: -10,
-                            left: -10,
-                        }}
-                    />
+                {/* Status */}
+                <p
+                    className={cn(
+                        'mb-8 text-sm font-medium transition-colors duration-300',
+                        status === 'listening' && 'text-violet-500',
+                        status === 'speaking' && 'text-emerald-500',
+                        status === 'processing' && 'text-purple-500',
+                        status === 'connecting' && 'text-amber-500',
+                        status === 'error' && 'text-red-500',
+                        (status === 'idle' || status === 'disconnected' || status === 'connected') &&
+                            'text-muted-foreground'
+                    )}
+                >
+                    {statusMessages[status]}
+                </p>
 
-                    {/* Main orb */}
-                    <div
-                        className={cn(
-                            'relative flex size-[120px] items-center justify-center rounded-full transition-all duration-300',
-                            status === 'idle' && 'bg-muted',
-                            status === 'connecting' && 'animate-pulse bg-yellow-500/50',
-                            isListening && 'bg-gradient-to-br from-blue-500 to-cyan-500',
-                            isSpeaking && 'bg-gradient-to-br from-green-500 to-emerald-500',
-                            isProcessing && 'bg-gradient-to-br from-purple-500 to-violet-500',
-                            status === 'error' && 'bg-red-500',
-                            status === 'disconnected' && 'bg-muted'
-                        )}
-                    >
-                        {/* Icon */}
-                        {isSpeaking ? (
-                            <Mic className="size-12 text-white" />
-                        ) : isListening ? (
-                            <Volume2 className="size-12 text-white" />
-                        ) : isProcessing ? (
-                            <div className="size-8 animate-spin rounded-full border-4 border-white/30 border-t-white" />
-                        ) : (
-                            <Phone className="size-12 text-muted-foreground" />
-                        )}
-                    </div>
+                {/* Animated orb */}
+                <div className="mb-8">
+                    <VoiceOrb status={status} />
                 </div>
 
                 {/* Live transcripts */}
-                <div className="mb-6 w-full space-y-3">
+                <div className="mb-8 w-full min-h-[80px] space-y-3">
                     {/* User transcript */}
                     {userTranscript && (
-                        <div className="rounded-xl bg-muted/50 p-3">
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">You said:</p>
-                            <p className="text-sm">{userTranscript}</p>
+                        <div className="rounded-2xl bg-muted/50 px-4 py-3 backdrop-blur-sm">
+                            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                You
+                            </p>
+                            <p className="text-sm leading-relaxed">{userTranscript}</p>
                         </div>
                     )}
 
                     {/* AI response */}
                     {aiResponse && (
-                        <div className="rounded-xl bg-primary/10 p-3">
-                            <p className="mb-1 text-xs font-medium text-primary">AI:</p>
-                            <p className="text-sm">{aiResponse}</p>
+                        <div className="rounded-2xl bg-violet-500/10 px-4 py-3 backdrop-blur-sm">
+                            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-violet-500">
+                                AI Response
+                            </p>
+                            <p className="text-sm leading-relaxed">{aiResponse}</p>
                         </div>
                     )}
                 </div>
 
                 {/* Controls */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                     {/* Mute button */}
                     <Button
                         variant="outline"
                         size="icon"
                         className={cn(
-                            'size-14 rounded-full transition-all',
-                            isMuted && 'bg-red-500/10 border-red-500 text-red-500'
+                            'size-14 rounded-full border-2 transition-all duration-300',
+                            isMuted
+                                ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                                : 'border-border hover:border-foreground/50 hover:bg-muted'
                         )}
                         onClick={toggleMute}
                         disabled={!isConnected}
@@ -189,9 +272,8 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
 
                     {/* End call button */}
                     <Button
-                        variant="destructive"
                         size="icon"
-                        className="size-16 rounded-full"
+                        className="size-16 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/25 transition-all duration-300 hover:bg-red-600 hover:shadow-red-500/40 hover:scale-105"
                         onClick={handleClose}
                     >
                         <PhoneOff className="size-7" />
@@ -199,10 +281,87 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 </div>
 
                 {/* Help text */}
-                <p className="mt-6 text-center text-xs text-muted-foreground">
-                    Press <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">Esc</kbd> or click outside to end call
+                <p className="mt-8 text-center text-xs text-muted-foreground/70">
+                    Press{' '}
+                    <kbd className="rounded-md bg-muted/80 px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd>{' '}
+                    to end call
                 </p>
             </div>
+
+            {/* CSS animations */}
+            <style>{`
+                @keyframes voice-wave {
+                    0%, 100% {
+                        transform: scaleY(0.3);
+                    }
+                    50% {
+                        transform: scaleY(1);
+                    }
+                }
+
+                @keyframes voice-glow-breathe {
+                    0%, 100% {
+                        transform: scale(1);
+                        opacity: 0.6;
+                    }
+                    50% {
+                        transform: scale(1.1);
+                        opacity: 1;
+                    }
+                }
+
+                @keyframes voice-glow-breathe-slow {
+                    0%, 100% {
+                        transform: scale(1);
+                        opacity: 0.4;
+                    }
+                    50% {
+                        transform: scale(1.15);
+                        opacity: 0.8;
+                    }
+                }
+
+                @keyframes voice-connecting {
+                    0%, 100% {
+                        transform: scale(1);
+                    }
+                    50% {
+                        transform: scale(1.05);
+                    }
+                }
+
+                @keyframes voice-sparkle {
+                    0%, 100% {
+                        transform: rotate(0deg) scale(1);
+                    }
+                    25% {
+                        transform: rotate(-10deg) scale(1.1);
+                    }
+                    75% {
+                        transform: rotate(10deg) scale(0.95);
+                    }
+                }
+
+                .voice-wave-bar {
+                    animation: voice-wave 0.8s ease-in-out infinite;
+                }
+
+                .voice-glow-outer {
+                    animation: voice-glow-breathe-slow 3s ease-in-out infinite;
+                }
+
+                .voice-glow-middle {
+                    animation: voice-glow-breathe 2s ease-in-out infinite;
+                }
+
+                .voice-orb-connecting {
+                    animation: voice-connecting 1.5s ease-in-out infinite;
+                }
+
+                .voice-sparkle {
+                    animation: voice-sparkle 2s ease-in-out infinite;
+                }
+            `}</style>
         </div>
     );
 }

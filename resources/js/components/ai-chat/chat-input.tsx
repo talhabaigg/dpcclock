@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
@@ -101,7 +100,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     }, []);
 
     const canSubmit = value.trim().length > 0 && !disabled;
-    const isExpanded = value.length > 100 || value.includes('\n') || attachments.length > 0;
 
     return (
         <div className={cn('relative w-full', className)}>
@@ -127,12 +125,24 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 </div>
             )}
 
-            {/* Input container */}
+            {/* Input container with rainbow glow */}
+            <div className="relative">
+                {/* Rainbow gradient border effect */}
+                <div
+                    className={cn(
+                        'absolute -inset-[1px] rounded-3xl opacity-0 blur-sm transition-opacity duration-300',
+                        isFocused && 'opacity-60'
+                    )}
+                    style={{
+                        background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
+                        backgroundSize: '200% 100%',
+                        animation: 'rainbow-shift 8s linear infinite',
+                    }}
+                />
             <div
                 className={cn(
-                    'bg-muted/50 border-border relative flex items-end gap-2 rounded-2xl border p-2 transition-all duration-200',
-                    isFocused && 'ring-ring/20 border-ring/50 ring-2',
-                    isExpanded && 'rounded-3xl'
+                    'relative flex items-center gap-3 rounded-3xl border border-border/50 bg-card px-4 py-3 shadow-sm transition-all duration-200',
+                    isFocused && 'border-border shadow-md'
                 )}
             >
                 {/* Attachment button */}
@@ -152,7 +162,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="text-muted-foreground hover:text-foreground size-9 shrink-0"
+                                    className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 shrink-0 rounded-full"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={disabled || isLoading}
                                 >
@@ -164,8 +174,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     </>
                 )}
 
-                {/* Textarea */}
-                <Textarea
+                {/* Textarea - using plain textarea for cleaner look */}
+                <textarea
                     ref={textareaRef}
                     value={value}
                     onChange={(e) => setValue(e.target.value.slice(0, maxLength))}
@@ -175,14 +185,15 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     placeholder={placeholder}
                     disabled={disabled || isLoading}
                     className={cn(
-                        'scrollbar-thin min-h-[40px] max-h-[200px] flex-1 resize-none border-0 bg-transparent p-2 text-base leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0',
-                        'placeholder:text-muted-foreground/70'
+                        'min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none',
+                        'placeholder:text-muted-foreground/60',
+                        'disabled:cursor-not-allowed disabled:opacity-50'
                     )}
                     rows={1}
                 />
 
                 {/* Submit/Stop button */}
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center">
                     {isLoading ? (
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -190,7 +201,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                                     type="button"
                                     size="icon"
                                     variant="outline"
-                                    className="size-9 rounded-xl"
+                                    className="size-9 rounded-full"
                                     onClick={onStop}
                                 >
                                     <Square className="size-4" fill="currentColor" />
@@ -205,9 +216,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                                     type="button"
                                     size="icon"
                                     className={cn(
-                                        'size-9 rounded-xl transition-all',
+                                        'size-9 rounded-full transition-all',
                                         canSubmit
-                                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                                            ? 'bg-foreground text-background shadow-md hover:bg-foreground/90 hover:scale-105'
                                             : 'bg-muted text-muted-foreground cursor-not-allowed'
                                     )}
                                     onClick={handleSubmit}
@@ -223,6 +234,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     )}
                 </div>
             </div>
+            </div>
 
             {/* Character count */}
             {value.length > maxLength * 0.8 && (
@@ -230,6 +242,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     {value.length.toLocaleString()} / {maxLength.toLocaleString()}
                 </div>
             )}
+
+            {/* CSS animation for rainbow effect */}
+            <style>{`
+                @keyframes rainbow-shift {
+                    0% { background-position: 0% 50%; }
+                    100% { background-position: 200% 50%; }
+                }
+            `}</style>
         </div>
     );
 });
