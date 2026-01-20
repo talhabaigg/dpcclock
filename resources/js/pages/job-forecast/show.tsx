@@ -19,6 +19,7 @@ import {
     CheckCircle,
     ChevronLeft,
     ChevronRight,
+    Copy,
     DollarSign,
     FileSpreadsheet,
     FileText,
@@ -272,6 +273,22 @@ const ShowJobForecastPage = ({
             },
         );
     }, [locationId, forecastWorkflow?.canReject, canUserFinalize, selectedForecastMonth, rejectionNote]);
+
+    const handleCopyFromPreviousMonth = useCallback(() => {
+        if (!locationId || !selectedForecastMonth) return;
+        if (!confirm('Copy forecast data from the previous month? This will copy all cost and revenue forecasts, shifting them forward by one month. Any existing data for this month will be merged/updated.')) return;
+
+        setIsWorkflowProcessing(true);
+        router.post(
+            `/location/${locationId}/job-forecast/copy-from-previous`,
+            { target_month: selectedForecastMonth },
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsWorkflowProcessing(false),
+                onError: () => setIsWorkflowProcessing(false),
+            },
+        );
+    }, [locationId, selectedForecastMonth]);
 
     // ===========================
     // Unified Group Show State
@@ -1377,6 +1394,24 @@ const ShowJobForecastPage = ({
                                 >
                                     <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4" />
                                 </Button>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 lg:h-8 lg:w-8"
+                                                onClick={handleCopyFromPreviousMonth}
+                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked}
+                                                title="Copy from previous month"
+                                            >
+                                                <Copy className="h-3 w-3 lg:h-4 lg:w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Copy forecast data from previous month</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             </div>
                         )}
 

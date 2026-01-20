@@ -201,6 +201,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/location/{location}/job-forecast/submit', [JobForecastController::class, 'submit'])->name('jobForecast.submit');
         Route::post('/location/{location}/job-forecast/finalize', [JobForecastController::class, 'finalize'])->name('jobForecast.finalize');
         Route::post('/location/{location}/job-forecast/reject', [JobForecastController::class, 'reject'])->name('jobForecast.reject');
+        Route::post('/location/{location}/job-forecast/copy-from-previous', [JobForecastController::class, 'copyFromPreviousMonth'])->name('jobForecast.copyFromPrevious');
 
         // Forecast Projects Routes
         Route::get('/forecast-projects', [ForecastProjectController::class, 'index'])->name('forecastProjects.index');

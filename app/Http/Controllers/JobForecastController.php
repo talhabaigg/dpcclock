@@ -795,4 +795,109 @@ class JobForecastController extends Controller
         return redirect()->back()->with('success', 'Forecast has been rejected and sent back for revision.');
     }
 
+    /**
+     * Copy forecast data from the previous month
+     */
+    public function copyFromPreviousMonth(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'target_month' => 'required|date_format:Y-m',
+            'source_month' => 'nullable|date_format:Y-m',
+        ]);
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+        $user = Auth::user();
+        $targetMonth = $validated['target_month'];
+
+        // Determine source month - either provided or previous month from target
+        if (!empty($validated['source_month'])) {
+            $sourceMonth = $validated['source_month'];
+        } else {
+            // Calculate previous month from target
+            $targetDate = Carbon::createFromFormat('Y-m', $targetMonth);
+            $sourceMonth = $targetDate->copy()->subMonth()->format('Y-m');
+        }
+
+        // Find source forecast
+        $sourceJobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', substr($sourceMonth, 0, 4))
+            ->whereMonth('forecast_month', substr($sourceMonth, 5, 2))
+            ->first();
+
+        if (!$sourceJobForecast) {
+            return redirect()->back()->withErrors(['error' => 'No forecast data found for ' . Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y') . '.']);
+        }
+
+        // Get source forecast data
+        $sourceData = JobForecastData::where('job_forecast_id', $sourceJobForecast->id)->get();
+
+        if ($sourceData->isEmpty()) {
+            return redirect()->back()->withErrors(['error' => 'No forecast data to copy from ' . Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y') . '.']);
+        }
+
+        // Create or get target forecast
+        $targetJobForecast = JobForecast::firstOrCreate(
+            [
+                'job_number' => $jobNumber,
+                'forecast_month' => (new \DateTime($targetMonth . '-01')),
+            ],
+            [
+                'is_locked' => false,
+                'status' => JobForecast::STATUS_DRAFT,
+                'created_by' => $user->id,
+            ]
+        );
+
+        // Check if target forecast is editable
+        if (!$targetJobForecast->isEditable()) {
+            return redirect()->back()->withErrors(['error' => 'Cannot copy to this forecast - it is not editable in its current status.']);
+        }
+
+        if ($targetJobForecast->is_locked) {
+            return redirect()->back()->withErrors(['error' => 'Cannot copy to this forecast - it is locked.']);
+        }
+
+        // Check if target already has data
+        $existingTargetData = JobForecastData::where('job_forecast_id', $targetJobForecast->id)->exists();
+
+        DB::beginTransaction();
+        try {
+            $sourceDate = Carbon::createFromFormat('Y-m', $sourceMonth);
+            $copiedCount = 0;
+
+            foreach ($sourceData as $sourceRow) {
+                // Copy the data with the same month - no shifting
+                JobForecastData::updateOrCreate(
+                    [
+                        'job_forecast_id' => $targetJobForecast->id,
+                        'grid_type' => $sourceRow->grid_type,
+                        'cost_item' => $sourceRow->cost_item,
+                        'month' => $sourceRow->month, // Keep the same month
+                    ],
+                    [
+                        'job_number' => $jobNumber,
+                        'location_id' => $id,
+                        'forecast_amount' => $sourceRow->forecast_amount,
+                    ]
+                );
+                $copiedCount++;
+            }
+
+            // Update the target forecast's updated_by
+            $targetJobForecast->updated_by = $user->id;
+            $targetJobForecast->save();
+
+            DB::commit();
+
+            $message = $existingTargetData
+                ? "Copied {$copiedCount} forecast entries from " . $sourceDate->format('M Y') . ". Existing data was merged/updated."
+                : "Copied {$copiedCount} forecast entries from " . $sourceDate->format('M Y') . ".";
+
+            return redirect()->back()->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Failed to copy forecast data: ' . $e->getMessage()]);
+        }
+    }
+
 }
