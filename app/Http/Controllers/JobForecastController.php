@@ -9,6 +9,8 @@ use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
 use App\Models\Location;
+use App\Models\User;
+use App\Notifications\JobForecastStatusNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +122,27 @@ class JobForecastController extends Controller
         }
 
         $isLocked = $jobForecast ? (bool) $jobForecast->is_locked : false;
+
+        // Workflow data
+        $forecastStatus = $jobForecast?->status ?? JobForecast::STATUS_DRAFT;
+        $forecastWorkflow = $jobForecast ? [
+            'id' => $jobForecast->id,
+            'status' => $jobForecast->status ?? JobForecast::STATUS_DRAFT,
+            'statusLabel' => $jobForecast->status_label ?? 'Draft',
+            'statusColor' => $jobForecast->status_color ?? 'yellow',
+            'isEditable' => $jobForecast->isEditable(),
+            'canSubmit' => $jobForecast->canBeSubmitted(),
+            'canFinalize' => $jobForecast->canBeFinalized(),
+            'canReject' => $jobForecast->canBeRejected(),
+            'submittedBy' => $jobForecast->submitter?->name,
+            'submittedAt' => $jobForecast->submitted_at?->format('M d, Y H:i'),
+            'finalizedBy' => $jobForecast->finalizer?->name,
+            'finalizedAt' => $jobForecast->finalized_at?->format('M d, Y H:i'),
+            'rejectionNote' => $jobForecast->rejection_note,
+        ] : null;
+
+        // Check if user is admin (can finalize)
+        $canUserFinalize = Auth::user()->hasRole('admin') || Auth::user()->hasRole('backoffice');
 
         // Get ALL cost codes with budgets from JobReportByCostItemAndCostType
         // Join with CostCodes table to get descriptions
@@ -280,6 +303,9 @@ class JobForecastController extends Controller
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
             'lastUpdate' => $lastUpdate,
+            // Workflow data
+            'forecastWorkflow' => $forecastWorkflow,
+            'canUserFinalize' => $canUserFinalize,
         ]);
     }
 
@@ -308,6 +334,8 @@ class JobForecastController extends Controller
         $validationErrors = [];
         $currentMonth = date('Y-m');
         $forecastMonth = $validated['forecast_month'];
+        $user = Auth::user();
+
         $jobForecast = JobForecast::firstOrCreate(
             [
                 'job_number' => $jobNumber,
@@ -315,12 +343,23 @@ class JobForecastController extends Controller
             ],
             [
                 'is_locked' => false,
+                'status' => JobForecast::STATUS_DRAFT,
+                'created_by' => $user->id,
             ]
         );
+
+        // Check if forecast is editable (based on status, not just lock)
+        if (!$jobForecast->isEditable()) {
+            return redirect()->back()->withErrors(['error' => 'This forecast cannot be edited in its current status.']);
+        }
 
         if ($jobForecast->is_locked) {
             return redirect()->back()->withErrors(['error' => 'This forecast is locked and cannot be edited.']);
         }
+
+        // Update the updater
+        $jobForecast->updated_by = $user->id;
+        $jobForecast->save();
         foreach ($validated['forecast_data'] as $row) {
             $costItem = $row['cost_item'];
 
@@ -611,6 +650,149 @@ class JobForecastController extends Controller
             'jobNumber' => $jobNumber,
             'locationId' => $location,
         ]);
+    }
+
+    /**
+     * Submit forecast for review
+     */
+    public function submit(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+        ]);
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+        $user = Auth::user();
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', substr($validated['forecast_month'], 0, 4))
+            ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
+            ->first();
+
+        if (!$jobForecast) {
+            return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
+        }
+
+        if (!$jobForecast->canBeSubmitted()) {
+            return redirect()->back()->withErrors(['error' => 'This forecast cannot be submitted in its current status.']);
+        }
+
+        // Check if forecast has any data
+        $hasData = $jobForecast->data()->exists();
+        if (!$hasData) {
+            return redirect()->back()->withErrors(['error' => 'Cannot submit an empty forecast. Please add forecast data first.']);
+        }
+
+        if (!$jobForecast->submit($user)) {
+            return redirect()->back()->withErrors(['error' => 'Failed to submit forecast.']);
+        }
+
+        // Notify admins about the submission
+        $admins = User::role(['admin', 'backoffice'])->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new JobForecastStatusNotification($jobForecast, 'submitted', $user));
+        }
+
+        return redirect()->back()->with('success', 'Forecast submitted for review.');
+    }
+
+    /**
+     * Finalize (approve) a submitted forecast
+     */
+    public function finalize(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+        ]);
+
+        $user = Auth::user();
+
+        // Only admins can finalize
+        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+            return redirect()->back()->withErrors(['error' => 'You do not have permission to finalize forecasts.']);
+        }
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', substr($validated['forecast_month'], 0, 4))
+            ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
+            ->first();
+
+        if (!$jobForecast) {
+            return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
+        }
+
+        if (!$jobForecast->canBeFinalized()) {
+            return redirect()->back()->withErrors(['error' => 'This forecast cannot be finalized. It must be in submitted status.']);
+        }
+
+        if (!$jobForecast->finalize($user)) {
+            return redirect()->back()->withErrors(['error' => 'Failed to finalize forecast.']);
+        }
+
+        // Notify the submitter that their forecast was finalized
+        if ($jobForecast->submitter) {
+            $jobForecast->submitter->notify(new JobForecastStatusNotification($jobForecast, 'finalized', $user));
+        }
+
+        // Also notify the creator if different from submitter
+        if ($jobForecast->creator && $jobForecast->creator->id !== $jobForecast->submitted_by) {
+            $jobForecast->creator->notify(new JobForecastStatusNotification($jobForecast, 'finalized', $user));
+        }
+
+        return redirect()->back()->with('success', 'Forecast has been finalized and locked.');
+    }
+
+    /**
+     * Reject a submitted forecast (send back to draft)
+     */
+    public function reject(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+            'rejection_note' => 'nullable|string|max:1000',
+        ]);
+
+        $user = Auth::user();
+
+        // Only admins can reject
+        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+            return redirect()->back()->withErrors(['error' => 'You do not have permission to reject forecasts.']);
+        }
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', substr($validated['forecast_month'], 0, 4))
+            ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
+            ->first();
+
+        if (!$jobForecast) {
+            return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
+        }
+
+        if (!$jobForecast->canBeRejected()) {
+            return redirect()->back()->withErrors(['error' => 'This forecast cannot be rejected. It must be in submitted status.']);
+        }
+
+        $rejectionNote = $validated['rejection_note'] ?? null;
+
+        if (!$jobForecast->reject($user, $rejectionNote)) {
+            return redirect()->back()->withErrors(['error' => 'Failed to reject forecast.']);
+        }
+
+        // Notify the submitter that their forecast was rejected
+        if ($jobForecast->creator) {
+            $jobForecast->creator->notify(new JobForecastStatusNotification(
+                $jobForecast,
+                'rejected',
+                $user,
+                $rejectionNote
+            ));
+        }
+
+        return redirect()->back()->with('success', 'Forecast has been rejected and sent back for revision.');
     }
 
 }

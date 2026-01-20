@@ -16,6 +16,7 @@ import { AgGridReact } from 'ag-grid-react';
 import {
     ArrowLeft,
     BarChart3,
+    CheckCircle,
     ChevronLeft,
     ChevronRight,
     DollarSign,
@@ -26,8 +27,10 @@ import {
     Plus,
     Save,
     Scale,
+    Send,
     Trash2,
     Unlock,
+    XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
@@ -69,6 +72,8 @@ const ShowJobForecastPage = ({
     jobNumber,
     isForecastProject = false,
     lastUpdate,
+    forecastWorkflow,
+    canUserFinalize = false,
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
@@ -96,7 +101,13 @@ const ShowJobForecastPage = ({
     const [selectedForecastMonth, setSelectedForecastMonth] = useState(
         initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7),
     );
-    const isEditingLocked = !isForecastProject && isLocked;
+    // Workflow state
+    const [isWorkflowProcessing, setIsWorkflowProcessing] = useState(false);
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [rejectionNote, setRejectionNote] = useState('');
+
+    // Editing is locked if: forecast project OR locked OR workflow says not editable
+    const isEditingLocked = !isForecastProject && (isLocked || (forecastWorkflow && !forecastWorkflow.isEditable));
 
     // Accrual Summary Dialog State
     const [accrualDialogOpen, setAccrualDialogOpen] = useState(false);
@@ -207,6 +218,60 @@ const ShowJobForecastPage = ({
         },
         [isEditingLocked],
     );
+
+    // ===========================
+    // Workflow Actions
+    // ===========================
+    const handleSubmitForecast = useCallback(() => {
+        if (!locationId || !forecastWorkflow?.canSubmit) return;
+        if (!confirm('Submit this forecast for review? You will not be able to edit it after submission.')) return;
+
+        setIsWorkflowProcessing(true);
+        router.post(
+            `/location/${locationId}/job-forecast/submit`,
+            { forecast_month: selectedForecastMonth },
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsWorkflowProcessing(false),
+                onError: () => setIsWorkflowProcessing(false),
+            },
+        );
+    }, [locationId, forecastWorkflow?.canSubmit, selectedForecastMonth]);
+
+    const handleFinalizeForecast = useCallback(() => {
+        if (!locationId || !forecastWorkflow?.canFinalize || !canUserFinalize) return;
+        if (!confirm('Finalize this forecast? It will be locked and no further changes will be allowed.')) return;
+
+        setIsWorkflowProcessing(true);
+        router.post(
+            `/location/${locationId}/job-forecast/finalize`,
+            { forecast_month: selectedForecastMonth },
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsWorkflowProcessing(false),
+                onError: () => setIsWorkflowProcessing(false),
+            },
+        );
+    }, [locationId, forecastWorkflow?.canFinalize, canUserFinalize, selectedForecastMonth]);
+
+    const handleRejectForecast = useCallback(() => {
+        if (!locationId || !forecastWorkflow?.canReject || !canUserFinalize) return;
+
+        setIsWorkflowProcessing(true);
+        router.post(
+            `/location/${locationId}/job-forecast/reject`,
+            { forecast_month: selectedForecastMonth, rejection_note: rejectionNote },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsWorkflowProcessing(false);
+                    setRejectDialogOpen(false);
+                    setRejectionNote('');
+                },
+                onError: () => setIsWorkflowProcessing(false),
+            },
+        );
+    }, [locationId, forecastWorkflow?.canReject, canUserFinalize, selectedForecastMonth, rejectionNote]);
 
     // ===========================
     // Unified Group Show State
@@ -1035,6 +1100,50 @@ const ShowJobForecastPage = ({
                 </Dialog>
             )}
 
+            {/* Reject Forecast Dialog */}
+            <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Reject Forecast</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Please provide a reason for rejecting this forecast. This will be sent to the submitter.
+                        </p>
+                        <div className="grid gap-2">
+                            <Label htmlFor="rejection-note">Rejection Note</Label>
+                            <textarea
+                                id="rejection-note"
+                                value={rejectionNote}
+                                onChange={(e) => setRejectionNote(e.target.value)}
+                                className="border-input bg-background min-h-[100px] w-full rounded-md border px-3 py-2 text-sm"
+                                placeholder="Enter the reason for rejection..."
+                            />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setRejectDialogOpen(false);
+                                setRejectionNote('');
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={handleRejectForecast}
+                            disabled={isWorkflowProcessing}
+                        >
+                            {isWorkflowProcessing ? 'Rejecting...' : 'Reject Forecast'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Saving Loader Dialog */}
             {isSaving && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1088,85 +1197,170 @@ const ShowJobForecastPage = ({
 
             {/* Main Content */}
             <div className="flex h-full flex-col">
-                <div className="m-2 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => router.visit('/turnover-forecast')}>
-                                        <ArrowLeft className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Back</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => setAccrualDialogOpen(true)}>
-                                        <BarChart3 className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Accrual Summary</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => setRevenueReportOpen(true)}>
-                                        <FileText className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Revenue Report</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => setExcelUploadOpen(true)}>
-                                        <FileSpreadsheet className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Excel Import/Export</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Link href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`} target="_blank" rel="noopener noreferrer">
-                                        <Button variant="ghost" size="icon" >
-                                            <Scale className="h-5 w-5" />
+                {/* Responsive Toolbar */}
+                <div className="m-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                    {/* Top Row (mobile) / Left Section (desktop) */}
+                    <div className="flex items-center justify-between gap-1 lg:justify-start">
+                        {/* Navigation & Tool Buttons */}
+                        <div className="flex items-center gap-1">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit('/turnover-forecast')}>
+                                            <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
                                         </Button>
-                                    </Link>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Back</TooltipContent>
+                                </Tooltip>
 
-                                </TooltipTrigger>
-                                <TooltipContent>Forecast v/s Actual</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                        <div className="flex flex-col">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAccrualDialogOpen(true)}>
+                                            <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Accrual Summary</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRevenueReportOpen(true)}>
+                                            <FileText className="h-4 w-4 lg:h-5 lg:w-5" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Revenue Report</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExcelUploadOpen(true)}>
+                                            <FileSpreadsheet className="h-4 w-4 lg:h-5 lg:w-5" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Excel Import/Export</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Link href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`} target="_blank" rel="noopener noreferrer">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                <Scale className="h-4 w-4 lg:h-5 lg:w-5" />
+                                            </Button>
+                                        </Link>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Forecast v/s Actual</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+
+                        {/* Last Refreshed - Hidden on mobile, shown on larger screens */}
+                        <div className="hidden flex-col md:flex">
                             <p className="text-xs font-light text-gray-700 dark:text-gray-200">Job data last refreshed:</p>
                             <Label className="text-xs font-bold">{lastUpdate ? `${new Date(lastUpdate).toLocaleString()}` : 'No Updates Yet'}</Label>
                         </div>
+
+                        {/* Lock/Save buttons visible on mobile in top row */}
+                        <div className="flex items-center gap-1 lg:hidden">
+                            {!isForecastProject && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={handleToggleLock}
+                                                disabled={!selectedForecastMonth || isSaving}
+                                            >
+                                                {isEditingLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
+                                            <Save className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    {/* Bottom Row (mobile) / Right Section (desktop) */}
+                    <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+                        {/* Workflow Status Badge */}
+                        {!isForecastProject && forecastWorkflow && (
+                            <div className="flex flex-wrap items-center gap-1 lg:gap-2">
+                                <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium lg:px-2.5 lg:text-xs ${
+                                        forecastWorkflow.statusColor === 'green'
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                            : forecastWorkflow.statusColor === 'blue'
+                                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                              : forecastWorkflow.statusColor === 'yellow'
+                                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                    }`}
+                                >
+                                    {forecastWorkflow.statusLabel}
+                                </span>
+                                {forecastWorkflow.submittedBy && forecastWorkflow.submittedAt && (
+                                    <span className="hidden text-xs text-gray-500 xl:inline dark:text-gray-400">
+                                        by {forecastWorkflow.submittedBy} on {new Date(forecastWorkflow.submittedAt).toLocaleDateString()}
+                                    </span>
+                                )}
+                                {forecastWorkflow.finalizedBy && forecastWorkflow.finalizedAt && (
+                                    <span className="hidden text-xs text-gray-500 xl:inline dark:text-gray-400">
+                                        by {forecastWorkflow.finalizedBy} on {new Date(forecastWorkflow.finalizedAt).toLocaleDateString()}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Rejection Note Display */}
+                        {!isForecastProject && forecastWorkflow?.rejectionNote && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="cursor-help text-[10px] text-red-600 lg:text-xs dark:text-red-400">
+                                            Rejected
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                        <p className="text-sm">{forecastWorkflow.rejectionNote}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+
+                        {/* Forecast Month Selector */}
                         {!isForecastProject && (
-                            <div className="flex items-center gap-2">
-                                <Label htmlFor="forecast-month" className="text-xs font-medium text-gray-700">
+                            <div className="flex items-center gap-1 lg:gap-2">
+                                <Label htmlFor="forecast-month" className="hidden text-xs font-medium text-gray-700 sm:inline dark:text-gray-300">
                                     Forecast Month
                                 </Label>
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8"
+                                    className="h-7 w-7 lg:h-8 lg:w-8"
                                     onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, -1))}
                                     title="Previous month"
                                 >
-                                    <ChevronLeft className="h-4 w-4" />
+                                    <ChevronLeft className="h-3 w-3 lg:h-4 lg:w-4" />
                                 </Button>
                                 <input
                                     id="forecast-month"
                                     type="month"
                                     value={selectedForecastMonth}
                                     onChange={(e) => handleForecastMonthChange(e.target.value)}
-                                    className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                                    className="border-input bg-background h-7 w-28 rounded-md border px-1 text-[10px] lg:h-8 lg:w-auto lg:px-2 lg:text-xs"
                                     title={
                                         availableForecastMonths?.length
                                             ? `Saved months: ${availableForecastMonths.join(', ')}`
@@ -1177,41 +1371,172 @@ const ShowJobForecastPage = ({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8"
+                                    className="h-7 w-7 lg:h-8 lg:w-8"
                                     onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, 1))}
                                     title="Next month"
                                 >
-                                    <ChevronRight className="h-4 w-4" />
+                                    <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4" />
                                 </Button>
                             </div>
                         )}
-                        {!isForecastProject && (
+
+                        {/* Lock/Save buttons - Hidden on mobile, shown on desktop */}
+                        <div className="hidden items-center gap-1 lg:flex">
+                            {!isForecastProject && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handleToggleLock}
+                                                disabled={!selectedForecastMonth || isSaving}
+                                            >
+                                                {isEditingLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={handleToggleLock}
-                                            disabled={!selectedForecastMonth || isSaving}
-                                        >
-                                            {isEditingLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                                        <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
+                                            <Save className="h-5 w-5" />
                                         </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
+                                    <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+
+                        {/* Workflow Action Buttons */}
+                        {!isForecastProject && forecastWorkflow?.canSubmit && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="group relative">
+                                            {/* Outer glow layer - full rainbow starting with blue */}
+                                            <div
+                                                className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
+                                                style={{
+                                                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
+                                                    backgroundSize: '300% 100%',
+                                                    animation: 'rainbow-flow 3s linear infinite',
+                                                }}
+                                            />
+                                            {/* Sharp border layer - full rainbow */}
+                                            <div
+                                                className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                                style={{
+                                                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
+                                                    backgroundSize: '300% 100%',
+                                                    animation: 'rainbow-flow 3s linear infinite',
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleSubmitForecast}
+                                                disabled={isWorkflowProcessing || isSaving}
+                                                className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-blue-500 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-blue-400"
+                                            >
+                                                <Send className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
+                                                <span>Submit</span>
+                                            </button>
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Submit forecast for review</TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
                         )}
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
-                                        <Save className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+
+                        {!isForecastProject && forecastWorkflow?.canFinalize && canUserFinalize && (
+                            <div className="flex items-center gap-2 lg:gap-3">
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="group relative">
+                                                {/* Outer glow layer - full rainbow */}
+                                                <div
+                                                    className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
+                                                    style={{
+                                                        background: 'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
+                                                        backgroundSize: '300% 100%',
+                                                        animation: 'rainbow-flow 3s linear infinite',
+                                                    }}
+                                                />
+                                                {/* Sharp border layer - full rainbow */}
+                                                <div
+                                                    className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                                    style={{
+                                                        background: 'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
+                                                        backgroundSize: '300% 100%',
+                                                        animation: 'rainbow-flow 3s linear infinite',
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleFinalizeForecast}
+                                                    disabled={isWorkflowProcessing || isSaving}
+                                                    className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-green-500 bg-white px-3 py-1.5 text-xs font-medium text-green-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-green-400"
+                                                >
+                                                    <CheckCircle className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
+                                                    <span>Finalize</span>
+                                                </button>
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Approve and finalize forecast</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="group relative">
+                                                {/* Outer glow layer - full rainbow */}
+                                                <div
+                                                    className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
+                                                    style={{
+                                                        background: 'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
+                                                        backgroundSize: '300% 100%',
+                                                        animation: 'rainbow-flow 3s linear infinite',
+                                                    }}
+                                                />
+                                                {/* Sharp border layer - full rainbow */}
+                                                <div
+                                                    className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                                    style={{
+                                                        background: 'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
+                                                        backgroundSize: '300% 100%',
+                                                        animation: 'rainbow-flow 3s linear infinite',
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRejectDialogOpen(true)}
+                                                    disabled={isWorkflowProcessing || isSaving}
+                                                    className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-red-500 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-red-400"
+                                                >
+                                                    <XCircle className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
+                                                    <span>Reject</span>
+                                                </button>
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Reject and send back for revision</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                        )}
+
+                        {/* CSS Keyframes for rainbow gradient animation */}
+                        <style>{`
+                            @keyframes rainbow-flow {
+                                0% { background-position: 0% 50%; }
+                                50% { background-position: 150% 50%; }
+                                100% { background-position: 300% 50%; }
+                            }
+                        `}</style>
                     </div>
                 </div>
 

@@ -45,6 +45,15 @@ Route::get('/notifications/mark-all-read', function () {
     $user->unreadNotifications->markAsRead();
     return redirect()->back();
 })->name('notifications.markAllRead');
+
+Route::post('/notifications/{id}/mark-read', function ($id) {
+    $user = auth()->user();
+    $notification = $user->notifications()->where('id', $id)->first();
+    if ($notification) {
+        $notification->markAsRead();
+    }
+    return redirect()->back();
+})->name('notifications.markRead');
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])
     ->name('requisition.updateStatusFromBuildMetrix');
@@ -189,6 +198,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::post('/location/{location}/job-forecast', [JobForecastController::class, 'store'])->name('jobForecast.store');
         Route::post('/location/{location}/job-forecast/lock', [JobForecastController::class, 'toggleLock'])->name('jobForecast.lock');
+        Route::post('/location/{location}/job-forecast/submit', [JobForecastController::class, 'submit'])->name('jobForecast.submit');
+        Route::post('/location/{location}/job-forecast/finalize', [JobForecastController::class, 'finalize'])->name('jobForecast.finalize');
+        Route::post('/location/{location}/job-forecast/reject', [JobForecastController::class, 'reject'])->name('jobForecast.reject');
 
         // Forecast Projects Routes
         Route::get('/forecast-projects', [ForecastProjectController::class, 'index'])->name('forecastProjects.index');

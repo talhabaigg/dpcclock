@@ -28,6 +28,24 @@ export type ChartContext =
           editable: boolean;
       };
 
+export type ForecastStatus = 'pending' | 'draft' | 'submitted' | 'finalized';
+
+export interface ForecastWorkflow {
+    id: number;
+    status: ForecastStatus;
+    statusLabel: string;
+    statusColor: string;
+    isEditable: boolean;
+    canSubmit: boolean;
+    canFinalize: boolean;
+    canReject: boolean;
+    submittedBy?: string;
+    submittedAt?: string;
+    finalizedBy?: string;
+    finalizedAt?: string;
+    rejectionNote?: string;
+}
+
 export interface JobForecastProps {
     costRowData: any[];
     revenueRowData: any[];
@@ -44,6 +62,9 @@ export interface JobForecastProps {
     jobNumber?: string;
     isForecastProject?: boolean;
     lastUpdate?: string;
+    // Workflow
+    forecastWorkflow?: ForecastWorkflow | null;
+    canUserFinalize?: boolean;
 }
 
 export interface ChartPoint {
