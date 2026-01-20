@@ -1,26 +1,13 @@
-import React from 'react';
-import { router } from '@inertiajs/react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { formatAmount, formatMonthHeader, getMonthOptions } from '../utils';
-import type { GeneralCost, CashInSplit, CashOutSplit, VendorPaymentDelaySplit } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2 } from 'lucide-react';
+import React from 'react';
+import type { CashInSplit, CashOutSplit, GeneralCost, VendorPaymentDelaySplit } from '../types';
+import { formatAmount, formatMonthHeader, getMonthOptions } from '../utils';
 
 // Settings Modal
 type SettingsModalProps = {
@@ -58,27 +45,21 @@ export const SettingsModal = ({
                 </DialogHeader>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Starting Balance</label>
+                        <label className="mb-1 block text-sm font-medium">Starting Balance</label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                $
-                            </span>
+                            <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">$</span>
                             <Input
                                 type="number"
                                 value={startingBalance}
-                                onChange={(e) =>
-                                    onStartingBalanceChange(parseFloat(e.target.value) || 0)
-                                }
+                                onChange={(e) => onStartingBalanceChange(parseFloat(e.target.value) || 0)}
                                 className="pl-8"
                                 placeholder="0.00"
                             />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Opening cash balance for the forecast period
-                        </p>
+                        <p className="text-muted-foreground mt-1 text-xs">Opening cash balance for the forecast period</p>
                     </div>
-                    <div className="border-t border-border pt-4">
-                        <h4 className="text-sm font-semibold mb-3">GST Payable Months</h4>
+                    <div className="border-border border-t pt-4">
+                        <h4 className="mb-3 text-sm font-semibold">GST Payable Months</h4>
                         <div className="grid grid-cols-2 gap-3 text-xs">
                             {[
                                 { key: 'q1', label: 'Q1 (Jan - Mar)' },
@@ -87,7 +68,7 @@ export const SettingsModal = ({
                                 { key: 'q4', label: 'Q4 (Oct - Dec)' },
                             ].map(({ key, label }) => (
                                 <div key={key}>
-                                    <label className="block text-xs font-medium mb-1">{label}</label>
+                                    <label className="mb-1 block text-xs font-medium">{label}</label>
                                     <Select
                                         value={String(gstPayMonths[key as keyof typeof gstPayMonths])}
                                         onValueChange={(value) =>
@@ -102,10 +83,7 @@ export const SettingsModal = ({
                                         </SelectTrigger>
                                         <SelectContent>
                                             {monthOptions.map((option) => (
-                                                <SelectItem
-                                                    key={`gst-${key}-${option.value}`}
-                                                    value={String(option.value)}
-                                                >
+                                                <SelectItem key={`gst-${key}-${option.value}`} value={String(option.value)}>
                                                     {option.label}
                                                 </SelectItem>
                                             ))}
@@ -114,9 +92,7 @@ export const SettingsModal = ({
                                 </div>
                             ))}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                            These months determine when each quarter's GST is paid.
-                        </p>
+                        <p className="text-muted-foreground mt-2 text-xs">These months determine when each quarter's GST is paid.</p>
                     </div>
                 </div>
                 <DialogFooter className="pt-2">
@@ -162,7 +138,7 @@ export const GeneralCostsModal = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>General Transactions</DialogTitle>
                 </DialogHeader>
@@ -170,34 +146,23 @@ export const GeneralCostsModal = ({
                     {/* Existing Costs */}
                     {generalCosts.length > 0 && (
                         <div>
-                            <h4 className="text-sm font-medium text-slate-700 mb-3">
-                                Active Transactions
-                            </h4>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                            <h4 className="mb-3 text-sm font-medium text-slate-700">Active Transactions</h4>
+                            <div className="max-h-48 space-y-2 overflow-y-auto">
                                 {generalCosts.map((cost) => (
-                                    <div
-                                        key={cost.id}
-                                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
-                                    >
+                                    <div key={cost.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                                         <div>
-                                            <div className="font-medium text-slate-800 flex items-center gap-2">
+                                            <div className="flex items-center gap-2 font-medium text-slate-800">
                                                 {cost.name}
                                                 <Badge
-                                                    variant={
-                                                        cost.flow_type === 'cash_in'
-                                                            ? 'secondary'
-                                                            : 'outline'
-                                                    }
-                                                    className="text-[10px] uppercase tracking-wide"
+                                                    variant={cost.flow_type === 'cash_in' ? 'secondary' : 'outline'}
+                                                    className="text-[10px] tracking-wide uppercase"
                                                 >
                                                     {cost.flow_type === 'cash_in' ? 'In' : 'Out'}
                                                 </Badge>
                                             </div>
                                             <div className="text-xs text-slate-500">
                                                 ${cost.amount.toLocaleString()}{' '}
-                                                {cost.type === 'recurring'
-                                                    ? `/ ${frequencies[cost.frequency ?? 'monthly']}`
-                                                    : '(one-off)'}
+                                                {cost.type === 'recurring' ? `/ ${frequencies[cost.frequency ?? 'monthly']}` : '(one-off)'}
                                                 {cost.category && ` • ${categories[cost.category]}`}
                                             </div>
                                         </div>
@@ -207,7 +172,7 @@ export const GeneralCostsModal = ({
                                             onClick={() => handleDelete(cost.id)}
                                             className="text-destructive hover:text-destructive"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 ))}
@@ -217,31 +182,21 @@ export const GeneralCostsModal = ({
 
                     {/* Add New Cost */}
                     <div className="border-t border-slate-200 pt-4">
-                        <h4 className="text-sm font-medium text-slate-700 mb-3">
-                            Add New Transaction
-                        </h4>
+                        <h4 className="mb-3 text-sm font-medium text-slate-700">Add New Transaction</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Name *
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Name *</label>
                                 <Input
                                     type="text"
                                     value={newCost.name ?? ''}
-                                    onChange={(e) =>
-                                        onNewCostChange({ ...newCost, name: e.target.value })
-                                    }
+                                    onChange={(e) => onNewCostChange({ ...newCost, name: e.target.value })}
                                     placeholder="e.g., Office Rent"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Amount *
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Amount *</label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-                                        $
-                                    </span>
+                                    <span className="absolute top-1/2 left-3 -translate-y-1/2 text-sm text-slate-500">$</span>
                                     <Input
                                         type="number"
                                         value={newCost.amount ?? ''}
@@ -257,9 +212,7 @@ export const GeneralCostsModal = ({
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Type
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Type</label>
                                 <Select
                                     value={newCost.type ?? 'recurring'}
                                     onValueChange={(value) =>
@@ -279,9 +232,7 @@ export const GeneralCostsModal = ({
                                 </Select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Cash Flow
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Cash Flow</label>
                                 <Select
                                     value={newCost.flow_type ?? 'cash_out'}
                                     onValueChange={(value) =>
@@ -302,14 +253,10 @@ export const GeneralCostsModal = ({
                             </div>
                             {newCost.type === 'recurring' && (
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Frequency
-                                    </label>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
                                     <Select
                                         value={newCost.frequency ?? 'monthly'}
-                                        onValueChange={(value) =>
-                                            onNewCostChange({ ...newCost, frequency: value })
-                                        }
+                                        onValueChange={(value) => onNewCostChange({ ...newCost, frequency: value })}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select frequency" />
@@ -325,9 +272,7 @@ export const GeneralCostsModal = ({
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Category
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Category</label>
                                 <Select
                                     value={newCost.category ?? 'none'}
                                     onValueChange={(value) =>
@@ -351,48 +296,33 @@ export const GeneralCostsModal = ({
                                 </Select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                    Start Date *
-                                </label>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Start Date *</label>
                                 <Input
                                     type="date"
                                     value={newCost.start_date ?? ''}
-                                    onChange={(e) =>
-                                        onNewCostChange({ ...newCost, start_date: e.target.value })
-                                    }
+                                    onChange={(e) => onNewCostChange({ ...newCost, start_date: e.target.value })}
                                 />
                             </div>
                             {newCost.type === 'recurring' && (
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        End Date
-                                    </label>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">End Date</label>
                                     <Input
                                         type="date"
                                         value={newCost.end_date ?? ''}
-                                        onChange={(e) =>
-                                            onNewCostChange({ ...newCost, end_date: e.target.value })
-                                        }
+                                        onChange={(e) => onNewCostChange({ ...newCost, end_date: e.target.value })}
                                     />
                                 </div>
                             )}
                             <div className="col-span-2 flex items-center gap-2">
                                 <Checkbox
                                     checked={newCost.includes_gst ?? true}
-                                    onCheckedChange={(checked) =>
-                                        onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })
-                                    }
+                                    onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
                                 />
-                                <span className="text-sm text-muted-foreground">
-                                    Amount includes GST
-                                </span>
+                                <span className="text-muted-foreground text-sm">Amount includes GST</span>
                             </div>
                         </div>
-                        <div className="flex justify-end mt-4">
-                            <Button
-                                onClick={onAdd}
-                                disabled={!newCost.name || !newCost.amount || !newCost.start_date}
-                            >
+                        <div className="mt-4 flex justify-end">
+                            <Button onClick={onAdd} disabled={!newCost.name || !newCost.amount || !newCost.start_date}>
                                 Add Transaction
                             </Button>
                         </div>
@@ -420,16 +350,8 @@ type SplitRowProps = {
     monthLabel?: string;
 };
 
-const SplitRow = ({
-    monthValue,
-    amount,
-    monthOptions,
-    onMonthChange,
-    onAmountChange,
-    onRemove,
-    monthLabel = 'Month',
-}: SplitRowProps) => (
-    <div className="grid grid-cols-12 gap-2 px-3 py-2 border-t border-slate-100">
+const SplitRow = ({ monthValue, amount, monthOptions, onMonthChange, onAmountChange, onRemove, monthLabel = 'Month' }: SplitRowProps) => (
+    <div className="grid grid-cols-12 gap-2 border-t border-slate-100 px-3 py-2">
         <div className="col-span-5">
             <Select value={monthValue} onValueChange={onMonthChange}>
                 <SelectTrigger className="h-9 text-sm">
@@ -446,15 +368,8 @@ const SplitRow = ({
         </div>
         <div className="col-span-5">
             <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
-                    $
-                </span>
-                <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)}
-                    className="h-9 pl-5 text-sm"
-                />
+                <span className="absolute top-1/2 left-2 -translate-y-1/2 text-xs text-slate-400">$</span>
+                <Input type="number" value={amount} onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)} className="h-9 pl-5 text-sm" />
             </div>
         </div>
         <div className="col-span-2 flex items-center justify-end">
@@ -515,9 +430,7 @@ export const CashInAdjustmentModal = ({
                     <div className="space-y-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">
-                                    Billing Month
-                                </label>
+                                <label className="mb-1 block text-xs font-medium">Billing Month</label>
                                 <Select value={sourceMonth ?? ''} onValueChange={onSourceMonthChange}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select month" />
@@ -532,25 +445,21 @@ export const CashInAdjustmentModal = ({
                                 </Select>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">
-                                    Billed Amount
-                                </label>
-                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                <label className="mb-1 block text-xs font-medium">Billed Amount</label>
+                                <div className="border-border bg-muted text-foreground rounded-lg border px-3 py-2 text-sm">
                                     ${formatAmount(sourceAmount)}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
+                        <div className="overflow-hidden rounded-xl border border-slate-200">
+                            <div className="grid grid-cols-12 gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
                                 <div className="col-span-5">Receipt Month</div>
                                 <div className="col-span-5">Amount</div>
                                 <div className="col-span-2 text-right">Action</div>
                             </div>
                             {splits.length === 0 && (
-                                <div className="px-3 py-3 text-sm text-slate-500">
-                                    No adjustments saved. Add a split to move receipts.
-                                </div>
+                                <div className="px-3 py-3 text-sm text-slate-500">No adjustments saved. Add a split to move receipts.</div>
                             )}
                             {splits.map((split, index) => (
                                 <SplitRow
@@ -559,9 +468,7 @@ export const CashInAdjustmentModal = ({
                                     monthValue={split.receipt_month}
                                     amount={split.amount}
                                     monthOptions={monthOptions}
-                                    onMonthChange={(value) =>
-                                        onSplitChange(index, { receipt_month: value })
-                                    }
+                                    onMonthChange={(value) => onSplitChange(index, { receipt_month: value })}
                                     onAmountChange={(value) => onSplitChange(index, { amount: value })}
                                     onRemove={() => onRemoveSplit(index)}
                                     monthLabel="Receipt Month"
@@ -573,37 +480,17 @@ export const CashInAdjustmentModal = ({
                             <Button type="button" variant="outline" size="sm" onClick={onAddSplit}>
                                 Add Split
                             </Button>
-                            <div className="h-4 w-px bg-border" />
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(0)}
-                            >
+                            <div className="bg-border h-4 w-px" />
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(0)}>
                                 Same Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(1)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(1)}>
                                 +1 Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(2)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(2)}>
                                 +2 Months
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(3)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(3)}>
                                 +3 Months
                             </Button>
                         </div>
@@ -613,13 +500,9 @@ export const CashInAdjustmentModal = ({
                                 Total split: ${formatAmount(splitTotal)} / ${formatAmount(sourceAmount)}
                             </div>
                             {isOverBudget ? (
-                                <span className="text-red-600 font-medium">
-                                    Split exceeds billed amount
-                                </span>
+                                <span className="font-medium text-red-600">Split exceeds billed amount</span>
                             ) : (
-                                <span className="text-emerald-600 font-medium">
-                                    Remaining: ${formatAmount(sourceAmount - splitTotal)}
-                                </span>
+                                <span className="font-medium text-emerald-600">Remaining: ${formatAmount(sourceAmount - splitTotal)}</span>
                             )}
                         </div>
 
@@ -686,22 +569,19 @@ export const CashOutAdjustmentModal = ({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>
-                        Adjust Cash Out{jobNumber ? ` — ${jobNumber}` : ''}
-                    </DialogTitle>
+                    <DialogTitle>Adjust Cash Out{jobNumber ? ` — ${jobNumber}` : ''}</DialogTitle>
                 </DialogHeader>
                 {jobNumber && costItem && vendor && (
                     <div className="space-y-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">Cost Item</label>
-                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
-                                    {costItem} · {vendor} ·{' '}
-                                    {jobNumber === 'ALL' ? 'All Jobs' : jobNumber}
+                                <label className="mb-1 block text-xs font-medium">Cost Item</label>
+                                <div className="border-border bg-muted text-foreground rounded-lg border px-3 py-2 text-sm">
+                                    {costItem} · {vendor} · {jobNumber === 'ALL' ? 'All Jobs' : jobNumber}
                                 </div>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">Source Month</label>
+                                <label className="mb-1 block text-xs font-medium">Source Month</label>
                                 <Select value={sourceMonth ?? ''} onValueChange={onSourceMonthChange}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select month" />
@@ -716,23 +596,21 @@ export const CashOutAdjustmentModal = ({
                                 </Select>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">Source Amount</label>
-                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                <label className="mb-1 block text-xs font-medium">Source Amount</label>
+                                <div className="border-border bg-muted text-foreground rounded-lg border px-3 py-2 text-sm">
                                     ${formatAmount(sourceAmount)}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
+                        <div className="overflow-hidden rounded-xl border border-slate-200">
+                            <div className="grid grid-cols-12 gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
                                 <div className="col-span-5">Payment Month</div>
                                 <div className="col-span-5">Amount</div>
                                 <div className="col-span-2 text-right">Action</div>
                             </div>
                             {splits.length === 0 && (
-                                <div className="px-3 py-3 text-sm text-slate-500">
-                                    No adjustments saved. Add a split to move payments.
-                                </div>
+                                <div className="px-3 py-3 text-sm text-slate-500">No adjustments saved. Add a split to move payments.</div>
                             )}
                             {splits.map((split, index) => (
                                 <SplitRow
@@ -741,9 +619,7 @@ export const CashOutAdjustmentModal = ({
                                     monthValue={split.payment_month}
                                     amount={split.amount}
                                     monthOptions={monthOptions}
-                                    onMonthChange={(value) =>
-                                        onSplitChange(index, { payment_month: value })
-                                    }
+                                    onMonthChange={(value) => onSplitChange(index, { payment_month: value })}
                                     onAmountChange={(value) => onSplitChange(index, { amount: value })}
                                     onRemove={() => onRemoveSplit(index)}
                                     monthLabel="Payment Month"
@@ -755,29 +631,14 @@ export const CashOutAdjustmentModal = ({
                             <Button type="button" variant="outline" size="sm" onClick={onAddSplit}>
                                 Add Split
                             </Button>
-                            <div className="h-4 w-px bg-border" />
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(0)}
-                            >
+                            <div className="bg-border h-4 w-px" />
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(0)}>
                                 Same Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(1)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(1)}>
                                 +1 Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(2)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(2)}>
                                 +2 Months
                             </Button>
                         </div>
@@ -787,13 +648,9 @@ export const CashOutAdjustmentModal = ({
                                 Total split: ${formatAmount(splitTotal)} / ${formatAmount(sourceAmount)}
                             </div>
                             {isOverBudget ? (
-                                <span className="text-red-600 font-medium">
-                                    Split exceeds source amount
-                                </span>
+                                <span className="font-medium text-red-600">Split exceeds source amount</span>
                             ) : (
-                                <span className="text-emerald-600 font-medium">
-                                    Remaining: ${formatAmount(sourceAmount - splitTotal)}
-                                </span>
+                                <span className="font-medium text-emerald-600">Remaining: ${formatAmount(sourceAmount - splitTotal)}</span>
                             )}
                         </div>
 
@@ -856,18 +713,16 @@ export const VendorPaymentDelayModal = ({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>
-                        Delay Vendor Payments{vendor ? ` — ${vendor}` : ''}
-                    </DialogTitle>
+                    <DialogTitle>Delay Vendor Payments{vendor ? ` — ${vendor}` : ''}</DialogTitle>
                 </DialogHeader>
                 {vendor && (
                     <div className="space-y-5">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Delay all payments for this vendor from a source month to different payment months.
                         </p>
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">Source Month</label>
+                                <label className="mb-1 block text-xs font-medium">Source Month</label>
                                 <Select value={sourceMonth ?? ''} onValueChange={onSourceMonthChange}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select month" />
@@ -882,23 +737,21 @@ export const VendorPaymentDelayModal = ({
                                 </Select>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs font-medium mb-1">Total Amount</label>
-                                <div className="px-3 py-2 text-sm border border-border rounded-lg bg-muted text-foreground">
+                                <label className="mb-1 block text-xs font-medium">Total Amount</label>
+                                <div className="border-border bg-muted text-foreground rounded-lg border px-3 py-2 text-sm">
                                     ${formatAmount(sourceAmount)}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-xl border border-border overflow-hidden">
-                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted">
+                        <div className="border-border overflow-hidden rounded-xl border">
+                            <div className="text-muted-foreground bg-muted grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold">
                                 <div className="col-span-5">Payment Month</div>
                                 <div className="col-span-5">Amount</div>
                                 <div className="col-span-2 text-right">Action</div>
                             </div>
                             {splits.length === 0 && (
-                                <div className="px-3 py-3 text-sm text-muted-foreground">
-                                    No delays configured. Add a split to delay payments.
-                                </div>
+                                <div className="text-muted-foreground px-3 py-3 text-sm">No delays configured. Add a split to delay payments.</div>
                             )}
                             {splits.map((split, index) => (
                                 <SplitRow
@@ -907,9 +760,7 @@ export const VendorPaymentDelayModal = ({
                                     monthValue={split.payment_month}
                                     amount={split.amount}
                                     monthOptions={monthOptions}
-                                    onMonthChange={(value) =>
-                                        onSplitChange(index, { payment_month: value })
-                                    }
+                                    onMonthChange={(value) => onSplitChange(index, { payment_month: value })}
                                     onAmountChange={(value) => onSplitChange(index, { amount: value })}
                                     onRemove={() => onRemoveSplit(index)}
                                     monthLabel="Payment Month"
@@ -921,53 +772,29 @@ export const VendorPaymentDelayModal = ({
                             <Button type="button" variant="outline" size="sm" onClick={onAddSplit}>
                                 Add Split
                             </Button>
-                            <div className="h-4 w-px bg-border" />
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(0)}
-                            >
+                            <div className="bg-border h-4 w-px" />
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(0)}>
                                 Same Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(1)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(1)}>
                                 +1 Month
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(2)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(2)}>
                                 +2 Months
                             </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onSetSingleSplit(3)}
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(3)}>
                                 +3 Months
                             </Button>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="text-muted-foreground flex items-center justify-between text-xs">
                             <div>
                                 Total split: ${formatAmount(splitTotal)} / ${formatAmount(sourceAmount)}
                             </div>
                             {isOverBudget ? (
-                                <span className="text-destructive font-medium">
-                                    Split exceeds source amount
-                                </span>
+                                <span className="text-destructive font-medium">Split exceeds source amount</span>
                             ) : (
-                                <span className="text-emerald-600 font-medium">
-                                    Remaining: ${formatAmount(sourceAmount - splitTotal)}
-                                </span>
+                                <span className="font-medium text-emerald-600">Remaining: ${formatAmount(sourceAmount - splitTotal)}</span>
                             )}
                         </div>
 
@@ -994,14 +821,9 @@ type FullscreenChartModalProps = {
     children: React.ReactNode;
 };
 
-export const FullscreenChartModal = ({
-    open,
-    onOpenChange,
-    title,
-    children,
-}: FullscreenChartModalProps) => (
+export const FullscreenChartModal = ({ open, onOpenChange, title, children }: FullscreenChartModalProps) => (
     <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh]">
+        <DialogContent className="max-h-[95vh] max-w-[95vw]">
             <DialogHeader>
                 <DialogTitle>{title}</DialogTitle>
             </DialogHeader>
@@ -1009,3 +831,260 @@ export const FullscreenChartModal = ({
         </DialogContent>
     </Dialog>
 );
+
+// GST Breakdown Modal
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Download } from 'lucide-react';
+import { useState } from 'react';
+import * as XLSX from 'xlsx';
+import type { GstQuarterBreakdown, GstTransaction } from '../types';
+
+type GstBreakdownModalProps = {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    gstBreakdown: GstQuarterBreakdown[];
+};
+
+const GstTransactionTable = ({ transactions, type }: { transactions: GstTransaction[]; type: 'collected' | 'paid' }) => {
+    if (transactions.length === 0) {
+        return <div className="text-muted-foreground py-4 text-center text-sm">No GST {type} transactions in this quarter</div>;
+    }
+
+    // Group transactions by month for better readability
+    const groupedByMonth = transactions.reduce(
+        (acc, t) => {
+            if (!acc[t.month]) {
+                acc[t.month] = [];
+            }
+            acc[t.month].push(t);
+            return acc;
+        },
+        {} as Record<string, GstTransaction[]>,
+    );
+
+    return (
+        <div className="space-y-4">
+            {Object.entries(groupedByMonth).map(([month, monthTransactions]) => (
+                <div key={month}>
+                    <div className="text-muted-foreground bg-background sticky top-0 mb-2 py-1 text-xs font-medium">{formatMonthHeader(month)}</div>
+                    <table className="w-full table-fixed text-xs">
+                        <thead>
+                            <tr className="text-muted-foreground border-b text-left">
+                                {type === 'collected' ? (
+                                    <th className="w-[40%] pb-2 font-medium">Job</th>
+                                ) : (
+                                    <>
+                                        <th className="w-[30%] pb-2 font-medium">Vendor</th>
+                                        <th className="w-[25%] pb-2 font-medium">Cost Item</th>
+                                    </>
+                                )}
+                                <th className="w-[18%] pb-2 text-right font-medium">Gross</th>
+                                <th className="w-[15%] pb-2 text-right font-medium">GST</th>
+                                <th className="w-[12%] pb-2 text-center font-medium">Source</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {monthTransactions.map((t, idx) => (
+                                <tr key={idx} className="border-border/50 hover:bg-muted/50 border-b">
+                                    {type === 'collected' ? (
+                                        <td className="truncate py-1.5">{t.job_number || '-'}</td>
+                                    ) : (
+                                        <>
+                                            <td className="truncate py-1.5" title={t.vendor || 'N/A'}>
+                                                {t.vendor || 'N/A'}
+                                            </td>
+                                            <td className="truncate py-1.5" title={t.cost_item_description || t.cost_item || ''}>
+                                                <span className="font-mono">{t.cost_item}</span>
+                                            </td>
+                                        </>
+                                    )}
+                                    <td className="py-1.5 text-right tabular-nums">${formatAmount(t.gross_amount)}</td>
+                                    <td className="py-1.5 text-right font-medium tabular-nums">${formatAmount(t.gst_amount)}</td>
+                                    <td className="py-1.5 text-center">
+                                        <Badge variant={t.source === 'actual' ? 'default' : 'secondary'} className="text-[10px]">
+                                            {t.source}
+                                        </Badge>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreakdownModalProps) => {
+    const [selectedQuarter, setSelectedQuarter] = useState(gstBreakdown[0]?.quarter || '');
+
+    const exportToExcel = (quarter: GstQuarterBreakdown) => {
+        const wb = XLSX.utils.book_new();
+
+        // GST Collected Sheet
+        const collectedData = [
+            ['GST COLLECTED (Revenue)'],
+            ['Quarter:', quarter.quarter_label],
+            [''],
+            ['Month', 'Job Number', 'Gross Amount', 'GST Amount', 'Source'],
+            ...quarter.collected.transactions.map((t) => [
+                formatMonthHeader(t.month),
+                t.job_number || '-',
+                t.gross_amount,
+                t.gst_amount,
+                t.source,
+            ]),
+            [''],
+            ['', 'SUBTOTAL', quarter.collected.transactions.reduce((sum, t) => sum + t.gross_amount, 0), quarter.collected.total, ''],
+        ];
+        const wsCollected = XLSX.utils.aoa_to_sheet(collectedData);
+        // Set column widths
+        wsCollected['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsCollected, 'GST Collected');
+
+        // GST Paid Sheet
+        const paidData = [
+            ['GST PAID (Costs)'],
+            ['Quarter:', quarter.quarter_label],
+            [''],
+            ['Month', 'Vendor', 'Cost Item', 'Description', 'Gross Amount', 'GST Amount', 'Source'],
+            ...quarter.paid.transactions.map((t) => [
+                formatMonthHeader(t.month),
+                t.vendor || 'N/A',
+                t.cost_item || '-',
+                t.cost_item_description || '',
+                t.gross_amount,
+                t.gst_amount,
+                t.source,
+            ]),
+            [''],
+            ['', '', '', 'SUBTOTAL', quarter.paid.transactions.reduce((sum, t) => sum + t.gross_amount, 0), quarter.paid.total, ''],
+        ];
+        const wsPaid = XLSX.utils.aoa_to_sheet(paidData);
+        wsPaid['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsPaid, 'GST Paid');
+
+        // Summary Sheet
+        const summaryData = [
+            ['GST SUMMARY'],
+            ['Quarter:', quarter.quarter_label],
+            ['Due Date:', formatMonthHeader(quarter.pay_month)],
+            [''],
+            ['Description', 'Amount'],
+            ['GST Collected (Revenue)', quarter.collected.total],
+            ['GST Paid (Costs)', quarter.paid.total],
+            [''],
+            [quarter.net >= 0 ? 'Net GST Payable' : 'Net GST Refund', Math.abs(quarter.net)],
+        ];
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+        wsSummary['!cols'] = [{ wch: 25 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+        // Download
+        XLSX.writeFile(wb, `GST_Breakdown_${quarter.quarter_label.replace(' ', '_')}.xlsx`);
+    };
+
+    if (gstBreakdown.length === 0) {
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>GST Breakdown</DialogTitle>
+                    </DialogHeader>
+                    <div className="text-muted-foreground py-8 text-center">No GST data available for the forecast period</div>
+                </DialogContent>
+            </Dialog>
+        );
+    }
+
+    const currentQuarter = gstBreakdown.find((q) => q.quarter === selectedQuarter) || gstBreakdown[0];
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-none">
+                <DialogHeader className="flex flex-row items-center justify-between">
+                    <DialogTitle>GST Breakdown by Quarter</DialogTitle>
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => exportToExcel(currentQuarter)}>
+                        <Download className="h-4 w-4" />
+                        Export to Excel
+                    </Button>
+                </DialogHeader>
+                <Tabs value={selectedQuarter} onValueChange={setSelectedQuarter} className="w-full">
+                    <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
+                        {gstBreakdown.map((q) => (
+                            <TabsTrigger key={q.quarter} value={q.quarter} className="text-xs whitespace-nowrap">
+                                {q.quarter_label}
+                                <span className={`ml-2 text-[10px] ${q.net >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {q.net >= 0 ? 'Payable' : 'Refund'}
+                                </span>
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                    {gstBreakdown.map((q) => (
+                        <TabsContent key={q.quarter} value={q.quarter} className="mt-4">
+                            {/* Summary */}
+                            <div className="mb-6 grid grid-cols-3 gap-4">
+                                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
+                                    <div className="text-xs font-medium text-green-600 dark:text-green-400">GST Collected (Revenue)</div>
+                                    <div className="text-lg font-bold text-green-700 tabular-nums dark:text-green-300">
+                                        ${formatAmount(q.collected.total)}
+                                    </div>
+                                    <div className="text-muted-foreground text-[10px]">{q.collected.transactions.length} transactions</div>
+                                </div>
+                                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/30">
+                                    <div className="text-xs font-medium text-blue-600 dark:text-blue-400">GST Paid (Costs)</div>
+                                    <div className="text-lg font-bold text-blue-700 tabular-nums dark:text-blue-300">
+                                        ${formatAmount(q.paid.total)}
+                                    </div>
+                                    <div className="text-muted-foreground text-[10px]">{q.paid.transactions.length} transactions</div>
+                                </div>
+                                <div
+                                    className={`rounded-lg p-3 ${
+                                        q.net >= 0 ? 'bg-red-50 dark:bg-red-950/30' : 'bg-emerald-50 dark:bg-emerald-950/30'
+                                    }`}
+                                >
+                                    <div
+                                        className={`text-xs font-medium ${
+                                            q.net >= 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+                                        }`}
+                                    >
+                                        Net GST {q.net >= 0 ? 'Payable' : 'Refund'}
+                                    </div>
+                                    <div
+                                        className={`text-lg font-bold tabular-nums ${
+                                            q.net >= 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'
+                                        }`}
+                                    >
+                                        ${formatAmount(Math.abs(q.net))}
+                                    </div>
+                                    <div className="text-muted-foreground text-[10px]">Due: {formatMonthHeader(q.pay_month)}</div>
+                                </div>
+                            </div>
+
+                            {/* Transaction Details */}
+                            <div className="grid grid-cols-2 gap-8">
+                                <div className="min-w-0">
+                                    <h4 className="mb-3 text-sm font-semibold text-green-700 dark:text-green-400">GST Collected (from Revenue)</h4>
+                                    <ScrollArea className="h-[350px] rounded-lg border p-3">
+                                        <div className="min-w-full">
+                                            <GstTransactionTable transactions={q.collected.transactions} type="collected" />
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+                                <div className="min-w-0">
+                                    <h4 className="mb-3 text-sm font-semibold text-blue-700 dark:text-blue-400">GST Paid (on Costs)</h4>
+                                    <ScrollArea className="h-[350px] rounded-lg border p-3">
+                                        <div className="min-w-full">
+                                            <GstTransactionTable transactions={q.paid.transactions} type="paid" />
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    ))}
+                </Tabs>
+            </DialogContent>
+        </Dialog>
+    );
+};

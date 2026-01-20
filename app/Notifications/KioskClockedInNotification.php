@@ -35,14 +35,9 @@ class KioskClockedInNotification extends Notification implements ShouldQueue
         $channels = ['mail', 'database'];
 
         // Add WebPush channel if user has push subscriptions
-        $hasPushSubscriptions = $notifiable->pushSubscriptions()->exists();
-        \Log::info("KioskClockedInNotification via() - User {$notifiable->id} has push subscriptions: " . ($hasPushSubscriptions ? 'yes' : 'no'));
-
-        if ($hasPushSubscriptions) {
+        if ($notifiable->pushSubscriptions()->exists()) {
             $channels[] = WebPushChannel::class;
         }
-
-        \Log::info("KioskClockedInNotification channels: " . implode(', ', array_map(fn($c) => is_string($c) ? $c : class_basename($c), $channels)));
 
         return $channels;
     }

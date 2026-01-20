@@ -18,5 +18,6 @@ export {
     CashOutAdjustmentModal,
     VendorPaymentDelayModal,
     FullscreenChartModal,
+    GstBreakdownModal,
 } from './modals';
 export { PaymentRulesLegend } from './payment-rules';

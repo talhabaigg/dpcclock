@@ -131,6 +131,7 @@ export type CashForecastProps = {
     cashOutAdjustments: CashOutAdjustment[];
     vendorPaymentDelays: VendorPaymentDelay[];
     costTypeByCostItem: Record<string, string | null>;
+    gstBreakdown: GstQuarterBreakdown[];
 };
 
 export type VendorDelayModalState = {
@@ -202,5 +203,32 @@ export type CashOutModalState = {
 export type CashFlowTotals = {
     cashIn: number;
     cashOut: number;
+    net: number;
+};
+
+// GST Breakdown types
+export type GstTransaction = {
+    month: string;
+    job_number: string | null;
+    vendor: string | null;
+    cost_item: string | null;
+    cost_item_description: string | null;
+    gross_amount: number;
+    gst_amount: number;
+    source: 'actual' | 'forecast';
+};
+
+export type GstQuarterBreakdown = {
+    quarter: string;
+    quarter_label: string;
+    pay_month: string;
+    collected: {
+        total: number;
+        transactions: GstTransaction[];
+    };
+    paid: {
+        total: number;
+        transactions: GstTransaction[];
+    };
     net: number;
 };

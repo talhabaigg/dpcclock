@@ -78,11 +78,21 @@ class CashForecastController extends Controller
 
         $transformedRows = $this->applyRules($combinedData, $rules);
 
-        // Add general costs
+        // Add general costs for the forecast display
         $generalCostRows = $this->getGeneralCostRows($allMonths);
         $transformedRows = $transformedRows->concat($generalCostRows);
 
         $gstPayableRows = $this->calculateQuarterlyGstPayable($transformedRows, $rules);
+
+        // For GST breakdown, include historical general costs to capture past quarters
+        $historicalGeneralCostRows = $this->getGeneralCostRows($allMonths, true);
+        $rowsForGstBreakdown = $transformedRows->concat(
+            // Add historical general costs that aren't already in transformedRows
+            $historicalGeneralCostRows->filter(function ($row) use ($allMonths) {
+                return !in_array($row->month, $allMonths);
+            })
+        );
+        $gstBreakdown = $this->calculateGstBreakdown($rowsForGstBreakdown, $rules, $costCodeDescriptions);
 
         $allMonthsWithCostSummary = $this->buildMonthHierarchy(
             $allMonths,
@@ -120,6 +130,7 @@ class CashForecastController extends Controller
             'cashOutSources' => $cashOutSources,
             'cashOutAdjustments' => $cashOutAdjustments['list'],
             'vendorPaymentDelays' => $vendorPaymentDelays,
+            'gstBreakdown' => $gstBreakdown,
         ]);
     }
 
@@ -490,7 +501,7 @@ class CashForecastController extends Controller
     /**
      * Get general cost rows for the forecast period.
      */
-    private function getGeneralCostRows(array $months): \Illuminate\Support\Collection
+    private function getGeneralCostRows(array $months, bool $includeHistorical = false): \Illuminate\Support\Collection
     {
         $generalCosts = CashForecastGeneralCost::where('is_active', true)->get();
         $rows = collect();
@@ -499,13 +510,29 @@ class CashForecastController extends Controller
             return $rows;
         }
 
-        $startMonth = Carbon::createFromFormat('Y-m', $months[0])->startOfMonth();
+        $currentMonth = Carbon::now()->format('Y-m');
+
+        // For GST calculation, include historical months going back to start of fiscal year (Jul 1)
+        // This ensures we capture all quarters for the current financial year
+        if ($includeHistorical) {
+            $now = Carbon::now();
+            // Go back to start of current financial year (Jul 1)
+            $fyStart = $now->month >= 7
+                ? Carbon::create($now->year, 7, 1)
+                : Carbon::create($now->year - 1, 7, 1);
+            $startMonth = $fyStart->copy()->startOfMonth();
+        } else {
+            $startMonth = Carbon::createFromFormat('Y-m', $months[0])->startOfMonth();
+        }
         $endMonth = Carbon::createFromFormat('Y-m', end($months))->endOfMonth();
 
         foreach ($generalCosts as $cost) {
             $cashflows = $cost->getCashflowsForRange($startMonth, $endMonth);
 
             foreach ($cashflows as $month => $amount) {
+                // Determine source based on whether month is in the past
+                $source = $month < $currentMonth ? 'actual' : 'forecast';
+
                 $rows->push((object) [
                     'month' => $month,
                     'source_month' => $month,
@@ -516,6 +543,7 @@ class CashForecastController extends Controller
                     'gst_rate' => $cost->includes_gst ? 0.10 : 0,
                     'is_general_cost' => true,
                     'flow_type' => $cost->flow_type ?? 'cash_out',
+                    'source' => $source,
                 ]);
             }
         }
@@ -1271,6 +1299,99 @@ class CashForecastController extends Controller
         }
 
         return $grossAmount - ($grossAmount / (1 + $rate));
+    }
+
+    /**
+     * Calculate detailed GST breakdown for each quarter.
+     * Returns transaction-level details for GST collected and paid.
+     */
+    private function calculateGstBreakdown($forecastRows, array $rules, array $costCodeDescriptions): array
+    {
+        $cashInCode = $rules['cash_in_code'] ?? '99-99';
+        $payMonths = $rules['gst_pay_months'] ?? [];
+
+        // Collect detailed GST transactions grouped by quarter
+        $quarterDetails = [];
+
+        foreach ($forecastRows as $row) {
+            $gstRate = $row->gst_rate ?? 0;
+
+            if ($gstRate <= 0) {
+                continue;
+            }
+
+            $gstAmount = $this->extractGstFromGross((float) $row->forecast_amount, (float) $gstRate);
+            $monthKey = $row->source_month ?? $row->month;
+            $date = Carbon::createFromFormat('Y-m', $monthKey);
+            $quarterKey = $date->year . '-Q' . $date->quarter;
+
+            if (!isset($quarterDetails[$quarterKey])) {
+                $quarter = $date->quarter;
+                $quarterEndMonth = $quarter * 3;
+                $payMonth = (int) ($payMonths[$quarter] ?? ($quarterEndMonth + 1));
+                if ($payMonth > 12) {
+                    $payMonth -= 12;
+                }
+                $payYear = $date->year;
+                if ($payMonth <= $quarterEndMonth) {
+                    $payYear += 1;
+                }
+
+                $quarterDetails[$quarterKey] = [
+                    'quarter' => $quarterKey,
+                    'quarter_label' => 'Q' . $quarter . ' ' . $date->year,
+                    'pay_month' => Carbon::create($payYear, $payMonth, 1)->format('Y-m'),
+                    'collected' => [
+                        'total' => 0.0,
+                        'transactions' => [],
+                    ],
+                    'paid' => [
+                        'total' => 0.0,
+                        'transactions' => [],
+                    ],
+                    'net' => 0.0,
+                ];
+            }
+
+            $transaction = [
+                'month' => $monthKey,
+                'job_number' => $row->job_number ?? null,
+                'vendor' => $row->vendor ?? null,
+                'cost_item' => $row->cost_item ?? null,
+                'cost_item_description' => $costCodeDescriptions[$row->cost_item] ?? null,
+                'gross_amount' => (float) $row->forecast_amount,
+                'gst_amount' => round($gstAmount, 2),
+                'source' => $row->source ?? 'forecast',
+            ];
+
+            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode) {
+                $quarterDetails[$quarterKey]['collected']['total'] += $gstAmount;
+                $quarterDetails[$quarterKey]['collected']['transactions'][] = $transaction;
+            } else {
+                $quarterDetails[$quarterKey]['paid']['total'] += $gstAmount;
+                $quarterDetails[$quarterKey]['paid']['transactions'][] = $transaction;
+            }
+        }
+
+        // Calculate net and round totals
+        foreach ($quarterDetails as &$quarter) {
+            $quarter['collected']['total'] = round($quarter['collected']['total'], 2);
+            $quarter['paid']['total'] = round($quarter['paid']['total'], 2);
+            $quarter['net'] = round($quarter['collected']['total'] - $quarter['paid']['total'], 2);
+
+            // Sort transactions by month, then job number
+            usort($quarter['collected']['transactions'], fn($a, $b) =>
+                strcmp($a['month'] . ($a['job_number'] ?? ''), $b['month'] . ($b['job_number'] ?? ''))
+            );
+            usort($quarter['paid']['transactions'], fn($a, $b) =>
+                strcmp($a['month'] . ($a['vendor'] ?? '') . ($a['cost_item'] ?? ''), $b['month'] . ($b['vendor'] ?? '') . ($b['cost_item'] ?? ''))
+            );
+        }
+
+        // Sort by quarter key
+        ksort($quarterDetails);
+
+        return array_values($quarterDetails);
     }
 
     private function isPrefixInRange($prefix, $min, $max)

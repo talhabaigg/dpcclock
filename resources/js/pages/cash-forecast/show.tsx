@@ -5,7 +5,7 @@ import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Settings, Maximize2, Clock } from 'lucide-react';
+import { Plus, Settings, Maximize2, Clock, Receipt } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -39,6 +39,7 @@ import {
     VendorPaymentDelayModal,
     FullscreenChartModal,
     PaymentRulesLegend,
+    GstBreakdownModal,
 } from './components';
 
 const ShowCashForecast = ({
@@ -55,6 +56,7 @@ const ShowCashForecast = ({
     cashOutAdjustments,
     vendorPaymentDelays,
     costTypeByCostItem,
+    gstBreakdown,
 }: CashForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
 
@@ -64,6 +66,7 @@ const ShowCashForecast = ({
     const [showSettings, setShowSettings] = useState(false);
     const [showGeneralCosts, setShowGeneralCosts] = useState(false);
     const [showFullscreenChart, setShowFullscreenChart] = useState<'bar' | 'cumulative' | 'waterfall' | null>(null);
+    const [showGstBreakdown, setShowGstBreakdown] = useState(false);
 
     // Settings State
     const [startingBalance, setStartingBalance] = useState(settings.startingBalance);
@@ -352,6 +355,10 @@ const ShowCashForecast = ({
                                 )}
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        <Button onClick={() => setShowGstBreakdown(true)} variant="outline" className="gap-2">
+                            <Receipt className="w-4 h-4" />
+                            GST Breakdown
+                        </Button>
                         <Button onClick={() => setShowGeneralCosts(true)} variant="outline" className="gap-2">
                             <Plus className="w-4 h-4" />
                             General Transactions
@@ -647,6 +654,12 @@ const ShowCashForecast = ({
                 )}
                 {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
             </FullscreenChartModal>
+
+            <GstBreakdownModal
+                open={showGstBreakdown}
+                onOpenChange={setShowGstBreakdown}
+                gstBreakdown={gstBreakdown}
+            />
         </AppLayout>
     );
 };
