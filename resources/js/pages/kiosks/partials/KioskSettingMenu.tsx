@@ -8,10 +8,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 import HourSelector from '@/pages/timesheets/components/hourSelector';
 import MinuteSelector from '@/pages/timesheets/components/minuteSelector';
 import { useForm } from '@inertiajs/react';
-import { Delete, Loader2, Settings } from 'lucide-react';
+import { Settings, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
@@ -26,8 +27,15 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
     const form = useForm<{ pin: string; kioskId: number }>({ pin: '', kioskId });
     const [showProcessing, setShowProcessing] = useState(false);
     void employees; // Used for employee display
+
     const handleNumClick = (num: string) => {
-        if (form.data.pin.length < 4) form.setData('pin', form.data.pin + num);
+        if (num === 'DEL') {
+            form.setData('pin', form.data.pin.slice(0, -1));
+        } else if (num === 'C') {
+            form.setData('pin', '');
+        } else if (form.data.pin.length < 4) {
+            form.setData('pin', form.data.pin + num);
+        }
     };
 
     const handleSubmit = (e?: React.FormEvent) => {
@@ -132,51 +140,61 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
             {/* Admin PIN Dialog (opens AFTER menu closes) */}
             <Dialog open={adminPinDialogOpen} onOpenChange={setAdminPinDialogOpen}>
                 <DialogContent
-                    // Optional: ensure focus goes inside the dialog and not back to a hidden thing
+                    className="max-w-sm sm:max-w-md"
                     onOpenAutoFocus={() => {
-                        // Let Radix do its default, or you can force your own:
-                        // ev.preventDefault();
-                        // firstDialogFocusRef.current?.focus();
+                        firstDialogFocusRef.current?.focus();
                     }}
                 >
-                    <DialogHeader>
-                        <DialogTitle>Enter Admin PIN</DialogTitle>
-                        <DialogDescription>4 digit Admin PIN to switch to Admin Mode.</DialogDescription>
+                    <DialogHeader className="text-center">
+                        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                            <ShieldCheck className="h-6 w-6 text-primary" />
+                        </div>
+                        <DialogTitle className="text-center">Enter Admin PIN</DialogTitle>
+                        <DialogDescription className="text-center">
+                            Enter your 4-digit PIN to switch to Admin Mode
+                        </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex flex-col items-center justify-center">
+                    <div className="flex flex-col items-center justify-center py-4">
                         {showProcessing ? (
-                            <div className="flex flex-col items-center justify-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                    <Loader2 className="animate-spin" />
-                                    <span>Verifying PIN...</span>
+                            <div className="flex flex-col items-center justify-center gap-4 py-8">
+                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                                    <ShieldCheck className="h-8 w-8 animate-pulse text-primary" />
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-base font-semibold text-foreground">Verifying PIN</span>
+                                    <span className="text-sm text-muted-foreground">Please wait...</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <div className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+                                    <div className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+                                    <div className="h-2 w-2 animate-bounce rounded-full bg-primary" />
                                 </div>
                             </div>
                         ) : (
-                            <>
-                                <div className="mb-2 flex items-center space-x-2">
-                                    <PinInputBox pin={form.data.pin} />
-                                    <Button
-                                        className="h-16 w-16 rounded-full"
-                                        variant="ghost"
-                                        size="icon"
-                                        type="button"
-                                        onClick={() => form.setData('pin', '')}
-                                        ref={firstDialogFocusRef}
-                                    >
-                                        <Delete />
-                                    </Button>
-                                </div>
-                                <PinNumpad
-                                    onClick={(key) => {
-                                        if (key === 'C') {
-                                            form.setData('pin', '');
-                                        } else {
-                                            handleNumClick(key);
-                                        }
+                            <div className="flex flex-col items-center gap-6">
+                                {/* PIN Display */}
+                                <PinInputBox pin={form.data.pin} />
+
+                                {/* Numpad */}
+                                <PinNumpad onClick={handleNumClick} />
+
+                                {/* Cancel Button */}
+                                <Button
+                                    variant="ghost"
+                                    className={cn(
+                                        'text-muted-foreground hover:text-foreground',
+                                        'touch-manipulation',
+                                    )}
+                                    onClick={() => {
+                                        setAdminPinDialogOpen(false);
+                                        form.setData('pin', '');
                                     }}
-                                />
-                            </>
+                                    ref={firstDialogFocusRef}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
                         )}
                     </div>
                 </DialogContent>

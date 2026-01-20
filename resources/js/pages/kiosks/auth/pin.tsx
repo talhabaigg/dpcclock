@@ -1,12 +1,16 @@
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useInitials } from '@/hooks/use-initials';
+import { cn } from '@/lib/utils';
 import { Link, useForm, usePage } from '@inertiajs/react';
-import { ChevronLeft, Delete, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
 import ForgotPinLink from './components/forgotPin';
 import PinNumpad from './components/numpad';
 import PinInputBox from './components/pinInputBox';
+
 interface Employee {
     id: number;
     name: string;
@@ -31,109 +35,155 @@ export default function ShowPin() {
         adminMode: boolean;
     }>().props;
 
-    // Use Inertia form state
-    void adminMode; // Used for conditional rendering
+    const getInitials = useInitials();
     const form = useForm({ pin: '' });
     const [showProcessing, setShowProcessing] = useState(false);
     const [showDialog, setShowDialog] = useState(false);
+    const [pinError, setPinError] = useState(false);
+
     const handleNumClick = (num: string) => {
-        if (form.data.pin.length < 4) {
+        if (num === 'DEL') {
+            form.setData('pin', form.data.pin.slice(0, -1));
+            setPinError(false);
+        } else if (num === 'C') {
+            form.setData('pin', '');
+            setPinError(false);
+        } else if (form.data.pin.length < 4) {
             form.setData('pin', form.data.pin + num);
+            setPinError(false);
         }
     };
+
     useEffect(() => {
         if (flash.error) {
-            setShowDialog(true); // Show the dialog when there's an error
+            setShowDialog(true);
+            setPinError(true);
         }
     }, [flash.error]);
-
-    const handleDeletePin = () => {
-        form.setData('pin', form.data.pin.slice(0, -1));
-    };
 
     const handleSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
 
         if (form.data.pin.length === 4) {
-            setShowProcessing(true); // Show the loading dialog
+            setShowProcessing(true);
 
             setTimeout(() => {
                 form.post(route('kiosk.validate-pin', { kioskId: kiosk.id, employeeId: employee.id }), {
-                    onFinish: () => setShowProcessing(false), // Hide processing after request finishes
+                    onFinish: () => setShowProcessing(false),
                 });
-            }, 500); // Delay submission by 2 seconds
+            }, 500);
         }
     };
+
     useEffect(() => {
         if (form.data.pin.length === 4) {
             handleSubmit();
         }
     }, [form.data.pin]);
+
     const [isMobile, setIsMobile] = useState(false);
 
-    // Update isMobile state based on window width
     useEffect(() => {
         const handleResize = () => {
-            setIsMobile(window.innerWidth < 768); // Adjust breakpoint as needed
+            setIsMobile(window.innerWidth < 768);
         };
 
         window.addEventListener('resize', handleResize);
-        handleResize(); // Initial check on mount
+        handleResize();
 
         return () => {
             window.removeEventListener('resize', handleResize);
         };
     }, []);
-    const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center space-y-4">
-            <KioskDialogBox isOpen={showDialog} onClose={() => setShowDialog(false)} title="Login Failed" description={flash.error}>
-                {flash.error?.split('.').map((line, index) => (
-                    <p key={index} className="-m-2 text-lg">
-                        {line.trim()}
-                    </p>
-                ))}
-            </KioskDialogBox>
-            <Link className="mt-10 mr-auto ml-8 sm:mt-0" href={route('kiosks.show', { kiosk: kiosk.id })}>
-                <Button className="h-16 w-16 rounded-full text-3xl" variant="outline">
-                    <ChevronLeft />
-                </Button>
-            </Link>
 
-            <h2 className="text-2xl font-bold">Hi {employee.name}!</h2>
-            <p>Please enter your PIN</p>
-            <form onSubmit={handleSubmit} className="flex flex-col items-center">
-                <div className="mb-2 flex items-center space-x-2">
-                    <PinInputBox pin={form.data.pin} />
-                    <Button className="h-16 w-16 rounded-full" variant="ghost" size="icon" onClick={handleDeletePin}>
-                        <Delete />
+    const content = (
+        <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
+            {/* Error Dialog */}
+            <KioskDialogBox
+                isOpen={showDialog}
+                onClose={() => {
+                    setShowDialog(false);
+                    form.setData('pin', '');
+                }}
+                title="Login Failed"
+                description={flash.error}
+                variant="error"
+            />
+
+            {/* Processing Dialog */}
+            <KioskDialogBox
+                isOpen={showProcessing}
+                onClose={() => {}}
+                title="Verifying PIN"
+                description="Please wait while we verify your credentials..."
+                variant="loading"
+            />
+
+            {/* Back Button */}
+            <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
+                <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            'h-12 w-12 rounded-full',
+                            'hover:bg-accent',
+                            'touch-manipulation',
+                        )}
+                    >
+                        <ArrowLeft className="h-5 w-5" />
                     </Button>
+                </Link>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex flex-col items-center">
+                {/* Employee Avatar & Greeting */}
+                <div className="mb-8 flex flex-col items-center">
+                    <Avatar className="mb-4 h-20 w-20 border-4 border-primary/20 shadow-lg">
+                        <AvatarFallback className="bg-primary/10 text-2xl font-semibold text-primary">
+                            {getInitials(employee.name)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <h2 className="text-2xl font-bold text-foreground">
+                        Hi, {employee.name.split(' ')[0]}!
+                    </h2>
+                    <p className="mt-1 text-muted-foreground">
+                        Enter your 4-digit PIN to continue
+                    </p>
                 </div>
-                {form.errors.pin && <p className="text-red-500">{form.errors.pin}</p>}
-                {showProcessing ? (
-                    <KioskDialogBox isOpen={showProcessing} onClose={() => setShowProcessing(false)} title="Please wait" description="Please wait...">
-                        <div className="flex items-center justify-center space-x-2">
-                            <Loader2 className="animate-spin" />
-                            <span>Logging in</span>
-                        </div>
-                    </KioskDialogBox>
-                ) : (
-                    flash?.success && <p className="text-green-500">{flash.success}</p>
-                )}
-                <PinNumpad
-                    onClick={(key) => {
-                        if (key === 'C') {
-                            form.setData('pin', '');
-                        } else {
-                            handleNumClick(key);
-                        }
-                    }}
-                />
-                <ForgotPinLink eh_employee_id={employee.eh_employee_id} eh_kiosk_id={kiosk.eh_kiosk_id} />
-            </form>
+
+                {/* PIN Entry */}
+                <form onSubmit={handleSubmit} className="flex flex-col items-center">
+                    {/* PIN Input Display */}
+                    <div className="mb-8">
+                        <PinInputBox pin={form.data.pin} error={pinError} />
+                    </div>
+
+                    {/* Error Message */}
+                    {form.errors.pin && (
+                        <p className="mb-4 text-sm text-destructive">{form.errors.pin}</p>
+                    )}
+
+                    {/* Success Message */}
+                    {flash?.success && (
+                        <p className="mb-4 text-sm text-emerald-600">{flash.success}</p>
+                    )}
+
+                    {/* Numpad */}
+                    <PinNumpad onClick={handleNumClick} disabled={showProcessing} />
+
+                    {/* Forgot PIN Link */}
+                    <div className="mt-6">
+                        <ForgotPinLink eh_employee_id={employee.eh_employee_id} eh_kiosk_id={kiosk.eh_kiosk_id} />
+                    </div>
+                </form>
+            </div>
         </div>
     );
+
     return isMobile ? (
-        content
+        <div className="min-h-screen bg-background">{content}</div>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}

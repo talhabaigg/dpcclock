@@ -1,8 +1,11 @@
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import axios from 'axios';
+import { Copy, ExternalLink, Loader2, QrCode, ShieldAlert } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface KioskTokenDialogProps {
     kioskId: number;
@@ -11,20 +14,21 @@ interface KioskTokenDialogProps {
 const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
-    const [open, setOpen] = useState<boolean>(false); // track dialog open state
+    const [open, setOpen] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchToken = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await axios.get('/retrieve-kiosk-token');
             const newToken = response.data.token;
 
-            // Only update if token has changed
             if (newToken !== token) {
                 setToken(newToken);
             }
-        } catch (error) {
-            alert('Failed to fetch kiosk token: ' + error.message);
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch token');
             setToken(null);
         } finally {
             setLoading(false);
@@ -36,49 +40,95 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
         return `${window.location.origin}/kiosks/${kioskId}/validate-token?token=${token}`;
     };
 
-    // Handle polling when dialog is open
+    const copyToClipboard = () => {
+        const url = generateKioskUrl(token, kioskId);
+        navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+    };
+
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
         if (open) {
-            fetchToken(); // fetch immediately on open
+            fetchToken();
             interval = setInterval(() => {
                 fetchToken();
-            }, 5000); // every 10 seconds
+            }, 5000);
         }
 
-        return () => clearInterval(interval); // cleanup when closed
+        return () => clearInterval(interval);
     }, [open]);
+
+    const kioskUrl = generateKioskUrl(token, kioskId);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="btn btn-primary">Show QR</Button>
+                <Button variant="outline" size="sm" className="gap-2">
+                    <QrCode className="h-4 w-4" />
+                    <span className="hidden sm:inline">Show QR</span>
+                </Button>
             </DialogTrigger>
 
-            <DialogContent className="dialog-content flex flex-col items-center justify-center">
-                <DialogTitle>SCAN QR CODE TO LOGIN</DialogTitle>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="text-center">
+                    <DialogTitle className="flex items-center justify-center gap-2">
+                        <QrCode className="h-5 w-5 text-primary" />
+                        Scan to Login
+                    </DialogTitle>
+                    <DialogDescription>Scan this QR code with your device to access this kiosk</DialogDescription>
+                </DialogHeader>
 
-                {loading ? (
-                    <DialogDescription>Updating...</DialogDescription>
-                ) : token ? (
-                    <div className="qr-code-container flex items-center justify-center">
-                        <QRCodeSVG value={generateKioskUrl(token, kioskId)} size={256} />
-                    </div>
-                ) : (
-                    <DialogDescription>You don't have permission to retrieve the QR code.</DialogDescription>
-                )}
+                <div className="flex flex-col items-center gap-4 py-4">
+                    {loading && !token ? (
+                        <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">Loading QR code...</p>
+                        </div>
+                    ) : error || !token ? (
+                        <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5">
+                            <ShieldAlert className="h-10 w-10 text-destructive/60" />
+                            <p className="text-center text-sm text-destructive">
+                                {error || "You don't have permission to retrieve the QR code."}
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* QR Code Container */}
+                            <div
+                                className={cn(
+                                    'relative rounded-xl border-2 border-primary/20 bg-white p-4',
+                                    'shadow-lg shadow-primary/5',
+                                    loading && 'opacity-60',
+                                )}
+                            >
+                                <QRCodeSVG value={kioskUrl} size={224} level="M" includeMargin={false} />
+                                {loading && (
+                                    <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
+                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    </div>
+                                )}
+                            </div>
 
-                <div className="mt-4 flex w-full justify-center">
-                    {token && (
-                        <a
-                            className="text-center text-xs break-all text-blue-600 underline"
-                            href={generateKioskUrl(token, kioskId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {generateKioskUrl(token, kioskId)}
-                        </a>
+                            {/* URL & Actions */}
+                            <div className="w-full space-y-3">
+                                <div className="rounded-lg bg-muted/50 p-3">
+                                    <p className="break-all text-center text-xs text-muted-foreground">{kioskUrl}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={copyToClipboard}>
+                                        <Copy className="h-4 w-4" />
+                                        Copy Link
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="flex-1 gap-2" asChild>
+                                        <a href={kioskUrl} target="_blank" rel="noopener noreferrer">
+                                            <ExternalLink className="h-4 w-4" />
+                                            Open Link
+                                        </a>
+                                    </Button>
+                                </div>
+                            </div>
+                        </>
                     )}
                 </div>
             </DialogContent>

@@ -1,53 +1,37 @@
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { CheckCircle2 } from 'lucide-react';
 
-type props = {
+interface TaskHoursAndAllowancesProps {
     task: {
         hours: number;
         insulation_allowance?: boolean;
         setout_allowance?: boolean;
     };
     index: number;
-    updateTaskAllocation: (index: number, field: string, value: any) => void;
-};
+    updateTaskAllocation: (index: number, field: string, value: number) => void;
+}
 
-export default function TaskHoursAndAllowances({ task, index, updateTaskAllocation }: props) {
+export default function TaskHoursAndAllowances({ task }: TaskHoursAndAllowancesProps) {
+    const hasAllowances = task.insulation_allowance || task.setout_allowance;
+
+    if (!hasAllowances) {
+        return null;
+    }
+
     return (
-        <div className="flex w-full flex-row items-center justify-between">
-            <div className="w-1/2 flex-1">
-                <Label>Hours</Label>
-                <Input
-                    type="number"
-                    value={task.hours}
-                    onChange={(e) => updateTaskAllocation(index, 'hours', parseFloat(e.target.value))}
-                    className="w-3/4 sm:w-full"
-                    min="0"
-                    step="0.5"
-                />
-            </div>
-
-            <div className="w-1/2 flex-1">
-                {(task.insulation_allowance || task.setout_allowance) && <Label>Allowances</Label>}
-                <div className="flex w-1/2 flex-1 flex-row items-center space-x-2">
-                    {task.insulation_allowance && (
-                        <>
-                            <span role="img" aria-label="checked" className="text-green-500">
-                                ✔️
-                            </span>
-                            <Label>Insulation</Label>
-                        </>
-                    )}
-
-                    {task.setout_allowance && (
-                        <>
-                            <span role="img" aria-label="checked" className="text-green-500">
-                                ✔️
-                            </span>
-                            <Label>SetOut</Label>
-                        </>
-                    )}
+        <div className="flex flex-wrap items-center gap-2">
+            {task.insulation_allowance && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span className="text-sm font-semibold text-emerald-600">Insulation</span>
                 </div>
-            </div>
+            )}
+            {task.setout_allowance && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span className="text-sm font-semibold text-emerald-600">SetOut</span>
+                </div>
+            )}
         </div>
     );
 }

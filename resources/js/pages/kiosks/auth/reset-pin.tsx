@@ -1,11 +1,12 @@
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useInitials } from '@/hooks/use-initials';
+import { cn } from '@/lib/utils';
 import { Link, useForm, usePage } from '@inertiajs/react';
-import { DialogTitle } from '@radix-ui/react-dialog';
-import { ChevronLeft } from 'lucide-react';
-
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ArrowLeft, CheckCircle2, Delete, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
 
 interface Employee {
@@ -21,7 +22,7 @@ interface Kiosk {
     eh_kiosk_id: string;
 }
 
-export default function ShowPin() {
+export default function ResetPin() {
     const { employees, kiosk, employee, flash } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
@@ -29,7 +30,7 @@ export default function ShowPin() {
         flash: { success?: string; error?: string };
     }>().props;
 
-    // Use Inertia form state
+    const getInitials = useInitials();
     const form = useForm({
         email_pin: '',
         new_pin: '',
@@ -41,25 +42,22 @@ export default function ShowPin() {
 
     useEffect(() => {
         if (flash.success || flash.error) {
-            setShowDialog(true); // Show the dialog when there's a flash message
+            setShowDialog(true);
         }
     }, [flash.success, flash.error]);
 
-    // Create refs for each input
     const emailPinRefs = useRef<HTMLInputElement[]>([]);
     const newPinRefs = useRef<HTMLInputElement[]>([]);
     const confirmPinRefs = useRef<HTMLInputElement[]>([]);
 
-    // Function to handle input change and focus on the next field
     const handleInputChange = (field: keyof typeof form.data, index: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newVal = e.target.value.replace(/\D/, ''); // only digits
+        const newVal = e.target.value.replace(/\D/, '');
         if (!newVal) return;
 
         const updated = form.data[field].split('');
         updated[index] = newVal;
         form.setData(field, updated.join('').slice(0, 4));
 
-        // Focus next input field if current input is filled
         if (updated[index].length === 1) {
             const refs = field === 'email_pin' ? emailPinRefs : field === 'new_pin' ? newPinRefs : confirmPinRefs;
             const nextIndex = index + 1;
@@ -69,33 +67,75 @@ export default function ShowPin() {
         }
     };
 
-    const renderPinInput = (label: string, field: keyof typeof form.data, inputRefs: React.RefObject<HTMLInputElement[]>) => (
-        <div className="mb-4 flex flex-col items-center space-y-2">
-            <p className="text-lg font-semibold">{label}</p>
-            <div className="flex items-center space-x-2">
+    const handleBackspace = (field: keyof typeof form.data, index: number) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !form.data[field][index]) {
+            const refs = field === 'email_pin' ? emailPinRefs : field === 'new_pin' ? newPinRefs : confirmPinRefs;
+            const prevIndex = index - 1;
+            if (refs.current[prevIndex]) {
+                refs.current[prevIndex]?.focus();
+            }
+        }
+    };
+
+    const renderPinInput = (
+        label: string,
+        description: string,
+        field: keyof typeof form.data,
+        inputRefs: React.MutableRefObject<HTMLInputElement[]>,
+        icon: React.ReactNode,
+        isValid?: boolean,
+    ) => (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2">
+                <div className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full',
+                    isValid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary/10 text-primary',
+                )}>
+                    {isValid ? <CheckCircle2 className="h-4 w-4" /> : icon}
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-foreground">{label}</p>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
+            </div>
+            <div className="flex items-center justify-center gap-3">
                 {Array(4)
                     .fill('')
-                    .map((_, index) => (
-                        <input
-                            key={index}
-                            type="password"
-                            value={form.data[field][index] || ''}
-                            className="h-12 w-12 rounded-lg border border-gray-300 text-center text-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            maxLength={1}
-                            onChange={handleInputChange(field, index)}
-                            ref={(el) => {
-                                if (el) inputRefs.current[index] = el;
-                            }}
-                        />
-                    ))}
+                    .map((_, index) => {
+                        const isFilled = form.data[field][index] !== undefined;
+                        return (
+                            <input
+                                key={index}
+                                type="password"
+                                inputMode="numeric"
+                                value={form.data[field][index] || ''}
+                                className={cn(
+                                    'h-14 w-14 rounded-xl border-2 text-center text-xl font-bold',
+                                    'bg-background transition-all duration-200',
+                                    'focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none',
+                                    'touch-manipulation',
+                                    isFilled ? 'border-primary/50 bg-primary/5' : 'border-border',
+                                    isValid && 'border-emerald-500/50 bg-emerald-500/5',
+                                )}
+                                maxLength={1}
+                                onChange={handleInputChange(field, index)}
+                                onKeyDown={handleBackspace(field, index)}
+                                ref={(el) => {
+                                    if (el) inputRefs.current[index] = el;
+                                }}
+                            />
+                        );
+                    })}
                 <Button
-                    className="h-16 w-16 rounded-full text-3xl"
+                    type="button"
                     variant="ghost"
+                    size="icon"
+                    className="h-14 w-14 rounded-xl text-muted-foreground hover:text-destructive touch-manipulation"
                     onClick={() => {
                         form.setData(field, form.data[field].slice(0, -1));
                     }}
                 >
-                    ⌫
+                    <Delete className="h-5 w-5" />
                 </Button>
             </div>
         </div>
@@ -138,52 +178,123 @@ export default function ShowPin() {
         };
     }, []);
 
-    const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center space-y-4">
-            <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <VisuallyHidden>
-                    <DialogTitle>{flash.success ? 'Success' : 'Error'}</DialogTitle>
-                </VisuallyHidden>
-                <DialogContent className="flex flex-col items-center p-0">
-                    <VisuallyHidden>
-                        <DialogDescription className="mx-auto text-xl">{flash.success || flash.error}</DialogDescription>
-                    </VisuallyHidden>
-                    <p className="mx-auto mt-4 p-2 text-2xl font-bold">{flash.success ? 'Success' : 'Error'}</p>
-                    {flash.success && <p className="-m-2 text-lg">{flash.success}</p>}
-                    {flash.error && <p className="-m-2 text-lg">{flash.error}</p>}
-                    <button onClick={() => setShowDialog(false)} className="mx-auto mt-2 w-full border-t-2 py-4 text-2xl font-extrabold">
-                        OK
-                    </button>
-                </DialogContent>
-            </Dialog>
-            {showProcessing && (
-                <div className="loading-spinner">
-                    <span>Processing...</span>
-                </div>
-            )}
-            <Link className="mt-10 mr-auto ml-8 sm:mt-0" href={route('kiosks.show', { kiosk: kiosk.id })}>
-                <Button className="h-16 w-16 rounded-full text-3xl" variant="outline">
-                    <ChevronLeft />
-                </Button>
-            </Link>
+    const pinsMatch = form.data.new_pin.length === 4 && form.data.new_pin === form.data.confirm_pin;
+    const canSubmit = form.data.email_pin.length === 4 && pinsMatch;
 
-            <h2 className="text-2xl font-bold">Hi {employee.name}!</h2>
-            {/* <p>Please enter PIN from email.</p> */}
-            <form onSubmit={handleSubmit} className="flex flex-col items-center space-y-6">
-                {renderPinInput('Enter PIN from email', 'email_pin', emailPinRefs)}
-                {renderPinInput('Set new PIN', 'new_pin', newPinRefs)}
-                {renderPinInput('Confirm new PIN', 'confirm_pin', confirmPinRefs)}
-                {form.errors.confirm_pin && <p className="text-red-500">{form.errors.confirm_pin}</p>}
-                {form.data.new_pin !== form.data.confirm_pin && <p className="text-red-500">Confirm PIN does not match new pin.</p>}
-                <Button type="submit" className="mt-4 w-full max-w-xs" disabled={form.data.new_pin !== form.data.confirm_pin}>
-                    Submit
-                </Button>
-            </form>
+    const content = (
+        <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
+            {/* Success/Error Dialog */}
+            <KioskDialogBox
+                isOpen={showDialog}
+                onClose={() => setShowDialog(false)}
+                title={flash.success ? 'PIN Reset Successful' : 'Reset Failed'}
+                description={flash.success || flash.error}
+                variant={flash.success ? 'success' : 'error'}
+            />
+
+            {/* Processing Dialog */}
+            <KioskDialogBox
+                isOpen={showProcessing}
+                onClose={() => {}}
+                title="Resetting PIN"
+                description="Please wait while we update your PIN..."
+                variant="loading"
+            />
+
+            {/* Back Button */}
+            <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
+                <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            'h-12 w-12 rounded-full',
+                            'hover:bg-accent',
+                            'touch-manipulation',
+                        )}
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                </Link>
+            </div>
+
+            {/* Main Content */}
+            <Card className="w-full max-w-md border-0 shadow-none sm:border sm:shadow-lg">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-4">
+                        <Avatar className="h-16 w-16 border-4 border-primary/20 shadow-lg">
+                            <AvatarFallback className="bg-primary/10 text-xl font-semibold text-primary">
+                                {getInitials(employee.name)}
+                            </AvatarFallback>
+                        </Avatar>
+                    </div>
+                    <CardTitle className="text-xl font-bold">Reset Your PIN</CardTitle>
+                    <CardDescription>
+                        Hi {employee.name.split(' ')[0]}, enter the PIN from your email and set a new PIN
+                    </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Email PIN */}
+                        {renderPinInput(
+                            'Email PIN',
+                            'Enter the 4-digit code sent to your email',
+                            'email_pin',
+                            emailPinRefs,
+                            <Mail className="h-4 w-4" />,
+                            form.data.email_pin.length === 4,
+                        )}
+
+                        <div className="border-t" />
+
+                        {/* New PIN */}
+                        {renderPinInput(
+                            'New PIN',
+                            'Create a new 4-digit PIN',
+                            'new_pin',
+                            newPinRefs,
+                            <KeyRound className="h-4 w-4" />,
+                            form.data.new_pin.length === 4,
+                        )}
+
+                        {/* Confirm PIN */}
+                        {renderPinInput(
+                            'Confirm PIN',
+                            'Re-enter your new PIN',
+                            'confirm_pin',
+                            confirmPinRefs,
+                            <ShieldCheck className="h-4 w-4" />,
+                            pinsMatch,
+                        )}
+
+                        {/* Error Messages */}
+                        {form.errors.confirm_pin && (
+                            <p className="text-center text-sm text-destructive">{form.errors.confirm_pin}</p>
+                        )}
+                        {form.data.confirm_pin.length > 0 && form.data.new_pin !== form.data.confirm_pin && (
+                            <p className="text-center text-sm text-destructive">PINs do not match</p>
+                        )}
+
+                        {/* Submit Button */}
+                        <Button
+                            type="submit"
+                            className={cn(
+                                'h-14 w-full rounded-xl text-base font-semibold',
+                                'touch-manipulation transition-all',
+                            )}
+                            disabled={!canSubmit}
+                        >
+                            Reset PIN
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
         </div>
     );
 
     return isMobile ? (
-        content
+        <div className="min-h-screen bg-background">{content}</div>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={false}>
             {content}

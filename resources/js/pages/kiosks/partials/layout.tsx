@@ -1,8 +1,10 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
-import { X } from 'lucide-react';
+import { LogOut, Monitor, ShieldCheck, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskSettingMenu from './KioskSettingMenu';
 import EmployeeList from './employeeList';
@@ -26,14 +28,22 @@ interface KioskLayoutProps {
 
 export default function KioskLayout({ children, employees, kiosk, selectedEmployee, adminMode }: KioskLayoutProps) {
     const [search, setSearch] = useState<string>('');
+    const [exitAdminDialogOpen, setExitAdminDialogOpen] = useState(false);
+    const [isExiting, setIsExiting] = useState(false);
     const { auth } = usePage().props as unknown as { auth: { user: any } };
 
+    const handleExitAdminMode = () => {
+        setIsExiting(true);
+        router.visit(`/kiosks/${kiosk.id}/disable-admin-mode`);
+    };
+
     const isKioskUser = auth?.user?.roles?.some((role: any) => role.name === 'kiosk');
+
     useEffect(() => {
         if (isKioskUser) {
             const timeout = setTimeout(
                 () => {
-                    router.post('/logout'); // uses POST method
+                    router.post('/logout');
                 },
                 5 * 60 * 1000,
             );
@@ -41,55 +51,98 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             return () => clearTimeout(timeout);
         }
     }, [isKioskUser]);
-    // Filter and sort employees
+
     const filteredEmployees = employees
         .filter((emp) => emp.name.toLowerCase().includes(search.toLowerCase()))
         .sort((a, b) => a.name.localeCompare(b.name));
-    const allKiosks = [
-        kiosk, // current one
-        ...(kiosk.related_kiosks ?? []), // fallback if null/undefined
-    ].sort((a, b) => a.name.localeCompare(b.name));
-    return (
-        <div className="flex h-screen flex-col">
-            {/* Top Bar */}
-            <div className="flex h-16 w-full items-center justify-between bg-black px-4 shadow-md">
-                <h2 className="text-xl font-bold text-white">{kiosk.name} </h2>
-                <img src="/superior-group-logo-white.svg" alt="" className="w-16 p-4" />
-                <div className="flex items-center space-x-2">
-                    {adminMode && (
-                        <Link href={`/kiosks/${kiosk.id}/disable-admin-mode`}>
-                            <Button className="flex max-w-16 items-center p-2 text-sm sm:max-w-full" variant="default">
-                                <X className="text-white" /> Exit <span className="hidden sm:block">Admin Mode</span>
-                            </Button>
-                        </Link>
-                    )}
 
+    const allKiosks = [kiosk, ...(kiosk.related_kiosks ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+
+    const clockedInCount = employees.filter((emp) => emp.clocked_in).length;
+
+    return (
+        <div className={cn(
+            'flex h-screen flex-col bg-background',
+            adminMode && 'ring-2 ring-inset ring-amber-500/50',
+        )}>
+            {/* Admin Mode Banner */}
+            {adminMode && (
+                <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-white shadow-md">
+                    <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                            <ShieldCheck className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm font-semibold">Admin Mode Active</span>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                        onClick={() => setExitAdminDialogOpen(true)}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Exit Admin Mode</span>
+                        <span className="sm:hidden">Exit</span>
+                    </Button>
+                </div>
+            )}
+
+            {/* Top Bar */}
+            <header className={cn(
+                'flex h-16 w-full items-center justify-between border-b bg-card px-4 shadow-sm',
+                adminMode && 'border-amber-500/30',
+            )}>
+                <div className="flex items-center gap-3">
+                    <div className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-lg',
+                        adminMode ? 'bg-amber-500/10' : 'bg-primary/10',
+                    )}>
+                        <Monitor className={cn(
+                            'h-5 w-5',
+                            adminMode ? 'text-amber-600' : 'text-primary',
+                        )} />
+                    </div>
+                    <div>
+                        <h2 className="font-semibold leading-tight">{kiosk.name}</h2>
+                    </div>
+                </div>
+
+                <img src="/superior-group-logo-white.svg" alt="Logo" className="hidden h-8 dark:block" />
+                <img src="/superior-group-logo.svg" alt="Logo" className="h-8 dark:hidden" />
+
+                <div className="flex items-center gap-2">
                     <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} />
                     <KioskTokenDialog kioskId={kiosk.id} />
                 </div>
-            </div>
+            </header>
 
             {/* Layout container */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar - Scrollable */}
-                <div className="sm:w=1/2 flex w-full flex-col overflow-hidden border-r border-gray-300 lg:w-1/3">
+                {/* Sidebar - Employee List */}
+                <aside className="flex w-72 flex-shrink-0 flex-col overflow-hidden border-r bg-muted/30 sm:w-80 lg:w-96">
+                    {/* Kiosk Switcher */}
                     {kiosk.related_kiosks && kiosk.related_kiosks.length > 0 && (
-                        <div className="m-2 flex flex-col justify-between space-y-2 space-x-2 p-2">
-                            <Label>Switch Kiosks</Label>
+                        <div className="border-b p-3">
+                            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                                <Monitor className="h-3.5 w-3.5" />
+                                Switch Kiosk
+                            </div>
                             <Tabs defaultValue={String(kiosk.id)} className="w-full">
-                                <TabsList className="flex flex-wrap">
+                                <TabsList className="h-auto w-full flex-wrap gap-1 bg-transparent p-0">
                                     {allKiosks.map((k) => (
                                         <TabsTrigger
                                             key={k.id}
                                             value={String(k.id)}
                                             asChild={k.id !== kiosk.id}
-                                            className="data-[state=active]:bg-primary w-full truncate overflow-hidden text-ellipsis data-[state=active]:text-white sm:w-1/2"
+                                            className={cn(
+                                                'flex-1 truncate rounded-md border px-3 py-1.5 text-xs font-medium transition-all',
+                                                'data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground',
+                                                'data-[state=inactive]:border-border data-[state=inactive]:bg-background data-[state=inactive]:hover:bg-muted',
+                                            )}
                                         >
                                             {k.id === kiosk.id ? (
-                                                // Active tab: primary color will come from shadcn via data-[state=active]
                                                 <span title={k.name}>{k.name}</span>
                                             ) : (
-                                                // Other kiosks: clickable links
                                                 <Link href={`/kiosks/${k.id}`} title={k.name}>
                                                     {k.name}
                                                 </Link>
@@ -100,20 +153,85 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             </Tabs>
                         </div>
                     )}
-                    {/* Search Bar */}
-                    <div className="m-2 flex items-center justify-end space-x-2 p-2">
-                        <EmployeeSearch value={search} onChange={setSearch} placeholder="Search" />
+
+                    {/* Search & Stats */}
+                    <div className="border-b p-3">
+                        <EmployeeSearch value={search} onChange={setSearch} placeholder="Search employees..." />
+                        <div className="mt-3 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Users className="h-3.5 w-3.5" />
+                                <span>{filteredEmployees.length} employees</span>
+                            </div>
+                            {clockedInCount > 0 && (
+                                <Badge variant="outline" className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                    {clockedInCount} clocked in
+                                </Badge>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Employee List - Scrollable */}
+                    {/* Employee List */}
                     <div className="flex-1 overflow-y-auto">
                         <EmployeeList employees={filteredEmployees} selectedEmployee={selectedEmployee} kioskId={kiosk.eh_kiosk_id} />
                     </div>
-                </div>
+                </aside>
 
                 {/* Main content */}
-                <div className="flex h-full w-full flex-1 items-center justify-center overflow-y-auto">{children}</div>
+                <main className="hidden flex-1 overflow-y-auto bg-background p-4 sm:flex sm:items-center sm:justify-center">
+                    {children}
+                </main>
             </div>
+
+            {/* Exit Admin Mode Dialog */}
+            <Dialog open={exitAdminDialogOpen} onOpenChange={setExitAdminDialogOpen}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader className="text-center">
+                        <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
+                            <LogOut className="h-8 w-8 text-amber-600" />
+                        </div>
+                        <DialogTitle className="text-center">Exit Admin Mode</DialogTitle>
+                        <DialogDescription className="text-center">
+                            Are you sure you want to exit admin mode?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isExiting ? (
+                        <div className="flex flex-col items-center justify-center gap-4 py-6">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
+                                <LogOut className="h-8 w-8 animate-pulse text-amber-600" />
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                                <span className="text-base font-semibold text-foreground">Exiting Admin Mode</span>
+                                <span className="text-sm text-muted-foreground">Please wait...</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.3s]" />
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.15s]" />
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-amber-500" />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-3 pt-4">
+                            <Button
+                                variant="destructive"
+                                className="w-full"
+                                onClick={handleExitAdminMode}
+                            >
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Exit Admin Mode
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => setExitAdminDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

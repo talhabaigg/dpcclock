@@ -1,6 +1,8 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useInitials } from '@/hooks/use-initials';
+import { ChevronRight, Clock } from 'lucide-react';
+
 interface Employee {
     id: number;
     name: string;
@@ -10,6 +12,7 @@ interface Employee {
     clocked_in: boolean;
     clock_in_time?: string;
 }
+
 type Props = {
     emp: Employee;
     isSelected: boolean;
@@ -18,23 +21,63 @@ type Props = {
 
 export default function EmployeeListButton({ emp, isSelected, onClick }: Props) {
     const getInitials = useInitials();
+
     return (
-        <>
-            <Button
-                variant={isSelected ? 'secondary' : 'ghost'}
-                className={`h-14 w-full justify-start text-left ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-400' : 'hover:bg-blue-400'}`}
-                onClick={onClick}
-            >
-                <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+        <button
+            onClick={onClick}
+            className={cn(
+                'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all',
+                'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isSelected && 'bg-primary text-primary-foreground hover:bg-primary/90',
+                !isSelected && emp.clocked_in && 'bg-emerald-500/5',
+            )}
+        >
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+                <Avatar
+                    className={cn(
+                        'h-10 w-10 border-2 transition-transform group-hover:scale-105',
+                        isSelected ? 'border-primary-foreground/30' : 'border-transparent',
+                        emp.clocked_in && !isSelected && 'border-emerald-500/50',
+                    )}
+                >
+                    <AvatarFallback
+                        className={cn(
+                            'text-sm font-medium',
+                            isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary',
+                        )}
+                    >
                         {getInitials(emp.name)}
                     </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col">
-                    {emp.name}
-                    {emp.clocked_in && <span className="text-green-500">Clocked In at {emp.clock_in_time}</span>}
-                </div>
-            </Button>
-        </>
+                {emp.clocked_in && !isSelected && (
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
+                )}
+            </div>
+
+            {/* Name & Status */}
+            <div className="min-w-0 flex-1">
+                <p className={cn('truncate font-medium', isSelected ? 'text-primary-foreground' : 'text-foreground')}>{emp.name}</p>
+                {emp.clocked_in && (
+                    <p
+                        className={cn(
+                            'flex items-center gap-1 text-xs',
+                            isSelected ? 'text-primary-foreground/80' : 'text-emerald-600 dark:text-emerald-400',
+                        )}
+                    >
+                        <Clock className="h-3 w-3" />
+                        In at {emp.clock_in_time}
+                    </p>
+                )}
+            </div>
+
+            {/* Chevron */}
+            <ChevronRight
+                className={cn(
+                    'h-4 w-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5',
+                    isSelected ? 'text-primary-foreground/60' : 'text-muted-foreground opacity-0 group-hover:opacity-100',
+                )}
+            />
+        </button>
     );
 }

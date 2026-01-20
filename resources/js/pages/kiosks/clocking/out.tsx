@@ -1,11 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { Loader2 } from 'lucide-react';
+import { Clock, Minus, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
 import AllowanceToggle from '../components/allowanceToggle';
@@ -227,72 +227,107 @@ export default function Clockout() {
     };
 
     const content = (
-        <div className="my-4 flex w-full flex-col items-center justify-center space-y-4">
-            <h2 className="text-center text-xl font-bold sm:text-2xl">Clock Out for {employee.name}</h2>
-            <p className="text-center text-sm sm:text-base">
-                Clocked In At: {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
-            <div className="flex w-full flex-col items-center px-4">
-                <Label className="mb-2 block flex-1 font-semibold">Select End Time</Label>
-                <div className="flex w-full flex-col justify-between space-y-2 space-x-2 sm:flex-row">
-                    {AvailableEndTimes().map((time) => (
-                        <Button
-                            key={time}
-                            onClick={() => setSelectedEndTime(time)}
-                            className="w-full"
-                            variant={selectedEndTime === time ? 'default' : 'outline'}
-                        >
-                            {time}
-                        </Button>
-                    ))}
-                </div>
-                {/* <Select onValueChange={setSelectedEndTime} value={selectedEndTime} defaultValue="">
-                    <SelectTrigger className="flex flex-1 justify-between">
-                        <SelectValue placeholder="Select End Time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {AvailableEndTimes().map((time) => (
-                            <SelectItem key={time} value={time.toString()}>
-                                {time}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select> */}
-            </div>
-            {processing && (
-                <KioskDialogBox isOpen={processing} title="Please wait" description="Please wait..." onClose={() => {}}>
-                    <div className="flex items-center justify-center space-x-2">
-                        <Loader2 className="animate-spin" />
-                        <span>Logging out</span>
-                    </div>
-                </KioskDialogBox>
-            )}
+        <div className="flex w-full flex-col items-center self-start px-4 py-6">
+            {/* Processing Dialog */}
+            <KioskDialogBox
+                isOpen={processing}
+                onClose={() => {}}
+                title="Clocking Out"
+                description="Please wait while we record your timesheet..."
+                variant="loading"
+            />
 
-            <form onSubmit={handleSubmit} className="w-full px-4">
+            {/* Header Section */}
+            <div className="mb-6 w-full max-w-5xl">
+                <div className="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold text-foreground sm:text-2xl">Clock Out</h2>
+                        <p className="text-sm text-muted-foreground">{employee.name}</p>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-600">
+                        <Clock className="h-4 w-4" />
+                        <span className="text-sm font-medium">
+                            In at {new Date(clockedIn.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    </div>
+                </div>
+
+                {/* End Time Selection */}
+                <div className="rounded-2xl border-2 bg-card p-4 sm:p-6">
+                    <Label className="mb-4 block text-sm font-semibold text-foreground">Select End Time</Label>
+                    <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4">
+                        {AvailableEndTimes().map((time) => {
+                            const isSelected = selectedEndTime === time;
+                            return (
+                                <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => setSelectedEndTime(time)}
+                                    className={cn(
+                                        'flex h-16 flex-1 items-center justify-center rounded-2xl border-2 text-2xl font-bold transition-all',
+                                        'touch-manipulation select-none active:scale-[0.98]',
+                                        isSelected
+                                            ? 'border-primary bg-primary text-primary-foreground shadow-lg'
+                                            : 'border-border bg-background text-foreground hover:border-primary/50 hover:bg-accent',
+                                    )}
+                                >
+                                    {time}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Task Allocations Form */}
+            <form onSubmit={handleSubmit} className="w-full max-w-5xl space-y-4">
                 {taskAllocations.map((task, index) => (
-                    <div key={index} className="mb-4 flex flex-col space-y-3 rounded-lg border-2 p-2 sm:flex-row sm:space-y-4 sm:space-x-4">
+                    <div
+                        key={index}
+                        className={cn(
+                            'rounded-2xl border-2 bg-card p-4 sm:p-6 transition-all',
+                            task.hours > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border',
+                        )}
+                    >
+                        <div className="mb-4 flex items-center justify-between">
+                            <span className="text-sm font-semibold text-foreground">Task {index + 1}</span>
+                            {task.hours > 0 && (
+                                <Badge className="bg-emerald-500 text-white text-sm px-3 py-1">
+                                    {task.hours} {task.hours === 1 ? 'hour' : 'hours'}
+                                </Badge>
+                            )}
+                        </div>
+
                         {task.hours > 0 ? (
-                            <>
-                                <div className="flex-4" onClick={() => updateTaskAllocation(index, 'hours', 0)}>
-                                    <Label>Level</Label>
+                            <div
+                                className="flex flex-col gap-4 cursor-pointer sm:flex-row sm:items-center"
+                                onClick={() => updateTaskAllocation(index, 'hours', 0)}
+                            >
+                                <div className="flex-1">
                                     <TaskLevelDisplay task={task} />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-shrink-0">
                                     <TaskHoursAndAllowances task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                 </div>
-                            </>
+                            </div>
                         ) : (
-                            <>
-                                <div className="flex-1">
-                                    <Label>Select level</Label>
+                            <div className="space-y-4">
+                                {/* Mobile: Level & Activity full width (stacked), Hours & Allowances side by side */}
+                                {/* Desktop (sm+): Single row with 4 columns */}
+
+                                {/* Level - Full width on mobile */}
+                                <div className="sm:hidden">
+                                    <Label className="mb-3 block text-sm font-semibold text-foreground">Level</Label>
                                     <LevelSelector
                                         levels={Object.keys(groupedLocations)}
                                         selectedLevel={task.level}
                                         onSelect={(level: string | number) => updateTaskAllocation(index, 'level', level)}
                                     />
                                 </div>
-                                <div className="flex-1">
-                                    <Label>Select Activity</Label>
+
+                                {/* Activity - Full width on mobile */}
+                                <div className="sm:hidden">
+                                    <Label className="mb-3 block text-sm font-semibold text-foreground">Activity</Label>
                                     <ActivitySelector
                                         task={task}
                                         groupedLocations={groupedLocations}
@@ -300,74 +335,187 @@ export default function Clockout() {
                                         updateTaskAllocation={updateTaskAllocation}
                                     />
                                 </div>
-                                <div className="flex w-full flex-1 gap-4 sm:flex-2 sm:flex-row">
-                                    <div className="w-full sm:w-1/2">
-                                        <Label>Select Hours</Label>
+
+                                {/* Hours & Allowances - Side by side on mobile */}
+                                <div className="grid grid-cols-2 gap-4 sm:hidden">
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
-
-                                    <div className="flex w-full flex-col items-start space-y-2 sm:w-1/2">
-                                        <Label className="font-semibold">Allowances</Label>
-                                        <AllowanceToggle
-                                            label="Insulation"
-                                            index={index}
-                                            checked={task.insulation_allowance}
-                                            onToggle={toggleAllowance}
-                                        />
-                                        <AllowanceToggle label="SetOut" index={index} checked={task.setout_allowance} onToggle={toggleAllowance} />
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                        <div className="flex h-[220px] flex-col justify-center gap-3">
+                                            <AllowanceToggle
+                                                label="Insulation"
+                                                index={index}
+                                                checked={task.insulation_allowance}
+                                                onToggle={toggleAllowance}
+                                            />
+                                            <AllowanceToggle
+                                                label="SetOut"
+                                                index={index}
+                                                checked={task.setout_allowance}
+                                                onToggle={toggleAllowance}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </>
+
+                                {/* Desktop layout - Single row */}
+                                <div className="hidden gap-4 sm:grid sm:grid-cols-4">
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Level</Label>
+                                        <LevelSelector
+                                            levels={Object.keys(groupedLocations)}
+                                            selectedLevel={task.level}
+                                            onSelect={(level: string | number) => updateTaskAllocation(index, 'level', level)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Activity</Label>
+                                        <ActivitySelector
+                                            task={task}
+                                            groupedLocations={groupedLocations}
+                                            index={index}
+                                            updateTaskAllocation={updateTaskAllocation}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
+                                        <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                        <div className="flex h-[220px] flex-col justify-center gap-3">
+                                            <AllowanceToggle
+                                                label="Insulation"
+                                                index={index}
+                                                checked={task.insulation_allowance}
+                                                onToggle={toggleAllowance}
+                                            />
+                                            <AllowanceToggle
+                                                label="SetOut"
+                                                index={index}
+                                                checked={task.setout_allowance}
+                                                onToggle={toggleAllowance}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 ))}
 
-                <div className="mb-2 flex justify-between">
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="laser-allowance"
-                            className="h-8 w-8"
-                            checked={laserAllowance}
-                            onCheckedChange={(val) => setLaserAllowance(!!val)}
-                        />
-                        <Label htmlFor="laser-allowance" className="ml-2 text-sm">
-                            Laser Allowance
-                        </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                        {hoursAllocated > hoursWorked && (
-                            <span className="text-right text-xs font-black text-red-500 sm:text-sm">
-                                Hours allocated cannot be higher than worked hours.
-                            </span>
-                        )}
-
-                        <Badge className={hoursAllocated > hoursWorked ? 'bg-red-500 text-white' : ''}>
-                            {hoursAllocated}/{hoursWorked}
-                        </Badge>
-                    </div>
-                </div>
-
-                <div className="mb-4 flex items-center justify-between space-x-2">
-                    <Button type="button" onClick={addTaskAllocation} className="w-full sm:w-32">
-                        + Add Activity
-                    </Button>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-3">
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
-                        className="w-full sm:w-32"
-                        disabled={taskAllocations.length <= 1}
+                        onClick={addTaskAllocation}
+                        className={cn(
+                            'h-12 gap-2 px-5 text-base font-semibold',
+                            'touch-manipulation active:scale-[0.98]',
+                        )}
                     >
-                        - Remove Activity
+                        <Plus className="h-5 w-5" />
+                        Add Task
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
+                        disabled={taskAllocations.length <= 1}
+                        className={cn(
+                            'h-12 gap-2 px-5 text-base font-semibold text-muted-foreground',
+                            'touch-manipulation active:scale-[0.98]',
+                        )}
+                    >
+                        <Minus className="h-5 w-5" />
+                        Remove
                     </Button>
                 </div>
 
-                <div className="flex justify-center">
-                    <Button type="submit" className="w-full sm:w-48" disabled={isClockOutDisabled}>
-                        Clock Out
-                    </Button>
+                {/* Footer Section */}
+                <div className="rounded-2xl border-2 bg-muted/30 p-4 sm:p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        {/* Laser Allowance */}
+                        <button
+                            type="button"
+                            onClick={() => setLaserAllowance(!laserAllowance)}
+                            className={cn(
+                                'flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all',
+                                'touch-manipulation active:scale-[0.98]',
+                                laserAllowance
+                                    ? 'border-emerald-500 bg-emerald-500/10'
+                                    : 'border-border bg-card hover:border-primary/30',
+                            )}
+                        >
+                            <div
+                                className={cn(
+                                    'flex h-6 w-6 items-center justify-center rounded border-2 transition-colors',
+                                    laserAllowance
+                                        ? 'border-emerald-500 bg-emerald-500 text-white'
+                                        : 'border-muted-foreground/40 bg-background',
+                                )}
+                            >
+                                {laserAllowance && (
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                )}
+                            </div>
+                            <span className={cn(
+                                'text-base font-semibold',
+                                laserAllowance ? 'text-emerald-600' : 'text-foreground',
+                            )}>
+                                Laser Allowance
+                            </span>
+                        </button>
+
+                        {/* Hours Counter */}
+                        <div className="flex items-center gap-3">
+                            {hoursAllocated > hoursWorked && (
+                                <span className="text-sm font-semibold text-destructive">
+                                    Over allocated!
+                                </span>
+                            )}
+                            <div
+                                className={cn(
+                                    'rounded-xl px-4 py-3 text-center',
+                                    hoursAllocated > hoursWorked && 'bg-destructive/10 border-2 border-destructive',
+                                    hoursAllocated === hoursWorked && 'bg-emerald-500/10 border-2 border-emerald-500',
+                                    hoursAllocated < hoursWorked && 'bg-amber-500/10 border-2 border-amber-500',
+                                )}
+                            >
+                                <span className={cn(
+                                    'text-lg font-bold',
+                                    hoursAllocated > hoursWorked && 'text-destructive',
+                                    hoursAllocated === hoursWorked && 'text-emerald-600',
+                                    hoursAllocated < hoursWorked && 'text-amber-600',
+                                )}>
+                                    {hoursAllocated} / {hoursWorked}
+                                </span>
+                                <span className="ml-1 text-sm font-medium text-muted-foreground">hours</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                {/* Submit Button */}
+                <Button
+                    type="submit"
+                    disabled={isClockOutDisabled}
+                    className={cn(
+                        'h-16 w-full gap-3 rounded-2xl text-xl font-bold',
+                        'bg-primary shadow-lg',
+                        'touch-manipulation transition-all active:scale-[0.98]',
+                        'disabled:opacity-50',
+                    )}
+                >
+                    <Clock className="h-6 w-6" />
+                    Clock Out
+                </Button>
             </form>
         </div>
     );
