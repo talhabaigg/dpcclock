@@ -6,8 +6,10 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushChannel;
+use NotificationChannels\WebPush\WebPushMessage;
 
-class KioskClockedInNotification extends Notification
+class KioskClockedInNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -30,7 +32,14 @@ class KioskClockedInNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        $channels = ['mail', 'database'];
+
+        // Add WebPush channel if user has push subscriptions
+        if ($notifiable->pushSubscriptions()->exists()) {
+            $channels[] = WebPushChannel::class;
+        }
+
+        return $channels;
     }
 
     /**
@@ -65,14 +74,44 @@ class KioskClockedInNotification extends Notification
         return $mail;
     }
     /**
-     * Get the array representation of the notification.
+     * Get the web push representation of the notification.
+     */
+    public function toWebPush(object $notifiable, $notification): WebPushMessage
+    {
+        $employeeCount = count($this->employees);
+        $body = $employeeCount === 1
+            ? "{$this->employees[0]['name']} is still clocked in at {$this->kioskName}"
+            : "{$employeeCount} employees are still clocked in at {$this->kioskName}";
+
+        return (new WebPushMessage)
+            ->title('Workers Still Clocked In')
+            ->body($body)
+            ->icon('/icon-192x192.png')
+            ->badge('/icon-192x192.png')
+            ->tag('clocked-in-' . now()->format('Y-m-d'))
+            ->data(['url' => route('timesheets.index')])
+            ->options(['TTL' => 3600]); // 1 hour
+    }
+
+    /**
+     * Get the array representation of the notification (for database).
      *
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array
     {
+        $employeeCount = count($this->employees);
+        $employeeNames = array_map(fn($e) => $e['name'], $this->employees);
+
         return [
+            'title' => 'Workers Still Clocked In',
+            'body' => $employeeCount === 1
+                ? "{$this->employees[0]['name']} is still clocked in at {$this->kioskName}"
+                : "{$employeeCount} employees are still clocked in at {$this->kioskName}",
             'kiosk_name' => $this->kioskName,
+            'employee_count' => $employeeCount,
+            'employee_names' => $employeeNames,
+            'url' => route('timesheets.index'),
         ];
     }
 }
