@@ -1,43 +1,68 @@
 'use client';
 
+import { AiChat } from '@/components/ai-chat';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { SimpleChatBox } from './simpleChatBox';
 
 export function ChatDock() {
     const [isOpen, setIsOpen] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     return (
-        <div className="fixed right-4 bottom-0 z-50">
+        <div
+            className={cn(
+                'fixed bottom-0 z-50 transition-all duration-300 ease-in-out',
+                isExpanded ? 'right-4 left-4 md:left-auto md:w-[600px]' : 'right-4 w-[400px]'
+            )}
+        >
             <div
-                className={`flex w-100 flex-col rounded-t-lg border border-b-0 bg-white shadow-xl transition-all duration-300 ease-in-out dark:bg-black ${
-                    isOpen ? 'h-[500px]' : 'h-10'
-                }`}
+                className={cn(
+                    'bg-background flex flex-col rounded-t-xl border border-b-0 shadow-2xl transition-all duration-300 ease-in-out',
+                    isOpen ? (isExpanded ? 'h-[700px]' : 'h-[550px]') : 'h-11'
+                )}
             >
                 {/* Header */}
-                <Button
-                    onClick={() => setIsOpen((v) => !v)}
-                    className="flex h-10 w-full items-center justify-between rounded-t-lg rounded-b-none px-3 text-sm font-semibold"
-                >
-                    <div className="flex items-center gap-2">
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full">
-                            <Sparkles size={16} />
+                <div className="flex items-center border-b">
+                    <Button
+                        onClick={() => setIsOpen((v) => !v)}
+                        variant="ghost"
+                        className="flex h-11 flex-1 items-center justify-between rounded-none rounded-tl-xl px-4 text-sm font-semibold hover:bg-transparent"
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
+                                <Sparkles className="size-4 text-white" />
+                            </span>
+                            <span>Superior AI</span>
+                        </div>
+                        <span className="text-muted-foreground">
+                            {isOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
                         </span>
-                        <span className="flex">Ask Superior AI</span>
-                    </div>
-                    <span>{isOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}</span>
-                </Button>
+                    </Button>
 
-                {/* Body (always mounted) */}
+                    {/* Expand/Collapse button */}
+                    {isOpen && (
+                        <Button
+                            onClick={() => setIsExpanded((v) => !v)}
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-foreground mr-2 size-8"
+                        >
+                            {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                        </Button>
+                    )}
+                </div>
+
+                {/* Body */}
                 <div
-                    className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out ${
+                    className={cn(
+                        'min-h-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out',
                         isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
-                    }`}
-                    // optional: prevent clicks when closed
+                    )}
                     style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
                 >
-                    <SimpleChatBox />
+                    <AiChat className="h-full" />
                 </div>
             </div>
         </div>

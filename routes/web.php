@@ -33,6 +33,8 @@ use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\VoiceCallController;
 
 
 
@@ -60,6 +62,14 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
 Route::middleware('auth')->group(function () {
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+
+    // AI Chat Routes (using web middleware for session auth)
+    Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
+    Route::post('/chat/stream', [ChatController::class, 'handleStream'])->name('chat.stream');
+
+    // Voice Call Routes (OpenAI Realtime API)
+    Route::post('/voice/session', [VoiceCallController::class, 'createSession'])->name('voice.session');
+    Route::post('/voice/tool', [VoiceCallController::class, 'executeTool'])->name('voice.tool');
 });
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');
 Route::get('/requisition/update-status', [PurchasingController::class, 'updateStatusFromBuildMetrix'])

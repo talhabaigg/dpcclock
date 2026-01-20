@@ -1,17 +1,21 @@
+import { AiChat } from '@/components/ai-chat';
 import AppLayout from '@/layouts/app-layout';
-import SimpleChatBox from '../purchasing/create-partials/simpleChatBox';
 import TokenProgressBar from './token-progress-bar';
 
 const Dashboard = ({ tokenUsage }) => {
     return (
         <AppLayout>
-            {' '}
-            <div className="mx-auto w-full p-2">
-                <SimpleChatBox />{' '}
-            </div>
-            <div className="mx-auto max-w-96 p-2">
-                {' '}
-                <TokenProgressBar tokenUsage={tokenUsage} />
+            <div className="flex h-[calc(100vh-4rem)] flex-col">
+                {/* Main chat area - takes full height */}
+                <div className="min-h-0 flex-1">
+                    <AiChat className="h-full" centered />
+                </div>
+                {/* Token progress bar - fixed at bottom */}
+                <div className="shrink-0 border-t bg-background/80 px-4 py-3 backdrop-blur-sm">
+                    <div className="mx-auto max-w-96">
+                        <TokenProgressBar tokenUsage={tokenUsage} />
+                    </div>
+                </div>
             </div>
         </AppLayout>
     );
