@@ -35,9 +35,14 @@ class KioskClockedInNotification extends Notification implements ShouldQueue
         $channels = ['mail', 'database'];
 
         // Add WebPush channel if user has push subscriptions
-        if ($notifiable->pushSubscriptions()->exists()) {
+        $hasPushSubscriptions = $notifiable->pushSubscriptions()->exists();
+        \Log::info("KioskClockedInNotification via() - User {$notifiable->id} has push subscriptions: " . ($hasPushSubscriptions ? 'yes' : 'no'));
+
+        if ($hasPushSubscriptions) {
             $channels[] = WebPushChannel::class;
         }
+
+        \Log::info("KioskClockedInNotification channels: " . implode(', ', array_map(fn($c) => is_string($c) ? $c : class_basename($c), $channels)));
 
         return $channels;
     }
@@ -103,11 +108,15 @@ class KioskClockedInNotification extends Notification implements ShouldQueue
         $employeeCount = count($this->employees);
         $employeeNames = array_map(fn($e) => $e['name'], $this->employees);
 
+        $message = $employeeCount === 1
+            ? "{$this->employees[0]['name']} is still clocked in at {$this->kioskName}"
+            : "{$employeeCount} employees are still clocked in at {$this->kioskName}";
+
         return [
+            'type' => 'KioskClockedIn',
             'title' => 'Workers Still Clocked In',
-            'body' => $employeeCount === 1
-                ? "{$this->employees[0]['name']} is still clocked in at {$this->kioskName}"
-                : "{$employeeCount} employees are still clocked in at {$this->kioskName}",
+            'body' => $message,
+            'message' => $message,
             'kiosk_name' => $this->kioskName,
             'employee_count' => $employeeCount,
             'employee_names' => $employeeNames,
