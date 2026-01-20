@@ -20,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         channels: __DIR__."/../routes/channels.php",
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->encryptCookies(except: ['appearance']);
+        $middleware->encryptCookies(except: ['appearance', 'otp_trusted_device']);
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,

@@ -40,19 +40,55 @@ class AuthenticatedSessionController extends Controller
         $user = $request->user();
 
         if ($user->two_factor_enabled) {
-            $cookieName = 'otp_trusted_' . $user->id;
-
-            if (!$request->hasCookie($cookieName)) {
+            // Check if this device is trusted for this user
+            if (!$this->isDeviceTrusted($request, $user->id)) {
                 $user->sendOneTimePassword();
                 session(['otp_user_id' => $user->id]);
                 Auth::logout();
 
                 return redirect()->route('otp.show');
             }
-
         }
 
         return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    /**
+     * Check if the current device is trusted for the given user.
+     */
+    private function isDeviceTrusted(Request $request, int $userId): bool
+    {
+        $trustedUsers = $request->cookie('otp_trusted_device');
+
+        if (!$trustedUsers) {
+            return false;
+        }
+
+        // The cookie contains a comma-separated list of user IDs
+        $trustedUserIds = explode(',', $trustedUsers);
+
+        return in_array((string) $userId, $trustedUserIds, true);
+    }
+
+    /**
+     * Add a user ID to the trusted device cookie.
+     */
+    private function addToTrustedDevice(int $userId): void
+    {
+        $existingCookie = request()->cookie('otp_trusted_device');
+        $trustedUserIds = $existingCookie ? explode(',', $existingCookie) : [];
+
+        if (!in_array((string) $userId, $trustedUserIds, true)) {
+            $trustedUserIds[] = (string) $userId;
+        }
+
+        Cookie::queue(
+            cookie(
+                'otp_trusted_device',
+                implode(',', $trustedUserIds),
+                60 * 24 * 30 // 30 days
+            )
+        );
     }
 
     /**
@@ -110,15 +146,9 @@ class AuthenticatedSessionController extends Controller
             $request->session()->regenerate();
             session()->forget('otp_user_id');
 
-            // Set a signed cookie if "remember" was checked
+            // Add to trusted device if "remember" was checked
             if ($request->boolean('remember')) {
-                Cookie::queue(
-                    cookie(
-                        'otp_trusted_' . $user->id,
-                        true,           // Value
-                        60 * 24 * 30       // Lifetime in minutes (30 days)
-                    )
-                );
+                $this->addToTrustedDevice($user->id);
             }
 
             return redirect()->intended('dashboard');

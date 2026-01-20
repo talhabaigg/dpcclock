@@ -8,16 +8,20 @@ self.addEventListener('install', (event) => {
 
 // Push notification event handler
 self.addEventListener('push', (event) => {
+    console.log('[Service Worker] Push received:', event);
+
     if (!event.data) {
-        console.log('Push event but no data');
+        console.log('[Service Worker] Push event but no data');
         return;
     }
 
     let data;
     try {
         data = event.data.json();
+        console.log('[Service Worker] Push data (JSON):', data);
     } catch (e) {
         // Fallback if not JSON
+        console.log('[Service Worker] Push data (text):', event.data.text());
         data = {
             title: 'Notification',
             body: event.data.text(),
@@ -39,8 +43,12 @@ self.addEventListener('push', (event) => {
         requireInteraction: data.requireInteraction || false,
     };
 
+    console.log('[Service Worker] Showing notification with options:', options);
+
     event.waitUntil(
         self.registration.showNotification(data.title || 'Clock Me In', options)
+            .then(() => console.log('[Service Worker] Notification shown successfully'))
+            .catch((err) => console.error('[Service Worker] Error showing notification:', err))
     );
 });
 

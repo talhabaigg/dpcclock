@@ -9,9 +9,12 @@ interface PushNotificationState {
     error: string | null;
 }
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    if (!base64String) {
+        throw new Error('VAPID public key is not configured');
+    }
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding)
         .replace(/-/g, '+')
@@ -39,7 +42,8 @@ export function usePushNotifications() {
         const isSupported =
             'serviceWorker' in navigator &&
             'PushManager' in window &&
-            'Notification' in window;
+            'Notification' in window &&
+            !!VAPID_PUBLIC_KEY;
         return isSupported;
     }, []);
 
