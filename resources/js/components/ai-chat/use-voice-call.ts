@@ -21,12 +21,19 @@ export interface VoiceCallEvent {
     };
 }
 
+export interface CallDurationInfo {
+    durationSeconds: number;
+    durationMinutes: number;
+    estimatedCost: number;
+}
+
 export interface UseVoiceCallOptions {
     onTranscript?: (text: string, isFinal: boolean) => void;
     onResponse?: (text: string) => void;
     onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
     onError?: (error: Error) => void;
     onStatusChange?: (status: VoiceCallStatus) => void;
+    onCallEnded?: (duration: CallDurationInfo) => void;
 }
 
 export interface UseVoiceCallReturn {
@@ -41,7 +48,7 @@ export interface UseVoiceCallReturn {
 }
 
 export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallReturn {
-    const { onTranscript, onResponse, onToolCall, onError, onStatusChange } = options;
+    const { onTranscript, onResponse, onToolCall, onError, onStatusChange, onCallEnded } = options;
 
     const [status, setStatus] = useState<VoiceCallStatus>('idle');
     const [isMuted, setIsMuted] = useState(false);
@@ -52,6 +59,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
     const dataChannelRef = useRef<RTCDataChannel | null>(null);
     const audioElementRef = useRef<HTMLAudioElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const voiceSessionIdRef = useRef<number | null>(null);
 
     const updateStatus = useCallback(
         (newStatus: VoiceCallStatus) => {
@@ -222,6 +230,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             console.log('Session response:', sessionData);
 
             const ephemeralKey = sessionData.client_secret?.value;
+            voiceSessionIdRef.current = sessionData.voice_session_id;
 
             if (!ephemeralKey) {
                 console.error('Session data:', sessionData);
@@ -331,7 +340,38 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         }
     }, [handleDataChannelMessage, onError, updateStatus, status]);
 
-    const endCall = useCallback(() => {
+    const endCall = useCallback(async () => {
+        // Report session end to server first
+        if (voiceSessionIdRef.current) {
+            try {
+                const response = await fetch('/voice/session/end', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN':
+                            document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+                                ?.content || '',
+                    },
+                    body: JSON.stringify({
+                        voice_session_id: voiceSessionIdRef.current,
+                    }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Voice session ended:', data);
+                    onCallEnded?.({
+                        durationSeconds: data.duration_seconds,
+                        durationMinutes: data.duration_minutes,
+                        estimatedCost: data.estimated_cost,
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to end voice session on server:', err);
+            }
+            voiceSessionIdRef.current = null;
+        }
+
         // Close data channel
         if (dataChannelRef.current) {
             dataChannelRef.current.close();
@@ -358,7 +398,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
         setIsMuted(false);
         updateStatus('idle');
-    }, [updateStatus]);
+    }, [updateStatus, onCallEnded]);
 
     const toggleMute = useCallback(() => {
         if (mediaStreamRef.current) {

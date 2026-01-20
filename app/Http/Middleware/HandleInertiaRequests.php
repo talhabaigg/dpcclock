@@ -58,6 +58,18 @@ class HandleInertiaRequests extends Middleware
                 'location' => $request->url(),
             ],
             'tokenUsage' => fn() => $request->user() ? $request->user()->tokenUsage() : 0,
+            'tokenStats' => fn() => $request->user() ? $request->user()->tokenStats() : [
+                'total_tokens' => 0,
+                'input_tokens' => 0,
+                'output_tokens' => 0,
+                'message_count' => 0,
+                'estimated_cost' => 0,
+                'limit' => 1_000_000,
+                'voice_minutes' => 0,
+                'voice_calls' => 0,
+                'voice_cost' => 0,
+                'total_cost' => 0,
+            ],
             'notifications' => fn() => $request->user() ? [
                 'unreadCount' => $request->user()->unreadNotifications()->count(),
                 // keep it small; fetch the full list on a notifications page/API

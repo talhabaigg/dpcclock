@@ -67,8 +67,69 @@ class User extends Authenticatable
         return $this->hasMany(AiChatMessage::class);
     }
 
+    public function voiceCallSessions()
+    {
+        return $this->hasMany(VoiceCallSession::class);
+    }
+
     public function tokenUsage(): int
     {
         return (int) $this->aiChatMessages()->sum('tokens_used');
+    }
+
+    /**
+     * Get detailed token usage statistics
+     */
+    public function tokenStats(): array
+    {
+        $stats = $this->aiChatMessages()
+            ->selectRaw('
+                COALESCE(SUM(tokens_used), 0) as total_tokens,
+                COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens,
+                COUNT(*) as message_count
+            ')
+            ->first();
+
+        $totalTokens = (int) ($stats->total_tokens ?? 0);
+        $inputTokens = (int) ($stats->input_tokens ?? 0);
+        $outputTokens = (int) ($stats->output_tokens ?? 0);
+
+        // GPT-4o-mini pricing: $0.15/1M input, $0.60/1M output
+        // Use breakdown if available, otherwise estimate 30% input, 70% output
+        if ($inputTokens > 0 || $outputTokens > 0) {
+            $estimatedCost = ($inputTokens * 0.15 / 1_000_000) + ($outputTokens * 0.60 / 1_000_000);
+        } else {
+            // Fallback estimate when breakdown not available
+            $estimatedCost = ($totalTokens * 0.30 * 0.15 / 1_000_000) + ($totalTokens * 0.70 * 0.60 / 1_000_000);
+        }
+
+        // Get voice call stats
+        $voiceStats = $this->voiceCallSessions()
+            ->where('status', 'completed')
+            ->selectRaw('
+                COALESCE(SUM(duration_seconds), 0) as total_seconds,
+                COALESCE(SUM(estimated_cost), 0) as voice_cost,
+                COUNT(*) as call_count
+            ')
+            ->first();
+
+        $voiceMinutes = round(($voiceStats->total_seconds ?? 0) / 60, 2);
+        $voiceCost = (float) ($voiceStats->voice_cost ?? 0);
+        $totalCost = round($estimatedCost + $voiceCost, 4);
+
+        return [
+            'total_tokens' => $totalTokens,
+            'input_tokens' => $inputTokens,
+            'output_tokens' => $outputTokens,
+            'message_count' => (int) ($stats->message_count ?? 0),
+            'estimated_cost' => round($estimatedCost, 4),
+            'limit' => 1_000_000, // Token limit per user
+            // Voice stats
+            'voice_minutes' => $voiceMinutes,
+            'voice_calls' => (int) ($voiceStats->call_count ?? 0),
+            'voice_cost' => round($voiceCost, 4),
+            'total_cost' => $totalCost,
+        ];
     }
 }

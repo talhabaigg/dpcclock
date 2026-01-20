@@ -13,6 +13,8 @@ class AiChatMessage extends Model
         'message',
         'model_used',
         'tokens_used',
+        'input_tokens',
+        'output_tokens',
     ];
 
     public function user()

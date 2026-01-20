@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\VoiceCallSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -21,12 +22,17 @@ class VoiceCallController extends Controller
                 return response()->json(['error' => 'OpenAI API key is not configured'], 500);
             }
 
+            // Voice options: alloy, ash, ballad, coral, echo, sage, shimmer, verse
+            // Male voices: ash (calm), echo (warm/deep), verse (dynamic)
+            // Female voices: alloy, ballad, coral, sage, shimmer
+            $voice = $request->input('voice', 'echo'); // Default to echo - warm male voice
+
             // Create ephemeral token via OpenAI Realtime sessions endpoint
             $response = Http::withToken($apiKey)
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/realtime/sessions', [
                     'model' => 'gpt-4o-mini-realtime-preview-2024-12-17',
-                    'voice' => 'alloy',
+                    'voice' => $voice,
                     'instructions' => $this->getVoiceInstructions(),
                     'tools' => $this->getRealtimeTools(),
                     'tool_choice' => 'auto',
@@ -56,10 +62,23 @@ class VoiceCallController extends Controller
 
             Log::info('Realtime session created', ['response' => $data]);
 
+            // Track the voice call session
+            $voiceSession = VoiceCallSession::create([
+                'user_id' => $request->user()->id,
+                'session_id' => $data['id'] ?? null,
+                'started_at' => now(),
+                'status' => 'active',
+                'metadata' => [
+                    'voice' => $voice,
+                    'model' => 'gpt-4o-mini-realtime-preview-2024-12-17',
+                ],
+            ]);
+
             return response()->json([
                 'client_secret' => $data['client_secret'] ?? null,
                 'session_id' => $data['id'] ?? null,
                 'expires_at' => $data['expires_at'] ?? null,
+                'voice_session_id' => $voiceSession->id,
                 // Include full response for debugging
                 'debug' => app()->isProduction() ? null : $data,
             ]);
@@ -73,6 +92,49 @@ class VoiceCallController extends Controller
                 'error' => 'Failed to create voice session',
                 'message' => app()->isProduction() ? 'Please try again later' : $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * End a voice call session
+     * Called by the frontend when the call ends
+     */
+    public function endSession(Request $request)
+    {
+        $validated = $request->validate([
+            'voice_session_id' => 'required|integer',
+        ]);
+
+        try {
+            $session = VoiceCallSession::where('id', $validated['voice_session_id'])
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'active')
+                ->first();
+
+            if (!$session) {
+                return response()->json(['error' => 'Session not found or already ended'], 404);
+            }
+
+            $session->end();
+
+            Log::info('Voice session ended', [
+                'session_id' => $session->id,
+                'duration_seconds' => $session->duration_seconds,
+                'estimated_cost' => $session->estimated_cost,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'duration_seconds' => $session->duration_seconds,
+                'duration_minutes' => $session->duration_minutes,
+                'estimated_cost' => $session->estimated_cost,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Voice session end error', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => 'Failed to end session'], 500);
         }
     }
 
@@ -114,15 +176,40 @@ class VoiceCallController extends Controller
     private function getVoiceInstructions(): string
     {
         return <<<'INSTRUCTIONS'
-You are Superior AI, a helpful voice assistant for the Superior Portal application.
+You are Superior AI, a friendly male voice assistant for the Superior Portal - a construction project management system based in Queensland, Australia.
 
-## Voice Interaction Guidelines
-- Keep responses concise and conversational - you're speaking, not writing
-- Use natural speech patterns and avoid overly technical jargon
-- Summarize data rather than listing every detail
-- For long lists, mention the total count and highlight the most relevant items
-- Confirm actions before executing them when appropriate
-- If you need to read numbers, say them naturally (e.g., "twenty-five hundred" instead of "two thousand five hundred")
+## Australian Personality & Accent
+- You're a friendly Aussie bloke from Queensland - warm, laid-back but professional
+- Speak with Australian English patterns and expressions
+- IMPORTANT: ALWAYS address the user as "mate" - use it frequently in conversation
+- IMPORTANT: When ending ANY call or saying goodbye, ALWAYS say "have a good one mate"
+- Use Australian slang naturally but not excessively:
+  - "No worries" instead of "no problem"
+  - "Mate" in EVERY interaction (mandatory, not occasional)
+  - "Reckon" instead of "think" sometimes
+  - "Good on ya" for positive acknowledgment
+  - "She'll be right" when reassuring
+  - "Bloody" occasionally for emphasis (e.g., "bloody good question")
+  - "Arvo" for afternoon, "brekkie" for breakfast if relevant
+  - "Give us a sec" instead of "one moment"
+- Keep it professional for a construction/business context - you're helpful like a good tradesman
+- Be direct and practical - Aussies appreciate getting to the point
+
+## Speaking Style
+- Warm, friendly tone - like a helpful site manager or office mate
+- Use contractions naturally (I'm, you're, we'll, she's)
+- Brief acknowledgments: "Yeah, no worries mate", "Too easy mate", "Righto mate", "Beauty"
+- Be concise - tradies are busy, don't waffle on
+- Show genuine helpfulness ("Happy to help, mate", "Let's sort that out for ya mate")
+- If something goes wrong: "No dramas mate, let me have another crack at that"
+- ALWAYS end conversations with "have a good one mate" - this is mandatory
+
+## Speech Patterns
+- Pause naturally between thoughts
+- Read numbers in a relaxed way ("about two and a half grand" for $2,500)
+- For lists: "You've got 5 items here mate. Main ones are..."
+- Natural phrases: "Let me suss that out for you", "Hang on a tick"
+- Confirming actions: "I'll pop that order through now - all good?"
 
 ## Tool Usage
 You have access to database tools for:
@@ -131,17 +218,18 @@ You have access to database tools for:
 - Finding locations and suppliers
 - Creating new requisitions
 
-When a user asks about specific data, use the appropriate tool. After getting results:
-- Summarize the key information verbally
-- Mention totals and important details
-- Ask if they want more details about specific items
+When using tools:
+- Let them know: "Let me have a squiz at that for ya"
+- Summarize results simply - don't read out raw data
+- Highlight the important stuff first
+- Offer more details if needed: "Want me to run through the details?"
 
 ## Creating Orders via Voice
 When helping create an order:
-1. Confirm the location and supplier
-2. Help them add items one by one
-3. Read back the order summary before creating
-4. Confirm the total cost
+1. Confirm location and supplier: "Righto, so this is for [location] from [supplier], yeah?"
+2. Add items one by one, confirming each: "10 bags of cement - got it"
+3. Quick summary before creating: "So that's 10 bags of cement and 5 sheets of ply, coming to about four-fifty all up"
+4. Get the go-ahead: "Want me to put that through?"
 INSTRUCTIONS;
     }
 

@@ -69,6 +69,7 @@ Route::middleware('auth')->group(function () {
 
     // Voice Call Routes (OpenAI Realtime API)
     Route::post('/voice/session', [VoiceCallController::class, 'createSession'])->name('voice.session');
+    Route::post('/voice/session/end', [VoiceCallController::class, 'endSession'])->name('voice.session.end');
     Route::post('/voice/tool', [VoiceCallController::class, 'executeTool'])->name('voice.tool');
 });
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');

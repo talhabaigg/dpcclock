@@ -1303,7 +1303,7 @@ INSTRUCTIONS;
             $result = $response->json();
             $assistantMessage = $this->extractAssistantMessage($result);
 
-            // Save assistant response
+            // Save assistant response with token breakdown
             AiChatMessage::create([
                 'user_id' => $userId,
                 'conversation_id' => $conversationId,
@@ -1311,6 +1311,8 @@ INSTRUCTIONS;
                 'message' => $assistantMessage,
                 'model_used' => $result['model'] ?? self::DEFAULT_MODEL,
                 'tokens_used' => $result['usage']['total_tokens'] ?? null,
+                'input_tokens' => $result['usage']['input_tokens'] ?? null,
+                'output_tokens' => $result['usage']['output_tokens'] ?? null,
             ]);
 
             return response()->json([
@@ -1363,6 +1365,8 @@ INSTRUCTIONS;
 
                 $fullText = '';
                 $totalTokens = 0;
+                $inputTokens = 0;
+                $outputTokens = 0;
                 $maxIterations = 10; // Prevent infinite loops
                 $currentInput = $input;
 
@@ -1487,7 +1491,10 @@ INSTRUCTIONS;
 
                                 // Handle completion
                                 if ($eventType === 'response.completed') {
-                                    $totalTokens += $event['response']['usage']['total_tokens'] ?? 0;
+                                    $usage = $event['response']['usage'] ?? [];
+                                    $totalTokens += $usage['total_tokens'] ?? 0;
+                                    $inputTokens += $usage['input_tokens'] ?? 0;
+                                    $outputTokens += $usage['output_tokens'] ?? 0;
 
                                     // Check if there are function calls in the output
                                     // The completed event has the FINAL state with full arguments
@@ -1591,6 +1598,8 @@ INSTRUCTIONS;
                         'message' => $fullText,
                         'model_used' => self::DEFAULT_MODEL,
                         'tokens_used' => $totalTokens,
+                        'input_tokens' => $inputTokens,
+                        'output_tokens' => $outputTokens,
                     ]);
                 }
 
