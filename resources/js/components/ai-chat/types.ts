@@ -10,6 +10,7 @@ export interface ChatMessage {
         model?: string;
         tokensUsed?: number;
         sources?: string[];
+        forceTool?: string;
     };
 }
 
@@ -67,7 +68,7 @@ export interface UseChatReturn {
     isLoading: boolean;
     error: Error | null;
     conversationId: string | null;
-    sendMessage: (content: string) => Promise<void>;
+    sendMessage: (content: string, forceTool?: string) => Promise<void>;
     regenerateLastMessage: () => Promise<void>;
     clearMessages: () => void;
     stopGeneration: () => void;

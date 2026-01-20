@@ -93,8 +93,8 @@ export function AiChat({
     );
 
     const handleSubmit = useCallback(
-        (message: string) => {
-            sendMessage(message);
+        (message: string, _attachments?: File[], forceTool?: string) => {
+            sendMessage(message, forceTool);
         },
         [sendMessage]
     );

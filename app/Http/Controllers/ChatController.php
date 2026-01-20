@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiChatMessage;
+use App\Models\JobSummary;
 use App\Models\Location;
 use App\Models\MaterialItem;
 use App\Models\Requisition;
@@ -62,8 +63,16 @@ IMPORTANT: You have access to database tools that can query live data. Use these
 - Materials, items, or pricing (use search_materials, get_material_price)
 - Locations or projects (use list_locations)
 - Suppliers or vendors (use list_suppliers)
+- Jobs, job summaries, project financials, costs, revenue, end dates (use get_job_summary)
 
 When a user asks about specific data like "which items are in PO PO400015" or "how many orders today", ALWAYS use the database tools - do NOT use file_search for these queries.
+
+ALWAYS use get_job_summary when the user asks about:
+- Job information, job data, job summaries
+- Which job will end next, job end dates, estimated end dates
+- Job costs, job revenue, cost vs revenue
+- Project financials or job financials
+- Over/under billing
 
 Only use file_search for:
 - General documentation or help topics
@@ -81,6 +90,46 @@ When creating requisitions, you can help users by:
 - If you do not know the answer, respond with "I am not sure about that."
 - Do not make up answers
 - Format your responses using markdown when appropriate for better readability
+
+## Data Visualization
+When asked to visualize data or show charts, use the get_job_summary tool with include_chart=true to get chart-ready data.
+Then output the chart data as a JSON code block with the language set to "chart". Example:
+
+```chart
+{
+  "type": "bar",
+  "title": "Job Summary",
+  "labels": ["Job1", "Job2"],
+  "datasets": [
+    {"label": "Cost", "data": [1000, 2000], "backgroundColor": "rgba(239, 68, 68, 0.7)"},
+    {"label": "Revenue", "data": [1500, 2500], "backgroundColor": "rgba(34, 197, 94, 0.7)"}
+  ]
+}
+```
+
+Supported chart types: "bar", "line", "pie"
+For pie charts, use this format:
+```chart
+{
+  "type": "pie",
+  "title": "Distribution",
+  "data": [{"name": "Category A", "value": 100}, {"name": "Category B", "value": 200}]
+}
+```
+
+## Image Generation
+When asked to generate, create, draw, or make an image/picture/illustration, use the generate_image tool.
+After the image is generated, output the result as a JSON code block so it displays properly:
+```json
+{
+  "success": true,
+  "image_url": "[URL from the tool result]",
+  "revised_prompt": "[prompt from the tool result]",
+  "size": "[size from the tool result]",
+  "display_type": "generated_image"
+}
+```
+IMPORTANT: Always copy the exact image_url from the tool result into the JSON block.
 INSTRUCTIONS;
 
         return config('services.openai.system_instructions') ?: $defaultInstructions;
@@ -94,6 +143,7 @@ INSTRUCTIONS;
         return $request->validate([
             'message' => ['required', 'string', 'max:' . self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
+            'force_tool' => ['nullable', 'string', 'max:50'],
         ]);
     }
 
@@ -539,6 +589,69 @@ INSTRUCTIONS;
             ],
         ];
 
+        // ===== VISUALIZATION TOOLS =====
+
+        $tools[] = [
+            'type' => 'function',
+            'name' => 'get_job_summary',
+            'description' => 'ALWAYS use this tool for ANY question about jobs. Get job summary data including: job numbers, start dates, estimated end dates, actual end dates, status, original/current estimate costs, original/current estimate revenue, and over/under billing. Use this for questions like "which job ends next", "show job costs", "job summaries", "project financials", "visualize jobs".',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'job_number' => [
+                        'type' => 'string',
+                        'description' => 'Filter by specific job number',
+                    ],
+                    'status' => [
+                        'type' => 'string',
+                        'description' => 'Filter by job status (e.g., active, completed, pending)',
+                    ],
+                    'limit' => [
+                        'type' => 'integer',
+                        'description' => 'Maximum number of jobs to return (default: 20, max: 100)',
+                    ],
+                    'include_chart' => [
+                        'type' => 'boolean',
+                        'description' => 'If true, returns data formatted for chart visualization',
+                    ],
+                ],
+                'required' => [],
+            ],
+        ];
+
+        // ===== IMAGE GENERATION TOOLS =====
+
+        $tools[] = [
+            'type' => 'function',
+            'name' => 'generate_image',
+            'description' => 'Generate an AI image using DALL-E. Use this when the user asks to create, generate, draw, or make an image, picture, illustration, or visual. Examples: "create an image of a sunset", "generate a logo", "draw a cat", "make me a picture of mountains".',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'prompt' => [
+                        'type' => 'string',
+                        'description' => 'Detailed description of the image to generate. Be specific about style, colors, composition, and subject matter.',
+                    ],
+                    'size' => [
+                        'type' => 'string',
+                        'description' => 'Image size: "1024x1024" (square), "1792x1024" (landscape), or "1024x1792" (portrait). Default: "1024x1024".',
+                        'enum' => ['1024x1024', '1792x1024', '1024x1792'],
+                    ],
+                    'quality' => [
+                        'type' => 'string',
+                        'description' => 'Image quality: "standard" or "hd" for higher detail. Default: "standard".',
+                        'enum' => ['standard', 'hd'],
+                    ],
+                    'style' => [
+                        'type' => 'string',
+                        'description' => 'Image style: "vivid" for hyper-real/dramatic or "natural" for more natural look. Default: "vivid".',
+                        'enum' => ['vivid', 'natural'],
+                    ],
+                ],
+                'required' => ['prompt'],
+            ],
+        ];
+
         return $tools;
     }
 
@@ -566,6 +679,10 @@ INSTRUCTIONS;
                 'update_requisition' => $this->toolUpdateRequisition($arguments),
                 // Delete tools
                 'delete_requisition' => $this->toolDeleteRequisition($arguments),
+                // Visualization tools
+                'get_job_summary' => $this->toolGetJobSummary($arguments),
+                // Image generation tools
+                'generate_image' => $this->toolGenerateImage($arguments),
                 // Legacy
                 'list_materials' => $this->toolSearchMaterials($arguments),
                 default => json_encode(['error' => "Unknown tool: {$name}"]),
@@ -1258,6 +1375,158 @@ INSTRUCTIONS;
     }
 
     /**
+     * Tool: Get job summary data for visualization
+     */
+    private function toolGetJobSummary(array $arguments): string
+    {
+        $query = JobSummary::query();
+
+        if (!empty($arguments['job_number'])) {
+            $query->where('job_number', 'like', '%' . $arguments['job_number'] . '%');
+        }
+
+        if (!empty($arguments['status'])) {
+            $query->where('status', $arguments['status']);
+        }
+
+        $limit = min((int) ($arguments['limit'] ?? 20), 100);
+        $includeChart = (bool) ($arguments['include_chart'] ?? false);
+
+        $jobs = $query->orderBy('job_number')->limit($limit)->get();
+
+        if ($jobs->isEmpty()) {
+            return json_encode(['error' => 'No job summaries found matching the criteria']);
+        }
+
+        $results = $jobs->map(fn($job) => [
+            'job_number' => $job->job_number,
+            'company_code' => $job->company_code,
+            'status' => $job->status,
+            'start_date' => optional($job->start_date)->toDateString(),
+            'estimated_end_date' => optional($job->estimated_end_date)->toDateString(),
+            'actual_end_date' => optional($job->actual_end_date)->toDateString(),
+            'original_estimate_cost' => (float) ($job->original_estimate_cost ?? 0),
+            'current_estimate_cost' => (float) ($job->current_estimate_cost ?? 0),
+            'original_estimate_revenue' => (float) ($job->original_estimate_revenue ?? 0),
+            'current_estimate_revenue' => (float) ($job->current_estimate_revenue ?? 0),
+            'over_under_billing' => (float) ($job->over_under_billing ?? 0),
+        ])->all();
+
+        $response = [
+            'jobs' => $results,
+            'count' => count($results),
+            'summary' => [
+                'total_original_cost' => collect($results)->sum('original_estimate_cost'),
+                'total_current_cost' => collect($results)->sum('current_estimate_cost'),
+                'total_original_revenue' => collect($results)->sum('original_estimate_revenue'),
+                'total_current_revenue' => collect($results)->sum('current_estimate_revenue'),
+                'total_over_under_billing' => collect($results)->sum('over_under_billing'),
+            ],
+        ];
+
+        // Add chart-formatted data if requested
+        if ($includeChart) {
+            $response['chart_data'] = [
+                'type' => 'bar',
+                'title' => 'Job Summary - Cost vs Revenue',
+                'labels' => collect($results)->pluck('job_number')->all(),
+                'datasets' => [
+                    [
+                        'label' => 'Current Est. Cost',
+                        'data' => collect($results)->pluck('current_estimate_cost')->all(),
+                        'backgroundColor' => 'rgba(239, 68, 68, 0.7)',
+                    ],
+                    [
+                        'label' => 'Current Est. Revenue',
+                        'data' => collect($results)->pluck('current_estimate_revenue')->all(),
+                        'backgroundColor' => 'rgba(34, 197, 94, 0.7)',
+                    ],
+                ],
+            ];
+        }
+
+        return json_encode($response, JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * Tool: Generate an image using DALL-E
+     */
+    private function toolGenerateImage(array $arguments): string
+    {
+        $prompt = $arguments['prompt'] ?? '';
+
+        if (empty($prompt)) {
+            return json_encode(['error' => 'A prompt is required to generate an image']);
+        }
+
+        $size = $arguments['size'] ?? '1024x1024';
+        $quality = $arguments['quality'] ?? 'standard';
+        $style = $arguments['style'] ?? 'vivid';
+
+        // Validate size
+        if (!in_array($size, ['1024x1024', '1792x1024', '1024x1792'])) {
+            $size = '1024x1024';
+        }
+
+        // Validate quality
+        if (!in_array($quality, ['standard', 'hd'])) {
+            $quality = 'standard';
+        }
+
+        // Validate style
+        if (!in_array($style, ['vivid', 'natural'])) {
+            $style = 'vivid';
+        }
+
+        try {
+            $apiKey = $this->getApiKey();
+
+            $response = Http::withToken($apiKey)
+                ->timeout(120)
+                ->post('https://api.openai.com/v1/images/generations', [
+                    'model' => 'dall-e-3',
+                    'prompt' => $prompt,
+                    'n' => 1,
+                    'size' => $size,
+                    'quality' => $quality,
+                    'style' => $style,
+                    'response_format' => 'url',
+                ]);
+
+            if ($response->failed()) {
+                Log::error('DALL-E API error', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+                return json_encode(['error' => 'Failed to generate image: ' . ($response->json()['error']['message'] ?? 'Unknown error')]);
+            }
+
+            $result = $response->json();
+
+            if (empty($result['data'][0]['url'])) {
+                return json_encode(['error' => 'No image URL returned from API']);
+            }
+
+            $imageUrl = $result['data'][0]['url'];
+            $revisedPrompt = $result['data'][0]['revised_prompt'] ?? $prompt;
+
+            return json_encode([
+                'success' => true,
+                'image_url' => $imageUrl,
+                'revised_prompt' => $revisedPrompt,
+                'size' => $size,
+                'quality' => $quality,
+                'style' => $style,
+                'display_type' => 'generated_image',
+            ], JSON_PRETTY_PRINT);
+
+        } catch (Throwable $e) {
+            Log::error('Image generation error', ['error' => $e->getMessage()]);
+            return json_encode(['error' => 'Failed to generate image: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
      * Handle non-streaming chat request
      */
     public function handle(Request $request)
@@ -1341,6 +1610,7 @@ INSTRUCTIONS;
             $data = $this->validateRequest($request);
             $conversationId = $data['conversation_id'] ?? Str::uuid()->toString();
             $userId = $this->getUserId();
+            $forceTool = $data['force_tool'] ?? null;
 
             // Save the user message
             AiChatMessage::create([
@@ -1358,9 +1628,9 @@ INSTRUCTIONS;
             $instructions = $this->getSystemInstructions();
             $tools = $this->buildToolsConfig();
 
-            Log::info('Chat stream starting', ['conversation_id' => $conversationId, 'user_id' => $userId]);
+            Log::info('Chat stream starting', ['conversation_id' => $conversationId, 'user_id' => $userId, 'force_tool' => $forceTool]);
 
-            return response()->stream(function () use ($input, $conversationId, $userId, $apiKey, $instructions, $tools) {
+            return response()->stream(function () use ($input, $conversationId, $userId, $apiKey, $instructions, $tools, $forceTool) {
                 $this->configureStreamOutput();
 
                 $fullText = '';
@@ -1374,6 +1644,23 @@ INSTRUCTIONS;
                     for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
                         Log::info('Making OpenAI API request', ['iteration' => $iteration]);
 
+                        // Build request payload
+                        $requestPayload = [
+                            'model' => self::DEFAULT_MODEL,
+                            'input' => $currentInput,
+                            'instructions' => $instructions,
+                            'tools' => $tools,
+                            'stream' => true,
+                        ];
+
+                        // Force specific tool if requested (only on first iteration)
+                        if ($forceTool && $iteration === 0) {
+                            $requestPayload['tool_choice'] = [
+                                'type' => 'function',
+                                'name' => $forceTool,
+                            ];
+                        }
+
                         $response = Http::withToken($apiKey)
                             ->withHeaders([
                                 'Accept' => 'text/event-stream',
@@ -1381,13 +1668,7 @@ INSTRUCTIONS;
                             ])
                             ->withOptions(['stream' => true])
                             ->timeout(120)
-                            ->post(self::OPENAI_API_URL, [
-                                'model' => self::DEFAULT_MODEL,
-                                'input' => $currentInput,
-                                'instructions' => $instructions,
-                                'tools' => $tools,
-                                'stream' => true,
-                            ]);
+                            ->post(self::OPENAI_API_URL, $requestPayload);
 
                         // Check for HTTP errors before trying to get stream
                         if ($response->failed()) {

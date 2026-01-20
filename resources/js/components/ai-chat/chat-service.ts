@@ -23,7 +23,8 @@ export class ChatService {
      */
     async *streamMessage(
         message: string,
-        conversationId: string | null
+        conversationId: string | null,
+        forceTool?: string
     ): AsyncGenerator<StreamEvent> {
         this.abortController = new AbortController();
 
@@ -40,6 +41,7 @@ export class ChatService {
                 body: JSON.stringify({
                     message,
                     conversation_id: conversationId,
+                    force_tool: forceTool,
                 }),
                 signal: this.abortController.signal,
             });

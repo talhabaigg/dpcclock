@@ -1,11 +1,37 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, Mic, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, ArrowUp, BarChart3, Check, FileText, Image, MapPin, Mic, Package, Plus, Sparkles, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SuggestedPrompt } from './types';
+
+// Available tools that can be forced (duplicated from chat-input for standalone use)
+interface AiTool {
+    id: string;
+    name: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+}
+
+const AVAILABLE_TOOLS: AiTool[] = [
+    { id: 'generate_image', name: 'Generate Image', description: 'Create AI-generated images', icon: Image },
+    { id: 'get_job_summary', name: 'Job Summary', description: 'View job costs, revenue & dates', icon: BarChart3 },
+    { id: 'search_requisitions', name: 'Search Orders', description: 'Find requisitions & POs', icon: FileText },
+    { id: 'search_materials', name: 'Search Materials', description: 'Find materials & pricing', icon: Package },
+    { id: 'list_locations', name: 'Locations', description: 'View all locations', icon: MapPin },
+    { id: 'list_suppliers', name: 'Suppliers', description: 'View all suppliers', icon: Users },
+];
 
 interface ChatWelcomeProps {
     title?: string;
@@ -17,8 +43,8 @@ interface ChatWelcomeProps {
     centered?: boolean;
     /** Placeholder for the input */
     placeholder?: string;
-    /** Called when user submits a message */
-    onSubmit?: (message: string) => void;
+    /** Called when user submits a message (with optional forceTool) */
+    onSubmit?: (message: string, attachments?: File[], forceTool?: string) => void;
     /** Whether the chat is loading */
     isLoading?: boolean;
     /** Called when user clicks the voice call button */
@@ -127,6 +153,7 @@ export function ChatWelcome({
     onVoiceCall,
 }: ChatWelcomeProps) {
     const [inputValue, setInputValue] = useState('');
+    const [selectedTool, setSelectedTool] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isFocused, setIsFocused] = useState(false);
 
@@ -146,9 +173,10 @@ export function ChatWelcome({
 
     const handleSubmit = useCallback(() => {
         if (!inputValue.trim() || isLoading) return;
-        onSubmit?.(inputValue.trim());
+        onSubmit?.(inputValue.trim(), undefined, selectedTool || undefined);
         setInputValue('');
-    }, [inputValue, isLoading, onSubmit]);
+        setSelectedTool(null);
+    }, [inputValue, isLoading, onSubmit, selectedTool]);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -161,12 +189,30 @@ export function ChatWelcome({
     );
 
     const canSubmit = inputValue.trim().length > 0 && !isLoading;
+    const selectedToolData = AVAILABLE_TOOLS.find(t => t.id === selectedTool);
 
     if (centered) {
         return (
             <div className={cn('flex h-full flex-col items-center justify-center px-4', className)}>
                 {/* Animated greeting like Gemini */}
                 <AnimatedGreeting userName={userName} />
+
+                {/* Selected tool indicator */}
+                {selectedTool && selectedToolData && (
+                    <div className="mb-3 flex w-full max-w-2xl items-center justify-center">
+                        <div className="flex items-center gap-2 rounded-full bg-violet-500/10 px-3 py-1.5 text-sm text-violet-600 dark:text-violet-400">
+                            <selectedToolData.icon className="size-3.5" />
+                            <span>Using: {selectedToolData.name}</span>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedTool(null)}
+                                className="ml-1 hover:text-violet-700 dark:hover:text-violet-300"
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Large centered input with rainbow glow */}
                 <div className="w-full max-w-2xl">
@@ -187,15 +233,66 @@ export function ChatWelcome({
                         {/* Inner card */}
                         <div className="relative rounded-3xl border border-border/50 bg-card shadow-lg">
                             <div className="flex items-center gap-2 p-3 md:gap-3 md:p-4">
-                                {/* Plus button */}
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                                >
-                                    <Plus className="size-5" />
-                                </Button>
+                                {/* Plus button with tools dropdown */}
+                                <DropdownMenu>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className={cn(
+                                                        'size-9 shrink-0 rounded-full transition-colors',
+                                                        selectedTool
+                                                            ? 'bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400'
+                                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                                    )}
+                                                    disabled={isLoading}
+                                                >
+                                                    <Plus className="size-5" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Tools</TooltipContent>
+                                    </Tooltip>
+                                    <DropdownMenuContent align="start" className="w-64">
+                                        <DropdownMenuLabel>Select a tool to use</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {AVAILABLE_TOOLS.map((tool) => {
+                                            const Icon = tool.icon;
+                                            const isSelected = selectedTool === tool.id;
+                                            return (
+                                                <DropdownMenuItem
+                                                    key={tool.id}
+                                                    onClick={() => setSelectedTool(isSelected ? null : tool.id)}
+                                                    className="flex items-center gap-3 py-2"
+                                                >
+                                                    <Icon className={cn('size-4', isSelected && 'text-violet-500')} />
+                                                    <div className="flex-1">
+                                                        <div className={cn('text-sm font-medium', isSelected && 'text-violet-600 dark:text-violet-400')}>
+                                                            {tool.name}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">{tool.description}</div>
+                                                    </div>
+                                                    {isSelected && <Check className="size-4 text-violet-500" />}
+                                                </DropdownMenuItem>
+                                            );
+                                        })}
+                                        {selectedTool && (
+                                            <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    onClick={() => setSelectedTool(null)}
+                                                    className="text-muted-foreground"
+                                                >
+                                                    <X className="size-4 mr-2" />
+                                                    Clear selection
+                                                </DropdownMenuItem>
+                                            </>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
 
                                 {/* Textarea - plain element for clean look */}
                                 <textarea

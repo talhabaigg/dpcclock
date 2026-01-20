@@ -4,12 +4,27 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Check, Copy, RefreshCw, Sparkles, User } from 'lucide-react';
-import { memo, useState } from 'react';
+import { Check, Copy, Download, Image, RefreshCw, Sparkles, User } from 'lucide-react';
+import { memo, useCallback, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Line,
+    LineChart,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip as RechartsTooltip,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import type { ChatMessage as ChatMessageType } from './types';
 
 interface ChatMessageProps {
@@ -96,6 +111,503 @@ function CodeBlock({
     );
 }
 
+// Chart colors palette
+const CHART_COLORS = [
+    '#8b5cf6', // violet
+    '#22c55e', // green
+    '#3b82f6', // blue
+    '#f97316', // orange
+    '#ec4899', // pink
+    '#eab308', // yellow
+    '#06b6d4', // cyan
+    '#ef4444', // red
+];
+
+// Chart visualization component
+interface ChartData {
+    type: 'bar' | 'line' | 'pie';
+    title?: string;
+    labels?: string[];
+    datasets?: Array<{
+        label: string;
+        data: number[];
+        backgroundColor?: string | string[];
+    }>;
+    data?: Array<{ name: string; value: number }>;
+}
+
+function ChartBlock({ data }: { data: ChartData }) {
+    const chartRef = useRef<HTMLDivElement>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    // Transform data for recharts format
+    const chartData = data.labels
+        ? data.labels.map((label, index) => {
+              const point: Record<string, string | number> = { name: label };
+              data.datasets?.forEach((dataset) => {
+                  point[dataset.label] = dataset.data[index] || 0;
+              });
+              return point;
+          })
+        : data.data || [];
+
+    const formatValue = (value: number) => {
+        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+        if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+        return `$${value.toFixed(0)}`;
+    };
+
+    const handleDownload = useCallback(async () => {
+        if (!chartRef.current || isDownloading) return;
+
+        setIsDownloading(true);
+        try {
+            // Find the SVG element inside the chart container
+            const svgElement = chartRef.current.querySelector('svg');
+            if (!svgElement) {
+                console.error('No SVG found in chart');
+                return;
+            }
+
+            // Clone the SVG to avoid modifying the original
+            const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
+
+            // Set explicit dimensions
+            const bbox = svgElement.getBoundingClientRect();
+            clonedSvg.setAttribute('width', String(bbox.width));
+            clonedSvg.setAttribute('height', String(bbox.height));
+
+            // Add white background for better visibility
+            const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            background.setAttribute('width', '100%');
+            background.setAttribute('height', '100%');
+            background.setAttribute('fill', '#ffffff');
+            clonedSvg.insertBefore(background, clonedSvg.firstChild);
+
+            // Convert SVG to data URL
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(clonedSvg);
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+
+            // Create canvas and draw image
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = () => {
+                // Set canvas size with padding
+                const padding = 20;
+                canvas.width = bbox.width + padding * 2;
+                canvas.height = bbox.height + padding * 2;
+
+                if (ctx) {
+                    // Fill white background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Draw the chart image centered
+                    ctx.drawImage(img, padding, padding);
+
+                    // Add title if present
+                    if (data.title) {
+                        ctx.fillStyle = '#1f2937';
+                        ctx.font = 'bold 14px Inter, system-ui, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(data.title, canvas.width / 2, 16);
+                    }
+
+                    // Convert to PNG and download
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `chart-${data.title?.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'export'}-${Date.now()}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        }
+                    }, 'image/png');
+                }
+
+                URL.revokeObjectURL(svgUrl);
+                setIsDownloading(false);
+            };
+
+            img.onerror = () => {
+                console.error('Failed to load SVG image');
+                URL.revokeObjectURL(svgUrl);
+                setIsDownloading(false);
+            };
+
+            img.src = svgUrl;
+        } catch (error) {
+            console.error('Failed to download chart:', error);
+            setIsDownloading(false);
+        }
+    }, [data.title, isDownloading]);
+
+    // Custom tooltip component for better styling
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
+        if (!active || !payload || !payload.length) return null;
+
+        return (
+            <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+                <p className="mb-1 text-xs font-medium text-foreground">{label}</p>
+                {payload.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2 text-xs">
+                        <div
+                            className="size-2.5 rounded-full"
+                            style={{ backgroundColor: entry.color }}
+                        />
+                        <span className="text-muted-foreground">{entry.name}:</span>
+                        <span className="font-medium text-foreground">{formatValue(entry.value)}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    // Truncate long labels for X-axis
+    const truncateLabel = (label: string, maxLength: number = 8) => {
+        if (label.length <= maxLength) return label;
+        return label.slice(0, maxLength) + '...';
+    };
+
+    return (
+        <div className="group/chart my-4 overflow-hidden rounded-xl border border-border/50 bg-card shadow-sm">
+            {/* Header with title and download button */}
+            <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-3">
+                {data.title ? (
+                    <h4 className="text-sm font-semibold text-foreground">
+                        {data.title}
+                    </h4>
+                ) : (
+                    <div />
+                )}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/chart:opacity-100"
+                            onClick={handleDownload}
+                            disabled={isDownloading}
+                        >
+                            <Download className={cn('size-3.5', isDownloading && 'animate-bounce')} />
+                            {isDownloading ? 'Saving...' : 'Save'}
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Download as PNG</TooltipContent>
+                </Tooltip>
+            </div>
+            <div ref={chartRef} className="h-[320px] w-full p-4">
+                <ResponsiveContainer width="100%" height="100%">
+                    {data.type === 'bar' ? (
+                        <BarChart
+                            data={chartData}
+                            margin={{ top: 10, right: 20, left: 10, bottom: 60 }}
+                            barCategoryGap="20%"
+                        >
+                            <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="hsl(var(--border))"
+                                opacity={0.3}
+                                vertical={false}
+                            />
+                            <XAxis
+                                dataKey="name"
+                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                                tickLine={false}
+                                axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
+                                angle={-45}
+                                textAnchor="end"
+                                height={70}
+                                interval={0}
+                                tickFormatter={(value) => truncateLabel(String(value))}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                                tickLine={false}
+                                axisLine={false}
+                                tickFormatter={formatValue}
+                                width={60}
+                            />
+                            <RechartsTooltip
+                                content={<CustomTooltip />}
+                                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
+                            />
+                            <Legend
+                                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                                iconType="circle"
+                                iconSize={8}
+                            />
+                            {data.datasets?.map((dataset, index) => (
+                                <Bar
+                                    key={dataset.label}
+                                    dataKey={dataset.label}
+                                    fill={dataset.backgroundColor as string || CHART_COLORS[index % CHART_COLORS.length]}
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={50}
+                                />
+                            ))}
+                        </BarChart>
+                    ) : data.type === 'line' ? (
+                        <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }}>
+                            <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="hsl(var(--border))"
+                                opacity={0.3}
+                                vertical={false}
+                            />
+                            <XAxis
+                                dataKey="name"
+                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                                tickLine={false}
+                                axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
+                                angle={-45}
+                                textAnchor="end"
+                                height={70}
+                                interval={0}
+                                tickFormatter={(value) => truncateLabel(String(value))}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                                tickLine={false}
+                                axisLine={false}
+                                tickFormatter={formatValue}
+                                width={60}
+                            />
+                            <RechartsTooltip
+                                content={<CustomTooltip />}
+                                cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '4 4' }}
+                            />
+                            <Legend
+                                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                                iconType="circle"
+                                iconSize={8}
+                            />
+                            {data.datasets?.map((dataset, index) => (
+                                <Line
+                                    key={dataset.label}
+                                    type="monotone"
+                                    dataKey={dataset.label}
+                                    stroke={dataset.backgroundColor as string || CHART_COLORS[index % CHART_COLORS.length]}
+                                    strokeWidth={2}
+                                    dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
+                                    activeDot={{ r: 6, strokeWidth: 2 }}
+                                />
+                            ))}
+                        </LineChart>
+                    ) : (
+                        <PieChart>
+                            <Pie
+                                data={chartData}
+                                cx="50%"
+                                cy="45%"
+                                innerRadius={55}
+                                outerRadius={95}
+                                paddingAngle={2}
+                                dataKey="value"
+                                nameKey="name"
+                                label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                                    // Don't show labels for very small slices
+                                    if (percent < 0.02) return null;
+                                    const RADIAN = Math.PI / 180;
+                                    const radius = outerRadius + 25;
+                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                    return (
+                                        <text
+                                            x={x}
+                                            y={y}
+                                            fill="hsl(var(--foreground))"
+                                            textAnchor={x > cx ? 'start' : 'end'}
+                                            dominantBaseline="central"
+                                            fontSize={11}
+                                            fontWeight={500}
+                                        >
+                                            {`${truncateLabel(name, 8)} ${(percent * 100).toFixed(0)}%`}
+                                        </text>
+                                    );
+                                }}
+                                labelLine={{
+                                    stroke: 'hsl(var(--muted-foreground))',
+                                    strokeWidth: 1,
+                                    strokeOpacity: 0.5,
+                                }}
+                            >
+                                {chartData.map((_, index) => (
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                                        stroke="hsl(var(--card))"
+                                        strokeWidth={2}
+                                    />
+                                ))}
+                            </Pie>
+                            <RechartsTooltip
+                                content={<CustomTooltip />}
+                            />
+                            <Legend
+                                wrapperStyle={{ fontSize: '11px' }}
+                                iconType="circle"
+                                iconSize={8}
+                                layout="horizontal"
+                                verticalAlign="bottom"
+                            />
+                        </PieChart>
+                    )}
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+}
+
+// Try to parse chart data from a code block
+function tryParseChartData(code: string): ChartData | null {
+    try {
+        const parsed = JSON.parse(code);
+        if (parsed && (parsed.type === 'bar' || parsed.type === 'line' || parsed.type === 'pie')) {
+            return parsed as ChartData;
+        }
+    } catch {
+        // Not valid JSON or not chart data
+    }
+    return null;
+}
+
+// Generated image data interface
+interface GeneratedImageData {
+    success: boolean;
+    image_url: string;
+    revised_prompt?: string;
+    size?: string;
+    display_type: 'generated_image';
+}
+
+// Try to parse generated image data from a code block
+function tryParseImageData(code: string): GeneratedImageData | null {
+    try {
+        const parsed = JSON.parse(code);
+        if (parsed && parsed.display_type === 'generated_image' && parsed.image_url) {
+            return parsed as GeneratedImageData;
+        }
+    } catch {
+        // Not valid JSON or not image data
+    }
+    return null;
+}
+
+// Generated Image component with download button
+function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+
+    const handleDownload = useCallback(async () => {
+        if (isDownloading) return;
+
+        setIsDownloading(true);
+        try {
+            // Fetch the image
+            const response = await fetch(data.image_url);
+            const blob = await response.blob();
+
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `generated-image-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Failed to download image:', error);
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [data.image_url, isDownloading]);
+
+    if (imageError) {
+        return (
+            <div className="my-4 rounded-xl border border-border/50 bg-card p-6 text-center text-muted-foreground">
+                <p>Failed to load generated image</p>
+                <a
+                    href={data.image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline text-sm"
+                >
+                    Open in new tab
+                </a>
+            </div>
+        );
+    }
+
+    return (
+        <div className="group/image my-4 rounded-xl border border-border/50 bg-card p-4 shadow-sm">
+            {/* Header with prompt and download button */}
+            <div className="mb-3 flex items-start justify-between gap-4">
+                {data.revised_prompt && (
+                    <p className="text-xs text-muted-foreground italic line-clamp-2 flex-1">
+                        "{data.revised_prompt}"
+                    </p>
+                )}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground shrink-0 opacity-0 transition-opacity hover:text-foreground group-hover/image:opacity-100"
+                            onClick={handleDownload}
+                            disabled={isDownloading}
+                        >
+                            <Download className={cn('size-3.5', isDownloading && 'animate-bounce')} />
+                            {isDownloading ? 'Saving...' : 'Save'}
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Download image</TooltipContent>
+                </Tooltip>
+            </div>
+
+            {/* Image container */}
+            <div className="relative overflow-hidden rounded-lg bg-muted/30">
+                {!imageLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="size-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                            <span className="text-xs text-muted-foreground">Loading image...</span>
+                        </div>
+                    </div>
+                )}
+                <img
+                    src={data.image_url}
+                    alt={data.revised_prompt || 'AI Generated Image'}
+                    className={cn(
+                        'w-full h-auto max-h-[500px] object-contain transition-opacity duration-300',
+                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                    )}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => setImageError(true)}
+                />
+            </div>
+
+            {/* Size badge */}
+            {data.size && (
+                <div className="mt-2 text-right">
+                    <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                        {data.size}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export const ChatMessage = memo(function ChatMessage({
     message,
     isLatest = false,
@@ -158,18 +670,20 @@ export const ChatMessage = memo(function ChatMessage({
                 {/* Message Content */}
                 <div className={cn('prose prose-sm dark:prose-invert max-w-none', isError && 'text-destructive')}>
                     {isStreaming && !message.content ? (
-                        <StreamingIndicator />
+                        <StreamingIndicator forceTool={message.metadata?.forceTool} />
                     ) : (
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                                // Code blocks with syntax highlighting
-                                code({ inline, className, children, ...props }) {
+                                // Code blocks with syntax highlighting and chart support
+                                code({ className, children, ...props }) {
                                     const match = /language-(\w+)/.exec(className || '');
                                     const language = match ? match[1] : '';
                                     const codeString = String(children).replace(/\n$/, '');
+                                    // Check if inline based on whether we have a language class (block code has language)
+                                    const isInline = !className;
 
-                                    if (inline) {
+                                    if (isInline) {
                                         return (
                                             <code
                                                 className="rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
@@ -178,6 +692,20 @@ export const ChatMessage = memo(function ChatMessage({
                                                 {children}
                                             </code>
                                         );
+                                    }
+
+                                    // Check if this is chart data (language is 'chart' or 'json' containing chart data)
+                                    if (language === 'chart' || language === 'json') {
+                                        const chartData = tryParseChartData(codeString);
+                                        if (chartData) {
+                                            return <ChartBlock data={chartData} />;
+                                        }
+
+                                        // Check if this is generated image data
+                                        const imageData = tryParseImageData(codeString);
+                                        if (imageData) {
+                                            return <GeneratedImageBlock data={imageData} />;
+                                        }
                                     }
 
                                     return (
@@ -298,7 +826,58 @@ export const ChatMessage = memo(function ChatMessage({
     );
 });
 
-function StreamingIndicator() {
+function StreamingIndicator({ forceTool }: { forceTool?: string }) {
+    const isGeneratingImage = forceTool === 'generate_image';
+
+    if (isGeneratingImage) {
+        return (
+            <div className="space-y-4">
+                {/* Animated generating image text */}
+                <div className="flex items-center gap-2">
+                    <Image className="size-4 text-pink-500 animate-pulse" />
+                    <span className="bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                        Generating image...
+                    </span>
+                </div>
+
+                {/* Image placeholder with animated border */}
+                <div className="relative w-64 h-64 rounded-xl overflow-hidden">
+                    {/* Animated gradient border */}
+                    <div
+                        className="absolute inset-0 rounded-xl"
+                        style={{
+                            background: 'linear-gradient(90deg, #ec4899, #f43f5e, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6, #ec4899)',
+                            backgroundSize: '200% 100%',
+                            animation: 'rainbow-shift 3s linear infinite',
+                            padding: '2px',
+                        }}
+                    >
+                        <div className="w-full h-full rounded-xl bg-card" />
+                    </div>
+
+                    {/* Inner content */}
+                    <div className="absolute inset-[2px] rounded-xl bg-muted/30 flex flex-col items-center justify-center gap-3">
+                        {/* Spinning loader */}
+                        <div className="relative size-12">
+                            <div className="absolute inset-0 rounded-full border-2 border-pink-500/20" />
+                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-pink-500 animate-spin" />
+                            <Image className="absolute inset-0 m-auto size-5 text-pink-500/60" />
+                        </div>
+                        <span className="text-xs text-muted-foreground">Creating your image...</span>
+                    </div>
+                </div>
+
+                {/* CSS for rainbow border animation */}
+                <style>{`
+                    @keyframes rainbow-shift {
+                        0% { background-position: 0% 50%; }
+                        100% { background-position: 200% 50%; }
+                    }
+                `}</style>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-3">
             {/* Animated thinking text with sparkle */}

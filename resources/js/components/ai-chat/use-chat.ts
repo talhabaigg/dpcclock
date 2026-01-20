@@ -21,7 +21,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     const lastUserMessageRef = useRef<string | null>(null);
 
     const sendMessage = useCallback(
-        async (content: string) => {
+        async (content: string, forceTool?: string) => {
             if (!content.trim() || isLoading) return;
 
             const trimmedContent = content.trim();
@@ -47,12 +47,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 content: '',
                 timestamp: new Date(),
                 status: 'streaming',
+                metadata: forceTool ? { forceTool } : undefined,
             };
 
             setMessages((prev) => [...prev, userMessage, assistantMessage]);
 
             try {
-                const stream = chatService.streamMessage(trimmedContent, conversationId);
+                const stream = chatService.streamMessage(trimmedContent, conversationId, forceTool);
                 let receivedDone = false;
                 let hasError = false;
 
