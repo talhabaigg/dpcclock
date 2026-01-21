@@ -5,11 +5,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { ArrowLeft, Camera, GitCompare, History } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -39,6 +40,30 @@ type Observation = {
     created_by_user?: { name: string };
 };
 
+type Revision = {
+    id: number;
+    drawing_sheet_id: number;
+    name: string;
+    revision_number?: string | null;
+    revision_date?: string | null;
+    status: string;
+    created_at: string;
+    thumbnail_path?: string | null;
+    file_path?: string | null;
+    diff_image_path?: string | null;
+    file_url?: string;
+    thumbnail_url?: string;
+    diff_image_url?: string;
+};
+
+type DrawingSheet = {
+    id: number;
+    title?: string;
+    sheet_number?: string;
+    revisions?: Revision[];
+    current_revision_id?: number;
+};
+
 type Drawing = {
     id: number;
     name: string;
@@ -48,6 +73,15 @@ type Drawing = {
     qa_stage_id: number;
     qa_stage?: QaStage;
     observations?: Observation[];
+    drawing_sheet?: DrawingSheet;
+    previous_revision?: {
+        id: number;
+        name: string;
+        revision_number?: string | null;
+        file_url?: string;
+    };
+    revision_number?: string | null;
+    diff_image_url?: string | null;
 };
 
 type PendingPoint = {
@@ -87,6 +121,14 @@ export default function QaStageDrawingShow() {
     const [viewerReady, setViewerReady] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
+    // Revision management
+    const revisions = drawing.drawing_sheet?.revisions || [];
+    const [selectedRevisionId, setSelectedRevisionId] = useState<number>(drawing.id);
+    const [showCompareOverlay, setShowCompareOverlay] = useState(false);
+
+    // Check if diff image is available for current drawing
+    const hasDiffImage = Boolean(drawing.diff_image_url);
+
     const pdfRef = useRef<PDFDocumentProxy | null>(null);
     const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
     const [pageSizes, setPageSizes] = useState<Record<number, { width: number; height: number }>>({});
@@ -119,6 +161,7 @@ export default function QaStageDrawingShow() {
 
         const loadPdf = async () => {
             try {
+                console.log('Loading PDF from URL:', drawing.file_url);
                 const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
                 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -127,7 +170,9 @@ export default function QaStageDrawingShow() {
                 if (cancelled) return;
                 pdfRef.current = pdf;
                 setPdfPageCount(pdf.numPages);
-            } catch {
+                console.log('PDF loaded successfully, pages:', pdf.numPages);
+            } catch (error) {
+                console.error('Failed to load PDF:', error);
                 toast.error('Failed to load PDF.');
             }
         };
@@ -392,40 +437,112 @@ export default function QaStageDrawingShow() {
 
             <div className="mx-2 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-semibold">{drawing.name}</h2>
-                            <p className="text-muted-foreground text-xs">Click anywhere on the drawing to add an observation.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {canPanZoom && (
-                                <div className="flex items-center gap-1">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                            setHasUserPanned(true);
-                                            setPdfScale((prev) => Math.max(PDF_SCALE_MIN, Math.round((prev - PDF_SCALE_STEP) * 100) / 100));
-                                        }}
-                                    >
-                                        -
-                                    </Button>
-                                    <div className="w-16 text-center text-xs text-muted-foreground">
-                                        {Math.round(pdfScale * 100)}%
+                    <div className="mb-3 flex flex-col gap-3">
+                        {/* Header row */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold">{drawing.name}</h2>
+                                <p className="text-muted-foreground text-xs">Click anywhere on the drawing to add an observation.</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {canPanZoom && (
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setHasUserPanned(true);
+                                                setPdfScale((prev) => Math.max(PDF_SCALE_MIN, Math.round((prev - PDF_SCALE_STEP) * 100) / 100));
+                                            }}
+                                        >
+                                            -
+                                        </Button>
+                                        <div className="w-16 text-center text-xs text-muted-foreground">
+                                            {Math.round(pdfScale * 100)}%
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setHasUserPanned(true);
+                                                setPdfScale((prev) => Math.min(PDF_SCALE_MAX, Math.round((prev + PDF_SCALE_STEP) * 100) / 100));
+                                            }}
+                                        >
+                                            +
+                                        </Button>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                            setHasUserPanned(true);
-                                            setPdfScale((prev) => Math.min(PDF_SCALE_MAX, Math.round((prev + PDF_SCALE_STEP) * 100) / 100));
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Version selector and comparison controls */}
+                        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+                            {/* Version Selector */}
+                            {revisions.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <History className="h-4 w-4 text-muted-foreground" />
+                                    <Select
+                                        value={String(selectedRevisionId)}
+                                        onValueChange={(value) => {
+                                            const revId = Number(value);
+                                            if (revId !== drawing.id) {
+                                                // Navigate to the selected revision
+                                                router.visit(`/qa-stage-drawings/${revId}`);
+                                            }
+                                            setSelectedRevisionId(revId);
                                         }}
                                     >
-                                        +
-                                    </Button>
+                                        <SelectTrigger className="w-[200px]">
+                                            <SelectValue placeholder="Select version" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {revisions.map((rev) => (
+                                                <SelectItem key={rev.id} value={String(rev.id)}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span>
+                                                            Rev {rev.revision_number || '?'}
+                                                            {rev.id === drawing.id && ' (Current)'}
+                                                        </span>
+                                                        {rev.status === 'active' && (
+                                                            <Badge variant="secondary" className="text-[10px]">
+                                                                Latest
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
+                            )}
+
+                            {/* Revision info badge */}
+                            {drawing.revision_number && (
+                                <Badge variant="outline">Rev {drawing.revision_number}</Badge>
+                            )}
+
+                            {/* Comparison toggle */}
+                            {hasDiffImage && (
+                                <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                                    <GitCompare className="h-4 w-4 text-muted-foreground" />
+                                    <Label htmlFor="compare-toggle" className="text-sm cursor-pointer">
+                                        Show Changes
+                                    </Label>
+                                    <Switch
+                                        id="compare-toggle"
+                                        checked={showCompareOverlay}
+                                        onCheckedChange={setShowCompareOverlay}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Previous revision info */}
+                            {drawing.previous_revision && (
+                                <span className="text-xs text-muted-foreground">
+                                    Compared to: Rev {drawing.previous_revision.revision_number || '?'}
+                                </span>
                             )}
                         </div>
                     </div>
@@ -469,6 +586,19 @@ export default function QaStageDrawingShow() {
                                                     Page {pageNumber}
                                                 </div>
                                                 <canvas ref={(el) => (canvasRefs.current[idx] = el)} className="block max-w-none rounded border" />
+                                                {/* Diff overlay - only show on first page when enabled */}
+                                                {showCompareOverlay && hasDiffImage && pageNumber === 1 && (
+                                                    <img
+                                                        src={drawing.diff_image_url!}
+                                                        alt="Changes overlay"
+                                                        className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+                                                        style={{
+                                                            opacity: 0.7,
+                                                            mixBlendMode: 'multiply',
+                                                        }}
+                                                        onError={() => toast.error('Failed to load comparison image')}
+                                                    />
+                                                )}
                                                 {pageSize &&
                                                     serverObservations
                                                         .filter((obs) => obs.page_number === pageNumber)
@@ -501,6 +631,19 @@ export default function QaStageDrawingShow() {
                             ) : (
                                 <div className="relative" onClick={handlePageClick(1)}>
                                     <img src={drawing.file_url} alt={drawing.name} className="block max-w-none rounded border" />
+                                    {/* Diff overlay for image drawings */}
+                                    {showCompareOverlay && hasDiffImage && (
+                                        <img
+                                            src={drawing.diff_image_url!}
+                                            alt="Changes overlay"
+                                            className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+                                            style={{
+                                                opacity: 0.7,
+                                                mixBlendMode: 'multiply',
+                                            }}
+                                            onError={() => toast.error('Failed to load comparison image')}
+                                        />
+                                    )}
                                     {serverObservations
                                         .filter((obs) => obs.page_number === 1)
                                         .map((obs) => (

@@ -17,7 +17,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowLeft, CircleX, Download, FileImage, Trash, Upload } from 'lucide-react';
+import { ArrowLeft, CircleX, Download, FileImage, Sparkles, Trash, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
 import { toast } from 'sonner';
@@ -124,6 +124,40 @@ export default function QaStageShow() {
     const handleDelete = (id: number) => {
         if (confirm('Are you sure you want to delete this drawing?')) {
             router.delete(`/qa-stage-drawings/${id}`);
+        }
+    };
+
+    const [extractingMetadataId, setExtractingMetadataId] = useState<number | null>(null);
+
+    const handleExtractMetadata = async (drawing: Drawing) => {
+        setExtractingMetadataId(drawing.id);
+        try {
+            const response = await fetch(`/qa-stage-drawings/${drawing.id}/extract-metadata`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Request failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                toast.success('Metadata extracted successfully');
+                router.reload();
+            } else {
+                toast.error(result.error || 'Failed to extract metadata');
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to extract metadata');
+        } finally {
+            setExtractingMetadataId(null);
         }
     };
 
@@ -265,6 +299,15 @@ export default function QaStageShow() {
                                             <Button size="sm" variant="outline" onClick={() => handleDownload(drawing)}>
                                                 <Download className="mr-1 h-4 w-4" />
                                                 Download
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleExtractMetadata(drawing)}
+                                                disabled={extractingMetadataId === drawing.id}
+                                            >
+                                                <Sparkles className="mr-1 h-4 w-4" />
+                                                {extractingMetadataId === drawing.id ? 'Extracting...' : 'AI Extract'}
                                             </Button>
                                             <Button size="sm" variant="ghost" onClick={() => handleDelete(drawing.id)}>
                                                 <Trash className="h-4 w-4 text-red-500" />

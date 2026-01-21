@@ -62,5 +62,26 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('qa-stages', QaStageController::class);
     Route::apiResource('qa-stage-drawings', QaStageDrawingController::class);
+
+    // Drawing revision and comparison endpoints
+    Route::get('qa-stage-drawings/{qaStageDrawing}/thumbnail', [QaStageDrawingController::class, 'thumbnail'])
+        ->name('qa-stage-drawings.thumbnail');
+    Route::get('qa-stage-drawings/{qaStageDrawing}/diff', [QaStageDrawingController::class, 'diff'])
+        ->name('qa-stage-drawings.diff');
+    Route::get('qa-stage-drawings/{qaStageDrawing}/revisions', [QaStageDrawingController::class, 'revisions'])
+        ->name('qa-stage-drawings.revisions');
+    Route::post('qa-stage-drawings/{qaStageDrawing}/compare', [QaStageDrawingController::class, 'compare'])
+        ->name('qa-stage-drawings.compare');
+    Route::post('qa-stage-drawings/{qaStageDrawing}/reprocess', [QaStageDrawingController::class, 'reprocess'])
+        ->name('qa-stage-drawings.reprocess');
+
+    // AI Metadata extraction and confirmation
+    Route::get('qa-stage-drawings/{qaStageDrawing}/metadata', [QaStageDrawingController::class, 'metadata'])
+        ->name('qa-stage-drawings.metadata');
+    Route::post('qa-stage-drawings/{qaStageDrawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])
+        ->name('qa-stage-drawings.extract-metadata');
+    Route::post('qa-stage-drawings/{qaStageDrawing}/confirm-metadata', [QaStageDrawingController::class, 'confirmMetadata'])
+        ->name('qa-stage-drawings.confirm-metadata');
+
     Route::apiResource('qa-stage-drawing-observations', QaStageDrawingObservationController::class);
 });

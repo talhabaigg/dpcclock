@@ -32,7 +32,15 @@ class QaStageController extends Controller
 
     public function show(QaStage $qaStage)
     {
-        $qaStage->load(['location', 'createdBy', 'updatedBy', 'drawings.createdBy']);
+        $qaStage->load([
+            'location',
+            'createdBy',
+            'updatedBy',
+            'drawings' => function ($query) {
+                // Load all drawings for now (filtering will be done client-side)
+                $query->with(['createdBy', 'drawingSheet', 'observations']);
+            },
+        ]);
 
         return response()->json($qaStage);
     }

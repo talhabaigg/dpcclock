@@ -304,6 +304,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'update'])->name('qa-stage-drawings.observations.update');
         Route::delete('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'destroy'])->name('qa-stage-drawings.destroy');
         Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download');
+        Route::post('/qa-stage-drawings/{drawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])->name('qa-stage-drawings.extract-metadata');
 
         Route::get('/php-limits', fn() => response()->json([
             'sapi' => php_sapi_name(),
