@@ -449,7 +449,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
     return (
         <div
             ref={wrapRef}
-            className="relative h-full w-full min-h-[200px] rounded-xl bg-gradient-to-b from-slate-50/50 to-white p-3 dark:from-slate-900/50 dark:to-slate-950 sm:min-h-[250px] sm:p-4"
+            className="relative h-full w-full min-h-[200px] rounded-lg bg-white p-3 dark:bg-slate-900 sm:min-h-[250px] sm:p-4"
             onPointerDown={() => {
                 if (editBox) closeEditBox();
             }}
@@ -458,13 +458,13 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
 
             {editBox && (
                 <div
-                    className="absolute z-50 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-slate-900 dark:ring-white/10"
+                    className="absolute z-50 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/10 dark:border-indigo-900/50 dark:bg-slate-800"
                     style={{ left: editBox.left, top: editBox.top, maxWidth: 'calc(100% - 16px)', width: '200px' }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >
-                    {/* Gradient Header */}
-                    <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 px-4 py-2.5">
-                        <p className="text-sm font-bold text-white">{meta[editBox.index]?.label}</p>
+                    {/* Header - subtle indigo accent */}
+                    <div className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-2.5 dark:border-indigo-900/50 dark:from-indigo-950/50 dark:to-slate-800">
+                        <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">{meta[editBox.index]?.label}</p>
                     </div>
 
                     {/* Content */}
@@ -474,7 +474,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                             <input
                                 autoFocus
                                 inputMode="numeric"
-                                className="h-11 w-full rounded-lg border-2 border-slate-200 bg-slate-50 px-3 pr-10 text-base font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-indigo-400 dark:focus:bg-slate-800"
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-10 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
                                 value={editBox.value}
                                 onChange={(e) => {
                                     setEditBoxDirty(true);
@@ -488,9 +488,9 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                             />
                             <div className="absolute right-2 top-1/2 -translate-y-1/2">
                                 <span
-                                    className={`inline-flex cursor-help items-center rounded px-1.5 py-0.5 text-xs font-bold ${
+                                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-bold ${
                                         editBox.inputMode === 'percent'
-                                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300'
                                             : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
                                     }`}
                                     title={editBox.inputMode === 'percent' ? 'Cumulative % of budget by this month' : 'Monthly dollar amount'}
@@ -501,25 +501,19 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                         </div>
 
                         {/* Action buttons below input */}
-                        <div className="mt-2.5 flex gap-2">
+                        <div className="mt-3 flex gap-2">
                             <button
-                                className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-slate-200 bg-white text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                                className="flex h-8 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
                                 onClick={closeEditBox}
                                 type="button"
                             >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
                                 Cancel
                             </button>
                             <button
-                                className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-sm font-medium text-white shadow-md shadow-indigo-500/25 transition-all hover:shadow-lg hover:shadow-indigo-500/30 active:scale-[0.98] dark:shadow-indigo-500/20"
+                                className="flex h-8 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-xs font-medium text-white shadow-sm shadow-indigo-500/30 transition-all hover:from-indigo-600 hover:to-violet-600 active:scale-[0.98]"
                                 onClick={commitEditBox}
                                 type="button"
                             >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
                                 Save
                             </button>
                         </div>

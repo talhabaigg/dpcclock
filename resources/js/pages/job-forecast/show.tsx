@@ -939,76 +939,79 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-0 shadow-2xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] lg:min-w-7xl sm:rounded-2xl">
-                    {/* Gradient Header */}
-                    <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-3 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-                                <TrendingUp className="h-4 w-4 flex-shrink-0 text-white/90 sm:h-5 sm:w-5" />
-                                <DialogTitle className="truncate text-sm font-semibold text-white sm:text-lg">
-                                    {chartCtx.open ? chartCtx.title : ''}
-                                </DialogTitle>
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] lg:min-w-7xl sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
+                    {/* Header - indigo accent with subtle gradient */}
+                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
+                        {/* Subtle decorative element */}
+                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
+                                    <TrendingUp className="h-4 w-4 text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {chartCtx.open ? chartCtx.title : ''}
+                                    </DialogTitle>
+                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Forecast Trend</p>
+                                </div>
                             </div>
-                            <div className="flex-shrink-0 text-right">
-                                <p className="text-sm font-bold text-white sm:text-lg">
-                                    {activeBudget ? `$${activeBudget.toLocaleString()}` : ''}
+                            <div className="flex-shrink-0 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                                <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                    {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
                                 </p>
-                                <p className="text-[10px] text-white/70 sm:text-xs">Total Budget</p>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-indigo-500 dark:text-indigo-400">Budget</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* View Mode Tabs */}
-                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
-                        <div className="flex">
-                            <TooltipProvider>
+                    {/* View Mode Toggle - icon only */}
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <TooltipProvider delayDuration={300}>
+                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-6 sm:py-3 sm:text-sm ${
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
                                                 chartViewMode === 'cumulative-percent'
-                                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                             }`}
                                             onClick={() => setChartViewMode('cumulative-percent')}
                                         >
-                                            <Percent className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                            <span className="hidden xs:inline">Cumulative</span>
-                                            <span className="xs:hidden">%</span>
+                                            <Percent className="h-4 w-4" />
                                         </button>
                                     </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>View cumulative percentage of budget</p>
+                                    <TooltipContent side="bottom">
+                                        <p>Cumulative %</p>
                                     </TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-6 sm:py-3 sm:text-sm ${
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
                                                 chartViewMode === 'monthly-amount'
-                                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                             }`}
                                             onClick={() => setChartViewMode('monthly-amount')}
                                         >
-                                            <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                            <span className="hidden xs:inline">Monthly</span>
-                                            <span className="xs:hidden">$</span>
+                                            <DollarSign className="h-4 w-4" />
                                         </button>
                                     </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>View monthly dollar amounts</p>
+                                    <TooltipContent side="bottom">
+                                        <p>Monthly $</p>
                                     </TooltipContent>
                                 </Tooltip>
-                            </TooltipProvider>
-                        </div>
+                            </div>
+                        </TooltipProvider>
                     </div>
 
                     <DialogHeader className="sr-only">
                         <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="min-h-0 flex-1 bg-white px-2 py-2 dark:bg-slate-900 sm:px-4 sm:py-0">
+                    <div className="min-h-0 flex-1 bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
                         <ForecastDialogChart
                             data={activeChartRows}
                             editable={chartCtx.open ? chartCtx.editable : false}
@@ -1020,9 +1023,9 @@ const ShowJobForecastPage = ({
                     </div>
 
                     {chartCtx.open && chartCtx.editable && (
-                        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-6 sm:py-3">
+                        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
                             <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                                <span className="font-medium text-slate-600 dark:text-slate-300">Tip:</span> <span className="hidden sm:inline">In Monthly view, drag forecast points to adjust values. In Cumulative view or by clicking any point, enter a specific value. Actual data points are locked.</span><span className="sm:hidden">Drag points to edit. Click for precise input.</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> <span className="hidden sm:inline">Click forecast points to edit values. In Monthly view, drag points to adjust. Actual data points are locked.</span><span className="sm:hidden">Click or drag forecast points to edit.</span>
                             </p>
                         </div>
                     )}
