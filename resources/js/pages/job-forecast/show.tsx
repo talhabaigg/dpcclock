@@ -17,19 +17,23 @@ import {
     ArrowLeft,
     BarChart3,
     CheckCircle,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
     Copy,
     DollarSign,
     FileSpreadsheet,
     FileText,
     Lock,
+    MessageSquare,
     Percent,
     Plus,
     Save,
     Scale,
     Send,
     Trash2,
+    TrendingUp,
     Unlock,
     XCircle,
 } from 'lucide-react';
@@ -123,6 +127,11 @@ const ShowJobForecastPage = ({
     // Excel Upload Dialog State
     const [excelUploadOpen, setExcelUploadOpen] = useState(false);
 
+    // Summary Comments State
+    const [summaryCommentsExpanded, setSummaryCommentsExpanded] = useState(false);
+    const [summaryComments, setSummaryComments] = useState(forecastWorkflow?.summaryComments || '');
+    const [isSavingComments, setIsSavingComments] = useState(false);
+
     // Forecast Project Item Management State
     const [itemDialogOpen, setItemDialogOpen] = useState(false);
     const [itemDialogType, setItemDialogType] = useState<'cost' | 'revenue'>('cost');
@@ -148,6 +157,11 @@ const ShowJobForecastPage = ({
             setSelectedForecastMonth(initialForecastMonth);
         }
     }, [initialForecastMonth]);
+
+    // Sync summary comments when forecast workflow changes
+    useEffect(() => {
+        setSummaryComments(forecastWorkflow?.summaryComments || '');
+    }, [forecastWorkflow?.summaryComments]);
 
     // ===========================
     // Derived State & Calculations
@@ -289,6 +303,27 @@ const ShowJobForecastPage = ({
             },
         );
     }, [locationId, selectedForecastMonth]);
+
+    // ===========================
+    // Summary Comments
+    // ===========================
+    const handleSaveSummaryComments = useCallback(() => {
+        if (!locationId || !selectedForecastMonth) return;
+
+        setIsSavingComments(true);
+        router.post(
+            `/location/${locationId}/job-forecast/summary-comments`,
+            {
+                forecast_month: selectedForecastMonth,
+                summary_comments: summaryComments,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSavingComments(false),
+                onError: () => setIsSavingComments(false),
+            },
+        );
+    }, [locationId, selectedForecastMonth, summaryComments]);
 
     // ===========================
     // Unified Group Show State
@@ -904,46 +939,76 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="h-150 w-full max-w-5xl min-w-full sm:min-w-7xl">
-                    <DialogHeader>
-                        <div className="flex items-center justify-between">
-                            <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
-                            <ButtonGroup className="mr-4">
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                size="icon"
-                                                variant={`${chartViewMode === 'cumulative-percent' ? 'default' : 'secondary'}`}
-                                                onClick={() => setChartViewMode('cumulative-percent')}
-                                            >
-                                                <Percent className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Cumulative %</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                size="icon"
-                                                variant={`${chartViewMode === 'monthly-amount' ? 'default' : 'secondary'}`}
-                                                onClick={() => setChartViewMode('monthly-amount')}
-                                            >
-                                                <DollarSign className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Monthly $</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </ButtonGroup>
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-0 shadow-2xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] lg:min-w-7xl sm:rounded-2xl">
+                    {/* Gradient Header */}
+                    <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-3 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                                <TrendingUp className="h-4 w-4 flex-shrink-0 text-white/90 sm:h-5 sm:w-5" />
+                                <DialogTitle className="truncate text-sm font-semibold text-white sm:text-lg">
+                                    {chartCtx.open ? chartCtx.title : ''}
+                                </DialogTitle>
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                                <p className="text-sm font-bold text-white sm:text-lg">
+                                    {activeBudget ? `$${activeBudget.toLocaleString()}` : ''}
+                                </p>
+                                <p className="text-[10px] text-white/70 sm:text-xs">Total Budget</p>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* View Mode Tabs */}
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
+                        <div className="flex">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-6 sm:py-3 sm:text-sm ${
+                                                chartViewMode === 'cumulative-percent'
+                                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                                            }`}
+                                            onClick={() => setChartViewMode('cumulative-percent')}
+                                        >
+                                            <Percent className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline">Cumulative</span>
+                                            <span className="xs:hidden">%</span>
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>View cumulative percentage of budget</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-6 sm:py-3 sm:text-sm ${
+                                                chartViewMode === 'monthly-amount'
+                                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                                            }`}
+                                            onClick={() => setChartViewMode('monthly-amount')}
+                                        >
+                                            <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline">Monthly</span>
+                                            <span className="xs:hidden">$</span>
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>View monthly dollar amounts</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+                    </div>
+
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="h-[520px]">
+                    <div className="min-h-0 flex-1 bg-white px-2 py-2 dark:bg-slate-900 sm:px-4 sm:py-0">
                         <ForecastDialogChart
                             data={activeChartRows}
                             editable={chartCtx.open ? chartCtx.editable : false}
@@ -955,9 +1020,10 @@ const ShowJobForecastPage = ({
                     </div>
 
                     {chartCtx.open && chartCtx.editable && (
-                        <div className="text-muted-foreground text-xs">
-                            Tip: In $ Monthly view, drag forecast points. In % Cumulative view or by clicking a point, you can type a value. Actuals
-                            are locked.
+                        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-6 sm:py-3">
+                            <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
+                                <span className="font-medium text-slate-600 dark:text-slate-300">Tip:</span> <span className="hidden sm:inline">In Monthly view, drag forecast points to adjust values. In Cumulative view or by clicking any point, enter a specific value. Actual data points are locked.</span><span className="sm:hidden">Drag points to edit. Click for precise input.</span>
+                            </p>
                         </div>
                     )}
                 </DialogContent>
@@ -1574,6 +1640,64 @@ const ShowJobForecastPage = ({
                         `}</style>
                     </div>
                 </div>
+
+                {/* Forecast Summary Comments Section */}
+                {!isForecastProject && (
+                    <div className="mx-2 mb-2">
+                        <div
+                            className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                        >
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between px-4 py-2"
+                                onClick={() => setSummaryCommentsExpanded(!summaryCommentsExpanded)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Forecast Summary
+                                    </span>
+                                    {summaryComments && !summaryCommentsExpanded && (
+                                        <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
+                                            - {summaryComments.substring(0, 60)}{summaryComments.length > 60 ? '...' : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                {summaryCommentsExpanded ? (
+                                    <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                )}
+                            </button>
+
+                            {summaryCommentsExpanded && (
+                                <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+                                    <textarea
+                                        value={summaryComments}
+                                        onChange={(e) => setSummaryComments(e.target.value)}
+                                        placeholder="Add comments about this forecast (key assumptions, risks, notes for reviewers...)"
+                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                        disabled={isEditingLocked}
+                                    />
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            {isEditingLocked ? 'Forecast is locked' : 'Comments are saved when you click Save'}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleSaveSummaryComments}
+                                            disabled={isEditingLocked || isSavingComments}
+                                            className="h-7"
+                                        >
+                                            {isSavingComments ? 'Saving...' : 'Save Comments'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex h-full flex-col space-y-2">
                     {/* Cost Grid */}

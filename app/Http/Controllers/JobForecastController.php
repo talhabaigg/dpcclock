@@ -139,6 +139,7 @@ class JobForecastController extends Controller
             'finalizedBy' => $jobForecast->finalizer?->name,
             'finalizedAt' => $jobForecast->finalized_at?->format('M d, Y H:i'),
             'rejectionNote' => $jobForecast->rejection_note,
+            'summaryComments' => $jobForecast->summary_comments,
         ] : null;
 
         // Check if user is admin (can finalize)
@@ -793,6 +794,43 @@ class JobForecastController extends Controller
         }
 
         return redirect()->back()->with('success', 'Forecast has been rejected and sent back for revision.');
+    }
+
+    /**
+     * Update forecast summary comments
+     */
+    public function updateSummaryComments(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+            'summary_comments' => 'nullable|string|max:5000',
+        ]);
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+        $user = Auth::user();
+
+        $jobForecast = JobForecast::firstOrCreate(
+            [
+                'job_number' => $jobNumber,
+                'forecast_month' => (new \DateTime($validated['forecast_month'])),
+            ],
+            [
+                'is_locked' => false,
+                'status' => JobForecast::STATUS_DRAFT,
+                'created_by' => $user->id,
+            ]
+        );
+
+        // Check if forecast is editable
+        if (!$jobForecast->isEditable()) {
+            return redirect()->back()->withErrors(['error' => 'This forecast cannot be edited in its current status.']);
+        }
+
+        $jobForecast->summary_comments = $validated['summary_comments'];
+        $jobForecast->updated_by = $user->id;
+        $jobForecast->save();
+
+        return redirect()->back()->with('success', 'Summary comments updated successfully.');
     }
 
     /**
