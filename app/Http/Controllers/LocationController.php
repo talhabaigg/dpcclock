@@ -250,14 +250,16 @@ class LocationController extends Controller
     public function loadJobData()
     {
         try {
-            // Dispatch all three jobs
+            // Dispatch all jobs
             \App\Jobs\LoadJobSummaries::dispatch();
             \App\Jobs\LoadJobCostData::dispatch();
             \App\Jobs\LoadJobReportByCostItemAndCostTypes::dispatch();
             \App\Jobs\LoadArProgressBillingSummaries::dispatch();
+            \App\Jobs\LoadArPostedInvoices::dispatch();
+            \App\Jobs\LoadApPostedInvoices::dispatch();
+            \App\Jobs\LoadApPostedInvoiceLines::dispatch();
 
-
-            return redirect()->back()->with('success', 'Data download initiated. All three jobs have been queued: Job Cost Details, Job Report by Cost Item & Cost Types, and AR Progress Billing Summaries.');
+            return redirect()->back()->with('success', 'Data download initiated. All jobs have been queued.');
         } catch (\Exception $e) {
             \Log::error('Failed to dispatch job data loading jobs', [
                 'error' => $e->getMessage(),
