@@ -23,6 +23,9 @@ return [
         'job_report_by_cost_item' => '/JobReportByCostItemAndCostTypes',
         'ar_progress_billing' => '/ARProgressBillingSummaries',
         'job_summaries' => '/JobSummaries',
+        'ar_posted_invoices' => '/ARPostedInvoices',
+        'ap_posted_invoices' => '/APPostedInvoices',
+        'ap_posted_invoice_lines' => '/APPostedInvoiceLines',
     ],
 
     'jobs' => [

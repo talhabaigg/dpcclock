@@ -34,7 +34,8 @@
       "Bash(dir \"C:\\\\php-8.3\\\\extras\\\\ssl\\\\openssl.cnf\")",
       "Bash(dir:*)",
       "Bash(Get-Content -Path \"c:\\\\Laravel\\\\dpcclock\\\\storage\\\\logs\\\\laravel.log\" -Tail 100)",
-      "Bash(Select-String -Pattern \"400|error|failed\" -Context 0,2)"
+      "Bash(Select-String -Pattern \"400|error|failed\" -Context 0,2)",
+      "Bash(xargs cat:*)"
     ]
   }
 }
