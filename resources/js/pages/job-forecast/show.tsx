@@ -1616,6 +1616,7 @@ const ShowJobForecastPage = ({
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}
                                 rowSelection={isForecastProject ? 'multiple' : undefined}
+                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
                                 onFirstDataRendered={(params) => {
                                     restoreColState(params.api, LS_COST_COL_STATE);
                                     restoreGroupShowState(params.api);
@@ -1701,6 +1702,7 @@ const ShowJobForecastPage = ({
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}
                                 rowSelection={isForecastProject ? 'multiple' : undefined}
+                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
                                 onFirstDataRendered={(params) => {
                                     restoreColState(params.api, LS_REV_COL_STATE);
                                     // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
