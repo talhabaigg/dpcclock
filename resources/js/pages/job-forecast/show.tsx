@@ -3,7 +3,6 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1055,53 +1054,87 @@ const ShowJobForecastPage = ({
 
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-3 sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:p-6">
-                    <DialogHeader className="flex-shrink-0">
-                        <div className="flex items-center justify-between gap-2">
-                            <DialogTitle className="text-sm sm:text-lg">Accrual Summary - Job Progression</DialogTitle>
-                            <TooltipProvider>
-                                <div className="flex gap-1 pr-2 sm:gap-4 sm:pr-4">
-                                    {/* View Mode Toggles */}
-                                    <div className="flex gap-1">
-                                        <ButtonGroup className="mr-4">
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            size="icon"
-                                                            variant={`${accrualViewMode === 'accrual-percent' ? 'default' : 'secondary'}`}
-                                                            onClick={() => setAccrualViewMode('accrual-percent')}
-                                                        >
-                                                            <Percent className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Switch to %</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            size="icon"
-                                                            variant={`${accrualViewMode === 'accrual-dollar' ? 'default' : 'secondary'}`}
-                                                            onClick={() => setAccrualViewMode('accrual-dollar')}
-                                                        >
-                                                            <DollarSign className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Switch to $</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </ButtonGroup>
-                                    </div>
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
+                    {/* Header - indigo accent with subtle gradient */}
+                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
+                        {/* Subtle decorative element */}
+                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
+                                    <BarChart3 className="h-4 w-4 text-white" />
                                 </div>
-                            </TooltipProvider>
+                                <div className="min-w-0">
+                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
+                                        Accrual Summary
+                                    </DialogTitle>
+                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Job Progression</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-shrink-0 gap-4 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {totalCostBudget ? `$${totalCostBudget.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-blue-500 dark:text-blue-400">Cost Budget</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {totalRevenueBudget ? `$${totalRevenueBudget.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-green-500 dark:text-green-400">Revenue Budget</p>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* View Mode Toggle - icon only */}
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <TooltipProvider delayDuration={300}>
+                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                accrualViewMode === 'accrual-percent'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setAccrualViewMode('accrual-percent')}
+                                        >
+                                            <Percent className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Cumulative %</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                accrualViewMode === 'accrual-dollar'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setAccrualViewMode('accrual-dollar')}
+                                        >
+                                            <DollarSign className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Dollar $</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        </TooltipProvider>
+                    </div>
+
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Accrual Summary</DialogTitle>
                     </DialogHeader>
 
-                    <div className="min-h-0 flex-1 overflow-auto">
+                    <div className="min-h-0 flex-1 overflow-auto bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -1113,9 +1146,10 @@ const ShowJobForecastPage = ({
                         />
                     </div>
 
-                    <div className="text-muted-foreground flex-shrink-0 border-t pt-2 text-xs sm:text-sm">
-                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Solid lines represent actuals, dashed lines
-                        represent forecast values.
+                    <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines represent forecast values. Click legend items to toggle visibility.
+                        </p>
                     </div>
                 </DialogContent>
             </Dialog>
