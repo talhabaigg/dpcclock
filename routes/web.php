@@ -306,6 +306,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download');
         Route::post('/qa-stage-drawings/{drawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])->name('qa-stage-drawings.extract-metadata');
 
+        // Drawing alignment persistence
+        Route::post('/qa-stage-drawings/{drawing}/alignment', [QaStageDrawingController::class, 'saveAlignment'])->name('qa-stage-drawings.alignment.save');
+        Route::get('/qa-stage-drawings/{drawing}/alignment/{candidateDrawing}', [QaStageDrawingController::class, 'getAlignment'])->name('qa-stage-drawings.alignment.get');
+        Route::delete('/qa-stage-drawings/{drawing}/alignment/{candidateDrawing}', [QaStageDrawingController::class, 'deleteAlignment'])->name('qa-stage-drawings.alignment.delete');
+
         Route::get('/php-limits', fn() => response()->json([
             'sapi' => php_sapi_name(),
             'upload_max_filesize' => ini_get('upload_max_filesize'),

@@ -10,8 +10,13 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
     AlignmentToolbar,
+    DiffControls,
+    DiffOverlayCanvas,
+    MagnifierLens,
     MarkersLayer,
+    SavedAlignment,
     useAlignmentTool,
+    useDiffOverlay,
 } from '@/features/drawing-compare';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -195,11 +200,154 @@ export default function QaStageDrawingShow() {
     // Alignment tool
     const alignmentTool = useAlignmentTool();
 
+    // Base canvas ref (for diff computation)
+    const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    // Base image ref (for non-PDF magnification)
+    const baseImageRef = useRef<HTMLImageElement | null>(null);
+
+    // Diff overlay
+    const diffOverlay = useDiffOverlay(
+        baseCanvasRef,
+        candidateCanvasRef,
+        alignmentTool.transform.cssTransform,
+        alignmentTool.isAligned,
+        { debounceMs: 500, scale: pdfScale }
+    );
+
     // View mode: 'pan' for panning, 'select' for adding observations
     const [viewMode, setViewMode] = useState<'pan' | 'select'>('pan');
 
     // Zoom lock state
     const [zoomLocked, setZoomLocked] = useState(false);
+
+    // Auto-align handler
+    const handleAutoAlign = useCallback(() => {
+        if (!baseCanvasRef.current || !candidateCanvasRef.current) {
+            toast.error('Both canvases must be loaded for auto-align');
+            return;
+        }
+        const result = alignmentTool.autoAlign(baseCanvasRef.current, candidateCanvasRef.current);
+        if (result.success) {
+            toast.success(result.message);
+        } else {
+            toast.error(result.message);
+        }
+    }, [alignmentTool]);
+
+    // Save alignment to backend
+    const saveAlignment = useCallback(
+        async (method: 'manual' | 'auto') => {
+            if (!compareRevisionId || !alignmentTool.isAligned) return;
+
+            const { transform, points } = alignmentTool.getTransformForSave();
+
+            try {
+                const response = await fetch(`/qa-stage-drawings/${drawing.id}/alignment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    },
+                    body: JSON.stringify({
+                        candidate_drawing_id: compareRevisionId,
+                        transform: {
+                            scale: transform.scale,
+                            rotation: transform.rotation,
+                            translateX: transform.translateX,
+                            translateY: transform.translateY,
+                            cssTransform: transform.cssTransform,
+                        },
+                        method,
+                        alignment_points: points,
+                    }),
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to save alignment');
+                }
+            } catch (error) {
+                console.error('Failed to save alignment:', error);
+            }
+        },
+        [drawing.id, compareRevisionId, alignmentTool]
+    );
+
+    // Track which candidate we've loaded alignment for (to prevent duplicate loads)
+    const loadedAlignmentForRef = useRef<number | null>(null);
+    // Track if we should skip next save (after loading)
+    const skipNextSaveRef = useRef(false);
+
+    // Load saved alignment from backend
+    const loadSavedAlignment = useCallback(
+        async (candidateId: number) => {
+            // Skip if already loaded for this candidate
+            if (loadedAlignmentForRef.current === candidateId) {
+                return false;
+            }
+
+            try {
+                const response = await fetch(`/qa-stage-drawings/${drawing.id}/alignment/${candidateId}`);
+                const data = await response.json();
+
+                if (data.success && data.alignment) {
+                    loadedAlignmentForRef.current = candidateId;
+                    skipNextSaveRef.current = true; // Don't save right after loading
+                    alignmentTool.loadSavedAlignment(data.alignment as SavedAlignment);
+                    toast.success('Loaded saved alignment');
+                    return true;
+                }
+            } catch (error) {
+                console.error('Failed to load alignment:', error);
+            }
+            return false;
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [drawing.id] // Intentionally exclude alignmentTool to prevent loops
+    );
+
+    // Auto-save alignment when it changes (debounced)
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (alignmentTool.isAligned && compareRevisionId) {
+            // Skip save if we just loaded
+            if (skipNextSaveRef.current) {
+                skipNextSaveRef.current = false;
+                return;
+            }
+
+            // Debounce save to avoid too many requests during fine-tuning
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+            saveTimeoutRef.current = setTimeout(() => {
+                // Determine method based on whether we have alignment points
+                const { points } = alignmentTool.getTransformForSave();
+                const method = points.baseA ? 'manual' : 'auto';
+                saveAlignment(method);
+            }, 1000);
+        }
+
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [alignmentTool.isAligned, alignmentTool.transform.cssTransform, compareRevisionId]);
+
+    // Load alignment when candidate revision changes
+    useEffect(() => {
+        if (compareRevisionId && showCompareOverlay) {
+            // Reset the loaded ref when candidate changes
+            if (loadedAlignmentForRef.current !== compareRevisionId) {
+                loadedAlignmentForRef.current = null;
+                loadSavedAlignment(compareRevisionId);
+            }
+        } else {
+            // Reset when comparison is turned off
+            loadedAlignmentForRef.current = null;
+        }
+    }, [compareRevisionId, showCompareOverlay, loadSavedAlignment]);
 
     // Determine if candidate is a PDF
     const candidateIsPdf = candidateRevision?.file_url
@@ -957,6 +1105,21 @@ export default function QaStageDrawingShow() {
                                     onStartAlignment={alignmentTool.startAlignment}
                                     onResetAlignment={alignmentTool.resetAlignment}
                                     onUndoLastPoint={alignmentTool.undoLastPoint}
+                                    onNudge={alignmentTool.nudgeTranslation}
+                                    onRotate={alignmentTool.adjustRotation}
+                                    onScale={alignmentTool.adjustScale}
+                                    onAutoAlign={handleAutoAlign}
+                                />
+                            )}
+
+                            {/* Diff Controls - only show when comparison is active */}
+                            {showCompareOverlay && candidateRevision?.file_url && (
+                                <DiffControls
+                                    state={diffOverlay.state}
+                                    isAligned={alignmentTool.isAligned}
+                                    onToggle={diffOverlay.toggleDiff}
+                                    onSensitivityChange={diffOverlay.setSensitivity}
+                                    onRecompute={diffOverlay.recompute}
                                 />
                             )}
                         </div>
@@ -1010,7 +1173,7 @@ export default function QaStageDrawingShow() {
                                                         Page {targetPageNumber} of {totalPages}
                                                     </div>
                                                 )}
-                                                <canvas ref={(el) => { canvasRefs.current[0] = el; }} className="block max-w-none rounded border" />
+                                                <canvas ref={(el) => { canvasRefs.current[0] = el; baseCanvasRef.current = el; }} className="block max-w-none rounded border" />
                                                 {/* Candidate PDF overlay - rendered to canvas for PDF-to-PDF comparison */}
                                                 {/* During alignment: hide overlay when picking base points, show when picking candidate points */}
                                                 {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
@@ -1018,11 +1181,13 @@ export default function QaStageDrawingShow() {
                                                         ref={candidateCanvasRef}
                                                         className="absolute left-0 top-0 pointer-events-none"
                                                         style={{
-                                                            opacity: alignmentTool.activeLayer === 'base'
-                                                                ? 0  // Hide overlay when picking base points
-                                                                : alignmentTool.activeLayer === 'candidate'
-                                                                  ? 0.7  // Show overlay prominently when picking candidate points
-                                                                  : overlayOpacity / 100,  // Normal opacity when not aligning
+                                                            opacity: diffOverlay.state.showDiff
+                                                                ? 0  // Hide overlay when showing diff (diff canvas shows comparison)
+                                                                : alignmentTool.activeLayer === 'base'
+                                                                  ? 0  // Hide overlay when picking base points
+                                                                  : alignmentTool.activeLayer === 'candidate'
+                                                                    ? 0.7  // Show overlay prominently when picking candidate points
+                                                                    : overlayOpacity / 100,  // Normal opacity when not aligning
                                                             display: candidatePdfLoaded ? 'block' : 'none',
                                                             transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                                             transformOrigin: 'top left',
@@ -1036,11 +1201,13 @@ export default function QaStageDrawingShow() {
                                                         alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
                                                         className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                                         style={{
-                                                            opacity: alignmentTool.activeLayer === 'base'
-                                                                ? 0  // Hide overlay when picking base points
-                                                                : alignmentTool.activeLayer === 'candidate'
-                                                                  ? 0.7  // Show overlay prominently when picking candidate points
-                                                                  : overlayOpacity / 100,  // Normal opacity when not aligning
+                                                            opacity: diffOverlay.state.showDiff
+                                                                ? 0  // Hide overlay when showing diff (diff canvas shows comparison)
+                                                                : alignmentTool.activeLayer === 'base'
+                                                                  ? 0  // Hide overlay when picking base points
+                                                                  : alignmentTool.activeLayer === 'candidate'
+                                                                    ? 0.7  // Show overlay prominently when picking candidate points
+                                                                    : overlayOpacity / 100,  // Normal opacity when not aligning
                                                             transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                                             transformOrigin: 'top left',
                                                         }}
@@ -1101,13 +1268,21 @@ export default function QaStageDrawingShow() {
                                                         containerHeight={pageSize.height}
                                                     />
                                                 )}
+                                                {/* Diff overlay canvas - highlights differences after alignment */}
+                                                {showCompareOverlay && (
+                                                    <DiffOverlayCanvas
+                                                        diffCanvas={diffOverlay.diffCanvas}
+                                                        visible={diffOverlay.state.showDiff}
+                                                        opacity={0.8}
+                                                    />
+                                                )}
                                             </div>
                                         );
                                     })()}
                                 </div>
                             ) : (
                                 <div className="relative" onClick={handlePageClick(1)}>
-                                    <img src={drawing.file_url} alt={drawing.name} className="block max-w-none rounded border" />
+                                    <img ref={baseImageRef} src={drawing.file_url} alt={drawing.name} className="block max-w-none rounded border" />
                                     {/* Candidate revision overlay for image drawings - only for non-PDF candidates */}
                                     {showCompareOverlay && candidateRevision?.file_url && !candidateIsPdf && (
                                         <img
@@ -1115,7 +1290,9 @@ export default function QaStageDrawingShow() {
                                             alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
                                             className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                             style={{
-                                                opacity: overlayOpacity / 100,
+                                                opacity: diffOverlay.state.showDiff
+                                                    ? 0  // Hide overlay when showing diff
+                                                    : overlayOpacity / 100,
                                                 transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                                 transformOrigin: 'top left',
                                             }}
@@ -1174,9 +1351,34 @@ export default function QaStageDrawingShow() {
                                             containerHeight={100}
                                         />
                                     )}
+                                    {/* Diff overlay canvas for image drawings */}
+                                    {showCompareOverlay && (
+                                        <DiffOverlayCanvas
+                                            diffCanvas={diffOverlay.diffCanvas}
+                                            visible={diffOverlay.state.showDiff}
+                                            opacity={0.8}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>
+                        {/* Magnifier lens for precise alignment point placement */}
+                        {alignmentTool.isAligning && (
+                            <MagnifierLens
+                                active={alignmentTool.isAligning}
+                                sourceElement={
+                                    alignmentTool.activeLayer === 'candidate'
+                                        ? candidateCanvasRef.current
+                                        : isPdf
+                                            ? baseCanvasRef.current
+                                            : baseImageRef.current
+                                }
+                                containerElement={containerRef.current}
+                                magnification={3}
+                                size={120}
+                                borderColor={alignmentTool.activeLayer === 'base' ? 'blue' : 'green'}
+                            />
+                        )}
                     </div>
                 </Card>
 

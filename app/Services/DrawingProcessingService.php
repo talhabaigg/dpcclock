@@ -127,12 +127,11 @@ class DrawingProcessingService
     }
 
     /**
-     * Extract page dimensions from PDF
+     * Extract page dimensions from a file path (without requiring a model).
+     * Use this when processing a file before creating the drawing model.
      */
-    public function extractPageDimensions(QaStageDrawing $drawing, ?string $filePath = null): array
+    public function extractPageDimensionsFromPath(string $filePath): array
     {
-        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
-
         try {
             $isPdf = Str::lower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
 
@@ -156,6 +155,31 @@ class DrawingProcessingService
                     $dimensions['height'] = $imageInfo[1];
                 }
             }
+
+            return $dimensions;
+
+        } catch (\Exception $e) {
+            Log::error('Dimension extraction failed', [
+                'file_path' => $filePath,
+                'error' => $e->getMessage(),
+            ]);
+            return [
+                'pages' => 1,
+                'width' => null,
+                'height' => null,
+            ];
+        }
+    }
+
+    /**
+     * Extract page dimensions from PDF and update the drawing model.
+     */
+    public function extractPageDimensions(QaStageDrawing $drawing, ?string $filePath = null): array
+    {
+        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
+
+        try {
+            $dimensions = $this->extractPageDimensionsFromPath($filePath);
 
             $drawing->update(['page_dimensions' => $dimensions]);
             return ['success' => true, 'dimensions' => $dimensions];

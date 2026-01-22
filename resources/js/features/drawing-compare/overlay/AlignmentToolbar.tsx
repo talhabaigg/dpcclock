@@ -1,5 +1,17 @@
 import { Button } from '@/components/ui/button';
-import { Crosshair, RotateCcw, Undo2 } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    Crosshair,
+    Layers,
+    RotateCcw,
+    RotateCw,
+    Undo2,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
 import { AlignmentState } from '../alignment/useAlignmentTool';
 
 type AlignmentToolbarProps = {
@@ -11,6 +23,14 @@ type AlignmentToolbarProps = {
     onStartAlignment: () => void;
     onResetAlignment: () => void;
     onUndoLastPoint: () => void;
+    /** Fine-tune: nudge translation */
+    onNudge?: (dx: number, dy: number) => void;
+    /** Fine-tune: adjust rotation */
+    onRotate?: (deltaDeg: number) => void;
+    /** Fine-tune: adjust scale */
+    onScale?: (delta: number) => void;
+    /** Auto-align for same-size drawings */
+    onAutoAlign?: () => void;
 };
 
 /**
@@ -31,15 +51,40 @@ export function AlignmentToolbar({
     onStartAlignment,
     onResetAlignment,
     onUndoLastPoint,
+    onNudge,
+    onRotate,
+    onScale,
+    onAutoAlign,
 }: AlignmentToolbarProps) {
+    // Nudge amount in percentage (0.1% = very fine)
+    const NUDGE_AMOUNT = 0.1;
+    // Rotation amount in degrees
+    const ROTATE_AMOUNT = 0.1;
+    // Scale amount (0.1% = 0.001)
+    const SCALE_AMOUNT = 0.001;
     return (
         <div className="flex items-center gap-3 rounded-md border px-3 py-2 bg-muted/30">
-            {/* Align button - starts alignment mode */}
+            {/* Alignment buttons - shown when idle */}
             {state === 'idle' && (
-                <Button size="sm" variant="outline" onClick={onStartAlignment}>
-                    <Crosshair className="mr-1 h-4 w-4" />
-                    Align
-                </Button>
+                <div className="flex items-center gap-1">
+                    {/* Auto-align button for same-size drawings */}
+                    {onAutoAlign && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={onAutoAlign}
+                            title="Auto-align (for same-size drawings)"
+                        >
+                            <Layers className="mr-1 h-4 w-4" />
+                            Auto
+                        </Button>
+                    )}
+                    {/* Manual align button */}
+                    <Button size="sm" variant="outline" onClick={onStartAlignment}>
+                        <Crosshair className="mr-1 h-4 w-4" />
+                        Manual
+                    </Button>
+                </div>
             )}
 
             {/* Status message */}
@@ -79,6 +124,97 @@ export function AlignmentToolbar({
 
                     {/* Text status */}
                     <span className="text-xs text-muted-foreground">{statusMessage}</span>
+                </div>
+            )}
+
+            {/* Fine-tune controls when aligned */}
+            {isAligned && onNudge && onRotate && onScale && (
+                <div className="flex items-center gap-2 border-l pl-3 ml-2">
+                    {/* Position nudge */}
+                    <div className="flex items-center gap-0.5" title="Nudge position">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onNudge(-NUDGE_AMOUNT, 0)}
+                            title="Nudge left"
+                        >
+                            <ArrowLeft className="h-3 w-3" />
+                        </Button>
+                        <div className="flex flex-col gap-0.5">
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={() => onNudge(0, -NUDGE_AMOUNT)}
+                                title="Nudge up"
+                            >
+                                <ArrowUp className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={() => onNudge(0, NUDGE_AMOUNT)}
+                                title="Nudge down"
+                            >
+                                <ArrowDown className="h-3 w-3" />
+                            </Button>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onNudge(NUDGE_AMOUNT, 0)}
+                            title="Nudge right"
+                        >
+                            <ArrowRight className="h-3 w-3" />
+                        </Button>
+                    </div>
+
+                    {/* Rotation adjust */}
+                    <div className="flex items-center gap-0.5 border-l pl-2" title="Adjust rotation">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onRotate(-ROTATE_AMOUNT)}
+                            title="Rotate counter-clockwise"
+                        >
+                            <RotateCcw className="h-3 w-3" />
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onRotate(ROTATE_AMOUNT)}
+                            title="Rotate clockwise"
+                        >
+                            <RotateCw className="h-3 w-3" />
+                        </Button>
+                    </div>
+
+                    {/* Scale adjust */}
+                    <div className="flex items-center gap-0.5 border-l pl-2" title="Adjust scale">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onScale(-SCALE_AMOUNT)}
+                            title="Scale down"
+                        >
+                            <ZoomOut className="h-3 w-3" />
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onScale(SCALE_AMOUNT)}
+                            title="Scale up"
+                        >
+                            <ZoomIn className="h-3 w-3" />
+                        </Button>
+                    </div>
                 </div>
             )}
 

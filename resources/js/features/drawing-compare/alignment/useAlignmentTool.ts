@@ -6,6 +6,7 @@ import {
     Point2D,
     TransformResult,
 } from './computeTransform';
+import { computeAutoAlignment, AutoAlignResult } from './autoAlign';
 
 /**
  * Alignment tool state machine states.
@@ -26,6 +27,18 @@ export type AlignmentData = {
     baseB?: Point2D;
     candidateA?: Point2D;
     candidateB?: Point2D;
+};
+
+/**
+ * Saved alignment data from the backend.
+ */
+export type SavedAlignment = {
+    scale: number;
+    rotation: number;
+    translateX: number;
+    translateY: number;
+    cssTransform: string;
+    method: 'manual' | 'auto';
 };
 
 /**
@@ -57,6 +70,22 @@ export type UseAlignmentToolReturn = {
     handleBaseClick: (point: Point2D) => void;
     /** Handle click on candidate layer */
     handleCandidateClick: (point: Point2D) => void;
+
+    /** Fine-tune: nudge translation by delta (in percentage units) */
+    nudgeTranslation: (dx: number, dy: number) => void;
+    /** Fine-tune: adjust rotation by delta (in degrees) */
+    adjustRotation: (deltaDeg: number) => void;
+    /** Fine-tune: adjust scale by delta (multiplier, e.g., 0.01 for 1%) */
+    adjustScale: (delta: number) => void;
+
+    /** Auto-align based on canvas sizes (for same-size drawings) */
+    autoAlign: (baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement) => AutoAlignResult;
+
+    /** Load a previously saved alignment */
+    loadSavedAlignment: (saved: SavedAlignment) => void;
+
+    /** Get transform data for saving */
+    getTransformForSave: () => { transform: TransformResult; points: AlignmentData };
 };
 
 const STATUS_MESSAGES: Record<AlignmentState, string> = {
@@ -177,6 +206,118 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
         [state]
     );
 
+    // Fine-tune adjustment: nudge translation
+    const nudgeTranslation = useCallback(
+        (dx: number, dy: number) => {
+            if (!isAligned) return;
+            setTransform((prev) => {
+                const newTranslateX = prev.translateX + dx / 100; // dx is in percentage, convert to 0-1
+                const newTranslateY = prev.translateY + dy / 100;
+                const translateXPercent = newTranslateX * 100;
+                const translateYPercent = newTranslateY * 100;
+                const rotationDeg = (prev.rotation * 180) / Math.PI;
+
+                return {
+                    ...prev,
+                    translateX: newTranslateX,
+                    translateY: newTranslateY,
+                    cssTransform: `translate(${translateXPercent}%, ${translateYPercent}%) rotate(${rotationDeg}deg) scale(${prev.scale})`,
+                };
+            });
+        },
+        [isAligned]
+    );
+
+    // Fine-tune adjustment: adjust rotation
+    const adjustRotation = useCallback(
+        (deltaDeg: number) => {
+            if (!isAligned) return;
+            setTransform((prev) => {
+                const newRotation = prev.rotation + (deltaDeg * Math.PI) / 180;
+                const translateXPercent = prev.translateX * 100;
+                const translateYPercent = prev.translateY * 100;
+                const rotationDeg = (newRotation * 180) / Math.PI;
+
+                return {
+                    ...prev,
+                    rotation: newRotation,
+                    cssTransform: `translate(${translateXPercent}%, ${translateYPercent}%) rotate(${rotationDeg}deg) scale(${prev.scale})`,
+                };
+            });
+        },
+        [isAligned]
+    );
+
+    // Fine-tune adjustment: adjust scale
+    const adjustScale = useCallback(
+        (delta: number) => {
+            if (!isAligned) return;
+            setTransform((prev) => {
+                const newScale = Math.max(0.5, Math.min(2.0, prev.scale + delta));
+                const translateXPercent = prev.translateX * 100;
+                const translateYPercent = prev.translateY * 100;
+                const rotationDeg = (prev.rotation * 180) / Math.PI;
+
+                return {
+                    ...prev,
+                    scale: newScale,
+                    cssTransform: `translate(${translateXPercent}%, ${translateYPercent}%) rotate(${rotationDeg}deg) scale(${newScale})`,
+                };
+            });
+        },
+        [isAligned]
+    );
+
+    // Auto-align for same-size drawings
+    const autoAlign = useCallback(
+        (baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement): AutoAlignResult => {
+            const result = computeAutoAlignment(baseCanvas, candidateCanvas);
+
+            if (result.success) {
+                setTransform(result.transform);
+                setState('aligned');
+                // Clear any manual points since we're using auto-align
+                setPoints({});
+            }
+
+            return result;
+        },
+        []
+    );
+
+    // Load a previously saved alignment
+    const loadSavedAlignment = useCallback((saved: SavedAlignment) => {
+        const loadedTransform: TransformResult = {
+            scale: saved.scale,
+            rotation: saved.rotation,
+            translateX: saved.translateX,
+            translateY: saved.translateY,
+            cssTransform: saved.cssTransform,
+            // Reconstruct matrix from values
+            cssMatrix: `matrix(${saved.scale * Math.cos(saved.rotation)}, ${saved.scale * Math.sin(saved.rotation)}, ${-saved.scale * Math.sin(saved.rotation)}, ${saved.scale * Math.cos(saved.rotation)}, 0, 0)`,
+            matrix: [
+                saved.scale * Math.cos(saved.rotation),
+                saved.scale * Math.sin(saved.rotation),
+                0,
+                -saved.scale * Math.sin(saved.rotation),
+                saved.scale * Math.cos(saved.rotation),
+                0,
+                0,
+                0,
+                1,
+            ],
+        };
+        setTransform(loadedTransform);
+        setState('aligned');
+        // Clear points since this is a loaded alignment
+        setPoints({});
+    }, []);
+
+    // Get transform data for saving
+    const getTransformForSave = useCallback(() => {
+        return { transform, points };
+    }, [transform, points]);
+
     return {
         state,
         points,
@@ -190,5 +331,11 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
         undoLastPoint,
         handleBaseClick,
         handleCandidateClick,
+        nudgeTranslation,
+        adjustRotation,
+        adjustScale,
+        autoAlign,
+        loadSavedAlignment,
+        getTransformForSave,
     };
 }

@@ -3,7 +3,10 @@ export { computeAlignmentTransform, applyTransform, computeInverseTransform, IDE
 export type { Point2D, AlignmentPoints, TransformResult } from './alignment/computeTransform';
 
 export { useAlignmentTool } from './alignment/useAlignmentTool';
-export type { AlignmentState, AlignmentData, UseAlignmentToolReturn } from './alignment/useAlignmentTool';
+export type { AlignmentState, AlignmentData, UseAlignmentToolReturn, SavedAlignment } from './alignment/useAlignmentTool';
+
+export { computeAutoAlignment, isSameSize } from './alignment/autoAlign';
+export type { AutoAlignResult } from './alignment/autoAlign';
 
 // Viewer
 export {
@@ -18,3 +21,8 @@ export type { ViewportState, LayerDimensions } from './viewer/CoordinateTransfor
 // Overlay
 export { MarkersLayer, CrosshairCursor } from './overlay/MarkersLayer';
 export { AlignmentToolbar } from './overlay/AlignmentToolbar';
+export { MagnifierLens } from './overlay/MagnifierLens';
+
+// Diff
+export { useDiffOverlay, DiffOverlayCanvas, DiffControls } from './diff';
+export type { DiffOverlayState, UseDiffOverlayOptions, UseDiffOverlayReturn } from './diff';

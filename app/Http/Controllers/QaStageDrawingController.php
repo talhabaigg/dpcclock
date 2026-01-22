@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessDrawingJob;
+use App\Models\DrawingAlignment;
 use App\Models\DrawingFile;
 use App\Models\DrawingSheet;
 use App\Models\QaStage;
@@ -118,10 +119,12 @@ class QaStageDrawingController extends Controller
      */
     private function resolveDrawingSheet(QaStage $qaStage, array $validated): DrawingSheet
     {
+        // If explicit drawing_sheet_id provided, use it
         if (!empty($validated['drawing_sheet_id'])) {
             return DrawingSheet::find($validated['drawing_sheet_id']);
         }
 
+        // If sheet_number provided, find or create by sheet number
         if (!empty($validated['sheet_number'])) {
             return DrawingSheet::findOrCreateBySheetNumber(
                 $qaStage->id,
@@ -130,6 +133,17 @@ class QaStageDrawingController extends Controller
             );
         }
 
+        // Try to find existing sheet by title (name) within same QA stage
+        // This allows uploading new revisions with the same name to group them together
+        $existingSheet = DrawingSheet::where('qa_stage_id', $qaStage->id)
+            ->where('title', $validated['name'])
+            ->first();
+
+        if ($existingSheet) {
+            return $existingSheet;
+        }
+
+        // No match found - create new sheet
         return DrawingSheet::create([
             'qa_stage_id' => $qaStage->id,
             'title' => $validated['name'],
@@ -144,7 +158,7 @@ class QaStageDrawingController extends Controller
     {
         try {
             $processingService = app(DrawingProcessingService::class);
-            $dimensions = $processingService->extractPageDimensions($filePath);
+            $dimensions = $processingService->extractPageDimensionsFromPath($filePath);
             return $dimensions['pages'] ?? 1;
         } catch (\Exception $e) {
             Log::warning("Could not determine page count: {$e->getMessage()}");
@@ -244,6 +258,87 @@ class QaStageDrawingController extends Controller
             'message' => 'Metadata extracted successfully',
             'metadata' => $result['metadata'],
             'confidence' => $result['confidence'],
+        ]);
+    }
+
+    /**
+     * Save alignment between two drawings.
+     */
+    public function saveAlignment(Request $request, QaStageDrawing $drawing)
+    {
+        $validated = $request->validate([
+            'candidate_drawing_id' => 'required|exists:qa_stage_drawings,id',
+            'transform' => 'required|array',
+            'transform.scale' => 'required|numeric',
+            'transform.rotation' => 'required|numeric',
+            'transform.translateX' => 'required|numeric',
+            'transform.translateY' => 'required|numeric',
+            'transform.cssTransform' => 'nullable|string',
+            'method' => 'required|in:manual,auto',
+            'alignment_points' => 'nullable|array',
+        ]);
+
+        try {
+            $alignment = DrawingAlignment::saveAlignment(
+                $drawing->id,
+                $validated['candidate_drawing_id'],
+                $validated['transform'],
+                $validated['method'],
+                $validated['alignment_points'] ?? null
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Alignment saved',
+                'alignment' => $alignment->toTransform(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to save alignment', [
+                'base_drawing_id' => $drawing->id,
+                'candidate_drawing_id' => $validated['candidate_drawing_id'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save alignment',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get saved alignment for a drawing pair.
+     */
+    public function getAlignment(QaStageDrawing $drawing, QaStageDrawing $candidateDrawing)
+    {
+        $alignment = DrawingAlignment::findForPair($drawing->id, $candidateDrawing->id);
+
+        if (!$alignment) {
+            return response()->json([
+                'success' => true,
+                'alignment' => null,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'alignment' => $alignment->toTransform(),
+        ]);
+    }
+
+    /**
+     * Delete alignment for a drawing pair.
+     */
+    public function deleteAlignment(QaStageDrawing $drawing, QaStageDrawing $candidateDrawing)
+    {
+        $deleted = DrawingAlignment::where('base_drawing_id', $drawing->id)
+            ->where('candidate_drawing_id', $candidateDrawing->id)
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted' => $deleted > 0,
         ]);
     }
 }
