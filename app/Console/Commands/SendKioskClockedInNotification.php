@@ -56,8 +56,12 @@ class SendKioskClockedInNotification extends Command
             if ($employees->isNotEmpty()) {
                 Log::info("Employees clocked in for kiosk {$kiosk->id}: ", $employees->toArray());
 
-                // Send notification to each manager of the kiosk
+                // Send notification to each manager of the kiosk (skip if disabled)
                 foreach ($kiosk->managers as $manager) {
+                    if ($manager->disable_kiosk_notifications) {
+                        Log::info("Skipping notification for manager {$manager->id} - notifications disabled.");
+                        continue;
+                    }
                     $manager->notify(new KioskClockedInNotification($employees->toArray(), $kiosk->name));
                 }
             } else {
