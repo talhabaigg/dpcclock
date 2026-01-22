@@ -14,11 +14,16 @@ class QaStageDrawing extends Model
     protected $fillable = [
         'qa_stage_id',
         'drawing_sheet_id',
+        'drawing_file_id',
+        'page_number',
+        'page_label',
         'name',
         'revision_number',
         'revision_date',
         'revision_notes',
         'status',
+        // Legacy file fields - kept for backwards compatibility during migration
+        // TODO: Remove these after full migration to drawing_files
         'file_path',
         'file_name',
         'file_type',
@@ -36,9 +41,10 @@ class QaStageDrawing extends Model
         'revision_date' => 'date',
         'ai_extracted_metadata' => 'array',
         'page_dimensions' => 'array',
+        'page_number' => 'integer',
     ];
 
-    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url'];
+    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages'];
 
     const STATUS_DRAFT = 'draft';
     const STATUS_PROCESSING = 'processing';
@@ -73,6 +79,14 @@ class QaStageDrawing extends Model
         return $this->belongsTo(DrawingSheet::class);
     }
 
+    /**
+     * The file this drawing page belongs to.
+     */
+    public function drawingFile()
+    {
+        return $this->belongsTo(DrawingFile::class, 'drawing_file_id');
+    }
+
     public function observations()
     {
         return $this->hasMany(QaStageDrawingObservation::class, 'qa_stage_drawing_id');
@@ -100,13 +114,51 @@ class QaStageDrawing extends Model
 
     // Accessors
 
-    public function getFileUrlAttribute()
+    /**
+     * Get the file URL - prefers DrawingFile, falls back to legacy file_path.
+     */
+    public function getFileUrlAttribute(): ?string
     {
+        // Prefer the new DrawingFile relationship
+        if ($this->drawing_file_id && $this->drawingFile) {
+            return $this->drawingFile->file_url;
+        }
+
+        // Fallback to legacy file_path
         if (!$this->file_path) {
             return null;
         }
-        // Use relative URL to avoid CORS issues when APP_URL doesn't match current host
         return '/storage/' . $this->file_path;
+    }
+
+    /**
+     * Get a display name that includes page number for multi-page files.
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        $totalPages = $this->total_pages;
+        if ($totalPages > 1) {
+            return $this->page_label ?? "{$this->name} — Page {$this->page_number}";
+        }
+        return $this->page_label ?? $this->name;
+    }
+
+    /**
+     * Get total pages in the source file.
+     */
+    public function getTotalPagesAttribute(): int
+    {
+        // Prefer DrawingFile page_count
+        if ($this->drawing_file_id && $this->drawingFile) {
+            return $this->drawingFile->page_count;
+        }
+
+        // Fallback to page_dimensions
+        if ($this->page_dimensions && isset($this->page_dimensions['pages'])) {
+            return max(1, (int) $this->page_dimensions['pages']);
+        }
+
+        return 1;
     }
 
     public function getThumbnailUrlAttribute()

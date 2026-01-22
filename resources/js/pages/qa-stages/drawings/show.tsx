@@ -5,12 +5,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Camera, GitCompare, History } from 'lucide-react';
+import { ArrowLeft, Camera, Eye, GitCompare, History, Layers } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -64,9 +65,26 @@ type DrawingSheet = {
     current_revision_id?: number;
 };
 
+type DrawingFile = {
+    id: number;
+    storage_path: string;
+    original_name: string;
+    mime_type?: string;
+    page_count: number;
+    file_url: string;
+};
+
+type SiblingPage = {
+    id: number;
+    page_number: number;
+    page_label?: string | null;
+    name: string;
+};
+
 type Drawing = {
     id: number;
     name: string;
+    display_name?: string;
     file_name: string;
     file_type?: string | null;
     file_url: string;
@@ -74,6 +92,10 @@ type Drawing = {
     qa_stage?: QaStage;
     observations?: Observation[];
     drawing_sheet?: DrawingSheet;
+    drawing_file?: DrawingFile;
+    page_number: number;
+    page_label?: string | null;
+    total_pages: number;
     previous_revision?: {
         id: number;
         name: string;
@@ -97,7 +119,15 @@ const DRAG_THRESHOLD_PX = 5;
 const PDF_PAGE_GAP_PX = 24;
 
 export default function QaStageDrawingShow() {
-    const { drawing } = usePage<{ drawing: Drawing }>().props;
+    const { drawing, siblingPages } = usePage<{
+        drawing: Drawing;
+        siblingPages: SiblingPage[];
+    }>().props;
+
+    // Page-based rendering: this drawing represents a single page
+    const targetPageNumber = drawing.page_number || 1;
+    const totalPages = drawing.total_pages || 1;
+    const isPaged = totalPages > 1;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'QA Stages', href: '/qa-stages' },
@@ -126,6 +156,18 @@ export default function QaStageDrawingShow() {
     const [selectedRevisionId, setSelectedRevisionId] = useState<number>(drawing.id);
     const [showCompareOverlay, setShowCompareOverlay] = useState(false);
 
+    // Overlay comparison state
+    const [compareRevisionId, setCompareRevisionId] = useState<number | null>(null);
+    const [overlayOpacity, setOverlayOpacity] = useState(50);
+
+    // Get the candidate revision for comparison
+    const candidateRevision = compareRevisionId
+        ? revisions.find((rev) => rev.id === compareRevisionId)
+        : null;
+
+    // Check if we can compare (need at least 2 revisions or a diff image)
+    const canCompare = revisions.length > 1 || Boolean(drawing.diff_image_url);
+
     // Check if diff image is available for current drawing
     const hasDiffImage = Boolean(drawing.diff_image_url);
 
@@ -139,6 +181,17 @@ export default function QaStageDrawingShow() {
     const didDragRef = useRef(false);
     const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
     const dragOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+    // Candidate PDF for overlay comparison
+    const candidatePdfRef = useRef<PDFDocumentProxy | null>(null);
+    const candidateCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [candidatePdfLoaded, setCandidatePdfLoaded] = useState(false);
+
+    // Determine if candidate is a PDF
+    const candidateIsPdf = candidateRevision?.file_url
+        ? candidateRevision.file_url.toLowerCase().endsWith('.pdf') ||
+          (candidateRevision as Revision & { file_type?: string })?.file_path?.toLowerCase().endsWith('.pdf')
+        : false;
 
     const isPdf = (drawing.file_type || '').toLowerCase().includes('pdf') || drawing.file_name.toLowerCase().endsWith('.pdf');
     const isImage =
@@ -161,7 +214,7 @@ export default function QaStageDrawingShow() {
 
         const loadPdf = async () => {
             try {
-                console.log('Loading PDF from URL:', drawing.file_url);
+                console.log('Loading PDF from URL:', drawing.file_url, 'for page:', targetPageNumber);
                 const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
                 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -169,8 +222,10 @@ export default function QaStageDrawingShow() {
                 const pdf = (await loadingTask.promise) as PDFDocumentProxy;
                 if (cancelled) return;
                 pdfRef.current = pdf;
-                setPdfPageCount(pdf.numPages);
-                console.log('PDF loaded successfully, pages:', pdf.numPages);
+                // For page-based drawings, we only render one page
+                // but we still need to know the total for validation
+                setPdfPageCount(1); // Always 1 since each drawing = 1 page
+                console.log('PDF loaded successfully, rendering page:', targetPageNumber, 'of', pdf.numPages);
             } catch (error) {
                 console.error('Failed to load PDF:', error);
                 toast.error('Failed to load PDF.');
@@ -182,41 +237,110 @@ export default function QaStageDrawingShow() {
         return () => {
             cancelled = true;
         };
-    }, [drawing.file_url, isPdf]);
+    }, [drawing.file_url, isPdf, targetPageNumber]);
 
     useEffect(() => {
-        const renderPages = async () => {
+        const renderPage = async () => {
             if (!pdfRef.current || pdfPageCount === 0) return;
 
             const deviceScale = window.devicePixelRatio || 1;
             const nextSizes: Record<number, { width: number; height: number }> = {};
 
-            for (let i = 1; i <= pdfPageCount; i += 1) {
-                const canvas = canvasRefs.current[i - 1];
-                if (!canvas) continue;
+            // Only render the single target page for this drawing
+            const canvas = canvasRefs.current[0];
+            if (!canvas) return;
 
-                const page = await pdfRef.current.getPage(i);
-                const viewport = page.getViewport({ scale: pdfScale * deviceScale });
-                const context = canvas.getContext('2d');
-                if (!context) continue;
+            // Get the specific page from the PDF
+            const page = await pdfRef.current.getPage(targetPageNumber);
+            const viewport = page.getViewport({ scale: pdfScale * deviceScale });
+            const context = canvas.getContext('2d');
+            if (!context) return;
 
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                canvas.style.width = `${viewport.width / deviceScale}px`;
-                canvas.style.height = `${viewport.height / deviceScale}px`;
-                nextSizes[i] = {
-                    width: viewport.width / deviceScale,
-                    height: viewport.height / deviceScale,
-                };
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = `${viewport.width / deviceScale}px`;
+            canvas.style.height = `${viewport.height / deviceScale}px`;
+            nextSizes[1] = {
+                width: viewport.width / deviceScale,
+                height: viewport.height / deviceScale,
+            };
 
-                await page.render({ canvasContext: context, viewport }).promise;
-            }
+            await page.render({ canvasContext: context, viewport }).promise;
 
             setPageSizes(nextSizes);
         };
 
-        renderPages();
-    }, [pdfPageCount, pdfScale]);
+        renderPage();
+    }, [pdfPageCount, pdfScale, targetPageNumber]);
+
+    // Load and render candidate PDF for overlay comparison
+    useEffect(() => {
+        if (!showCompareOverlay || !candidateRevision?.file_url || !candidateIsPdf) {
+            setCandidatePdfLoaded(false);
+            candidatePdfRef.current = null;
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadCandidatePdf = async () => {
+            try {
+                console.log('Loading candidate PDF for comparison:', candidateRevision.file_url);
+                const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
+                pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+                const loadingTask = pdfjs.getDocument({ url: candidateRevision.file_url });
+                const pdf = (await loadingTask.promise) as PDFDocumentProxy;
+                if (cancelled) return;
+
+                candidatePdfRef.current = pdf;
+                setCandidatePdfLoaded(true);
+                console.log('Candidate PDF loaded successfully');
+            } catch (error) {
+                console.error('Failed to load candidate PDF:', error);
+                toast.error('Failed to load comparison PDF.');
+                setCandidatePdfLoaded(false);
+            }
+        };
+
+        loadCandidatePdf();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [showCompareOverlay, candidateRevision?.file_url, candidateIsPdf]);
+
+    // Render candidate PDF to overlay canvas
+    useEffect(() => {
+        if (!candidatePdfLoaded || !candidatePdfRef.current || !candidateCanvasRef.current) {
+            return;
+        }
+
+        const renderCandidatePage = async () => {
+            const canvas = candidateCanvasRef.current;
+            if (!canvas || !candidatePdfRef.current) return;
+
+            const deviceScale = window.devicePixelRatio || 1;
+
+            // Get the same page number from candidate PDF
+            // For revisions, we compare the same page (targetPageNumber)
+            const candidatePageNum = Math.min(targetPageNumber, candidatePdfRef.current.numPages);
+            const page = await candidatePdfRef.current.getPage(candidatePageNum);
+            const viewport = page.getViewport({ scale: pdfScale * deviceScale });
+            const context = canvas.getContext('2d');
+            if (!context) return;
+
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = `${viewport.width / deviceScale}px`;
+            canvas.style.height = `${viewport.height / deviceScale}px`;
+
+            await page.render({ canvasContext: context, viewport }).promise;
+            console.log('Candidate PDF page rendered');
+        };
+
+        renderCandidatePage();
+    }, [candidatePdfLoaded, pdfScale, targetPageNumber]);
 
     useEffect(() => {
         if (!isPdf || hasUserPanned || !containerRef.current || Object.keys(pageSizes).length === 0) {
@@ -523,25 +647,135 @@ export default function QaStageDrawingShow() {
                                 <Badge variant="outline">Rev {drawing.revision_number}</Badge>
                             )}
 
-                            {/* Comparison toggle */}
-                            {hasDiffImage && (
-                                <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
-                                    <GitCompare className="h-4 w-4 text-muted-foreground" />
-                                    <Label htmlFor="compare-toggle" className="text-sm cursor-pointer">
-                                        Show Changes
-                                    </Label>
-                                    <Switch
-                                        id="compare-toggle"
-                                        checked={showCompareOverlay}
-                                        onCheckedChange={setShowCompareOverlay}
-                                    />
+                            {/* Page navigation for multi-page files */}
+                            {isPaged && siblingPages.length > 1 && (
+                                <div className="flex items-center gap-2">
+                                    <Select
+                                        value={String(drawing.id)}
+                                        onValueChange={(value) => {
+                                            router.visit(`/qa-stage-drawings/${value}`);
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Select page" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {siblingPages.map((page) => (
+                                                <SelectItem key={page.id} value={String(page.id)}>
+                                                    Page {page.page_number}
+                                                    {page.page_label && ` - ${page.page_label}`}
+                                                    {page.id === drawing.id && ' (Current)'}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             )}
 
-                            {/* Previous revision info */}
-                            {drawing.previous_revision && (
+                            {/* Overlay Comparison Controls */}
+                            {canCompare && (
+                                <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                        <Layers className="h-4 w-4 text-muted-foreground" />
+                                        <Label htmlFor="compare-toggle" className="text-sm cursor-pointer">
+                                            Compare
+                                        </Label>
+                                        <Switch
+                                            id="compare-toggle"
+                                            checked={showCompareOverlay}
+                                            onCheckedChange={(checked) => {
+                                                setShowCompareOverlay(checked);
+                                                // Auto-select previous revision if none selected (only if it has a file)
+                                                if (checked && !compareRevisionId) {
+                                                    const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
+                                                    if (otherRevisions.length > 0) {
+                                                        setCompareRevisionId(otherRevisions[0].id);
+                                                    }
+                                                    // If no other revisions with files, we'll fall back to diff image if available
+                                                }
+                                            }}
+                                        />
+                                    </div>
+
+                                    {showCompareOverlay && (
+                                        <>
+                                            {/* Candidate revision selector */}
+                                            {revisions.filter((rev) => rev.id !== drawing.id && rev.file_url).length > 0 && (
+                                                <Select
+                                                    value={compareRevisionId ? String(compareRevisionId) : ''}
+                                                    onValueChange={(value) => setCompareRevisionId(Number(value))}
+                                                >
+                                                    <SelectTrigger className="w-[160px] h-8">
+                                                        <SelectValue placeholder="Select revision" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {revisions
+                                                            .filter((rev) => rev.id !== drawing.id && rev.file_url)
+                                                            .map((rev) => (
+                                                                <SelectItem key={rev.id} value={String(rev.id)}>
+                                                                    Rev {rev.revision_number || '?'}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+
+                                            {/* Opacity slider */}
+                                            <div className="flex items-center gap-2">
+                                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                                <Slider
+                                                    value={[overlayOpacity]}
+                                                    onValueChange={(values) => setOverlayOpacity(values[0])}
+                                                    min={0}
+                                                    max={100}
+                                                    step={5}
+                                                    className="w-24"
+                                                />
+                                                <span className="text-xs text-muted-foreground w-8">{overlayOpacity}%</span>
+                                            </div>
+
+                                            {/* Show diff image toggle if available */}
+                                            {hasDiffImage && (
+                                                <div className="flex items-center gap-2">
+                                                    <GitCompare className="h-4 w-4 text-muted-foreground" />
+                                                    <Label htmlFor="diff-mode" className="text-xs cursor-pointer">
+                                                        Diff
+                                                    </Label>
+                                                    <Switch
+                                                        id="diff-mode"
+                                                        checked={!compareRevisionId}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                setCompareRevisionId(null);
+                                                            } else {
+                                                                const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
+                                                                if (otherRevisions.length > 0) {
+                                                                    setCompareRevisionId(otherRevisions[0].id);
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Comparison info */}
+                            {showCompareOverlay && (
                                 <span className="text-xs text-muted-foreground">
-                                    Compared to: Rev {drawing.previous_revision.revision_number || '?'}
+                                    {compareRevisionId && candidateRevision
+                                        ? `Overlaying Rev ${candidateRevision.revision_number || '?'}`
+                                        : drawing.previous_revision
+                                          ? `Diff vs Rev ${drawing.previous_revision.revision_number || '?'}`
+                                          : null}
+                                </span>
+                            )}
+                            {/* Warning if candidate revision has no file */}
+                            {showCompareOverlay && compareRevisionId && candidateRevision && !candidateRevision.file_url && (
+                                <span className="text-xs text-destructive">
+                                    Selected revision has no file available
                                 </span>
                             )}
                         </div>
@@ -572,36 +806,68 @@ export default function QaStageDrawingShow() {
                         >
                             {isPdf ? (
                                 <div className="space-y-6">
-                                    {Array.from({ length: pdfPageCount }, (_, idx) => {
-                                        const pageNumber = idx + 1;
-                                        const pageSize = pageSizes[pageNumber];
+                                    {/* Single page rendering - each drawing represents one page */}
+                                    {(() => {
+                                        const pageSize = pageSizes[1]; // We always use index 1 now
                                         return (
                                             <div
-                                                key={pageNumber}
                                                 className="relative"
                                                 style={pageSize ? { width: pageSize.width, height: pageSize.height } : undefined}
-                                                onClick={handlePageClick(pageNumber)}
+                                                onClick={handlePageClick(1)}
                                             >
-                                                <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-2 py-1 text-xs text-white">
-                                                    Page {pageNumber}
-                                                </div>
-                                                <canvas ref={(el) => (canvasRefs.current[idx] = el)} className="block max-w-none rounded border" />
-                                                {/* Diff overlay - only show on first page when enabled */}
-                                                {showCompareOverlay && hasDiffImage && pageNumber === 1 && (
+                                                {/* Page indicator for multi-page files */}
+                                                {isPaged && (
+                                                    <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-2 py-1 text-xs text-white">
+                                                        Page {targetPageNumber} of {totalPages}
+                                                    </div>
+                                                )}
+                                                <canvas ref={(el) => (canvasRefs.current[0] = el)} className="block max-w-none rounded border" />
+                                                {/* Candidate PDF overlay - rendered to canvas for PDF-to-PDF comparison */}
+                                                {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
+                                                    <canvas
+                                                        ref={candidateCanvasRef}
+                                                        className="absolute inset-0 pointer-events-none"
+                                                        style={{
+                                                            opacity: overlayOpacity / 100,
+                                                            display: candidatePdfLoaded ? 'block' : 'none',
+                                                        }}
+                                                    />
+                                                )}
+                                                {/* Candidate image overlay - for non-PDF revisions */}
+                                                {showCompareOverlay && candidateRevision?.file_url && !candidateIsPdf && (
+                                                    <img
+                                                        src={candidateRevision.file_url}
+                                                        alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
+                                                        className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+                                                        style={{
+                                                            opacity: overlayOpacity / 100,
+                                                        }}
+                                                        onError={() => toast.error('Failed to load comparison revision')}
+                                                    />
+                                                )}
+                                                {/* Loading indicator for candidate PDF */}
+                                                {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && !candidatePdfLoaded && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                                                        <span className="text-white text-sm bg-black/50 px-2 py-1 rounded">Loading comparison...</span>
+                                                    </div>
+                                                )}
+                                                {/* Diff overlay - show pre-generated diff image when no candidate selected */}
+                                                {showCompareOverlay && !compareRevisionId && hasDiffImage && (
                                                     <img
                                                         src={drawing.diff_image_url!}
                                                         alt="Changes overlay"
                                                         className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                                         style={{
-                                                            opacity: 0.7,
+                                                            opacity: overlayOpacity / 100,
                                                             mixBlendMode: 'multiply',
                                                         }}
                                                         onError={() => toast.error('Failed to load comparison image')}
                                                     />
                                                 )}
+                                                {/* Observations - now all observations are on page 1 of this drawing */}
                                                 {pageSize &&
                                                     serverObservations
-                                                        .filter((obs) => obs.page_number === pageNumber)
+                                                        .filter((obs) => obs.page_number === 1)
                                                         .map((obs) => (
                                                             <button
                                                                 key={obs.id}
@@ -626,19 +892,37 @@ export default function QaStageDrawingShow() {
                                                         ))}
                                             </div>
                                         );
-                                    })}
+                                    })()}
                                 </div>
                             ) : (
                                 <div className="relative" onClick={handlePageClick(1)}>
                                     <img src={drawing.file_url} alt={drawing.name} className="block max-w-none rounded border" />
-                                    {/* Diff overlay for image drawings */}
-                                    {showCompareOverlay && hasDiffImage && (
+                                    {/* Candidate revision overlay for image drawings - only for non-PDF candidates */}
+                                    {showCompareOverlay && candidateRevision?.file_url && !candidateIsPdf && (
+                                        <img
+                                            src={candidateRevision.file_url}
+                                            alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
+                                            className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+                                            style={{
+                                                opacity: overlayOpacity / 100,
+                                            }}
+                                            onError={() => toast.error('Failed to load comparison revision')}
+                                        />
+                                    )}
+                                    {/* Note: PDF-to-image comparison not supported - candidate must be an image */}
+                                    {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                                            <span className="text-white text-sm bg-black/50 px-2 py-1 rounded">PDF overlay not supported for image base</span>
+                                        </div>
+                                    )}
+                                    {/* Diff overlay for image drawings - when no candidate selected */}
+                                    {showCompareOverlay && !compareRevisionId && hasDiffImage && (
                                         <img
                                             src={drawing.diff_image_url!}
                                             alt="Changes overlay"
                                             className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                             style={{
-                                                opacity: 0.7,
+                                                opacity: overlayOpacity / 100,
                                                 mixBlendMode: 'multiply',
                                             }}
                                             onError={() => toast.error('Failed to load comparison image')}

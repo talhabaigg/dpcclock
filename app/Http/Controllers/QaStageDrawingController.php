@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessDrawingJob;
+use App\Models\DrawingFile;
 use App\Models\DrawingSheet;
 use App\Models\QaStage;
 use App\Models\QaStageDrawing;
 use App\Services\DrawingMetadataService;
+use App\Services\DrawingProcessingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -38,50 +41,115 @@ class QaStageDrawingController extends Controller
                 return redirect()->back()->with('error', 'Failed to upload file.');
             }
 
-            // Determine or create the drawing sheet
-            $drawingSheet = null;
-            if (!empty($validated['drawing_sheet_id'])) {
-                // Adding revision to existing sheet
-                $drawingSheet = DrawingSheet::find($validated['drawing_sheet_id']);
-            } elseif (!empty($validated['sheet_number'])) {
-                // Find or create sheet by sheet number
-                $drawingSheet = DrawingSheet::findOrCreateBySheetNumber(
-                    $qaStage->id,
-                    $validated['sheet_number'],
-                    $validated['name']
-                );
-            } else {
-                // Create new sheet for this drawing
-                $drawingSheet = DrawingSheet::create([
+            // Calculate file hash for deduplication
+            $fullPath = Storage::disk('public')->path($filePath);
+            $sha256 = hash_file('sha256', $fullPath);
+
+            // Determine page count
+            $pageCount = $this->getPageCount($fullPath, $file->getClientMimeType());
+
+            // Use transaction for atomic creation of file + pages
+            $firstDrawing = DB::transaction(function () use (
+                $qaStage, $validated, $filePath, $fileName, $file, $sha256, $pageCount
+            ) {
+                // Create the DrawingFile record
+                $drawingFile = DrawingFile::create([
                     'qa_stage_id' => $qaStage->id,
-                    'title' => $validated['name'],
-                    'revision_count' => 0,
+                    'storage_path' => $filePath,
+                    'original_name' => $fileName,
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                    'sha256' => $sha256,
+                    'page_count' => $pageCount,
+                    'created_by' => auth()->id(),
                 ]);
-            }
 
-            // Create the drawing record
-            $drawing = QaStageDrawing::create([
-                'qa_stage_id' => $qaStage->id,
-                'drawing_sheet_id' => $drawingSheet->id,
-                'name' => $validated['name'],
-                'revision_number' => $validated['revision_number'] ?? null,
-                'status' => QaStageDrawing::STATUS_DRAFT,
-                'file_path' => $filePath,
-                'file_name' => $fileName,
-                'file_type' => $file->getClientMimeType(),
-                'file_size' => $file->getSize(),
-            ]);
+                // Determine or create the drawing sheet
+                $drawingSheet = $this->resolveDrawingSheet($qaStage, $validated);
 
-            // Add as revision to sheet (handles revision numbering and status)
-            $drawingSheet->addRevision($drawing, $validated['revision_number'] ?? null);
+                // Create drawing records for each page
+                $firstDrawing = null;
+                for ($page = 1; $page <= $pageCount; $page++) {
+                    $pageName = $pageCount > 1
+                        ? $validated['name'] . " — Page {$page}"
+                        : $validated['name'];
+
+                    $drawing = QaStageDrawing::create([
+                        'qa_stage_id' => $qaStage->id,
+                        'drawing_sheet_id' => $drawingSheet->id,
+                        'drawing_file_id' => $drawingFile->id,
+                        'page_number' => $page,
+                        'name' => $pageName,
+                        'revision_number' => $validated['revision_number'] ?? null,
+                        'status' => QaStageDrawing::STATUS_DRAFT,
+                        // Legacy fields for backwards compatibility
+                        'file_path' => $filePath,
+                        'file_name' => $fileName,
+                        'file_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+
+                    if ($page === 1) {
+                        $firstDrawing = $drawing;
+                        // Add first page as revision to sheet
+                        $drawingSheet->addRevision($drawing, $validated['revision_number'] ?? null);
+                    }
+                }
+
+                return $firstDrawing;
+            });
 
             // Dispatch async processing job for thumbnail/diff generation
-            ProcessDrawingJob::dispatch($drawing->id);
+            ProcessDrawingJob::dispatch($firstDrawing->id);
 
-            return redirect()->back()->with('success', 'Drawing uploaded successfully. Processing in background...');
+            $message = $pageCount > 1
+                ? "Drawing uploaded successfully ({$pageCount} pages created). Processing in background..."
+                : 'Drawing uploaded successfully. Processing in background...';
+
+            return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             Log::error('Upload error', ['error' => $e->getMessage()]);
             return redirect()->back()->with('error', 'Failed to upload: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Resolve or create a DrawingSheet for the upload.
+     */
+    private function resolveDrawingSheet(QaStage $qaStage, array $validated): DrawingSheet
+    {
+        if (!empty($validated['drawing_sheet_id'])) {
+            return DrawingSheet::find($validated['drawing_sheet_id']);
+        }
+
+        if (!empty($validated['sheet_number'])) {
+            return DrawingSheet::findOrCreateBySheetNumber(
+                $qaStage->id,
+                $validated['sheet_number'],
+                $validated['name']
+            );
+        }
+
+        return DrawingSheet::create([
+            'qa_stage_id' => $qaStage->id,
+            'title' => $validated['name'],
+            'revision_count' => 0,
+        ]);
+    }
+
+    /**
+     * Get page count from a file.
+     */
+    private function getPageCount(string $filePath, ?string $mimeType): int
+    {
+        try {
+            $processingService = app(DrawingProcessingService::class);
+            $dimensions = $processingService->extractPageDimensions($filePath);
+            return $dimensions['pages'] ?? 1;
+        } catch (\Exception $e) {
+            Log::warning("Could not determine page count: {$e->getMessage()}");
+            // Default to 1 page if we can't determine
+            return 1;
         }
     }
 
@@ -110,21 +178,30 @@ class QaStageDrawingController extends Controller
 
     public function download(QaStageDrawing $drawing)
     {
-        $path = Storage::disk('public')->path($drawing->file_path);
+        // Prefer DrawingFile, fall back to legacy file_path
+        $storagePath = $drawing->drawingFile?->storage_path ?? $drawing->file_path;
+        $fileName = $drawing->drawingFile?->original_name ?? $drawing->file_name;
+
+        if (!$storagePath) {
+            return redirect()->back()->with('error', 'No file associated with this drawing.');
+        }
+
+        $path = Storage::disk('public')->path($storagePath);
 
         if (!file_exists($path)) {
             return redirect()->back()->with('error', 'File not found.');
         }
 
-        return response()->download($path, $drawing->file_name);
+        return response()->download($path, $fileName);
     }
 
     public function show(QaStageDrawing $drawing)
     {
         $drawing->load([
             'qaStage.location',
+            'drawingFile',
             'drawingSheet.revisions' => function ($query) {
-                $query->select('id', 'drawing_sheet_id', 'name', 'revision_number', 'revision_date', 'status', 'created_at', 'thumbnail_path', 'file_path', 'diff_image_path')
+                $query->select('id', 'drawing_sheet_id', 'drawing_file_id', 'page_number', 'name', 'revision_number', 'revision_date', 'status', 'created_at', 'thumbnail_path', 'file_path', 'diff_image_path')
                     ->orderBy('created_at', 'desc');
             },
             'previousRevision:id,name,revision_number,file_path,thumbnail_path',
@@ -132,8 +209,18 @@ class QaStageDrawingController extends Controller
             'observations.createdBy',
         ]);
 
+        // Get sibling pages from the same file (for multi-page navigation)
+        $siblingPages = [];
+        if ($drawing->drawing_file_id) {
+            $siblingPages = QaStageDrawing::where('drawing_file_id', $drawing->drawing_file_id)
+                ->select('id', 'page_number', 'page_label', 'name')
+                ->orderBy('page_number')
+                ->get();
+        }
+
         return Inertia::render('qa-stages/drawings/show', [
             'drawing' => $drawing,
+            'siblingPages' => $siblingPages,
         ]);
     }
 

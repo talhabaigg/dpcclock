@@ -27,14 +27,30 @@ type Location = {
     name: string;
 };
 
+type DrawingFile = {
+    id: number;
+    storage_path: string;
+    original_name: string;
+    mime_type: string;
+    file_size: number;
+    page_count: number;
+    file_url: string;
+};
+
 type Drawing = {
     id: number;
     qa_stage_id: number;
+    drawing_file_id?: number;
+    page_number: number;
+    page_label?: string;
     name: string;
+    display_name: string;
+    total_pages: number;
     file_name: string;
     file_type: string;
     file_size: number;
     file_url: string;
+    drawing_file?: DrawingFile;
     created_by: number;
     created_by_user?: { name: string };
     created_at: string;
@@ -259,6 +275,7 @@ export default function QaStageShow() {
                         <TableRow>
                             <TableHead>ID</TableHead>
                             <TableHead>Name</TableHead>
+                            <TableHead>Page</TableHead>
                             <TableHead>File Name</TableHead>
                             <TableHead>Type</TableHead>
                             <TableHead>Size</TableHead>
@@ -269,7 +286,7 @@ export default function QaStageShow() {
                     <TableBody>
                         {!qaStage.drawings || qaStage.drawings.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-muted-foreground text-center">
+                                <TableCell colSpan={8} className="text-muted-foreground text-center">
                                     No drawings uploaded yet. Upload one to get started.
                                 </TableCell>
                             </TableRow>
@@ -277,8 +294,21 @@ export default function QaStageShow() {
                             qaStage.drawings.map((drawing) => (
                                 <TableRow key={drawing.id}>
                                     <TableCell>{drawing.id}</TableCell>
-                                    <TableCell className="font-medium">{drawing.name}</TableCell>
-                                    <TableCell>{drawing.file_name}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {drawing.display_name || drawing.name}
+                                    </TableCell>
+                                    <TableCell>
+                                        {drawing.total_pages > 1 ? (
+                                            <Badge variant="outline">
+                                                {drawing.page_number} / {drawing.total_pages}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-muted-foreground">1</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {drawing.drawing_file?.original_name || drawing.file_name}
+                                    </TableCell>
                                     <TableCell>
                                         <Badge variant="secondary">{drawing.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</Badge>
                                     </TableCell>
