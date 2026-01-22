@@ -158,7 +158,7 @@ class PurchasingController extends Controller
 
         $user = auth()->user();
 
-        if ($user->hasPermissionTo('view all requisitions')) {
+        if ($user->hasPermissionTo('requisitions.view-all')) {
             $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
 
                 ->withSum('lineItems', 'total_cost')

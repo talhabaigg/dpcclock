@@ -22,6 +22,7 @@ class JobForecast extends Model
         'finalized_by',
         'finalized_at',
         'rejection_note',
+        'summary_comments',
     ];
 
     protected $casts = [

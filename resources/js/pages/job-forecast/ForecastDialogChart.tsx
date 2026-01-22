@@ -44,6 +44,18 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
     const wrapRef = useRef<HTMLDivElement>(null);
     const [editBox, setEditBox] = useState<EditBox | null>(null);
     const [editBoxDirty, setEditBoxDirty] = useState(false);
+    const [isDark, setIsDark] = useState(false);
+
+    // Detect dark mode
+    useEffect(() => {
+        const checkDarkMode = () => {
+            setIsDark(document.documentElement.classList.contains('dark'));
+        };
+        checkDarkMode();
+        const observer = new MutationObserver(checkDarkMode);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
 
     const closeEditBox = () => {
         setEditBox(null);
@@ -153,16 +165,20 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
         return meta.map((m) => m.y);
     }, [viewMode, budget, cumulativeData, meta]);
 
-    // Shadcn-inspired color palette
+    // Modern color palette with dark mode support
     const COLORS = useMemo(
         () => ({
-            actual: '#d1c700', // Keep the yellow for actuals
-            forecast: 'hsl(221.2 83.2% 53.3%)', // Blue-600 for forecast
-            gridColor: 'hsl(214.3 31.8% 91.4%)', // Border color
-            textColor: 'hsl(222.2 47.4% 11.2%)', // Foreground
-            mutedText: 'hsl(215.4 16.3% 46.9%)', // Muted foreground
+            actual: isDark ? '#facc15' : '#eab308', // Yellow for actuals (amber-400/500)
+            forecast: isDark ? '#818cf8' : '#6366f1', // Indigo for forecast (indigo-400/500)
+            forecastGradientStart: isDark ? 'rgba(129, 140, 248, 0.3)' : 'rgba(99, 102, 241, 0.2)',
+            forecastGradientEnd: isDark ? 'rgba(129, 140, 248, 0.02)' : 'rgba(99, 102, 241, 0.02)',
+            gridColor: isDark ? '#374151' : '#e2e8f0', // Gray borders
+            textColor: isDark ? '#f3f4f6' : '#1e293b', // Text color
+            mutedText: isDark ? '#9ca3af' : '#64748b', // Muted text
+            labelBg: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            tooltipBg: isDark ? '#1f2937' : '#ffffff',
         }),
-        [],
+        [isDark],
     );
 
     const formatValue = (value: number) => {
@@ -193,17 +209,30 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                         const fontSize = isSmallChart ? 9 : 11;
                         ctx.font = `600 ${fontSize}px "Inter", system-ui, sans-serif`;
                         const textWidth = ctx.measureText(text).width;
-                        const padding = isSmallChart ? 2 : 4;
-                        const boxHeight = isSmallChart ? 14 : 16;
-                        const yOffset = isSmallChart ? 18 : 22;
+                        const padding = isSmallChart ? 4 : 6;
+                        const boxHeight = isSmallChart ? 18 : 22;
+                        const yOffset = isSmallChart ? 22 : 28;
+                        const borderRadius = 6;
 
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                        ctx.fillRect(x - textWidth / 2 - padding, y - yOffset, textWidth + padding * 2, boxHeight);
+                        // Draw rounded rectangle background with shadow
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+                        ctx.shadowBlur = 4;
+                        ctx.shadowOffsetY = 2;
+
+                        ctx.beginPath();
+                        ctx.roundRect(x - textWidth / 2 - padding, y - yOffset, textWidth + padding * 2, boxHeight, borderRadius);
+                        ctx.fillStyle = COLORS.labelBg;
+                        ctx.fill();
+
+                        // Reset shadow for border
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetY = 0;
 
                         // Draw border
                         ctx.strokeStyle = COLORS.gridColor;
                         ctx.lineWidth = 1;
-                        ctx.strokeRect(x - textWidth / 2 - padding, y - yOffset, textWidth + padding * 2, boxHeight);
+                        ctx.stroke();
 
                         // Draw text
                         ctx.fillStyle = COLORS.textColor;
@@ -226,32 +255,50 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                     label: viewMode === 'cumulative-percent' ? 'Cumulative %' : 'Monthly $',
                     data: displayValues,
                     spanGaps: true,
-                    borderWidth: 2.5,
-                    tension: 0.3,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
-                    pointHitRadius: 14,
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: (context: any) => {
+                        const chart = context.chart;
+                        const { ctx, chartArea } = chart;
+                        if (!chartArea) return COLORS.forecastGradientStart;
+                        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                        gradient.addColorStop(0, COLORS.forecastGradientStart);
+                        gradient.addColorStop(1, COLORS.forecastGradientEnd);
+                        return gradient;
+                    },
+                    pointRadius: 6,
+                    pointHoverRadius: 9,
+                    pointHitRadius: 16,
                     pointBackgroundColor: (ctx: any) => (meta[ctx.dataIndex]?.is_actual ? COLORS.actual : COLORS.forecast),
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointHoverBorderWidth: 2,
+                    pointBorderColor: isDark ? '#1f2937' : '#ffffff',
+                    pointBorderWidth: 2.5,
+                    pointHoverBorderWidth: 3,
+                    pointStyle: 'circle',
                     segment: {
                         borderColor: (ctx: any) => (meta[ctx.p1DataIndex]?.is_actual ? COLORS.actual : COLORS.forecast),
-                        borderDash: (ctx: any) => (meta[ctx.p1DataIndex]?.is_actual ? [] : [5, 5]),
+                        borderDash: (ctx: any) => (meta[ctx.p1DataIndex]?.is_actual ? [] : [6, 4]),
                     },
                 },
             ],
         }),
-        [meta, displayValues, viewMode, COLORS],
+        [meta, displayValues, viewMode, COLORS, isDark],
     );
 
     const options = useMemo<ChartOptions<'line'>>(
         () => ({
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 35, // Space for data labels above points
+                    right: 10,
+                    left: 10,
+                },
+            },
             animation: {
-                duration: 750,
-                easing: 'easeInOutQuart',
+                duration: 600,
+                easing: 'easeOutQuart',
             },
             interaction: {
                 mode: 'index',
@@ -261,20 +308,24 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                 legend: { display: false },
                 tooltip: {
                     enabled: true,
-                    backgroundColor: 'hsl(0 0% 100%)',
+                    backgroundColor: COLORS.tooltipBg,
                     titleColor: COLORS.textColor,
                     bodyColor: COLORS.textColor,
                     borderColor: COLORS.gridColor,
                     borderWidth: 1,
-                    padding: 10,
-                    cornerRadius: 6,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: true,
+                    boxWidth: 12,
+                    boxHeight: 12,
+                    boxPadding: 4,
                     titleFont: {
-                        size: 12,
+                        size: 13,
                         weight: 'bold' as const,
                         family: "'Inter', system-ui, sans-serif",
                     },
                     bodyFont: {
-                        size: 11,
+                        size: 12,
                         family: "'Inter', system-ui, sans-serif",
                     },
                     callbacks: {
@@ -283,7 +334,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                             const v = ctx.parsed.y;
                             if (!m || v == null) return '';
 
-                            const prefix = m.is_actual ? 'Actual' : 'Forecast';
+                            const prefix = m.is_actual ? '● Actual' : '○ Forecast';
                             if (viewMode === 'cumulative-percent') {
                                 return `${prefix}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
                             }
@@ -398,65 +449,74 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
     return (
         <div
             ref={wrapRef}
-            className="relative h-full w-full min-h-[200px] p-1 sm:min-h-[250px] sm:p-2"
+            className="relative h-full w-full min-h-[200px] rounded-lg bg-white p-3 dark:bg-slate-900 sm:min-h-[250px] sm:p-4"
             onPointerDown={() => {
                 if (editBox) closeEditBox();
             }}
         >
-            <Line key={viewMode} data={chartData} options={options} plugins={[dataLabelPlugin]} />
+            <Line key={`${viewMode}-${isDark}`} data={chartData} options={options} plugins={[dataLabelPlugin]} />
 
             {editBox && (
                 <div
-                    className="bg-background absolute z-50 rounded-lg border border-border p-2.5 shadow-xl sm:p-4"
-                    style={{ left: editBox.left, top: editBox.top, maxWidth: 'calc(100% - 16px)' }}
+                    className="absolute z-50 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/10 dark:border-indigo-900/50 dark:bg-slate-800"
+                    style={{ left: editBox.left, top: editBox.top, maxWidth: 'calc(100% - 16px)', width: '200px' }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >
-                    <div className="text-foreground mb-2 text-xs font-semibold sm:mb-3 sm:text-sm">
-                        Edit Forecast - <span className="text-primary">{meta[editBox.index]?.label}</span>
+                    {/* Header - subtle indigo accent */}
+                    <div className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-2.5 dark:border-indigo-900/50 dark:from-indigo-950/50 dark:to-slate-800">
+                        <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">{meta[editBox.index]?.label}</p>
                     </div>
 
-                    <div className="mb-2 flex flex-col gap-1.5 sm:mb-3 sm:flex-row sm:items-center sm:gap-3">
-                        <input
-                            autoFocus
-                            inputMode="numeric"
-                            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm font-medium outline-none ring-offset-background transition-colors focus:border-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:h-10 sm:w-36 sm:px-3"
-                            value={editBox.value}
-                            onChange={(e) => {
-                                setEditBoxDirty(true);
-                                setEditBox((s) => (s ? { ...s, value: e.target.value } : s));
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') commitEditBox();
-                                if (e.key === 'Escape') closeEditBox();
-                            }}
-                            onBlur={commitEditBox}
-                        />
-                        <span className="text-muted-foreground text-xs font-medium sm:text-sm">
-                            {editBox.inputMode === 'percent' ? '% (cumulative)' : '$ (monthly)'}
-                        </span>
-                    </div>
+                    {/* Content */}
+                    <div className="p-3">
+                        {/* Input with unit badge */}
+                        <div className="relative">
+                            <input
+                                autoFocus
+                                inputMode="numeric"
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-10 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
+                                value={editBox.value}
+                                onChange={(e) => {
+                                    setEditBoxDirty(true);
+                                    setEditBox((s) => (s ? { ...s, value: e.target.value } : s));
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') commitEditBox();
+                                    if (e.key === 'Escape') closeEditBox();
+                                }}
+                                onBlur={commitEditBox}
+                            />
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                <span
+                                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-bold ${
+                                        editBox.inputMode === 'percent'
+                                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+                                    }`}
+                                    title={editBox.inputMode === 'percent' ? 'Cumulative % of budget by this month' : 'Monthly dollar amount'}
+                                >
+                                    {editBox.inputMode === 'percent' ? '%' : '$'}
+                                </span>
+                            </div>
+                        </div>
 
-                    <div className="text-muted-foreground mb-2 hidden text-xs leading-relaxed sm:mb-3 sm:block">
-                        {editBox.inputMode === 'percent'
-                            ? 'Enter the cumulative % of budget to reach by this month'
-                            : 'Enter the dollar amount for this month only'}
-                    </div>
-
-                    <div className="flex justify-end gap-1.5 border-t border-border pt-2 sm:gap-2 sm:pt-3">
-                        <button
-                            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:px-3 sm:py-1.5"
-                            onClick={closeEditBox}
-                            type="button"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5"
-                            onClick={commitEditBox}
-                            type="button"
-                        >
-                            Save
-                        </button>
+                        {/* Action buttons below input */}
+                        <div className="mt-3 flex gap-2">
+                            <button
+                                className="flex h-8 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                                onClick={closeEditBox}
+                                type="button"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="flex h-8 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-xs font-medium text-white shadow-sm shadow-indigo-500/30 transition-all hover:from-indigo-600 hover:to-violet-600 active:scale-[0.98]"
+                                onClick={commitEditBox}
+                                type="button"
+                            >
+                                Save
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

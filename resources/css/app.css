@@ -159,3 +159,101 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* AG Grid Wrapper Styling */
+.ag-root-wrapper {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.dark .ag-root-wrapper {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    border: 1px solid #374151;
+    background-color: #111827;
+}
+
+/* AG Grid Header Styling */
+.ag-header {
+    border-bottom: 2px solid #cbd5e1 !important;
+    background-color: #f1f5f9 !important;
+}
+
+.dark .ag-header {
+    border-bottom: 2px solid #4b5563 !important;
+    background-color: #1f2937 !important;
+}
+
+.dark .ag-header-cell {
+    color: #e5e7eb !important;
+}
+
+.dark .ag-header-group-cell {
+    color: #e5e7eb !important;
+}
+
+/* AG Grid Body Styling */
+.dark .ag-body {
+    background-color: #111827 !important;
+}
+
+.dark .ag-row {
+    background-color: #111827 !important;
+}
+
+.dark .ag-row-odd {
+    background-color: #0d1117 !important;
+}
+
+.dark .ag-cell {
+    color: #e5e7eb !important;
+    border-color: #374151 !important;
+}
+
+/* AG Grid Total Row Styling */
+.ag-row-total {
+    background-color: #e2e8f0 !important;
+    font-weight: 700 !important;
+    border-top: 2px solid #94a3b8 !important;
+}
+
+.ag-row-total .ag-cell {
+    background-color: #e2e8f0 !important;
+    color: #1e293b !important;
+}
+
+.dark .ag-row-total {
+    background-color: #1f2937 !important;
+    border-top: 2px solid #4b5563 !important;
+}
+
+.dark .ag-row-total .ag-cell {
+    background-color: #1f2937 !important;
+    color: #f3f4f6 !important;
+}
+
+/* AG Grid Row Hover Effect */
+.ag-row:hover:not(.ag-row-total) {
+    background-color: #f1f5f9 !important;
+}
+
+.dark .ag-row:hover:not(.ag-row-total) {
+    background-color: #1e293b !important;
+}
+
+/* AG Grid Pinned Columns */
+.dark .ag-pinned-left-cols-container .ag-cell,
+.dark .ag-pinned-right-cols-container .ag-cell {
+    background-color: #111827 !important;
+}
+
+.dark .ag-pinned-left-cols-container .ag-row-odd .ag-cell,
+.dark .ag-pinned-right-cols-container .ag-row-odd .ag-cell {
+    background-color: #0d1117 !important;
+}
+
+.dark .ag-pinned-left-header,
+.dark .ag-pinned-right-header {
+    background-color: #1f2937 !important;
+}

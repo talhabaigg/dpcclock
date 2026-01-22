@@ -35,7 +35,15 @@
       "Bash(dir:*)",
       "Bash(Get-Content -Path \"c:\\\\Laravel\\\\dpcclock\\\\storage\\\\logs\\\\laravel.log\" -Tail 100)",
       "Bash(Select-String -Pattern \"400|error|failed\" -Context 0,2)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(echo:*)",
+      "Bash(cmd.exe /c \"where php\")",
+      "Bash(cmd.exe /c \"php -v\")",
+      "Bash(powershell.exe -Command \"Get-Command php -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell.exe:*)",
+      "Bash(tr:*)",
+      "Bash(more:*)",
+      "Bash(Get-Content -Path \"storage\\\\logs\\\\laravel.log\" -Tail 100)"
     ]
   }
 }

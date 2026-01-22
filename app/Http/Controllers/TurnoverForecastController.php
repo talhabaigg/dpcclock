@@ -250,13 +250,20 @@ class TurnoverForecastController extends Controller
             // Remaining budget = total budget - cost to date
             $remainingBudget = $budget - $costToDate;
 
-            // Determine forecast submission status for current month
+            // Determine forecast submission status from the actual forecast status field
             $forecastStatus = 'not_started';
             $lastSubmittedAt = null;
 
             if ($currentJobForecast) {
-                $forecastStatus = $currentJobForecast->is_locked ? 'submitted' : 'draft';
-                $lastSubmittedAt = $currentJobForecast->updated_at?->toIso8601String();
+                // Map the actual status from the forecast model
+                $forecastStatus = match ($currentJobForecast->status) {
+                    JobForecast::STATUS_PENDING => 'not_started',
+                    JobForecast::STATUS_DRAFT => 'draft',
+                    JobForecast::STATUS_SUBMITTED => 'submitted',
+                    JobForecast::STATUS_FINALIZED => 'finalized',
+                    default => 'not_started',
+                };
+                $lastSubmittedAt = $currentJobForecast->submitted_at?->toIso8601String();
             }
 
             $combinedData[] = [
@@ -372,9 +379,14 @@ class TurnoverForecastController extends Controller
             // Remaining budget = total budget (no costs yet)
             $remainingBudget = $budget;
 
-            // Forecast projects don't have the same submission tracking as locations
-            // They are always considered as having forecast data if they have cost/revenue items
-            $forecastProjectStatus = (!empty($costForecast) || !empty($revenueForecast)) ? 'draft' : 'not_started';
+            // Map the actual status from the forecast project model
+            $forecastProjectStatus = match ($project->status) {
+                'pending' => 'not_started',
+                'draft' => 'draft',
+                'submitted' => 'submitted',
+                'finalized' => 'finalized',
+                default => 'not_started',
+            };
 
             $combinedData[] = [
                 'id' => $project->id,

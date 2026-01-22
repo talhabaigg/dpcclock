@@ -44,6 +44,7 @@ export interface ForecastWorkflow {
     finalizedBy?: string;
     finalizedAt?: string;
     rejectionNote?: string;
+    summaryComments?: string;
 }
 
 export interface JobForecastProps {

@@ -26,7 +26,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'phone', // Added phone attribute
+        'phone',
+        'disable_kiosk_notifications',
     ];
 
     /**

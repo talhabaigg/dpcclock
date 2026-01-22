@@ -106,7 +106,7 @@ type CreateRequisitionProps = {
 export default function Create() {
     const { suppliers, locations, costCodes, requisition, flash, auth } = usePage<CreateRequisitionProps>().props;
     const [autoSaving, setAutoSaving] = useState(true);
-    const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth.permissions;
+    const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth?.permissions ?? [];
     const gridRef = useRef<AgGridReact>(null);
     const [pastingItems, setPastingItems] = useState(false);
 
@@ -464,7 +464,9 @@ export default function Create() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
-            <ChatDock />
+            {permissions.includes('ai.chat') && (
+                <ChatDock enableVoice={permissions.includes('ai.voice')} />
+            )}
             {/* <div className="mx-auto p-2 sm:min-w-full">
                 <SimpleChatBox />
             </div> */}
@@ -739,7 +741,7 @@ export default function Create() {
                         </div>
                     </CardContent>
                 </Card>
-                {permissions.includes('view all requisitions') && (
+                {permissions.includes('requisitions.view-all') && (
                     <AiImageExtractor
                         setFile={setFile}
                         file={file}

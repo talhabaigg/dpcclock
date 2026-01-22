@@ -3,7 +3,6 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -17,19 +16,23 @@ import {
     ArrowLeft,
     BarChart3,
     CheckCircle,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
     Copy,
     DollarSign,
     FileSpreadsheet,
     FileText,
     Lock,
+    MessageSquare,
     Percent,
     Plus,
     Save,
     Scale,
     Send,
     Trash2,
+    TrendingUp,
     Unlock,
     XCircle,
 } from 'lucide-react';
@@ -123,6 +126,11 @@ const ShowJobForecastPage = ({
     // Excel Upload Dialog State
     const [excelUploadOpen, setExcelUploadOpen] = useState(false);
 
+    // Summary Comments State
+    const [summaryCommentsExpanded, setSummaryCommentsExpanded] = useState(false);
+    const [summaryComments, setSummaryComments] = useState(forecastWorkflow?.summaryComments || '');
+    const [isSavingComments, setIsSavingComments] = useState(false);
+
     // Forecast Project Item Management State
     const [itemDialogOpen, setItemDialogOpen] = useState(false);
     const [itemDialogType, setItemDialogType] = useState<'cost' | 'revenue'>('cost');
@@ -148,6 +156,11 @@ const ShowJobForecastPage = ({
             setSelectedForecastMonth(initialForecastMonth);
         }
     }, [initialForecastMonth]);
+
+    // Sync summary comments when forecast workflow changes
+    useEffect(() => {
+        setSummaryComments(forecastWorkflow?.summaryComments || '');
+    }, [forecastWorkflow?.summaryComments]);
 
     // ===========================
     // Derived State & Calculations
@@ -289,6 +302,27 @@ const ShowJobForecastPage = ({
             },
         );
     }, [locationId, selectedForecastMonth]);
+
+    // ===========================
+    // Summary Comments
+    // ===========================
+    const handleSaveSummaryComments = useCallback(() => {
+        if (!locationId || !selectedForecastMonth) return;
+
+        setIsSavingComments(true);
+        router.post(
+            `/location/${locationId}/job-forecast/summary-comments`,
+            {
+                forecast_month: selectedForecastMonth,
+                summary_comments: summaryComments,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSavingComments(false),
+                onError: () => setIsSavingComments(false),
+            },
+        );
+    }, [locationId, selectedForecastMonth, summaryComments]);
 
     // ===========================
     // Unified Group Show State
@@ -904,46 +938,79 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="h-150 w-full max-w-5xl min-w-full sm:min-w-7xl">
-                    <DialogHeader>
-                        <div className="flex items-center justify-between">
-                            <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
-                            <ButtonGroup className="mr-4">
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                size="icon"
-                                                variant={`${chartViewMode === 'cumulative-percent' ? 'default' : 'secondary'}`}
-                                                onClick={() => setChartViewMode('cumulative-percent')}
-                                            >
-                                                <Percent className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Cumulative %</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                size="icon"
-                                                variant={`${chartViewMode === 'monthly-amount' ? 'default' : 'secondary'}`}
-                                                onClick={() => setChartViewMode('monthly-amount')}
-                                            >
-                                                <DollarSign className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Monthly $</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </ButtonGroup>
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] lg:min-w-7xl sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
+                    {/* Header - indigo accent with subtle gradient */}
+                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
+                        {/* Subtle decorative element */}
+                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
+                                    <TrendingUp className="h-4 w-4 text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {chartCtx.open ? chartCtx.title : ''}
+                                    </DialogTitle>
+                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Forecast Trend</p>
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                                <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                    {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
+                                </p>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-indigo-500 dark:text-indigo-400">Budget</p>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* View Mode Toggle - icon only */}
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <TooltipProvider delayDuration={300}>
+                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                chartViewMode === 'cumulative-percent'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setChartViewMode('cumulative-percent')}
+                                        >
+                                            <Percent className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Cumulative %</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                chartViewMode === 'monthly-amount'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setChartViewMode('monthly-amount')}
+                                        >
+                                            <DollarSign className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Monthly $</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        </TooltipProvider>
+                    </div>
+
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="h-[520px]">
+                    <div className="min-h-0 flex-1 bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
                         <ForecastDialogChart
                             data={activeChartRows}
                             editable={chartCtx.open ? chartCtx.editable : false}
@@ -955,9 +1022,10 @@ const ShowJobForecastPage = ({
                     </div>
 
                     {chartCtx.open && chartCtx.editable && (
-                        <div className="text-muted-foreground text-xs">
-                            Tip: In $ Monthly view, drag forecast points. In % Cumulative view or by clicking a point, you can type a value. Actuals
-                            are locked.
+                        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                            <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> <span className="hidden sm:inline">Click forecast points to edit values. In Monthly view, drag points to adjust. Actual data points are locked.</span><span className="sm:hidden">Click or drag forecast points to edit.</span>
+                            </p>
                         </div>
                     )}
                 </DialogContent>
@@ -986,53 +1054,87 @@ const ShowJobForecastPage = ({
 
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-3 sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:p-6">
-                    <DialogHeader className="flex-shrink-0">
-                        <div className="flex items-center justify-between gap-2">
-                            <DialogTitle className="text-sm sm:text-lg">Accrual Summary - Job Progression</DialogTitle>
-                            <TooltipProvider>
-                                <div className="flex gap-1 pr-2 sm:gap-4 sm:pr-4">
-                                    {/* View Mode Toggles */}
-                                    <div className="flex gap-1">
-                                        <ButtonGroup className="mr-4">
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            size="icon"
-                                                            variant={`${accrualViewMode === 'accrual-percent' ? 'default' : 'secondary'}`}
-                                                            onClick={() => setAccrualViewMode('accrual-percent')}
-                                                        >
-                                                            <Percent className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Switch to %</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            size="icon"
-                                                            variant={`${accrualViewMode === 'accrual-dollar' ? 'default' : 'secondary'}`}
-                                                            onClick={() => setAccrualViewMode('accrual-dollar')}
-                                                        >
-                                                            <DollarSign className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Switch to $</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </ButtonGroup>
-                                    </div>
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
+                    {/* Header - indigo accent with subtle gradient */}
+                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
+                        {/* Subtle decorative element */}
+                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="relative flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
+                                    <BarChart3 className="h-4 w-4 text-white" />
                                 </div>
-                            </TooltipProvider>
+                                <div className="min-w-0">
+                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
+                                        Accrual Summary
+                                    </DialogTitle>
+                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Job Progression</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-shrink-0 gap-4 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {totalCostBudget ? `$${totalCostBudget.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-blue-500 dark:text-blue-400">Cost Budget</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {totalRevenueBudget ? `$${totalRevenueBudget.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-green-500 dark:text-green-400">Revenue Budget</p>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* View Mode Toggle - icon only */}
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <TooltipProvider delayDuration={300}>
+                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                accrualViewMode === 'accrual-percent'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setAccrualViewMode('accrual-percent')}
+                                        >
+                                            <Percent className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Cumulative %</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                                accrualViewMode === 'accrual-dollar'
+                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                            onClick={() => setAccrualViewMode('accrual-dollar')}
+                                        >
+                                            <DollarSign className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Dollar $</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        </TooltipProvider>
+                    </div>
+
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Accrual Summary</DialogTitle>
                     </DialogHeader>
 
-                    <div className="min-h-0 flex-1 overflow-auto">
+                    <div className="min-h-0 flex-1 overflow-auto bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -1044,9 +1146,10 @@ const ShowJobForecastPage = ({
                         />
                     </div>
 
-                    <div className="text-muted-foreground flex-shrink-0 border-t pt-2 text-xs sm:text-sm">
-                        This chart shows the cumulative accrual of cost, revenue, and margin over time. Solid lines represent actuals, dashed lines
-                        represent forecast values.
+                    <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                        <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines represent forecast values. Click legend items to toggle visibility.
+                        </p>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1575,6 +1678,64 @@ const ShowJobForecastPage = ({
                     </div>
                 </div>
 
+                {/* Forecast Summary Comments Section */}
+                {!isForecastProject && (
+                    <div className="mx-2 mb-2">
+                        <div
+                            className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                        >
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between px-4 py-2"
+                                onClick={() => setSummaryCommentsExpanded(!summaryCommentsExpanded)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Forecast Summary
+                                    </span>
+                                    {summaryComments && !summaryCommentsExpanded && (
+                                        <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
+                                            - {summaryComments.substring(0, 60)}{summaryComments.length > 60 ? '...' : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                {summaryCommentsExpanded ? (
+                                    <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                )}
+                            </button>
+
+                            {summaryCommentsExpanded && (
+                                <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+                                    <textarea
+                                        value={summaryComments}
+                                        onChange={(e) => setSummaryComments(e.target.value)}
+                                        placeholder="Add comments about this forecast (key assumptions, risks, notes for reviewers...)"
+                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                        disabled={isEditingLocked}
+                                    />
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            {isEditingLocked ? 'Forecast is locked' : 'Comments are saved when you click Save'}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleSaveSummaryComments}
+                                            disabled={isEditingLocked || isSavingComments}
+                                            className="h-7"
+                                        >
+                                            {isSavingComments ? 'Saving...' : 'Save Comments'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex h-full flex-col space-y-2">
                     {/* Cost Grid */}
                     <div className="flex flex-col px-2" style={{ height: `${topGridHeight}%` }}>
@@ -1616,6 +1777,7 @@ const ShowJobForecastPage = ({
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}
                                 rowSelection={isForecastProject ? 'multiple' : undefined}
+                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
                                 onFirstDataRendered={(params) => {
                                     restoreColState(params.api, LS_COST_COL_STATE);
                                     restoreGroupShowState(params.api);
@@ -1701,6 +1863,7 @@ const ShowJobForecastPage = ({
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}
                                 rowSelection={isForecastProject ? 'multiple' : undefined}
+                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
                                 onFirstDataRendered={(params) => {
                                     restoreColState(params.api, LS_REV_COL_STATE);
                                     // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids

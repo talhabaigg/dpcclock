@@ -38,10 +38,15 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'roles' => 'required|string|exists:roles,id',
+            'disable_kiosk_notifications' => 'boolean',
         ]);
 
         // Update basic info
-        $user->update($request->only('name', 'email'));
+        $user->update([
+            'name' => $request->input('name'),
+            'email' => $request->input('email'),
+            'disable_kiosk_notifications' => $request->boolean('disable_kiosk_notifications'),
+        ]);
 
         // Get the role model by ID
         $role = Role::findOrFail($request->input('roles'));

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -26,6 +27,7 @@ type User = {
     name: string;
     email: string;
     created_at: string;
+    disable_kiosk_notifications: boolean;
     roles: {
         permissions: Permission[];
         id: number;
@@ -53,6 +55,7 @@ export default function UserEdit() {
         email: user.email,
         roles: user.roles[0]?.id.toString() ?? '', // assuming single role
         managed_kiosks: user.managed_kiosks,
+        disable_kiosk_notifications: user.disable_kiosk_notifications ?? false,
     });
 
     const KioskForm = useForm({
@@ -112,6 +115,14 @@ export default function UserEdit() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="mb-4 flex items-center space-x-2">
+                        <Switch
+                            id="disable_kiosk_notifications"
+                            checked={data.disable_kiosk_notifications}
+                            onCheckedChange={(checked) => setData('disable_kiosk_notifications', checked)}
+                        />
+                        <Label htmlFor="disable_kiosk_notifications">Disable Kiosk Clock-in Notifications</Label>
                     </div>
                     <div className="mb-2">
                         <div className="my-2 flex flex-col items-start space-y-2">
