@@ -38,6 +38,8 @@ interface AiChatProps {
     onConversationIdChange?: (id: string | null) => void;
     /** Centered mode with large input box (Copilot/Gemini style) - used for dashboard */
     centered?: boolean;
+    /** Whether voice call feature is enabled (requires ai.voice permission) */
+    enableVoice?: boolean;
 }
 
 export function AiChat({
@@ -46,6 +48,7 @@ export function AiChat({
     initialConversationId,
     onConversationIdChange,
     centered = false,
+    enableVoice = false,
 }: AiChatProps) {
     const {
         placeholder = 'Message Superior AI...',
@@ -115,12 +118,14 @@ export function AiChat({
                     placeholder={placeholder}
                     centered={true}
                     className="h-full"
-                    onVoiceCall={() => setIsVoiceCallOpen(true)}
+                    onVoiceCall={enableVoice ? () => setIsVoiceCallOpen(true) : undefined}
                 />
-                <VoiceCallModal
-                    isOpen={isVoiceCallOpen}
-                    onClose={() => setIsVoiceCallOpen(false)}
-                />
+                {enableVoice && (
+                    <VoiceCallModal
+                        isOpen={isVoiceCallOpen}
+                        onClose={() => setIsVoiceCallOpen(false)}
+                    />
+                )}
             </div>
         );
     }
@@ -138,20 +143,22 @@ export function AiChat({
                         <span className="font-semibold">Superior AI</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-muted-foreground hover:text-primary h-8 gap-1.5 px-2"
-                                    onClick={() => setIsVoiceCallOpen(true)}
-                                >
-                                    <Phone className="size-4" />
-                                    <span className="hidden sm:inline">Voice</span>
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Start voice call</TooltipContent>
-                        </Tooltip>
+                        {enableVoice && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-muted-foreground hover:text-primary h-8 gap-1.5 px-2"
+                                        onClick={() => setIsVoiceCallOpen(true)}
+                                    >
+                                        <Phone className="size-4" />
+                                        <span className="hidden sm:inline">Voice</span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Start voice call</TooltipContent>
+                            </Tooltip>
+                        )}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
@@ -207,10 +214,12 @@ export function AiChat({
                     </div>
                 </div>
 
-                <VoiceCallModal
-                    isOpen={isVoiceCallOpen}
-                    onClose={() => setIsVoiceCallOpen(false)}
-                />
+                {enableVoice && (
+                    <VoiceCallModal
+                        isOpen={isVoiceCallOpen}
+                        onClose={() => setIsVoiceCallOpen(false)}
+                    />
+                )}
             </div>
         );
     }
@@ -221,20 +230,22 @@ export function AiChat({
             {/* Header with voice call and clear buttons */}
             {messages.length > 0 && (
                 <div className="border-border flex shrink-0 items-center justify-end gap-1 border-b px-3 py-2">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-muted-foreground hover:text-primary h-7 gap-1.5 px-2 text-xs"
-                                onClick={() => setIsVoiceCallOpen(true)}
-                            >
-                                <Phone className="size-3.5" />
-                                Voice
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Start voice call</TooltipContent>
-                    </Tooltip>
+                    {enableVoice && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-muted-foreground hover:text-primary h-7 gap-1.5 px-2 text-xs"
+                                    onClick={() => setIsVoiceCallOpen(true)}
+                                >
+                                    <Phone className="size-3.5" />
+                                    Voice
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Start voice call</TooltipContent>
+                        </Tooltip>
+                    )}
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
@@ -296,10 +307,12 @@ export function AiChat({
                 </p>
             </div>
 
-            <VoiceCallModal
-                isOpen={isVoiceCallOpen}
-                onClose={() => setIsVoiceCallOpen(false)}
-            />
+            {enableVoice && (
+                <VoiceCallModal
+                    isOpen={isVoiceCallOpen}
+                    onClose={() => setIsVoiceCallOpen(false)}
+                />
+            )}
         </div>
     );
 }

@@ -61,12 +61,16 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
 Route::middleware('auth')->group(function () {
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+});
 
-    // AI Chat Routes (using web middleware for session auth)
+// AI Chat Routes (restricted to users with ai.chat permission)
+Route::middleware(['auth', 'permission:ai.chat'])->group(function () {
     Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream'])->name('chat.stream');
+});
 
-    // Voice Call Routes (OpenAI Realtime API)
+// AI Voice Routes (restricted to users with ai.voice permission)
+Route::middleware(['auth', 'permission:ai.voice'])->group(function () {
     Route::post('/voice/session', [VoiceCallController::class, 'createSession'])->name('voice.session');
     Route::post('/voice/session/end', [VoiceCallController::class, 'endSession'])->name('voice.session.end');
     Route::post('/voice/tool', [VoiceCallController::class, 'executeTool'])->name('voice.tool');
@@ -221,15 +225,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // REQUISITION MANAGEMENT
     // ============================================
-    Route::middleware('permission:requisitions.view')->group(function () {
-        Route::get('/requisition/all', [PurchasingController::class, 'index'])->name('requisition.index');
-        Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show');
-    });
+    Route::get('/requisition/all', [PurchasingController::class, 'index'])->name('requisition.index')
+        ->middleware('permission:requisitions.view');
     Route::middleware('permission:requisitions.create')->group(function () {
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
         Route::get('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
     });
+    // Note: {id} route must come AFTER /create to avoid matching "create" as an id
+    Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show')
+        ->middleware('permission:requisitions.view');
     Route::middleware('permission:requisitions.edit')->group(function () {
         Route::get('/requisition/{id}/edit', [PurchasingController::class, 'edit'])->name('requisition.edit');
         Route::put('/requisition/{requisition}', [PurchasingController::class, 'update'])->name('requisition.update');

@@ -218,6 +218,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'queue-status.view' => 'View queue status',
             'admin.roles' => 'Manage roles and permissions',
         ],
+
+        // ============================================
+        // AI FEATURES
+        // ============================================
+        'AI' => [
+            'ai.chat' => 'Access AI chat features',
+            'ai.voice' => 'Access AI voice call features',
+        ],
     ];
 
     /**

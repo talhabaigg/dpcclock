@@ -41,7 +41,9 @@
       "Bash(cmd.exe /c \"php -v\")",
       "Bash(powershell.exe -Command \"Get-Command php -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(powershell.exe:*)",
-      "Bash(tr:*)"
+      "Bash(tr:*)",
+      "Bash(more:*)",
+      "Bash(Get-Content -Path \"storage\\\\logs\\\\laravel.log\" -Tail 100)"
     ]
   }
 }

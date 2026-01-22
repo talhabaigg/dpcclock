@@ -6,7 +6,11 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
-export function ChatDock() {
+interface ChatDockProps {
+    enableVoice?: boolean;
+}
+
+export function ChatDock({ enableVoice = false }: ChatDockProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -62,7 +66,7 @@ export function ChatDock() {
                     )}
                     style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
                 >
-                    <AiChat className="h-full" />
+                    <AiChat className="h-full" enableVoice={enableVoice} />
                 </div>
             </div>
         </div>
