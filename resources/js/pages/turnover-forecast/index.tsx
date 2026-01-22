@@ -33,7 +33,7 @@ type TurnoverRow = {
     job_name: string;
     job_number: string;
     // Forecast status fields
-    forecast_status: 'not_started' | 'draft' | 'submitted';
+    forecast_status: 'not_started' | 'draft' | 'submitted' | 'finalized';
     last_submitted_at: string | null;
     // Revenue fields
     claimed_to_date: number;
@@ -562,6 +562,14 @@ export default function TurnoverForecastIndex({
                         return '';
                     }
                     const status = rowData?.forecast_status as TurnoverRow['forecast_status'];
+                    if (status === 'finalized') {
+                        return (
+                            <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Finalized</span>
+                            </div>
+                        );
+                    }
                     if (status === 'submitted') {
                         return (
                             <div className="flex items-center gap-1.5">
