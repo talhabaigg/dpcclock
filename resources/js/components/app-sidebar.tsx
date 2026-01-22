@@ -20,150 +20,137 @@ import {
     Folder,
     Hammer,
     Hourglass,
+    Key,
     LayoutGrid,
     Pickaxe,
+    Settings,
+    Shield,
     Target,
     UsersRound,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
+
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: '/',
         icon: LayoutGrid,
-        permission: 'view dashboard',
+        permission: 'dashboard.view',
     },
     {
         title: 'Locations',
         href: '/locations',
         icon: Building,
-        permission: 'manage locations',
+        permission: 'locations.view',
     },
     {
         title: 'Turnover Forecast',
         href: '/turnover-forecast',
         icon: ChartLine,
-        permission: 'view all requisitions',
+        permission: 'turnover-forecast.view',
     },
     {
         title: 'Cashflow Forecast',
         href: '/cash-forecast',
         icon: ChartArea,
-        permission: 'view all requisitions',
+        permission: 'cash-forecast.view',
     },
     {
         title: 'Budget Management',
         href: '/budget-management',
         icon: Target,
-        adminOnly: true,
-        permission: null,
+        permission: 'budget.view',
     },
     {
         title: 'Employees',
         href: '/employees',
         icon: UsersRound,
-        permission: 'manage employees',
+        permission: 'employees.view',
     },
     {
         title: 'Kiosks',
         href: '/kiosks',
         icon: Clock,
-        permission: 'view kiosk',
+        permission: 'kiosks.view',
     },
     {
         title: 'Worktypes',
         href: '/worktypes',
         icon: Hammer,
-        permission: 'manage worktypes',
+        permission: 'worktypes.view',
     },
-    // {
-    //     title: 'Timesheets',
-    //     href: '/timesheets',
-    //     icon: Hourglass,
-    //     permission: 'manage timesheets',
-    // },
-
-    // {
-    //     title: 'Timesheet Converter',
-    //     href: '/timesheets-converter',
-    //     icon: FoldHorizontal,
-    //     permission: 'view timesheet converter',
-    // },
     {
         title: 'Users',
         href: '/users',
         icon: UsersRound,
-        permission: 'view timesheet converter',
+        permission: 'users.view',
     },
     {
         title: 'Requisitions',
         href: '/requisition/all',
         icon: Folder,
-        permission: 'manage timesheets',
+        permission: 'requisitions.view',
     },
     {
         title: 'Variations',
         href: '/variations',
         icon: File,
-        permission: 'view timesheet converter',
+        permission: 'variations.view',
     },
 ];
-
-// const textIcon = (text: string) => () => (
-//     <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-500 text-sm font-medium text-white">{text}</span>
-// );
 
 const timesheets = [
     {
         name: 'Timesheets',
         icon: Clock,
-        permission: 'manage timesheets',
+        permission: 'timesheets.view',
         subItems: [
             {
                 name: 'Manage',
                 url: '/timesheets',
                 icon: Hourglass,
-                permission: 'view all requisitions',
+                permission: 'timesheets.view',
             },
             {
                 name: 'Review',
                 url: '/timesheets/review',
                 icon: Hourglass,
-                permission: 'view all requisitions',
+                permission: 'timesheets.review',
             },
         ],
     },
 ];
+
 const documents = [
     {
         name: 'Data',
         icon: Database,
-        permission: 'view all requisitions',
+        permission: 'materials.view',
         subItems: [
             {
                 name: 'Material',
                 url: '/material-items/all',
                 icon: Pickaxe,
-                permission: 'view all requisitions',
+                permission: 'materials.view',
             },
             {
                 name: 'Suppliers',
                 url: '/suppliers',
                 icon: Box,
-                permission: 'view all requisitions',
+                permission: 'suppliers.view',
             },
             {
                 name: 'Cost Codes',
                 url: '/cost-codes',
                 icon: Binary,
-                permission: 'view all requisitions',
+                permission: 'costcodes.view',
             },
             {
                 name: 'Cost Types',
                 url: '/cost-types',
                 icon: Binary,
-                permission: 'view all requisitions',
+                permission: 'costtypes.view',
             },
         ],
     },
@@ -173,13 +160,35 @@ const reports = [
     {
         name: 'Reports',
         icon: FileSpreadsheet,
-        permission: 'view all requisitions',
+        permission: 'reports.view',
         subItems: [
             {
                 name: 'Req Line Desc Report',
                 url: '/reports/req-line-items-desc',
                 icon: Pickaxe,
-                permission: 'view all requisitions',
+                permission: 'reports.requisition-lines',
+            },
+        ],
+    },
+];
+
+const admin = [
+    {
+        name: 'Administration',
+        icon: Settings,
+        permission: 'admin.roles',
+        subItems: [
+            {
+                name: 'Roles & Permissions',
+                url: '/admin/roles',
+                icon: Shield,
+                permission: 'admin.roles',
+            },
+            {
+                name: 'All Permissions',
+                url: '/admin/permissions',
+                icon: Key,
+                permission: 'admin.roles',
             },
         ],
     },
@@ -190,25 +199,18 @@ const footerNavItems: NavItem[] = [
         title: 'Queue Status',
         href: '/queue-status',
         icon: Activity,
-        permission: 'view all requisitions',
+        permission: 'queue-status.view',
     },
     {
         title: 'Calendar',
         href: '/calendar',
         icon: CalendarDays,
-        permission: 'view all requisitions',
+        permission: 'calendar.view',
     },
-    // {
-    //     title: 'Documentation',
-    //     href: 'https://laravel.com/docs/starter-kits',
-    //     icon: BookOpen,
-    //     permission: 'view all requisitions',
-    // },
 ];
 
 type AuthUser = {
     permissions: string[];
-    // add other user properties if needed
 };
 
 type PageProps = {
@@ -216,14 +218,11 @@ type PageProps = {
         user: AuthUser;
         permissions: string[];
         isAdmin: boolean;
-        // add other auth properties if needed
     };
-    // add other props if needed
 };
 
 export function AppSidebar() {
     const { props } = usePage<PageProps>();
-    // const permissions: string[] = props?.auth?.user?.permissions ?? [];
     const permissions: string[] = props?.auth?.permissions ?? [];
     const isAdmin = props?.auth?.isAdmin ?? false;
 
@@ -236,6 +235,8 @@ export function AppSidebar() {
     const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredAdmin = admin.filter((item) => !item.permission || permissions.includes(item.permission));
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -255,6 +256,7 @@ export function AppSidebar() {
                 <NavDocuments items={filteredTimesheets} />
                 <NavDocuments items={filteredDocuments} />
                 <NavDocuments items={filteredReports} />
+                <NavDocuments items={filteredAdmin} />
             </SidebarContent>
 
             <SidebarFooter>
