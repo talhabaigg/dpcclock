@@ -8,11 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    AlignmentToolbar,
+    MarkersLayer,
+    useAlignmentTool,
+} from '@/features/drawing-compare';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Camera, Eye, GitCompare, History, Layers } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Camera, Eye, GitCompare, Hand, History, Layers, Lock, Maximize, MousePointer, Unlock } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 type PDFDocumentProxy = import('pdfjs-dist').PDFDocumentProxy;
@@ -187,6 +192,15 @@ export default function QaStageDrawingShow() {
     const candidateCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const [candidatePdfLoaded, setCandidatePdfLoaded] = useState(false);
 
+    // Alignment tool
+    const alignmentTool = useAlignmentTool();
+
+    // View mode: 'pan' for panning, 'select' for adding observations
+    const [viewMode, setViewMode] = useState<'pan' | 'select'>('pan');
+
+    // Zoom lock state
+    const [zoomLocked, setZoomLocked] = useState(false);
+
     // Determine if candidate is a PDF
     const candidateIsPdf = candidateRevision?.file_url
         ? candidateRevision.file_url.toLowerCase().endsWith('.pdf') ||
@@ -197,6 +211,44 @@ export default function QaStageDrawingShow() {
     const isImage =
         (drawing.file_type || '').toLowerCase().startsWith('image') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name);
     const canPanZoom = isPdf || isImage;
+
+    // Handle alignment clicks on base layer
+    // Uses the clicked element's rect directly for precise coordinate calculation
+    const handleAlignmentBaseClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (!alignmentTool.isAligning || alignmentTool.activeLayer !== 'base') return;
+
+        // Get coordinates relative to the clicked page element (same as observation click)
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+        const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
+
+        console.log('Base click:', {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            rectLeft: rect.left,
+            rectTop: rect.top,
+            rectWidth: rect.width,
+            rectHeight: rect.height,
+            normalizedX: x,
+            normalizedY: y,
+            pdfScale
+        });
+
+        alignmentTool.handleBaseClick({ x, y });
+    }, [alignmentTool, pdfScale]);
+
+    // Handle alignment clicks on candidate layer
+    // Uses the clicked element's rect directly for precise coordinate calculation
+    const handleAlignmentCandidateClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (!alignmentTool.isAligning || alignmentTool.activeLayer !== 'candidate') return;
+
+        // Get coordinates relative to the clicked page element (same as observation click)
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+        const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
+
+        alignmentTool.handleCandidateClick({ x, y });
+    }, [alignmentTool]);
 
     useEffect(() => {
         setHasUserPanned(false);
@@ -311,14 +363,28 @@ export default function QaStageDrawingShow() {
     }, [showCompareOverlay, candidateRevision?.file_url, candidateIsPdf]);
 
     // Render candidate PDF to overlay canvas
+    // Track render count to force re-render when needed
+    const [candidateRenderKey, setCandidateRenderKey] = useState(0);
+
+    // Force re-render of candidate when overlay becomes visible
     useEffect(() => {
-        if (!candidatePdfLoaded || !candidatePdfRef.current || !candidateCanvasRef.current) {
+        if (showCompareOverlay && candidatePdfLoaded) {
+            setCandidateRenderKey((k) => k + 1);
+        }
+    }, [showCompareOverlay, candidatePdfLoaded]);
+
+    useEffect(() => {
+        if (!candidatePdfLoaded || !candidatePdfRef.current || !showCompareOverlay) {
             return;
         }
 
-        const renderCandidatePage = async () => {
+        // Small delay to ensure canvas is mounted
+        const timeoutId = setTimeout(async () => {
             const canvas = candidateCanvasRef.current;
-            if (!canvas || !candidatePdfRef.current) return;
+            if (!canvas || !candidatePdfRef.current) {
+                console.log('Candidate canvas not ready, skipping render');
+                return;
+            }
 
             const deviceScale = window.devicePixelRatio || 1;
 
@@ -336,11 +402,11 @@ export default function QaStageDrawingShow() {
             canvas.style.height = `${viewport.height / deviceScale}px`;
 
             await page.render({ canvasContext: context, viewport }).promise;
-            console.log('Candidate PDF page rendered');
-        };
+            console.log('Candidate PDF page rendered at scale:', pdfScale);
+        }, 50);
 
-        renderCandidatePage();
-    }, [candidatePdfLoaded, pdfScale, targetPageNumber]);
+        return () => clearTimeout(timeoutId);
+    }, [candidatePdfLoaded, pdfScale, targetPageNumber, showCompareOverlay, candidateRenderKey]);
 
     useEffect(() => {
         if (!isPdf || hasUserPanned || !containerRef.current || Object.keys(pageSizes).length === 0) {
@@ -364,10 +430,28 @@ export default function QaStageDrawingShow() {
     }, [hasUserPanned, isPdf, pageSizes, pdfPageCount]);
 
     const handlePageClick = (pageNumber: number) => (event: React.MouseEvent<HTMLDivElement>) => {
+        // If user was dragging (panning), don't trigger any click action
         if (didDragRef.current) {
             didDragRef.current = false;
             return;
         }
+
+        // If in alignment mode (actively picking points), handle alignment clicks
+        if (alignmentTool.isAligning) {
+            if (alignmentTool.activeLayer === 'base') {
+                handleAlignmentBaseClick(event);
+            } else if (alignmentTool.activeLayer === 'candidate') {
+                handleAlignmentCandidateClick(event);
+            }
+            return;
+        }
+
+        // Only allow adding observations in 'select' mode (not in 'pan' mode)
+        if (viewMode !== 'select') {
+            return;
+        }
+
+        // Normal observation click - only when not in alignment mode and in select mode
         const rect = event.currentTarget.getBoundingClientRect();
         const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
         const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
@@ -413,7 +497,7 @@ export default function QaStageDrawingShow() {
     };
 
     const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-        if (!canPanZoom) return;
+        if (!canPanZoom || zoomLocked) return;
         event.preventDefault();
         event.stopPropagation();
 
@@ -434,6 +518,38 @@ export default function QaStageDrawingShow() {
         setPdfScale(nextScale);
         setPdfTranslate({ x: nextTranslateX, y: nextTranslateY });
     };
+
+    // Fit drawing to canvas viewport
+    const fitToCanvas = useCallback(() => {
+        if (!containerRef.current || Object.keys(pageSizes).length === 0) return;
+
+        const pageSize = pageSizes[1];
+        if (!pageSize) return;
+
+        const { clientWidth, clientHeight } = containerRef.current;
+        const padding = 40; // Padding around the drawing
+
+        // Calculate scale to fit drawing within viewport
+        const scaleX = (clientWidth - padding) / pageSize.width;
+        const scaleY = (clientHeight - padding) / pageSize.height;
+        const fitScale = Math.min(scaleX, scaleY, PDF_SCALE_MAX);
+        const clampedScale = Math.max(PDF_SCALE_MIN, fitScale);
+
+        // Calculate the scaled dimensions
+        const scaledWidth = pageSize.width * clampedScale;
+        const scaledHeight = pageSize.height * clampedScale;
+
+        // Center the drawing
+        const nextX = (clientWidth - scaledWidth) / 2;
+        const nextY = (clientHeight - scaledHeight) / 2;
+
+        setPdfScale(clampedScale);
+        setPdfTranslate({
+            x: isFinite(nextX) ? nextX : 0,
+            y: isFinite(nextY) ? nextY : 0,
+        });
+        setHasUserPanned(true);
+    }, [pageSizes]);
 
     const resetDialog = () => {
         setPendingPoint(null);
@@ -570,33 +686,84 @@ export default function QaStageDrawingShow() {
                             </div>
                             <div className="flex items-center gap-2">
                                 {canPanZoom && (
-                                    <div className="flex items-center gap-1">
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setHasUserPanned(true);
-                                                setPdfScale((prev) => Math.max(PDF_SCALE_MIN, Math.round((prev - PDF_SCALE_STEP) * 100) / 100));
-                                            }}
-                                        >
-                                            -
-                                        </Button>
-                                        <div className="w-16 text-center text-xs text-muted-foreground">
-                                            {Math.round(pdfScale * 100)}%
+                                    <>
+                                        {/* Pan/Select mode toggle */}
+                                        <div className="flex items-center border rounded-md">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
+                                                onClick={() => setViewMode('pan')}
+                                                title="Pan mode"
+                                                className="rounded-r-none"
+                                            >
+                                                <Hand className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={viewMode === 'select' ? 'secondary' : 'ghost'}
+                                                onClick={() => setViewMode('select')}
+                                                title="Select/Observation mode"
+                                                className="rounded-l-none"
+                                            >
+                                                <MousePointer className="h-4 w-4" />
+                                            </Button>
                                         </div>
+
+                                        {/* Zoom controls */}
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={zoomLocked}
+                                                onClick={() => {
+                                                    setHasUserPanned(true);
+                                                    setPdfScale((prev) => Math.max(PDF_SCALE_MIN, Math.round((prev - PDF_SCALE_STEP) * 100) / 100));
+                                                }}
+                                            >
+                                                -
+                                            </Button>
+                                            <div className="w-16 text-center text-xs text-muted-foreground">
+                                                {Math.round(pdfScale * 100)}%
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={zoomLocked}
+                                                onClick={() => {
+                                                    setHasUserPanned(true);
+                                                    setPdfScale((prev) => Math.min(PDF_SCALE_MAX, Math.round((prev + PDF_SCALE_STEP) * 100) / 100));
+                                                }}
+                                            >
+                                                +
+                                            </Button>
+                                        </div>
+
+                                        {/* Fit to canvas button */}
                                         <Button
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => {
-                                                setHasUserPanned(true);
-                                                setPdfScale((prev) => Math.min(PDF_SCALE_MAX, Math.round((prev + PDF_SCALE_STEP) * 100) / 100));
-                                            }}
+                                            onClick={fitToCanvas}
+                                            title="Fit to canvas"
                                         >
-                                            +
+                                            <Maximize className="h-4 w-4" />
                                         </Button>
-                                    </div>
+
+                                        {/* Lock zoom toggle */}
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={zoomLocked ? 'secondary' : 'outline'}
+                                            onClick={() => setZoomLocked((prev) => !prev)}
+                                            title={zoomLocked ? 'Unlock zoom' : 'Lock zoom'}
+                                        >
+                                            {zoomLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -778,12 +945,34 @@ export default function QaStageDrawingShow() {
                                     Selected revision has no file available
                                 </span>
                             )}
+
+                            {/* Alignment Tool */}
+                            {showCompareOverlay && candidateRevision?.file_url && (
+                                <AlignmentToolbar
+                                    state={alignmentTool.state}
+                                    statusMessage={alignmentTool.statusMessage}
+                                    isAligning={alignmentTool.isAligning}
+                                    isAligned={alignmentTool.isAligned}
+                                    canUndo={alignmentTool.state !== 'idle' && alignmentTool.state !== 'picking_base_A'}
+                                    onStartAlignment={alignmentTool.startAlignment}
+                                    onResetAlignment={alignmentTool.resetAlignment}
+                                    onUndoLastPoint={alignmentTool.undoLastPoint}
+                                />
+                            )}
                         </div>
                     </div>
 
                     <div
                         ref={containerRef}
-                        className={`relative overflow-hidden rounded border ${canPanZoom ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        className={`relative overflow-hidden rounded border ${
+                            alignmentTool.isAligning
+                                ? 'cursor-crosshair'
+                                : canPanZoom && viewMode === 'pan'
+                                  ? 'cursor-grab active:cursor-grabbing'
+                                  : canPanZoom && viewMode === 'select'
+                                    ? 'cursor-crosshair'
+                                    : ''
+                        }`}
                         style={{
                             height: '70vh',
                             width: '100%',
@@ -821,15 +1010,22 @@ export default function QaStageDrawingShow() {
                                                         Page {targetPageNumber} of {totalPages}
                                                     </div>
                                                 )}
-                                                <canvas ref={(el) => (canvasRefs.current[0] = el)} className="block max-w-none rounded border" />
+                                                <canvas ref={(el) => { canvasRefs.current[0] = el; }} className="block max-w-none rounded border" />
                                                 {/* Candidate PDF overlay - rendered to canvas for PDF-to-PDF comparison */}
+                                                {/* During alignment: hide overlay when picking base points, show when picking candidate points */}
                                                 {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
                                                     <canvas
                                                         ref={candidateCanvasRef}
-                                                        className="absolute inset-0 pointer-events-none"
+                                                        className="absolute left-0 top-0 pointer-events-none"
                                                         style={{
-                                                            opacity: overlayOpacity / 100,
+                                                            opacity: alignmentTool.activeLayer === 'base'
+                                                                ? 0  // Hide overlay when picking base points
+                                                                : alignmentTool.activeLayer === 'candidate'
+                                                                  ? 0.7  // Show overlay prominently when picking candidate points
+                                                                  : overlayOpacity / 100,  // Normal opacity when not aligning
                                                             display: candidatePdfLoaded ? 'block' : 'none',
+                                                            transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                            transformOrigin: 'top left',
                                                         }}
                                                     />
                                                 )}
@@ -840,7 +1036,13 @@ export default function QaStageDrawingShow() {
                                                         alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
                                                         className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                                         style={{
-                                                            opacity: overlayOpacity / 100,
+                                                            opacity: alignmentTool.activeLayer === 'base'
+                                                                ? 0  // Hide overlay when picking base points
+                                                                : alignmentTool.activeLayer === 'candidate'
+                                                                  ? 0.7  // Show overlay prominently when picking candidate points
+                                                                  : overlayOpacity / 100,  // Normal opacity when not aligning
+                                                            transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                            transformOrigin: 'top left',
                                                         }}
                                                         onError={() => toast.error('Failed to load comparison revision')}
                                                     />
@@ -890,6 +1092,15 @@ export default function QaStageDrawingShow() {
                                                                 !
                                                             </button>
                                                         ))}
+                                                {/* Alignment markers layer */}
+                                                {(alignmentTool.isAligning || alignmentTool.isAligned) && pageSize && (
+                                                    <MarkersLayer
+                                                        points={alignmentTool.points}
+                                                        state={alignmentTool.state}
+                                                        containerWidth={pageSize.width}
+                                                        containerHeight={pageSize.height}
+                                                    />
+                                                )}
                                             </div>
                                         );
                                     })()}
@@ -905,6 +1116,8 @@ export default function QaStageDrawingShow() {
                                             className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                                             style={{
                                                 opacity: overlayOpacity / 100,
+                                                transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                transformOrigin: 'top left',
                                             }}
                                             onError={() => toast.error('Failed to load comparison revision')}
                                         />
@@ -952,6 +1165,15 @@ export default function QaStageDrawingShow() {
                                                 !
                                             </button>
                                         ))}
+                                    {/* Alignment markers layer for image drawings */}
+                                    {(alignmentTool.isAligning || alignmentTool.isAligned) && (
+                                        <MarkersLayer
+                                            points={alignmentTool.points}
+                                            state={alignmentTool.state}
+                                            containerWidth={100}
+                                            containerHeight={100}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>
