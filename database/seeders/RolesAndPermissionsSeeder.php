@@ -105,6 +105,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Requisitions' => [
             'requisitions.view' => 'View requisitions',
+            'requisitions.view-all' => 'View all requisitions (across all locations)',
             'requisitions.create' => 'Create requisitions',
             'requisitions.edit' => 'Edit requisitions',
             'requisitions.delete' => 'Delete requisitions',
@@ -269,6 +270,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'worktypes.sync',
             // Requisitions
             'requisitions.view',
+            'requisitions.view-all',
             'requisitions.create',
             'requisitions.edit',
             'requisitions.delete',
@@ -359,6 +361,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'worktypes.view',
             // Requisitions
             'requisitions.view',
+            'requisitions.view-all',
             'requisitions.create',
             'requisitions.edit',
             'requisitions.process',

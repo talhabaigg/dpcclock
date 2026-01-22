@@ -739,7 +739,7 @@ export default function Create() {
                         </div>
                     </CardContent>
                 </Card>
-                {permissions.includes('view all requisitions') && (
+                {permissions.includes('requisitions.view-all') && (
                     <AiImageExtractor
                         setFile={setFile}
                         file={file}
