@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ProcessDrawingSetJob;
 use App\Models\DrawingSet;
+use App\Models\DrawingSheet;
 use App\Models\Location;
 use App\Models\QaStageDrawing;
 use App\Models\TitleBlockTemplate;
+use App\Services\DrawingComparisonService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -610,5 +612,198 @@ class DrawingSetController extends Controller
                 'Cache-Control' => 'private, max-age=3600',
             ]
         );
+    }
+
+    /**
+     * Compare two drawing revisions using AI to identify changes.
+     * Accepts two QaStageDrawing IDs and returns a summary of differences.
+     */
+    public function compareRevisions(Request $request): JsonResponse
+    {
+        // Allow longer execution time and more memory for AI analysis
+        set_time_limit(180);
+        ini_set('memory_limit', '1G');
+
+        $validated = $request->validate([
+            'sheet_a_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'sheet_b_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'context' => ['nullable', 'string', 'max:200'],
+            'additional_prompt' => ['nullable', 'string', 'max:1000'], // For regeneration with refinement
+        ]);
+
+        $sheetA = QaStageDrawing::findOrFail($validated['sheet_a_id']);
+        $sheetB = QaStageDrawing::findOrFail($validated['sheet_b_id']);
+
+        // Helper to get image path (prefers page_preview_s3_key, falls back to thumbnail_path)
+        $getImagePath = function ($sheet) {
+            return $sheet->page_preview_s3_key ?: $sheet->thumbnail_path;
+        };
+
+        $imagePathA = $getImagePath($sheetA);
+        $imagePathB = $getImagePath($sheetB);
+
+        // Verify both sheets have preview images
+        if (!$imagePathA || !$imagePathB) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Both sheets must have preview images to compare. Missing: ' .
+                    (!$imagePathA ? 'Sheet A' : '') .
+                    (!$imagePathA && !$imagePathB ? ' and ' : '') .
+                    (!$imagePathB ? 'Sheet B' : ''),
+            ], 422);
+        }
+
+        $comparisonService = app(DrawingComparisonService::class);
+
+        // Get images as base64 data URLs
+        $imageA = $comparisonService->getImageDataUrl($imagePathA);
+        $imageB = $comparisonService->getImageDataUrl($imagePathB);
+
+        if (!$imageA || !$imageB) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load sheet images from storage.',
+            ], 500);
+        }
+
+        \Log::info('Starting AI drawing comparison', [
+            'sheet_a_id' => $sheetA->id,
+            'sheet_b_id' => $sheetB->id,
+            'sheet_a_revision' => $sheetA->revision,
+            'sheet_b_revision' => $sheetB->revision,
+            'sheet_a_drawing_number' => $sheetA->drawing_number,
+        ]);
+
+        // Run comparison
+        $context = $validated['context'] ?? 'walls and ceilings construction drawings';
+        $additionalPrompt = $validated['additional_prompt'] ?? null;
+        $result = $comparisonService->compareRevisions($imageA, $imageB, $context, $additionalPrompt);
+
+        if (!$result['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'AI comparison failed: ' . ($result['error'] ?? 'Unknown error'),
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'comparison' => [
+                'sheet_a' => [
+                    'id' => $sheetA->id,
+                    'drawing_number' => $sheetA->drawing_number,
+                    'revision' => $sheetA->revision,
+                ],
+                'sheet_b' => [
+                    'id' => $sheetB->id,
+                    'drawing_number' => $sheetB->drawing_number,
+                    'revision' => $sheetB->revision,
+                ],
+                'summary' => $result['summary'],
+                'changes' => $result['changes'],
+                'change_count' => $result['change_count'] ?? count($result['changes'] ?? []),
+                'confidence' => $result['confidence'] ?? 'unknown',
+                'notes' => $result['notes'] ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * Get all revisions of a drawing sheet for comparison.
+     */
+    public function getDrawingSheetRevisions(DrawingSheet $drawingSheet): JsonResponse
+    {
+        $revisions = $drawingSheet->revisions()
+            ->whereNotNull('page_preview_s3_key')
+            ->orderBy('created_at', 'asc')
+            ->get(['id', 'revision_number', 'revision', 'drawing_number', 'drawing_title', 'created_at']);
+
+        return response()->json([
+            'success' => true,
+            'drawing_sheet' => [
+                'id' => $drawingSheet->id,
+                'sheet_number' => $drawingSheet->sheet_number,
+                'title' => $drawingSheet->title,
+            ],
+            'revisions' => $revisions,
+        ]);
+    }
+
+    /**
+     * Save AI-detected changes as observations.
+     * Creates observation records for selected AI comparison changes.
+     */
+    public function saveComparisonAsObservations(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sheet_a_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'sheet_b_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'target_sheet_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'changes' => ['required', 'array', 'min:1'],
+            'changes.*.type' => ['required', 'string'],
+            'changes.*.description' => ['required', 'string', 'max:2000'],
+            'changes.*.location' => ['required', 'string'],
+            'changes.*.impact' => ['required', 'string', 'in:low,medium,high'],
+            'changes.*.potential_change_order' => ['required', 'boolean'],
+            'changes.*.reason' => ['nullable', 'string'],
+        ]);
+
+        $targetSheet = QaStageDrawing::findOrFail($validated['target_sheet_id']);
+        $createdObservations = [];
+
+        try {
+            \DB::beginTransaction();
+
+            foreach ($validated['changes'] as $index => $change) {
+                // Create observation from AI change
+                // AI doesn't provide exact coordinates, so we place markers in a grid pattern
+                // User can adjust positions later when reviewing
+                $gridX = 0.1 + (($index % 4) * 0.2); // 0.1, 0.3, 0.5, 0.7
+                $gridY = 0.1 + (floor($index / 4) * 0.15); // Stack vertically
+
+                $observation = \App\Models\QaStageDrawingObservation::create([
+                    'qa_stage_drawing_id' => $targetSheet->id,
+                    'page_number' => $targetSheet->page_number ?? 1,
+                    'x' => min($gridX, 0.9),
+                    'y' => min($gridY, 0.9),
+                    'type' => 'observation',
+                    'description' => "[{$change['type']}] {$change['description']}\n\nLocation: {$change['location']}" .
+                        ($change['reason'] ? "\n\nReason: {$change['reason']}" : ''),
+                    'source' => 'ai_comparison',
+                    'source_sheet_a_id' => $validated['sheet_a_id'],
+                    'source_sheet_b_id' => $validated['sheet_b_id'],
+                    'ai_change_type' => $change['type'],
+                    'ai_impact' => $change['impact'],
+                    'ai_location' => $change['location'],
+                    'potential_change_order' => $change['potential_change_order'],
+                    'is_confirmed' => false,
+                ]);
+
+                $createdObservations[] = $observation;
+            }
+
+            \DB::commit();
+
+            \Log::info('AI comparison observations saved', [
+                'target_sheet_id' => $targetSheet->id,
+                'count' => count($createdObservations),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => count($createdObservations) . ' observations created from AI comparison',
+                'observations' => $createdObservations,
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Failed to save AI comparison observations', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save observations: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

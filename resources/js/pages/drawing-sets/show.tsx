@@ -11,7 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Loader2, MapPin, RefreshCw, Save, Settings, Trash2, XCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Eye, GitCompare, Loader2, MapPin, RefreshCw, RotateCcw, Save, Settings, Trash2, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -164,6 +166,27 @@ export default function DrawingSetShow() {
     const [savingFieldMappings, setSavingFieldMappings] = useState(false);
     const [extractingAfterMapping, setExtractingAfterMapping] = useState(false);
     const [retrySyncLoading, setRetrySyncLoading] = useState(false);
+    const [showCompareDialog, setShowCompareDialog] = useState(false);
+    const [compareSheetA, setCompareSheetA] = useState<string>('');
+    const [compareSheetB, setCompareSheetB] = useState<string>('');
+    const [comparing, setComparing] = useState(false);
+    const [comparisonResult, setComparisonResult] = useState<{
+        summary: string;
+        changes: Array<{
+            type: string;
+            description: string;
+            location: string;
+            impact: string;
+            potential_change_order: boolean;
+            reason?: string;
+        }>;
+        change_count: number;
+        confidence: string;
+        notes?: string;
+    } | null>(null);
+    const [selectedChanges, setSelectedChanges] = useState<Set<number>>(new Set());
+    const [customPrompt, setCustomPrompt] = useState('');
+    const [savingObservations, setSavingObservations] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -315,6 +338,117 @@ export default function DrawingSetShow() {
             toast.error('Failed to re-link sheets');
         }
     };
+
+    const handleCompareRevisions = async (additionalPrompt?: string) => {
+        if (!compareSheetA || !compareSheetB) {
+            toast.error('Please select two sheets to compare');
+            return;
+        }
+
+        setComparing(true);
+        setComparisonResult(null);
+        setSelectedChanges(new Set());
+
+        try {
+            const response = await fetch('/drawing-sheets/compare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({
+                    sheet_a_id: parseInt(compareSheetA),
+                    sheet_b_id: parseInt(compareSheetB),
+                    context: 'walls and ceilings construction drawings in Australia',
+                    additional_prompt: additionalPrompt || undefined,
+                }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setComparisonResult(data.comparison);
+                // Auto-select all changes by default
+                setSelectedChanges(new Set(data.comparison.changes.map((_: unknown, idx: number) => idx)));
+                toast.success(`Found ${data.comparison.change_count} changes`);
+            } else {
+                toast.error(data.message || 'Comparison failed');
+            }
+        } catch {
+            toast.error('Failed to compare revisions');
+        } finally {
+            setComparing(false);
+        }
+    };
+
+    const handleToggleChange = (idx: number) => {
+        setSelectedChanges(prev => {
+            const next = new Set(prev);
+            if (next.has(idx)) {
+                next.delete(idx);
+            } else {
+                next.add(idx);
+            }
+            return next;
+        });
+    };
+
+    const handleSelectAllChanges = () => {
+        if (comparisonResult) {
+            setSelectedChanges(new Set(comparisonResult.changes.map((_, idx) => idx)));
+        }
+    };
+
+    const handleDeselectAllChanges = () => {
+        setSelectedChanges(new Set());
+    };
+
+    const handleSaveAsObservations = async () => {
+        if (!comparisonResult || selectedChanges.size === 0) {
+            toast.error('Please select at least one change to save');
+            return;
+        }
+
+        setSavingObservations(true);
+
+        try {
+            const changesToSave = comparisonResult.changes.filter((_, idx) => selectedChanges.has(idx));
+
+            const response = await fetch('/drawing-sheets/compare/save-observations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({
+                    sheet_a_id: parseInt(compareSheetA),
+                    sheet_b_id: parseInt(compareSheetB),
+                    target_sheet_id: parseInt(compareSheetB), // Save to newer revision
+                    changes: changesToSave,
+                }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                toast.success(data.message);
+                setShowCompareDialog(false);
+            } else {
+                toast.error(data.message || 'Failed to save observations');
+            }
+        } catch {
+            toast.error('Failed to save observations');
+        } finally {
+            setSavingObservations(false);
+        }
+    };
+
+    const handleRegenerate = () => {
+        handleCompareRevisions(customPrompt || undefined);
+    };
+
+    // Get sheets that have drawing numbers for comparison
+    const comparableSheets = drawingSet.sheets.filter(
+        (s) => s.drawing_number && s.page_preview_s3_key && s.extraction_status === 'success'
+    );
 
     const getPreviewUrl = (sheet: Sheet) => {
         if (sheet.page_preview_s3_key) return `/drawing-sheets/${sheet.id}/preview`;
@@ -534,6 +668,17 @@ export default function DrawingSetShow() {
                         <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={handleRelinkSheets}>
                             Re-link Revisions
                         </Button>
+                        {comparableSheets.length >= 2 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-violet-200 text-violet-700 hover:bg-violet-50"
+                                onClick={() => setShowCompareDialog(true)}
+                            >
+                                <GitCompare className="mr-2 h-4 w-4" />
+                                Compare AI ({comparableSheets.length} sheets)
+                            </Button>
+                        )}
                     </div>
                 </Card>
 
@@ -1161,6 +1306,257 @@ export default function DrawingSetShow() {
                             </Button>
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* AI Comparison Dialog */}
+            <Dialog open={showCompareDialog} onOpenChange={(open) => {
+                setShowCompareDialog(open);
+                if (!open) {
+                    setComparisonResult(null);
+                    setCompareSheetA('');
+                    setCompareSheetB('');
+                }
+            }}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <GitCompare className="h-5 w-5 text-violet-600" />
+                            AI Drawing Comparison
+                        </DialogTitle>
+                        <DialogDescription>
+                            Select two revisions to compare. AI will analyze the drawings and identify changes.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-auto space-y-4 py-4">
+                        {/* Sheet Selection */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Older Revision (A)</Label>
+                                <Select value={compareSheetA} onValueChange={setCompareSheetA}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select sheet..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {comparableSheets.map((sheet) => (
+                                            <SelectItem key={sheet.id} value={String(sheet.id)} disabled={String(sheet.id) === compareSheetB}>
+                                                {sheet.drawing_number} - Rev {sheet.revision || '?'} (Page {sheet.page_number})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Newer Revision (B)</Label>
+                                <Select value={compareSheetB} onValueChange={setCompareSheetB}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select sheet..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {comparableSheets.map((sheet) => (
+                                            <SelectItem key={sheet.id} value={String(sheet.id)} disabled={String(sheet.id) === compareSheetA}>
+                                                {sheet.drawing_number} - Rev {sheet.revision || '?'} (Page {sheet.page_number})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Results */}
+                        {comparisonResult && (
+                            <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
+                                {/* Summary */}
+                                <div>
+                                    <h4 className="font-semibold text-sm mb-1">Summary</h4>
+                                    <p className="text-sm text-slate-700">{comparisonResult.summary}</p>
+                                    <div className="flex gap-2 mt-2">
+                                        <Badge variant="outline">
+                                            {comparisonResult.change_count} changes found
+                                        </Badge>
+                                        <Badge variant="outline" className={
+                                            comparisonResult.confidence === 'high' ? 'bg-green-50 text-green-700' :
+                                            comparisonResult.confidence === 'medium' ? 'bg-amber-50 text-amber-700' :
+                                            'bg-red-50 text-red-700'
+                                        }>
+                                            {comparisonResult.confidence} confidence
+                                        </Badge>
+                                    </div>
+                                </div>
+
+                                {/* Changes List with Selection */}
+                                {comparisonResult.changes.length > 0 && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="font-semibold text-sm">Detailed Changes</h4>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs"
+                                                    onClick={handleSelectAllChanges}
+                                                >
+                                                    Select All
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs"
+                                                    onClick={handleDeselectAllChanges}
+                                                >
+                                                    Deselect All
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 max-h-[250px] overflow-auto">
+                                            {comparisonResult.changes.map((change, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={`p-3 rounded border cursor-pointer transition-colors ${
+                                                        selectedChanges.has(idx)
+                                                            ? 'border-violet-400 bg-violet-50'
+                                                            : change.potential_change_order
+                                                                ? 'border-amber-300 bg-amber-50'
+                                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                                    }`}
+                                                    onClick={() => handleToggleChange(idx)}
+                                                >
+                                                    <div className="flex items-start gap-3">
+                                                        <Checkbox
+                                                            checked={selectedChanges.has(idx)}
+                                                            onCheckedChange={() => handleToggleChange(idx)}
+                                                            className="mt-1"
+                                                        />
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    {change.type}
+                                                                </Badge>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={
+                                                                        change.impact === 'high' ? 'text-red-600' :
+                                                                        change.impact === 'medium' ? 'text-amber-600' :
+                                                                        'text-slate-600'
+                                                                    }
+                                                                >
+                                                                    {change.impact} impact
+                                                                </Badge>
+                                                                {change.potential_change_order && (
+                                                                    <Badge className="bg-amber-500 text-white text-xs">
+                                                                        Potential Change Order
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm">{change.description}</p>
+                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                Location: {change.location}
+                                                            </p>
+                                                            {change.reason && (
+                                                                <p className="text-xs text-amber-700 mt-1">
+                                                                    {change.reason}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-2 text-sm text-muted-foreground">
+                                            {selectedChanges.size} of {comparisonResult.changes.length} changes selected
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Notes */}
+                                {comparisonResult.notes && (
+                                    <div className="text-sm text-muted-foreground border-t pt-2">
+                                        <strong>AI Notes:</strong> {comparisonResult.notes}
+                                    </div>
+                                )}
+
+                                {/* Regenerate Section */}
+                                <div className="border-t pt-4 space-y-3">
+                                    <div>
+                                        <Label className="text-sm font-medium">Refine Analysis (Optional)</Label>
+                                        <Textarea
+                                            placeholder="Add instructions to refine the comparison, e.g., 'Focus more on dimension changes' or 'Ignore annotation changes'"
+                                            value={customPrompt}
+                                            onChange={(e) => setCustomPrompt(e.target.value)}
+                                            className="mt-1.5 h-20 text-sm"
+                                        />
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleRegenerate}
+                                        disabled={comparing}
+                                        className="w-full"
+                                    >
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Regenerate Analysis
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Loading State */}
+                        {comparing && (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="text-center space-y-3">
+                                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-violet-600" />
+                                    <p className="text-sm text-muted-foreground">
+                                        AI is analyzing the drawings...<br />
+                                        This may take 30-60 seconds.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setShowCompareDialog(false)}>
+                            Close
+                        </Button>
+                        {comparisonResult && comparisonResult.changes.length > 0 && (
+                            <Button
+                                variant="default"
+                                onClick={handleSaveAsObservations}
+                                disabled={selectedChanges.size === 0 || savingObservations}
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                            >
+                                {savingObservations ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        Save {selectedChanges.size} as Observations
+                                    </>
+                                )}
+                            </Button>
+                        )}
+                        <Button
+                            onClick={() => handleCompareRevisions()}
+                            disabled={!compareSheetA || !compareSheetB || comparing}
+                            className="bg-violet-600 hover:bg-violet-700"
+                        >
+                            {comparing ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Comparing...
+                                </>
+                            ) : (
+                                <>
+                                    <GitCompare className="mr-2 h-4 w-4" />
+                                    Compare with AI
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </AppLayout>

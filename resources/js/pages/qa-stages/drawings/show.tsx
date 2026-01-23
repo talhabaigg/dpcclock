@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,11 +30,15 @@ import {
     Hand,
     History,
     Layers,
+    Loader2,
     Lock,
     Maximize,
     MinusCircle,
     MousePointer,
     PlusCircle,
+    RotateCcw,
+    Save,
+    Sparkles,
     Unlock,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -194,29 +199,29 @@ export default function QaStageDrawingShow() {
     // Build breadcrumbs based on source
     const breadcrumbs: BreadcrumbItem[] = isFromDrawingSet
         ? [
-              { title: 'Projects', href: '/locations' },
-              {
-                  title: project?.name || drawing.drawing_set?.project?.name || 'Project',
-                  href: project?.id ? `/locations/${project.id}` : '/locations',
-              },
-              {
-                  title: 'Drawing Sets',
-                  href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
-              },
-              {
-                  title: drawing.drawing_set?.original_filename || 'Drawing Set',
-                  href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
-              },
-              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-          ]
+            { title: 'Projects', href: '/locations' },
+            {
+                title: project?.name || drawing.drawing_set?.project?.name || 'Project',
+                href: project?.id ? `/locations/${project.id}` : '/locations',
+            },
+            {
+                title: 'Drawing Sets',
+                href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
+            },
+            {
+                title: drawing.drawing_set?.original_filename || 'Drawing Set',
+                href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
+            },
+            { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+        ]
         : [
-              { title: 'QA Stages', href: '/qa-stages' },
-              {
-                  title: drawing.qa_stage?.name || 'QA Stage',
-                  href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
-              },
-              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-          ];
+            { title: 'QA Stages', href: '/qa-stages' },
+            {
+                title: drawing.qa_stage?.name || 'QA Stage',
+                href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
+            },
+            { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+        ];
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
@@ -248,6 +253,28 @@ export default function QaStageDrawingShow() {
 
     // Check if diff image is available for current drawing
     const hasDiffImage = Boolean(drawing.diff_image_url);
+
+    // AI Comparison state
+    const [showAICompareDialog, setShowAICompareDialog] = useState(false);
+    const [aiCompareSheetA, setAICompareSheetA] = useState<string>('');
+    const [aiCompareSheetB, setAICompareSheetB] = useState<string>('');
+    const [aiComparing, setAIComparing] = useState(false);
+    const [aiComparisonResult, setAIComparisonResult] = useState<{
+        summary: string | null;
+        changes: Array<{
+            type: string;
+            description: string;
+            location: string;
+            impact: string;
+            potential_change_order: boolean;
+            reason?: string;
+        }>;
+        confidence?: string;
+        notes?: string;
+    } | null>(null);
+    const [selectedChanges, setSelectedChanges] = useState<Set<number>>(new Set());
+    const [customPrompt, setCustomPrompt] = useState('');
+    const [savingObservations, setSavingObservations] = useState(false);
 
     const pdfRef = useRef<PDFDocumentProxy | null>(null);
     const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -528,8 +555,8 @@ export default function QaStageDrawingShow() {
     // Determine if candidate is a PDF (check pdf_url first, then file_url)
     const candidateIsPdf = candidateRevision
         ? Boolean(candidateRevision.pdf_url) ||
-          (candidateRevision.file_url?.toLowerCase().endsWith('.pdf') ?? false) ||
-          (candidateRevision.file_path?.toLowerCase().endsWith('.pdf') ?? false)
+        (candidateRevision.file_url?.toLowerCase().endsWith('.pdf') ?? false) ||
+        (candidateRevision.file_path?.toLowerCase().endsWith('.pdf') ?? false)
         : false;
 
     // Get the candidate PDF URL
@@ -1130,6 +1157,138 @@ export default function QaStageDrawingShow() {
         }
     };
 
+    // AI Comparison handler
+    const handleAICompare = async (additionalPrompt?: string) => {
+        if (!aiCompareSheetA || !aiCompareSheetB) {
+            toast.error('Please select two revisions to compare.');
+            return;
+        }
+
+        setAIComparing(true);
+        setAIComparisonResult(null);
+        setSelectedChanges(new Set());
+
+        try {
+            const response = await fetch('/drawing-sheets/compare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    sheet_a_id: parseInt(aiCompareSheetA),
+                    sheet_b_id: parseInt(aiCompareSheetB),
+                    context: 'walls and ceilings construction drawings',
+                    additional_prompt: additionalPrompt || undefined,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || errorData.error || `Request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.message || data.error || 'Comparison failed');
+            }
+
+            // Results are nested under 'comparison' key
+            const comparison = data.comparison || {};
+            setAIComparisonResult({
+                summary: comparison.summary,
+                changes: comparison.changes || [],
+                confidence: comparison.confidence,
+                notes: comparison.notes,
+            });
+
+            toast.success('AI comparison complete!');
+        } catch (error) {
+            console.error('AI comparison error:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to compare revisions');
+        } finally {
+            setAIComparing(false);
+        }
+    };
+
+    const handleToggleChange = (index: number) => {
+        setSelectedChanges((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(index)) {
+                newSet.delete(index);
+            } else {
+                newSet.add(index);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSelectAllChanges = () => {
+        if (aiComparisonResult?.changes) {
+            setSelectedChanges(new Set(aiComparisonResult.changes.map((_, i) => i)));
+        }
+    };
+
+    const handleDeselectAllChanges = () => {
+        setSelectedChanges(new Set());
+    };
+
+    const handleSaveAsObservations = async () => {
+        if (!aiComparisonResult || selectedChanges.size === 0) {
+            toast.error('Please select at least one change to save.');
+            return;
+        }
+
+        setSavingObservations(true);
+
+        try {
+            const changesToSave = aiComparisonResult.changes.filter((_, index) => selectedChanges.has(index));
+
+            const response = await fetch('/drawing-sheets/compare/save-observations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    target_sheet_id: drawing.id,
+                    sheet_a_id: parseInt(aiCompareSheetA),
+                    sheet_b_id: parseInt(aiCompareSheetB),
+                    changes: changesToSave,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || errorData.error || `Request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            toast.success(`Saved ${data.created_count} observations successfully!`);
+            setSelectedChanges(new Set());
+
+            // Refresh observations
+            router.reload({ only: ['drawing'] });
+        } catch (error) {
+            console.error('Save observations error:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to save observations');
+        } finally {
+            setSavingObservations(false);
+        }
+    };
+
+    const handleRegenerate = () => {
+        handleAICompare(customPrompt || undefined);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${drawing.name}`} />
@@ -1409,6 +1568,32 @@ export default function QaStageDrawingShow() {
                         </div>
                     )}
 
+                    {/* AI Compare Button */}
+                    {revisions.length >= 2 && (
+                        <>
+                            <div className="h-4 w-px bg-border" />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1.5 px-2 text-xs"
+                                onClick={() => {
+                                    // Pre-select current drawing and previous revision if available
+                                    const currentId = String(drawing.id);
+                                    const otherRevisions = revisions.filter((r) => r.id !== drawing.id);
+                                    const previousId = otherRevisions.length > 0 ? String(otherRevisions[0].id) : '';
+                                    setAICompareSheetA(previousId); // Older revision
+                                    setAICompareSheetB(currentId); // Current/newer revision
+                                    setAIComparisonResult(null);
+                                    setShowAICompareDialog(true);
+                                }}
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                AI Compare
+                            </Button>
+                        </>
+                    )}
+
                     {/* Alignment Tool */}
                     {showCompareOverlay && candidatePdfUrl && (
                         <>
@@ -1459,15 +1644,14 @@ export default function QaStageDrawingShow() {
                 <div className="relative flex-1 overflow-hidden">
                     <div
                         ref={containerRef}
-                        className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${
-                            alignmentTool.isAligning
+                        className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${alignmentTool.isAligning
                                 ? 'cursor-crosshair'
                                 : canPanZoom && viewMode === 'pan'
-                                  ? 'cursor-grab active:cursor-grabbing'
-                                  : canPanZoom && viewMode === 'select'
-                                    ? 'cursor-crosshair'
-                                    : ''
-                        }`}
+                                    ? 'cursor-grab active:cursor-grabbing'
+                                    : canPanZoom && viewMode === 'select'
+                                        ? 'cursor-crosshair'
+                                        : ''
+                            }`}
                         style={{
                             touchAction: canPanZoom ? 'none' : 'auto',
                             overscrollBehavior: canPanZoom ? 'contain' : 'auto',
@@ -1486,249 +1670,247 @@ export default function QaStageDrawingShow() {
                                 opacity: viewerReady ? 1 : 0,
                             }}
                         >
-                        {isPdf ? (
-                            <div>
-                                {(() => {
-                                    const pageSize = pageSizes[1];
-                                    return (
-                                        <div
-                                            className="relative"
-                                            style={pageSize ? { width: pageSize.width, height: pageSize.height } : undefined}
-                                            onClick={handlePageClick(1)}
-                                        >
-                                            {isPaged && (
-                                                <div className="absolute left-3 top-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                                                    {targetPageNumber} / {totalPages}
-                                                </div>
-                                            )}
-                                            <canvas
-                                                ref={(el) => {
-                                                    canvasRefs.current[0] = el;
-                                                    baseCanvasRef.current = el;
-                                                    diffBaseCanvasRef.current = el;
-                                                }}
-                                                className="block max-w-none rounded-sm shadow-lg"
-                                            />
-                                            {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
+                            {isPdf ? (
+                                <div>
+                                    {(() => {
+                                        const pageSize = pageSizes[1];
+                                        return (
+                                            <div
+                                                className="relative"
+                                                style={pageSize ? { width: pageSize.width, height: pageSize.height } : undefined}
+                                                onClick={handlePageClick(1)}
+                                            >
+                                                {isPaged && (
+                                                    <div className="absolute left-3 top-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                                                        {targetPageNumber} / {totalPages}
+                                                    </div>
+                                                )}
                                                 <canvas
                                                     ref={(el) => {
-                                                        candidateCanvasRef.current = el;
-                                                        diffCandidateCanvasRef.current = el;
+                                                        canvasRefs.current[0] = el;
+                                                        baseCanvasRef.current = el;
+                                                        diffBaseCanvasRef.current = el;
                                                     }}
-                                                    className="pointer-events-none absolute left-0 top-0"
-                                                    style={{
-                                                        opacity: diffOverlay.state.showDiff
-                                                            ? 0
-                                                            : alignmentTool.activeLayer === 'base'
-                                                              ? 0
-                                                              : alignmentTool.activeLayer === 'candidate'
-                                                                ? 0.7
-                                                                : overlayOpacity / 100,
-                                                        display: candidatePdfLoaded ? 'block' : 'none',
-                                                        transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
-                                                        transformOrigin: 'top left',
-                                                    }}
+                                                    className="block max-w-none rounded-sm shadow-lg"
                                                 />
-                                            )}
-                                            {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && pageSize && (
-                                                <img
-                                                    src={candidatePdfUrl}
-                                                    alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
-                                                    className="pointer-events-none absolute left-0 top-0"
-                                                    style={{
-                                                        width: pageSize.width,
-                                                        height: pageSize.height,
-                                                        opacity: diffOverlay.state.showDiff
-                                                            ? 0
-                                                            : alignmentTool.activeLayer === 'base'
-                                                              ? 0
-                                                              : alignmentTool.activeLayer === 'candidate'
-                                                                ? 0.7
-                                                                : overlayOpacity / 100,
-                                                        transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
-                                                        transformOrigin: 'top left',
-                                                    }}
-                                                    onError={() => toast.error('Failed to load comparison revision')}
-                                                />
-                                            )}
-                                            {showCompareOverlay && candidatePdfUrl && candidateIsPdf && !candidatePdfLoaded && (
-                                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
-                                                    <div className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
-                                                        Loading...
+                                                {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
+                                                    <canvas
+                                                        ref={(el) => {
+                                                            candidateCanvasRef.current = el;
+                                                            diffCandidateCanvasRef.current = el;
+                                                        }}
+                                                        className="pointer-events-none absolute left-0 top-0"
+                                                        style={{
+                                                            opacity: diffOverlay.state.showDiff
+                                                                ? 0
+                                                                : alignmentTool.activeLayer === 'base'
+                                                                    ? 0
+                                                                    : alignmentTool.activeLayer === 'candidate'
+                                                                        ? 0.7
+                                                                        : overlayOpacity / 100,
+                                                            display: candidatePdfLoaded ? 'block' : 'none',
+                                                            transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                            transformOrigin: 'top left',
+                                                        }}
+                                                    />
+                                                )}
+                                                {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && pageSize && (
+                                                    <img
+                                                        src={candidatePdfUrl}
+                                                        alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
+                                                        className="pointer-events-none absolute left-0 top-0"
+                                                        style={{
+                                                            width: pageSize.width,
+                                                            height: pageSize.height,
+                                                            opacity: diffOverlay.state.showDiff
+                                                                ? 0
+                                                                : alignmentTool.activeLayer === 'base'
+                                                                    ? 0
+                                                                    : alignmentTool.activeLayer === 'candidate'
+                                                                        ? 0.7
+                                                                        : overlayOpacity / 100,
+                                                            transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                            transformOrigin: 'top left',
+                                                        }}
+                                                        onError={() => toast.error('Failed to load comparison revision')}
+                                                    />
+                                                )}
+                                                {showCompareOverlay && candidatePdfUrl && candidateIsPdf && !candidatePdfLoaded && (
+                                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+                                                        <div className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+                                                            Loading...
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                            {showCompareOverlay && !compareRevisionId && hasDiffImage && (
-                                                <img
-                                                    src={drawing.diff_image_url!}
-                                                    alt="Changes overlay"
-                                                    className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-                                                    style={{
-                                                        opacity: overlayOpacity / 100,
-                                                        mixBlendMode: 'multiply',
-                                                    }}
-                                                    onError={() => toast.error('Failed to load comparison image')}
-                                                />
-                                            )}
-                                            {pageSize &&
-                                                serverObservations
-                                                    .filter((obs) => obs.page_number === 1)
-                                                    .map((obs) => (
-                                                        <button
-                                                            key={obs.id}
-                                                            type="button"
-                                                            className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${
-                                                                obs.type === 'defect'
-                                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                                    : 'bg-blue-500 ring-2 ring-blue-500/30'
-                                                            }`}
-                                                            style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
-                                                            title={obs.description}
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                setEditingObservation(obs);
-                                                                setPendingPoint(null);
-                                                                setObservationType(obs.type);
-                                                                setDescription(obs.description);
-                                                                setPhotoFile(null);
-                                                                setDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            !
-                                                        </button>
-                                                    ))}
-                                            {(alignmentTool.isAligning || alignmentTool.isAligned) && pageSize && (
-                                                <MarkersLayer
-                                                    points={alignmentTool.points}
-                                                    state={alignmentTool.state}
-                                                    containerWidth={pageSize.width}
-                                                    containerHeight={pageSize.height}
-                                                />
-                                            )}
-                                            {showCompareOverlay && pageSize && (
-                                                <DiffOverlayCanvas
-                                                    diffCanvas={diffOverlay.diffCanvas}
-                                                    visible={diffOverlay.state.showDiff}
-                                                    opacity={0.8}
-                                                    displayWidth={pageSize.width}
-                                                    displayHeight={pageSize.height}
-                                                />
-                                            )}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        ) : (
-                            <div
-                                className="relative"
-                                style={baseImageSize ? {
-                                    width: baseImageSize.width * pdfScale,
-                                    height: baseImageSize.height * pdfScale,
-                                } : undefined}
-                                onClick={handlePageClick(1)}
-                            >
-                                <img
-                                    ref={baseImageRef}
-                                    src={imageUrl || ''}
-                                    alt={displayName}
-                                    className="block rounded-sm shadow-lg"
+                                                )}
+                                                {showCompareOverlay && !compareRevisionId && hasDiffImage && (
+                                                    <img
+                                                        src={drawing.diff_image_url!}
+                                                        alt="Changes overlay"
+                                                        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                                                        style={{
+                                                            opacity: overlayOpacity / 100,
+                                                            mixBlendMode: 'multiply',
+                                                        }}
+                                                        onError={() => toast.error('Failed to load comparison image')}
+                                                    />
+                                                )}
+                                                {pageSize &&
+                                                    serverObservations
+                                                        .filter((obs) => obs.page_number === 1)
+                                                        .map((obs) => (
+                                                            <button
+                                                                key={obs.id}
+                                                                type="button"
+                                                                className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${obs.type === 'defect'
+                                                                        ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                                        : 'bg-blue-500 ring-2 ring-blue-500/30'
+                                                                    }`}
+                                                                style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
+                                                                title={obs.description}
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    setEditingObservation(obs);
+                                                                    setPendingPoint(null);
+                                                                    setObservationType(obs.type);
+                                                                    setDescription(obs.description);
+                                                                    setPhotoFile(null);
+                                                                    setDialogOpen(true);
+                                                                }}
+                                                            >
+                                                                !
+                                                            </button>
+                                                        ))}
+                                                {(alignmentTool.isAligning || alignmentTool.isAligned) && pageSize && (
+                                                    <MarkersLayer
+                                                        points={alignmentTool.points}
+                                                        state={alignmentTool.state}
+                                                        containerWidth={pageSize.width}
+                                                        containerHeight={pageSize.height}
+                                                    />
+                                                )}
+                                                {showCompareOverlay && pageSize && (
+                                                    <DiffOverlayCanvas
+                                                        diffCanvas={diffOverlay.diffCanvas}
+                                                        visible={diffOverlay.state.showDiff}
+                                                        opacity={0.8}
+                                                        displayWidth={pageSize.width}
+                                                        displayHeight={pageSize.height}
+                                                    />
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            ) : (
+                                <div
+                                    className="relative"
                                     style={baseImageSize ? {
                                         width: baseImageSize.width * pdfScale,
                                         height: baseImageSize.height * pdfScale,
                                     } : undefined}
-                                    onLoad={(e) => {
-                                        const img = e.currentTarget;
-                                        setBaseImageSize({
-                                            width: img.naturalWidth,
-                                            height: img.naturalHeight,
-                                        });
-                                    }}
-                                />
-                                {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && baseImageSize && (
+                                    onClick={handlePageClick(1)}
+                                >
                                     <img
-                                        ref={candidateImageRef}
-                                        src={candidatePdfUrl}
-                                        alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
-                                        className="pointer-events-none absolute left-0 top-0"
-                                        style={{
+                                        ref={baseImageRef}
+                                        src={imageUrl || ''}
+                                        alt={displayName}
+                                        className="block rounded-sm shadow-lg"
+                                        style={baseImageSize ? {
                                             width: baseImageSize.width * pdfScale,
                                             height: baseImageSize.height * pdfScale,
-                                            opacity: diffOverlay.state.showDiff ? 0 : overlayOpacity / 100,
-                                            transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
-                                            transformOrigin: 'top left',
-                                        }}
-                                        onLoad={() => setCandidateImageLoaded(true)}
-                                        onError={() => {
-                                            setCandidateImageLoaded(false);
-                                            toast.error('Failed to load comparison revision');
+                                        } : undefined}
+                                        onLoad={(e) => {
+                                            const img = e.currentTarget;
+                                            setBaseImageSize({
+                                                width: img.naturalWidth,
+                                                height: img.naturalHeight,
+                                            });
                                         }}
                                     />
-                                )}
-                                {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
-                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
-                                        <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">PDF overlay not supported in image mode</span>
-                                    </div>
-                                )}
-                                {showCompareOverlay && !compareRevisionId && hasDiffImage && baseImageSize && (
-                                    <img
-                                        src={drawing.diff_image_url!}
-                                        alt="Changes overlay"
-                                        className="pointer-events-none absolute left-0 top-0"
-                                        style={{
-                                            width: baseImageSize.width * pdfScale,
-                                            height: baseImageSize.height * pdfScale,
-                                            opacity: overlayOpacity / 100,
-                                            mixBlendMode: 'multiply',
-                                        }}
-                                        onError={() => toast.error('Failed to load comparison image')}
-                                    />
-                                )}
-                                {serverObservations
-                                    .filter((obs) => obs.page_number === 1)
-                                    .map((obs) => (
-                                        <button
-                                            key={obs.id}
-                                            type="button"
-                                            className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${
-                                                obs.type === 'defect'
-                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                    : 'bg-blue-500 ring-2 ring-blue-500/30'
-                                            }`}
-                                            style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
-                                            title={obs.description}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                setEditingObservation(obs);
-                                                setPendingPoint(null);
-                                                setObservationType(obs.type);
-                                                setDescription(obs.description);
-                                                setPhotoFile(null);
-                                                setDialogOpen(true);
+                                    {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && baseImageSize && (
+                                        <img
+                                            ref={candidateImageRef}
+                                            src={candidatePdfUrl}
+                                            alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
+                                            className="pointer-events-none absolute left-0 top-0"
+                                            style={{
+                                                width: baseImageSize.width * pdfScale,
+                                                height: baseImageSize.height * pdfScale,
+                                                opacity: diffOverlay.state.showDiff ? 0 : overlayOpacity / 100,
+                                                transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
+                                                transformOrigin: 'top left',
                                             }}
-                                        >
-                                            !
-                                        </button>
-                                    ))}
-                                {(alignmentTool.isAligning || alignmentTool.isAligned) && baseImageSize && (
-                                    <MarkersLayer
-                                        points={alignmentTool.points}
-                                        state={alignmentTool.state}
-                                        containerWidth={baseImageSize.width * pdfScale}
-                                        containerHeight={baseImageSize.height * pdfScale}
-                                    />
-                                )}
-                                {showCompareOverlay && baseImageSize && (
-                                    <DiffOverlayCanvas
-                                        diffCanvas={diffOverlay.diffCanvas}
-                                        visible={diffOverlay.state.showDiff}
-                                        opacity={0.8}
-                                        displayWidth={baseImageSize.width * pdfScale}
-                                        displayHeight={baseImageSize.height * pdfScale}
-                                    />
-                                )}
-                            </div>
-                        )}
-                    </div>
+                                            onLoad={() => setCandidateImageLoaded(true)}
+                                            onError={() => {
+                                                setCandidateImageLoaded(false);
+                                                toast.error('Failed to load comparison revision');
+                                            }}
+                                        />
+                                    )}
+                                    {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
+                                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
+                                            <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">PDF overlay not supported in image mode</span>
+                                        </div>
+                                    )}
+                                    {showCompareOverlay && !compareRevisionId && hasDiffImage && baseImageSize && (
+                                        <img
+                                            src={drawing.diff_image_url!}
+                                            alt="Changes overlay"
+                                            className="pointer-events-none absolute left-0 top-0"
+                                            style={{
+                                                width: baseImageSize.width * pdfScale,
+                                                height: baseImageSize.height * pdfScale,
+                                                opacity: overlayOpacity / 100,
+                                                mixBlendMode: 'multiply',
+                                            }}
+                                            onError={() => toast.error('Failed to load comparison image')}
+                                        />
+                                    )}
+                                    {serverObservations
+                                        .filter((obs) => obs.page_number === 1)
+                                        .map((obs) => (
+                                            <button
+                                                key={obs.id}
+                                                type="button"
+                                                className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${obs.type === 'defect'
+                                                        ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                        : 'bg-blue-500 ring-2 ring-blue-500/30'
+                                                    }`}
+                                                style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
+                                                title={obs.description}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setEditingObservation(obs);
+                                                    setPendingPoint(null);
+                                                    setObservationType(obs.type);
+                                                    setDescription(obs.description);
+                                                    setPhotoFile(null);
+                                                    setDialogOpen(true);
+                                                }}
+                                            >
+                                                !
+                                            </button>
+                                        ))}
+                                    {(alignmentTool.isAligning || alignmentTool.isAligned) && baseImageSize && (
+                                        <MarkersLayer
+                                            points={alignmentTool.points}
+                                            state={alignmentTool.state}
+                                            containerWidth={baseImageSize.width * pdfScale}
+                                            containerHeight={baseImageSize.height * pdfScale}
+                                        />
+                                    )}
+                                    {showCompareOverlay && baseImageSize && (
+                                        <DiffOverlayCanvas
+                                            diffCanvas={diffOverlay.diffCanvas}
+                                            visible={diffOverlay.state.showDiff}
+                                            opacity={0.8}
+                                            displayWidth={baseImageSize.width * pdfScale}
+                                            displayHeight={baseImageSize.height * pdfScale}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Magnifier lens */}
                         {alignmentTool.isAligning && (
@@ -1738,8 +1920,8 @@ export default function QaStageDrawingShow() {
                                     alignmentTool.activeLayer === 'candidate'
                                         ? candidateCanvasRef.current
                                         : isPdf
-                                          ? baseCanvasRef.current
-                                          : baseImageRef.current
+                                            ? baseCanvasRef.current
+                                            : baseImageRef.current
                                 }
                                 containerElement={containerRef.current}
                                 magnification={3}
@@ -1818,6 +2000,244 @@ export default function QaStageDrawingShow() {
                         </Button>
                         <Button size="sm" onClick={editingObservation ? handleUpdateObservation : handleCreateObservation} disabled={saving}>
                             {saving ? 'Saving...' : editingObservation ? 'Update' : 'Save'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* AI Comparison Dialog */}
+            <Dialog open={showAICompareDialog} onOpenChange={setShowAICompareDialog}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-amber-500" />
+                            AI Drawing Comparison
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label className="text-xs">Older Revision (A)</Label>
+                                <Select value={aiCompareSheetA} onValueChange={setAICompareSheetA}>
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Select revision" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {revisions.map((rev) => (
+                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareSheetB}>
+                                                Rev {rev.revision_number || '?'} - {rev.name || `Sheet ${rev.id}`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="text-xs">Newer Revision (B)</Label>
+                                <Select value={aiCompareSheetB} onValueChange={setAICompareSheetB}>
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Select revision" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {revisions.map((rev) => (
+                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareSheetA}>
+                                                Rev {rev.revision_number || '?'} - {rev.name || `Sheet ${rev.id}`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <Button
+                            onClick={() => handleAICompare()}
+                            disabled={aiComparing || !aiCompareSheetA || !aiCompareSheetB}
+                            className="w-full"
+                        >
+                            {aiComparing ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Analyzing with AI...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Compare Revisions
+                                </>
+                            )}
+                        </Button>
+
+                        {/* Results */}
+                        {aiComparisonResult && (
+                            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                                {aiComparisonResult.summary && (
+                                    <div>
+                                        <h4 className="mb-1 text-sm font-medium">Summary</h4>
+                                        <p className="text-sm text-muted-foreground">{aiComparisonResult.summary}</p>
+                                    </div>
+                                )}
+
+                                {aiComparisonResult.confidence && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">Confidence:</span>
+                                        <Badge
+                                            variant={
+                                                aiComparisonResult.confidence === 'high'
+                                                    ? 'default'
+                                                    : aiComparisonResult.confidence === 'medium'
+                                                        ? 'secondary'
+                                                        : 'outline'
+                                            }
+                                            className="text-xs"
+                                        >
+                                            {aiComparisonResult.confidence}
+                                        </Badge>
+                                    </div>
+                                )}
+
+                                {aiComparisonResult.changes.length > 0 && (
+                                    <div>
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <h4 className="text-sm font-medium">
+                                                Changes Detected ({aiComparisonResult.changes.length})
+                                                {selectedChanges.size > 0 && (
+                                                    <span className="ml-2 text-xs text-muted-foreground">
+                                                        ({selectedChanges.size} selected)
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            <div className="flex gap-2">
+                                                <Button variant="ghost" size="sm" onClick={handleSelectAllChanges} className="h-7 text-xs">
+                                                    Select All
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleDeselectAllChanges}
+                                                    className="h-7 text-xs"
+                                                    disabled={selectedChanges.size === 0}
+                                                >
+                                                    Deselect All
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <div className="max-h-60 space-y-2 overflow-y-auto">
+                                            {aiComparisonResult.changes.map((change, index) => (
+                                                <div
+                                                    key={index}
+                                                    className={`rounded border bg-background p-3 text-sm cursor-pointer transition-colors ${selectedChanges.has(index) ? 'border-primary bg-primary/5' : ''}`}
+                                                    onClick={() => handleToggleChange(index)}
+                                                >
+                                                    <div className="mb-1 flex items-center gap-2">
+                                                        <Checkbox
+                                                            checked={selectedChanges.has(index)}
+                                                            onCheckedChange={() => handleToggleChange(index)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="h-4 w-4"
+                                                        />
+                                                        <Badge variant="outline" className="text-xs capitalize">
+                                                            {change.type}
+                                                        </Badge>
+                                                        <Badge
+                                                            variant={
+                                                                change.impact === 'high'
+                                                                    ? 'destructive'
+                                                                    : change.impact === 'medium'
+                                                                        ? 'default'
+                                                                        : 'secondary'
+                                                            }
+                                                            className="text-xs"
+                                                        >
+                                                            {change.impact} impact
+                                                        </Badge>
+                                                        {change.potential_change_order && (
+                                                            <Badge variant="destructive" className="text-xs">
+                                                                Potential CO
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="ml-6 text-muted-foreground">{change.description}</p>
+                                                    {change.location && (
+                                                        <p className="ml-6 mt-1 text-xs text-muted-foreground">
+                                                            <span className="font-medium">Location:</span> {change.location}
+                                                        </p>
+                                                    )}
+                                                    {change.reason && (
+                                                        <p className="ml-6 mt-1 text-xs text-amber-600">
+                                                            <span className="font-medium">CO Reason:</span> {change.reason}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Save as Observations Button */}
+                                        <Button
+                                            onClick={handleSaveAsObservations}
+                                            disabled={savingObservations || selectedChanges.size === 0}
+                                            className="mt-3 w-full"
+                                            variant="default"
+                                        >
+                                            {savingObservations ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Saving Observations...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="mr-2 h-4 w-4" />
+                                                    Save {selectedChanges.size > 0 ? `${selectedChanges.size} ` : ''}as Observations
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {aiComparisonResult.notes && (
+                                    <div>
+                                        <h4 className="mb-1 text-sm font-medium">Notes</h4>
+                                        <p className="text-xs text-muted-foreground">{aiComparisonResult.notes}</p>
+                                    </div>
+                                )}
+
+                                {/* Regenerate Section */}
+                                <div className="border-t pt-4">
+                                    <h4 className="mb-2 text-sm font-medium">Refine Analysis</h4>
+                                    <p className="mb-2 text-xs text-muted-foreground">
+                                        Add additional instructions to refine the AI analysis:
+                                    </p>
+                                    <Textarea
+                                        value={customPrompt}
+                                        onChange={(e) => setCustomPrompt(e.target.value)}
+                                        placeholder="E.g., Focus more on dimensional changes, ignore annotation updates..."
+                                        className="mb-2 min-h-[60px] text-sm"
+                                    />
+                                    <Button
+                                        onClick={handleRegenerate}
+                                        disabled={aiComparing}
+                                        variant="outline"
+                                        className="w-full"
+                                    >
+                                        {aiComparing ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Regenerating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                Regenerate with Instructions
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowAICompareDialog(false)}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -23,6 +23,23 @@ class QaStageDrawingObservation extends Model
         'photo_size',
         'created_by',
         'updated_by',
+        // AI comparison fields
+        'source',
+        'source_sheet_a_id',
+        'source_sheet_b_id',
+        'ai_change_type',
+        'ai_impact',
+        'ai_location',
+        'potential_change_order',
+        'is_confirmed',
+        'confirmed_at',
+        'confirmed_by',
+    ];
+
+    protected $casts = [
+        'potential_change_order' => 'boolean',
+        'is_confirmed' => 'boolean',
+        'confirmed_at' => 'datetime',
     ];
 
     protected $appends = ['photo_url'];
@@ -51,6 +68,45 @@ class QaStageDrawingObservation extends Model
     public function updatedBy()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function confirmedBy()
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    public function sourceSheetA()
+    {
+        return $this->belongsTo(QaStageDrawing::class, 'source_sheet_a_id');
+    }
+
+    public function sourceSheetB()
+    {
+        return $this->belongsTo(QaStageDrawing::class, 'source_sheet_b_id');
+    }
+
+    /**
+     * Scope to filter AI-generated observations.
+     */
+    public function scopeAiGenerated($query)
+    {
+        return $query->where('source', 'ai_comparison');
+    }
+
+    /**
+     * Scope to filter confirmed observations.
+     */
+    public function scopeConfirmed($query)
+    {
+        return $query->where('is_confirmed', true);
+    }
+
+    /**
+     * Scope to filter unconfirmed AI observations.
+     */
+    public function scopeUnconfirmed($query)
+    {
+        return $query->where('is_confirmed', false);
     }
 
     public function getPhotoUrlAttribute()

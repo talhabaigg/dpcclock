@@ -508,6 +508,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawing-sets/{drawingSet}/retry-all', [DrawingSetController::class, 'retryAllExtraction'])->name('drawing-sets.retry-all');
         Route::post('/drawing-sets/{drawingSet}/relink-sheets', [DrawingSetController::class, 'relinkSheets'])->name('drawing-sets.relink-sheets');
         Route::post('/drawing-sheets/{sheet}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawing-sheets.create-template');
+        // AI Drawing Comparison
+        Route::post('/drawing-sheets/compare', [DrawingSetController::class, 'compareRevisions'])->name('drawing-sheets.compare');
+        Route::post('/drawing-sheets/compare/save-observations', [DrawingSetController::class, 'saveComparisonAsObservations'])->name('drawing-sheets.compare.save-observations');
+        Route::get('/drawing-sheets-group/{drawingSheet}/revisions', [DrawingSetController::class, 'getDrawingSheetRevisions'])->name('drawing-sheets-group.revisions');
     });
     Route::delete('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'destroy'])->name('drawing-sets.destroy')
         ->middleware('permission:qa-drawings.delete');
