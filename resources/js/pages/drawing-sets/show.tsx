@@ -15,6 +15,7 @@ import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Loader2, M
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+// Textract format bounding box
 type BoundingBox = {
     left: number;
     top: number;
@@ -22,11 +23,22 @@ type BoundingBox = {
     height: number;
 };
 
+// Field mapping format bounding box (full-image coordinates)
+type FieldMappingBoundingBox = {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+};
+
+// Combined type for extraction fields that can have either format
+type AnyBoundingBox = BoundingBox | FieldMappingBoundingBox;
+
 type ExtractionField = {
     text: string;
     confidence: number;
     source_alias: string;
-    boundingBox?: BoundingBox | null;
+    boundingBox?: AnyBoundingBox | null;
 };
 
 type Sheet = {
@@ -149,6 +161,7 @@ export default function DrawingSetShow() {
     }>({ drawing_number: null, drawing_title: null, revision: null });
     const [activeFieldTool, setActiveFieldTool] = useState<'drawing_number' | 'drawing_title' | 'revision' | null>(null);
     const [savingFieldMappings, setSavingFieldMappings] = useState(false);
+    const [extractingAfterMapping, setExtractingAfterMapping] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -329,7 +342,7 @@ export default function DrawingSetShow() {
     };
 
     const handleSaveFieldMappings = async () => {
-        if (!fieldMappingTemplate) return;
+        if (!fieldMappingTemplate || !selectedSheet) return;
 
         setSavingFieldMappings(true);
 
@@ -352,6 +365,7 @@ export default function DrawingSetShow() {
         }
 
         try {
+            // Step 1: Save field mappings
             const response = await fetch(`/templates/${fieldMappingTemplate.id}/field-mappings`, {
                 method: 'PUT',
                 headers: {
@@ -362,17 +376,44 @@ export default function DrawingSetShow() {
             });
 
             const data = await response.json();
-            if (data.success) {
-                toast.success('Field mappings saved successfully');
-                setShowFieldMapping(false);
-                router.reload();
-            } else {
+            if (!data.success) {
                 toast.error(data.message || 'Failed to save field mappings');
+                setSavingFieldMappings(false);
+                return;
             }
+
+            toast.success('Field mappings saved. Running extraction...');
+            setSavingFieldMappings(false);
+            setExtractingAfterMapping(true);
+
+            // Step 2: Run sync extraction with the template
+            const extractResponse = await fetch(`/drawing-sheets/${selectedSheet.id}/retry`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({
+                    template_id: fieldMappingTemplate.id,
+                    sync: true,
+                }),
+            });
+
+            const extractData = await extractResponse.json();
+            if (extractData.success) {
+                toast.success('Extraction completed successfully');
+            } else {
+                toast.error(extractData.message || 'Extraction failed');
+            }
+
+            setShowFieldMapping(false);
+            setExtractingAfterMapping(false);
+            router.reload();
         } catch {
             toast.error('Failed to save field mappings');
-        } finally {
             setSavingFieldMappings(false);
+            setExtractingAfterMapping(false);
         }
     };
 
@@ -828,105 +869,230 @@ export default function DrawingSetShow() {
 
             {/* Field Mapping Dialog */}
             <Dialog open={showFieldMapping} onOpenChange={setShowFieldMapping}>
-                <DialogContent className="max-w-[98vw] min-w-full h-[95vh] overflow-hidden flex flex-col">
-                    <DialogHeader>
-                        <DialogTitle>Draw Field Regions</DialogTitle>
-                        <DialogDescription>
-                            Draw rectangles around each field in the title block. Select a field tool, then click and drag on the image.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex gap-6 flex-1 overflow-hidden min-h-0">
-                        {/* Field Tool Selector */}
-                        <div className="w-52 space-y-3 flex-shrink-0">
-                            <Label className="text-sm font-medium">Select field to draw:</Label>
-                            {(['drawing_number', 'drawing_title', 'revision'] as const).map((field) => {
-                                const labels = {
-                                    drawing_number: 'Drawing Number',
-                                    drawing_title: 'Drawing Title',
-                                    revision: 'Revision',
-                                };
-                                const colors = {
-                                    drawing_number: 'border-green-500 bg-green-500',
-                                    drawing_title: 'border-blue-500 bg-blue-500',
-                                    revision: 'border-purple-500 bg-purple-500',
-                                };
-                                const hasRect = fieldRects[field] !== null;
-                                const isActive = activeFieldTool === field;
-
-                                return (
-                                    <div key={field} className="space-y-1">
-                                        <Button
-                                            variant={isActive ? 'default' : 'outline'}
-                                            className={`w-full justify-start ${isActive ? '' : ''}`}
-                                            onClick={() => setActiveFieldTool(field)}
-                                        >
-                                            <span className={`w-3 h-3 rounded mr-2 ${colors[field]}`} />
-                                            {labels[field]}
-                                            {hasRect && <Check className="ml-auto h-4 w-4 text-green-500" />}
-                                        </Button>
-                                        {hasRect && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="w-full text-xs text-muted-foreground"
-                                                onClick={() => handleClearFieldRect(field)}
-                                            >
-                                                <XCircle className="h-3 w-3 mr-1" />
-                                                Clear
-                                            </Button>
-                                        )}
-                                    </div>
-                                );
-                            })}
-
-                            <div className="pt-4 border-t">
-                                <p className="text-xs text-muted-foreground">
-                                    <strong>Tip:</strong> Draw a box around the exact text you want to extract for each field.
-                                    The system will use these regions for all drawings using this template.
-                                </p>
+                <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] min-w-full overflow-hidden flex flex-col p-0">
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b bg-gradient-to-r from-slate-50 to-white">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+                                    <MapPin className="h-5 w-5 text-primary" />
+                                    Draw Field Regions
+                                </DialogTitle>
+                                <DialogDescription className="mt-1">
+                                    Select a field below, then draw a rectangle around it in the title block image
+                                </DialogDescription>
                             </div>
-                        </div>
-
-                        {/* Drawing Canvas */}
-                        <div className="flex-1 overflow-auto bg-gray-100 rounded-lg p-4 flex items-center justify-center">
-                            {selectedSheet && fieldMappingTemplate ? (
-                                <FieldMappingCanvas
-                                    imageUrl={`/drawing-sheets/${selectedSheet.id}/preview`}
-                                    cropRect={fieldMappingTemplate.crop_rect}
-                                    fieldRects={fieldRects}
-                                    activeField={activeFieldTool}
-                                    onFieldRectDrawn={handleFieldRectDrawn}
-                                />
-                            ) : (
-                                <div className="text-center text-muted-foreground">
-                                    <p>No sheet or template selected</p>
+                            <div className="flex items-center gap-2">
+                                {/* Progress indicator */}
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground bg-slate-100 px-3 py-1.5 rounded-full">
+                                    <span className="font-medium">
+                                        {[fieldRects.drawing_number, fieldRects.drawing_title, fieldRects.revision].filter(Boolean).length}
+                                    </span>
+                                    <span>/</span>
+                                    <span>3 fields mapped</span>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     </div>
 
-                    <DialogFooter className="mt-4">
-                        <Button variant="outline" onClick={() => setShowFieldMapping(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleSaveFieldMappings}
-                            disabled={savingFieldMappings || (!fieldRects.drawing_number && !fieldRects.drawing_title && !fieldRects.revision)}
-                        >
-                            {savingFieldMappings ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Save Field Mappings
-                                </>
+                    <div className="flex flex-1 overflow-hidden min-h-0">
+                        {/* Left Sidebar - Field Tools */}
+                        <div className="w-72 border-r bg-slate-50/50 flex flex-col">
+                            <div className="p-4 flex-1 overflow-auto">
+                                <div className="space-y-2">
+                                    {(['drawing_number', 'drawing_title', 'revision'] as const).map((field) => {
+                                        const labels = {
+                                            drawing_number: 'Drawing Number',
+                                            drawing_title: 'Drawing Title',
+                                            revision: 'Revision',
+                                        };
+                                        const descriptions = {
+                                            drawing_number: 'The unique identifier for this drawing',
+                                            drawing_title: 'The name or description of the drawing',
+                                            revision: 'The revision letter or number',
+                                        };
+                                        const colors = {
+                                            drawing_number: { bg: 'bg-emerald-500', border: 'border-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700' },
+                                            drawing_title: { bg: 'bg-blue-500', border: 'border-blue-500', light: 'bg-blue-50', text: 'text-blue-700' },
+                                            revision: { bg: 'bg-violet-500', border: 'border-violet-500', light: 'bg-violet-50', text: 'text-violet-700' },
+                                        };
+                                        const hasRect = fieldRects[field] !== null;
+                                        const isActive = activeFieldTool === field;
+                                        const colorSet = colors[field];
+
+                                        return (
+                                            <div
+                                                key={field}
+                                                className={`rounded-lg border-2 transition-all cursor-pointer ${isActive
+                                                    ? `${colorSet.border} ${colorSet.light} shadow-sm`
+                                                    : hasRect
+                                                        ? 'border-slate-200 bg-white'
+                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                    }`}
+                                                onClick={() => setActiveFieldTool(field)}
+                                            >
+                                                <div className="p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`w-3 h-3 rounded-sm ${colorSet.bg}`} />
+                                                            <span className={`font-medium text-sm ${isActive ? colorSet.text : 'text-slate-700'}`}>
+                                                                {labels[field]}
+                                                            </span>
+                                                        </div>
+                                                        {hasRect ? (
+                                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+                                                                <Check className="h-3 w-3 mr-1" />
+                                                                Mapped
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-slate-400 border-slate-200 text-xs">
+                                                                Not set
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-1 ml-5">
+                                                        {descriptions[field]}
+                                                    </p>
+                                                    {hasRect && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="w-full mt-2 h-7 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleClearFieldRect(field);
+                                                            }}
+                                                        >
+                                                            <XCircle className="h-3 w-3 mr-1" />
+                                                            Clear selection
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Tips section */}
+                            <div className="p-4 border-t bg-amber-50/50">
+                                <div className="flex gap-2">
+                                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <div className="text-xs text-amber-800">
+                                        <p className="font-medium mb-1">Tips</p>
+                                        <ul className="space-y-1 text-amber-700">
+                                            <li>• Click a field above to select it</li>
+                                            <li>• Draw a tight box around the text</li>
+                                            <li>• Mappings apply to all sheets</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Main Canvas Area */}
+                        <div className="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
+                            {/* Extraction Loading Overlay */}
+                            {extractingAfterMapping && (
+                                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center">
+                                    <div className="text-center space-y-4">
+                                        <div className="relative">
+                                            <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
+                                            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-slate-800">Extracting Metadata</h3>
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                Running OCR with your field mappings...
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
-                        </Button>
-                    </DialogFooter>
+
+                            {/* Canvas toolbar */}
+                            <div className="px-4 py-2 bg-white border-b flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    {activeFieldTool ? (
+                                        <Badge className={`${activeFieldTool === 'drawing_number' ? 'bg-emerald-500' :
+                                            activeFieldTool === 'drawing_title' ? 'bg-blue-500' : 'bg-violet-500'
+                                            }`}>
+                                            Drawing: {activeFieldTool === 'drawing_number' ? 'Drawing Number' :
+                                                activeFieldTool === 'drawing_title' ? 'Drawing Title' : 'Revision'}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-sm text-muted-foreground">Select a field from the left to start drawing</span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    Template: <span className="font-medium">{fieldMappingTemplate?.name}</span>
+                                </div>
+                            </div>
+
+                            {/* Canvas */}
+                            <div className="flex-1 overflow-auto p-6 flex items-center justify-center">
+                                {selectedSheet && fieldMappingTemplate ? (
+                                    <FieldMappingCanvas
+                                        imageUrl={`/drawing-sheets/${selectedSheet.id}/preview`}
+                                        cropRect={fieldMappingTemplate.crop_rect}
+                                        fieldRects={fieldRects}
+                                        activeField={activeFieldTool}
+                                        onFieldRectDrawn={handleFieldRectDrawn}
+                                    />
+                                ) : (
+                                    <div className="text-center text-muted-foreground">
+                                        <p>No sheet or template selected</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-6 py-4 border-t bg-white flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                            {extractingAfterMapping ? (
+                                <span className="text-blue-600 flex items-center gap-1">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Running extraction...
+                                </span>
+                            ) : fieldRects.drawing_number || fieldRects.drawing_title || fieldRects.revision ? (
+                                <span className="text-emerald-600 flex items-center gap-1">
+                                    <Check className="h-4 w-4" />
+                                    Ready to save
+                                </span>
+                            ) : (
+                                <span>Draw at least one field region to save</span>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <Button variant="outline" onClick={() => setShowFieldMapping(false)} disabled={savingFieldMappings || extractingAfterMapping}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleSaveFieldMappings}
+                                disabled={savingFieldMappings || extractingAfterMapping || (!fieldRects.drawing_number && !fieldRects.drawing_title && !fieldRects.revision)}
+                                className="min-w-[140px]"
+                            >
+                                {savingFieldMappings ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : extractingAfterMapping ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Extracting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Save & Extract
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </AppLayout>
@@ -1078,20 +1244,40 @@ function PreviewWithOverlays({
                                 label: fieldName,
                             };
 
-                            // Textract returns coordinates relative to the analyzed image
-                            // If a template was used, coordinates are relative to the cropped region
-                            // We need to transform them to be relative to the full image
-                            let left = field.boundingBox.left;
-                            let top = field.boundingBox.top;
-                            let width = field.boundingBox.width;
-                            let height = field.boundingBox.height;
+                            // Handle two bounding box formats:
+                            // 1. Field mapping format: { x, y, w, h } - already in full-image coordinates
+                            // 2. Textract format: { left, top, width, height } - relative to cropped region
+                            const bb = field.boundingBox as AnyBoundingBox;
+                            const isFieldMappingFormat = 'x' in bb;
 
-                            if (template) {
-                                // Transform coordinates from template-relative to image-relative
-                                left = template.crop_rect.x + left * template.crop_rect.w;
-                                top = template.crop_rect.y + top * template.crop_rect.h;
-                                width = width * template.crop_rect.w;
-                                height = height * template.crop_rect.h;
+                            let left: number;
+                            let top: number;
+                            let width: number;
+                            let height: number;
+
+                            if (isFieldMappingFormat) {
+                                // Field mapping format: already in full-image coordinates
+                                const fmBb = bb as FieldMappingBoundingBox;
+                                left = fmBb.x;
+                                top = fmBb.y;
+                                width = fmBb.w;
+                                height = fmBb.h;
+                            } else {
+                                // Textract format: coordinates relative to the analyzed image
+                                // If a template was used, transform from crop-relative to full-image
+                                const txBb = bb as BoundingBox;
+                                left = txBb.left;
+                                top = txBb.top;
+                                width = txBb.width;
+                                height = txBb.height;
+
+                                if (template) {
+                                    // Transform coordinates from template-relative to image-relative
+                                    left = template.crop_rect.x + left * template.crop_rect.w;
+                                    top = template.crop_rect.y + top * template.crop_rect.h;
+                                    width = width * template.crop_rect.w;
+                                    height = height * template.crop_rect.h;
+                                }
                             }
 
                             const pixelStyle = toPixelStyle(left, top, width, height);
@@ -1273,8 +1459,10 @@ function FieldMappingCanvas({
     onFieldRectDrawn: (field: 'drawing_number' | 'drawing_title' | 'revision', rect: FieldRect) => void;
 }) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const parentRef = useRef<HTMLDivElement>(null);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageDims, setImageDims] = useState<{ width: number; height: number } | null>(null);
+    const [parentSize, setParentSize] = useState<{ width: number; height: number } | null>(null);
     const [drawing, setDrawing] = useState(false);
     const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
     const [currentDrawRect, setCurrentDrawRect] = useState<FieldRect | null>(null);
@@ -1293,11 +1481,24 @@ function FieldMappingCanvas({
         img.src = imageUrl;
     }, [imageUrl]);
 
-    // Field colors
-    const fieldColors: Record<string, { border: string; bg: string }> = {
-        drawing_number: { border: 'border-green-500', bg: 'bg-green-500/20' },
-        drawing_title: { border: 'border-blue-500', bg: 'bg-blue-500/20' },
-        revision: { border: 'border-purple-500', bg: 'bg-purple-500/20' },
+    // Measure parent container size
+    useEffect(() => {
+        const measureParent = () => {
+            if (parentRef.current) {
+                const rect = parentRef.current.getBoundingClientRect();
+                setParentSize({ width: rect.width - 48, height: rect.height - 48 }); // Account for padding
+            }
+        };
+        measureParent();
+        window.addEventListener('resize', measureParent);
+        return () => window.removeEventListener('resize', measureParent);
+    }, []);
+
+    // Field colors - matching sidebar colors
+    const fieldColors: Record<string, { border: string; bg: string; solid: string }> = {
+        drawing_number: { border: 'border-emerald-500', bg: 'bg-emerald-500/20', solid: 'bg-emerald-500' },
+        drawing_title: { border: 'border-blue-500', bg: 'bg-blue-500/20', solid: 'bg-blue-500' },
+        revision: { border: 'border-violet-500', bg: 'bg-violet-500/20', solid: 'bg-violet-500' },
     };
 
     // Get mouse position relative to the container (which shows only the crop region)
@@ -1347,9 +1548,9 @@ function FieldMappingCanvas({
         setStartPos(null);
     };
 
-    // Calculate container and image dimensions
-    const maxHeight = typeof window !== 'undefined' ? window.innerHeight * 0.75 : 600;
-    const maxWidth = typeof window !== 'undefined' ? window.innerWidth * 0.7 : 800;
+    // Calculate container dimensions based on available parent space
+    const maxHeight = parentSize?.height || 500;
+    const maxWidth = parentSize?.width || 700;
 
     let containerWidth = maxWidth;
     let containerHeight = maxHeight;
@@ -1371,24 +1572,17 @@ function FieldMappingCanvas({
     }
 
     // Calculate background-size and background-position for CSS background image
-    // background-size: the full image should be scaled so the crop region fills the container
-    // If crop region is cropRect.w of full width, and container is containerWidth,
-    // then full image width in the background should be containerWidth / cropRect.w
     const bgWidth = containerWidth / cropRect.w;
     const bgHeight = containerHeight / cropRect.h;
-
-    // background-position: position the image so the crop region's top-left is at container's origin
-    // The crop region starts at cropRect.x * fullWidth from the left
-    // We need to shift left by that amount, expressed as a pixel value
     const bgPosX = -cropRect.x * bgWidth;
     const bgPosY = -cropRect.y * bgHeight;
 
     return (
-        <div className="relative w-full h-full flex flex-col items-center justify-center">
+        <div ref={parentRef} className="relative w-full h-full flex flex-col items-center justify-center">
             {/* Container that shows only the crop region using CSS background */}
             <div
                 ref={containerRef}
-                className={`relative overflow-hidden rounded-lg border-2 border-amber-500 ${activeField ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`relative overflow-hidden rounded-lg border-2 ${activeField ? 'border-slate-400 cursor-crosshair' : 'border-slate-300 cursor-default'} shadow-lg`}
                 style={{
                     width: containerWidth,
                     height: containerHeight,
@@ -1396,20 +1590,19 @@ function FieldMappingCanvas({
                     backgroundSize: `${bgWidth}px ${bgHeight}px`,
                     backgroundPosition: `${bgPosX}px ${bgPosY}px`,
                     backgroundRepeat: 'no-repeat',
-                    backgroundColor: '#f3f4f6',
+                    backgroundColor: '#f8fafc',
                 }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
             >
-
                 {imageLoaded && (
                     <>
                         {/* Existing field rectangles */}
                         {Object.entries(fieldRects).map(([field, rect]) => {
                             if (!rect) return null;
-                            const colors = fieldColors[field] || { border: 'border-gray-500', bg: 'bg-gray-500/20' };
+                            const colors = fieldColors[field] || { border: 'border-gray-500', bg: 'bg-gray-500/20', solid: 'bg-gray-500' };
                             const labels: Record<string, string> = {
                                 drawing_number: 'Drawing #',
                                 drawing_title: 'Title',
@@ -1428,7 +1621,7 @@ function FieldMappingCanvas({
                                     }}
                                 >
                                     <span
-                                        className={`absolute -top-5 left-0 rounded px-1 text-[10px] font-bold text-white ${colors.border.replace('border-', 'bg-')}`}
+                                        className={`absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${colors.solid}`}
                                     >
                                         {labels[field]}
                                     </span>
@@ -1452,18 +1645,14 @@ function FieldMappingCanvas({
                 )}
 
                 {!imageLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
                         <div className="text-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
-                            <p className="text-muted-foreground">Loading title block...</p>
+                            <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-2" />
+                            <p className="text-slate-500">Loading title block...</p>
                         </div>
                     </div>
                 )}
             </div>
-
-            <p className="text-muted-foreground mt-3 text-center text-sm">
-                Draw rectangles around each field. This shows only the title block region.
-            </p>
         </div>
     );
 }
