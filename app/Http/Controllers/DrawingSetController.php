@@ -394,4 +394,41 @@ class DrawingSetController extends Controller
 
         return redirect($url);
     }
+
+    /**
+     * Serve the original PDF from a drawing set.
+     * Streams the PDF content directly to avoid CORS issues with S3.
+     */
+    public function servePdf(DrawingSet $drawingSet)
+    {
+        if (!$drawingSet->original_pdf_s3_key) {
+            abort(404, 'No PDF available');
+        }
+
+        // Stream the PDF directly from S3 to avoid CORS issues
+        $stream = Storage::disk('s3')->readStream($drawingSet->original_pdf_s3_key);
+
+        if (!$stream) {
+            abort(404, 'Could not read PDF from storage');
+        }
+
+        $size = Storage::disk('s3')->size($drawingSet->original_pdf_s3_key);
+        $filename = $drawingSet->original_filename ?? 'drawing.pdf';
+
+        return response()->stream(
+            function () use ($stream) {
+                fpassthru($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            },
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => $size,
+                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+                'Cache-Control' => 'private, max-age=3600',
+            ]
+        );
+    }
 }

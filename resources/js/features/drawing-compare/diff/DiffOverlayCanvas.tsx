@@ -15,6 +15,10 @@ type DiffOverlayCanvasProps = {
     opacity?: number;
     /** Additional CSS class names */
     className?: string;
+    /** Explicit display width (overrides auto-calculation) */
+    displayWidth?: number;
+    /** Explicit display height (overrides auto-calculation) */
+    displayHeight?: number;
 };
 
 /**
@@ -26,6 +30,8 @@ export function DiffOverlayCanvas({
     visible,
     opacity = 0.7,
     className = '',
+    displayWidth,
+    displayHeight,
 }: DiffOverlayCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -54,15 +60,18 @@ export function DiffOverlayCanvas({
         return null;
     }
 
+    // Calculate display size - use explicit props if provided, otherwise use devicePixelRatio
+    const width = displayWidth ?? diffCanvas.width / (window.devicePixelRatio || 1);
+    const height = displayHeight ?? diffCanvas.height / (window.devicePixelRatio || 1);
+
     return (
         <canvas
             ref={canvasRef}
             className={`absolute left-0 top-0 pointer-events-none ${className}`}
             style={{
                 opacity,
-                // Match the base canvas display size
-                width: diffCanvas.width / (window.devicePixelRatio || 1),
-                height: diffCanvas.height / (window.devicePixelRatio || 1),
+                width,
+                height,
             }}
         />
     );

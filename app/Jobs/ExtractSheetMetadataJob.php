@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\DrawingSheet;
 use App\Models\QaStageDrawing;
 use App\Models\TitleBlockTemplate;
 use App\Services\DrawingMetadataValidationService;
@@ -388,9 +389,64 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
         $sheet->update($updateData);
 
+        // Link to DrawingSheet for revision comparison when we have a valid drawing number
+        $this->linkToDrawingSheet($sheet, $updateData['drawing_number'], $updateData['drawing_title']);
+
         // Update drawing set status if applicable
         if ($sheet->drawingSet) {
             $sheet->drawingSet->updateStatusFromSheets();
+        }
+    }
+
+    /**
+     * Link the sheet to a DrawingSheet for revision grouping and comparison.
+     * This enables sheets with the same drawing number to be compared across revisions.
+     */
+    private function linkToDrawingSheet(QaStageDrawing $sheet, ?string $drawingNumber, ?string $title): void
+    {
+        // Skip if no drawing number extracted
+        if (empty($drawingNumber)) {
+            return;
+        }
+
+        // Skip if already linked
+        if ($sheet->drawing_sheet_id) {
+            return;
+        }
+
+        // Get project ID from drawing set
+        $projectId = $sheet->drawingSet?->project_id;
+        if (!$projectId) {
+            return;
+        }
+
+        try {
+            // Find or create a DrawingSheet for this drawing number
+            $drawingSheet = DrawingSheet::findOrCreateByDrawingNumber(
+                $projectId,
+                $drawingNumber,
+                $title
+            );
+
+            // Add this sheet as a revision
+            // Use the extracted revision as the revision_number
+            $revisionNumber = $sheet->revision;
+
+            // Link the sheet to the DrawingSheet
+            $drawingSheet->addRevision($sheet, $revisionNumber);
+
+            Log::info('Linked sheet to DrawingSheet', [
+                'sheet_id' => $sheet->id,
+                'drawing_sheet_id' => $drawingSheet->id,
+                'drawing_number' => $drawingNumber,
+                'revision' => $revisionNumber,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to link sheet to DrawingSheet', [
+                'sheet_id' => $sheet->id,
+                'drawing_number' => $drawingNumber,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

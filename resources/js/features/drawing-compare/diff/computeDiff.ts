@@ -24,8 +24,8 @@ export type DiffOptions = {
 
 const DEFAULT_OPTIONS: DiffOptions = {
     threshold: 30,
-    baseOnlyColor: { r: 59, g: 130, b: 246, a: 200 },      // Blue - content in base only
-    candidateOnlyColor: { r: 239, g: 68, b: 68, a: 200 },  // Red - content in candidate only
+    baseOnlyColor: { r: 0, g: 100, b: 255, a: 255 },       // Bright Blue - content in base only (removed)
+    candidateOnlyColor: { r: 255, g: 0, b: 100, a: 255 },  // Bright Magenta/Red - content in candidate only (added)
 };
 
 /**
@@ -87,14 +87,13 @@ export function computeDiffMask(
     let diffPixelCount = 0;
     const totalPixels = width * height;
 
-    // Process each pixel
-    // Detect content by checking if pixel is "dark" (has ink/lines)
-    // Typical drawings have dark lines on light/white background
-    // Use the threshold to determine what counts as "content"
-    // Higher threshold = more pixels considered as content = more sensitive
-    const contentThreshold = 255 - opts.threshold; // e.g., threshold=30 -> contentThreshold=225
+    // First pass: detect raw differences using direct pixel comparison
+    // This is more reliable than luminance-based detection
+    const rawDiffMask = new Uint8Array(totalPixels); // 0 = same, 1 = base only, 2 = candidate only
 
     for (let i = 0; i < basePixels.length; i += 4) {
+        const pixelIndex = i / 4;
+
         const r1 = basePixels[i];
         const g1 = basePixels[i + 1];
         const b1 = basePixels[i + 2];
@@ -105,37 +104,93 @@ export function computeDiffMask(
         const b2 = candidatePixels[i + 2];
         const a2 = candidatePixels[i + 3];
 
-        // Calculate luminance for each pixel
-        const lum1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1;
-        const lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+        // Calculate the maximum channel difference
+        const diff = Math.max(
+            Math.abs(r1 - r2),
+            Math.abs(g1 - g2),
+            Math.abs(b1 - b2),
+            Math.abs(a1 - a2)
+        );
 
-        // Determine if each pixel has "content" (is dark enough to be a line/shape)
-        const hasContentBase = a1 > 0 && lum1 < contentThreshold;
-        const hasContentCandidate = a2 > 0 && lum2 < contentThreshold;
+        // If difference exceeds threshold, determine which side has the content
+        if (diff > opts.threshold) {
+            // Calculate grayscale values to determine which has "darker" content
+            const gray1 = (r1 + g1 + b1) / 3;
+            const gray2 = (r2 + g2 + b2) / 3;
 
-        // Only show diff when one has content and the other doesn't
-        if (hasContentBase && !hasContentCandidate) {
-            // Content in base only (blue) - something was removed or is missing in candidate
-            const darkness = (contentThreshold - lum1) / contentThreshold;
-            maskPixels[i] = opts.baseOnlyColor.r;
-            maskPixels[i + 1] = opts.baseOnlyColor.g;
-            maskPixels[i + 2] = opts.baseOnlyColor.b;
-            maskPixels[i + 3] = Math.round(opts.baseOnlyColor.a * Math.max(0.5, darkness));
-            diffPixelCount++;
-        } else if (!hasContentBase && hasContentCandidate) {
-            // Content in candidate only (red) - something was added in candidate
-            const darkness = (contentThreshold - lum2) / contentThreshold;
-            maskPixels[i] = opts.candidateOnlyColor.r;
-            maskPixels[i + 1] = opts.candidateOnlyColor.g;
-            maskPixels[i + 2] = opts.candidateOnlyColor.b;
-            maskPixels[i + 3] = Math.round(opts.candidateOnlyColor.a * Math.max(0.5, darkness));
-            diffPixelCount++;
-        } else {
-            // Both have content or both are empty - no difference to show
-            maskPixels[i] = 0;
-            maskPixels[i + 1] = 0;
-            maskPixels[i + 2] = 0;
-            maskPixels[i + 3] = 0;
+            // The side with darker content (lower grayscale) is the one with the visible element
+            if (gray1 < gray2 - 10) {
+                // Base has darker content (something in base that's not in candidate)
+                rawDiffMask[pixelIndex] = 1;
+            } else if (gray2 < gray1 - 10) {
+                // Candidate has darker content (something added in candidate)
+                rawDiffMask[pixelIndex] = 2;
+            } else {
+                // Both have similar darkness but different colors - mark as candidate change
+                rawDiffMask[pixelIndex] = 2;
+            }
+        }
+    }
+
+    // Second pass: dilate the diff mask to make differences more visible
+    // This creates a "halo" effect around differences
+    const dilationRadius = 1; // pixels (smaller = thinner highlight)
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const pixelIndex = y * width + x;
+            const i = pixelIndex * 4;
+
+            // Check if this pixel or any neighbor within radius has a difference
+            let foundBaseOnly = false;
+            let foundCandidateOnly = false;
+            let minDist = dilationRadius + 1;
+            let closestType = 0;
+
+            for (let dy = -dilationRadius; dy <= dilationRadius && (!foundBaseOnly || !foundCandidateOnly); dy++) {
+                for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+
+                    const neighborIndex = ny * width + nx;
+                    const neighborType = rawDiffMask[neighborIndex];
+
+                    if (neighborType > 0) {
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist <= dilationRadius) {
+                            if (neighborType === 1) foundBaseOnly = true;
+                            if (neighborType === 2) foundCandidateOnly = true;
+                            if (dist < minDist) {
+                                minDist = dist;
+                                closestType = neighborType;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Apply color based on closest diff type
+            if (closestType > 0) {
+                // Calculate alpha based on distance (closer = more opaque)
+                const alphaMultiplier = 1 - (minDist / (dilationRadius + 1));
+                const color = closestType === 1 ? opts.baseOnlyColor : opts.candidateOnlyColor;
+
+                maskPixels[i] = color.r;
+                maskPixels[i + 1] = color.g;
+                maskPixels[i + 2] = color.b;
+                maskPixels[i + 3] = Math.round(color.a * Math.max(0.4, alphaMultiplier));
+
+                if (rawDiffMask[pixelIndex] > 0) {
+                    diffPixelCount++;
+                }
+            } else {
+                // No difference - transparent
+                maskPixels[i] = 0;
+                maskPixels[i + 1] = 0;
+                maskPixels[i + 2] = 0;
+                maskPixels[i + 3] = 0;
+            }
         }
     }
 

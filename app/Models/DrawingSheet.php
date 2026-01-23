@@ -11,6 +11,7 @@ class DrawingSheet extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'project_id',
         'qa_stage_id',
         'sheet_number',
         'title',
@@ -45,6 +46,11 @@ class DrawingSheet extends Model
     }
 
     // Relationships
+
+    public function project()
+    {
+        return $this->belongsTo(Location::class, 'project_id');
+    }
 
     public function qaStage()
     {
@@ -197,6 +203,42 @@ class DrawingSheet extends Model
         return self::create([
             'qa_stage_id' => $qaStageId,
             'sheet_number' => $sheetNumber,
+            'title' => $title,
+            'discipline' => $discipline,
+            'revision_count' => 0,
+        ]);
+    }
+
+    /**
+     * Find or create a sheet by drawing number within a project.
+     * Used for grouping sheets from drawing sets (bulk PDF uploads).
+     */
+    public static function findOrCreateByDrawingNumber(
+        int $projectId,
+        string $drawingNumber,
+        ?string $title = null,
+        ?string $discipline = null
+    ): self {
+        // Normalize drawing number for comparison
+        $normalizedNumber = strtoupper(trim($drawingNumber));
+
+        $sheet = self::where('project_id', $projectId)
+            ->whereRaw('UPPER(TRIM(sheet_number)) = ?', [$normalizedNumber])
+            ->first();
+
+        if ($sheet) {
+            // Update title if not set and we have one
+            if (!$sheet->title && $title) {
+                $sheet->title = $title;
+                $sheet->save();
+            }
+            return $sheet;
+        }
+
+        return self::create([
+            'project_id' => $projectId,
+            'qa_stage_id' => null, // Project-level sheet, not tied to a specific stage
+            'sheet_number' => $normalizedNumber,
             'title' => $title,
             'discipline' => $discipline,
             'revision_count' => 0,

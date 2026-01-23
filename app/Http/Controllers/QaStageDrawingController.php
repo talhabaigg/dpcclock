@@ -213,12 +213,18 @@ class QaStageDrawingController extends Controller
     {
         $drawing->load([
             'qaStage.location',
+            'drawingSet.project', // For drawings from drawing sets
             'drawingFile',
             'drawingSheet.revisions' => function ($query) {
-                $query->select('id', 'drawing_sheet_id', 'drawing_file_id', 'page_number', 'name', 'revision_number', 'revision_date', 'status', 'created_at', 'thumbnail_path', 'file_path', 'diff_image_path')
-                    ->orderBy('created_at', 'desc');
+                $query->select(
+                    'id', 'drawing_sheet_id', 'drawing_file_id', 'drawing_set_id',
+                    'page_number', 'name', 'revision_number', 'revision_date', 'status',
+                    'created_at', 'thumbnail_path', 'file_path', 'diff_image_path',
+                    'page_preview_s3_key', 'drawing_number', 'drawing_title', 'revision'
+                )->orderBy('created_at', 'desc');
             },
-            'previousRevision:id,name,revision_number,file_path,thumbnail_path',
+            'drawingSheet.project', // For project-level sheets
+            'previousRevision:id,name,revision_number,file_path,thumbnail_path,page_preview_s3_key',
             'createdBy',
             'observations.createdBy',
         ]);
@@ -230,11 +236,33 @@ class QaStageDrawingController extends Controller
                 ->select('id', 'page_number', 'page_label', 'name')
                 ->orderBy('page_number')
                 ->get();
+        } elseif ($drawing->drawing_set_id) {
+            // For drawing sets, sibling pages are other pages from the same PDF
+            $siblingPages = QaStageDrawing::where('drawing_set_id', $drawing->drawing_set_id)
+                ->select('id', 'page_number', 'drawing_number', 'drawing_title', 'revision')
+                ->orderBy('page_number')
+                ->get()
+                ->map(function ($page) {
+                    return [
+                        'id' => $page->id,
+                        'page_number' => $page->page_number,
+                        'page_label' => null,
+                        'name' => $page->drawing_number
+                            ? "{$page->drawing_number} - {$page->drawing_title}"
+                            : "Page {$page->page_number}",
+                    ];
+                });
         }
+
+        // Determine project for breadcrumbs
+        $project = $drawing->qaStage?->location
+            ?? $drawing->drawingSet?->project
+            ?? $drawing->drawingSheet?->project;
 
         return Inertia::render('qa-stages/drawings/show', [
             'drawing' => $drawing,
             'siblingPages' => $siblingPages,
+            'project' => $project,
         ]);
     }
 

@@ -36,7 +36,7 @@ import {
     PlusCircle,
     Unlock,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 type PDFDocumentProxy = import('pdfjs-dist').PDFDocumentProxy;
@@ -68,6 +68,7 @@ type Observation = {
 type Revision = {
     id: number;
     drawing_sheet_id: number;
+    drawing_set_id?: number | null;
     name: string;
     revision_number?: string | null;
     revision_date?: string | null;
@@ -77,8 +78,16 @@ type Revision = {
     file_path?: string | null;
     diff_image_path?: string | null;
     file_url?: string;
+    pdf_url?: string | null;
+    is_drawing_set_sheet?: boolean;
     thumbnail_url?: string;
     diff_image_url?: string;
+    // For drawing set sheets
+    page_preview_s3_key?: string | null;
+    page_preview_url?: string;
+    drawing_number?: string | null;
+    drawing_title?: string | null;
+    revision?: string | null;
 };
 
 type DrawingSheet = {
@@ -105,15 +114,26 @@ type SiblingPage = {
     name: string;
 };
 
+type DrawingSet = {
+    id: number;
+    project_id: number;
+    original_filename: string;
+    project?: Location;
+};
+
 type Drawing = {
     id: number;
     name: string;
     display_name?: string;
-    file_name: string;
+    file_name?: string | null;
     file_type?: string | null;
-    file_url: string;
-    qa_stage_id: number;
+    file_url?: string | null;
+    pdf_url?: string | null;
+    is_drawing_set_sheet?: boolean;
+    qa_stage_id: number | null;
     qa_stage?: QaStage;
+    drawing_set_id?: number | null;
+    drawing_set?: DrawingSet;
     observations?: Observation[];
     drawing_sheet?: DrawingSheet;
     drawing_file?: DrawingFile;
@@ -125,9 +145,18 @@ type Drawing = {
         name: string;
         revision_number?: string | null;
         file_url?: string;
+        pdf_url?: string | null;
+        is_drawing_set_sheet?: boolean;
+        page_preview_s3_key?: string | null;
     };
     revision_number?: string | null;
     diff_image_url?: string | null;
+    // For drawing set sheets
+    drawing_number?: string | null;
+    drawing_title?: string | null;
+    revision?: string | null;
+    page_preview_s3_key?: string | null;
+    page_preview_url?: string | null;
 };
 
 type PendingPoint = {
@@ -136,16 +165,17 @@ type PendingPoint = {
     y: number;
 };
 
-const PDF_SCALE_MIN = 0.5;
-const PDF_SCALE_MAX = 4;
-const PDF_SCALE_STEP = 0.2;
+const PDF_SCALE_MIN = 0.05;
+const PDF_SCALE_MAX = 5;
+const PDF_SCALE_STEP = 0.05;
 const DRAG_THRESHOLD_PX = 5;
 const PDF_PAGE_GAP_PX = 24;
 
 export default function QaStageDrawingShow() {
-    const { drawing, siblingPages } = usePage<{
+    const { drawing, siblingPages, project } = usePage<{
         drawing: Drawing;
         siblingPages: SiblingPage[];
+        project?: Location;
     }>().props;
 
     // Page-based rendering: this drawing represents a single page
@@ -153,14 +183,39 @@ export default function QaStageDrawingShow() {
     const totalPages = drawing.total_pages || 1;
     const isPaged = totalPages > 1;
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'QA Stages', href: '/qa-stages' },
-        {
-            title: drawing.qa_stage?.name || 'QA Stage',
-            href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
-        },
-        { title: drawing.name, href: `/qa-stage-drawings/${drawing.id}` },
-    ];
+    // Determine if this is from a drawing set or QA stage
+    const isFromDrawingSet = Boolean(drawing.drawing_set_id);
+    const displayName = drawing.display_name || drawing.name || `Page ${drawing.page_number}`;
+
+    // Get the image/file URL - prefer file_url, fall back to page_preview_url for drawing set sheets
+    const imageUrl = drawing.file_url || drawing.page_preview_url || null;
+
+    // Build breadcrumbs based on source
+    const breadcrumbs: BreadcrumbItem[] = isFromDrawingSet
+        ? [
+              { title: 'Projects', href: '/locations' },
+              {
+                  title: project?.name || drawing.drawing_set?.project?.name || 'Project',
+                  href: project?.id ? `/locations/${project.id}` : '/locations',
+              },
+              {
+                  title: 'Drawing Sets',
+                  href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
+              },
+              {
+                  title: drawing.drawing_set?.original_filename || 'Drawing Set',
+                  href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
+              },
+              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+          ]
+        : [
+              { title: 'QA Stages', href: '/qa-stages' },
+              {
+                  title: drawing.qa_stage?.name || 'QA Stage',
+                  href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
+              },
+              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+          ];
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
@@ -196,6 +251,7 @@ export default function QaStageDrawingShow() {
     const pdfRef = useRef<PDFDocumentProxy | null>(null);
     const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
     const [pageSizes, setPageSizes] = useState<Record<number, { width: number; height: number }>>({});
+    const [intrinsicPageSize, setIntrinsicPageSize] = useState<{ width: number; height: number } | null>(null);
     const [pdfPageCount, setPdfPageCount] = useState(0);
     const [pdfScale, setPdfScale] = useState(1);
     const [pdfTranslate, setPdfTranslate] = useState({ x: 0, y: 0 });
@@ -216,9 +272,25 @@ export default function QaStageDrawingShow() {
     const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
     // Base image ref (for non-PDF magnification)
     const baseImageRef = useRef<HTMLImageElement | null>(null);
+    // Track base image dimensions for fitting to container
+    const [baseImageSize, setBaseImageSize] = useState<{ width: number; height: number } | null>(null);
+    // Candidate image ref (for non-PDF overlay comparison)
+    const candidateImageRef = useRef<HTMLImageElement | null>(null);
+    const [candidateImageLoaded, setCandidateImageLoaded] = useState(false);
 
-    // Diff overlay
-    const diffOverlay = useDiffOverlay(baseCanvasRef, candidateCanvasRef, alignmentTool.transform.cssTransform, alignmentTool.isAligned, {
+    // Offscreen canvases for image-based operations (auto-align and diff)
+    // These are used when working with images instead of PDFs
+    const baseOffscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const candidateOffscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    // Unified canvas refs for diff computation - will point to either PDF canvas or offscreen image canvas
+    const diffBaseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const diffCandidateCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    // Counter to force diff recomputation when offscreen canvases are created
+    const [diffCanvasVersion, setDiffCanvasVersion] = useState(0);
+
+    // Diff overlay - uses the unified canvas refs
+    const diffOverlay = useDiffOverlay(diffBaseCanvasRef, diffCandidateCanvasRef, alignmentTool.transform.cssTransform, alignmentTool.isAligned, {
         debounceMs: 500,
         scale: pdfScale,
     });
@@ -229,19 +301,51 @@ export default function QaStageDrawingShow() {
     // Zoom lock state
     const [zoomLocked, setZoomLocked] = useState(false);
 
-    // Auto-align handler
+    // Helper to create canvas from image element
+    const imageToCanvas = useCallback((img: HTMLImageElement): HTMLCanvasElement => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(img, 0, 0);
+        }
+        return canvas;
+    }, []);
+
+    // Auto-align handler - works with both PDFs (canvas) and images
     const handleAutoAlign = useCallback(() => {
-        if (!baseCanvasRef.current || !candidateCanvasRef.current) {
-            toast.error('Both canvases must be loaded for auto-align');
+        let baseCanvas: HTMLCanvasElement | null = null;
+        let candidateCanvas: HTMLCanvasElement | null = null;
+
+        // Get base canvas - prefer existing canvas, fall back to creating from image
+        if (baseCanvasRef.current) {
+            baseCanvas = baseCanvasRef.current;
+        } else if (baseImageRef.current && baseImageRef.current.complete) {
+            baseCanvas = imageToCanvas(baseImageRef.current);
+            baseOffscreenCanvasRef.current = baseCanvas;
+        }
+
+        // Get candidate canvas - prefer existing canvas, fall back to creating from image
+        if (candidateCanvasRef.current) {
+            candidateCanvas = candidateCanvasRef.current;
+        } else if (candidateImageRef.current && candidateImageRef.current.complete) {
+            candidateCanvas = imageToCanvas(candidateImageRef.current);
+            candidateOffscreenCanvasRef.current = candidateCanvas;
+        }
+
+        if (!baseCanvas || !candidateCanvas) {
+            toast.error('Both images must be loaded for auto-align');
             return;
         }
-        const result = alignmentTool.autoAlign(baseCanvasRef.current, candidateCanvasRef.current);
+
+        const result = alignmentTool.autoAlign(baseCanvas, candidateCanvas);
         if (result.success) {
             toast.success(result.message);
         } else {
             toast.error(result.message);
         }
-    }, [alignmentTool]);
+    }, [alignmentTool, imageToCanvas]);
 
     // Save alignment to backend
     const saveAlignment = useCallback(
@@ -358,15 +462,27 @@ export default function QaStageDrawingShow() {
         }
     }, [compareRevisionId, showCompareOverlay, loadSavedAlignment]);
 
-    // Determine if candidate is a PDF
-    const candidateIsPdf = candidateRevision?.file_url
-        ? candidateRevision.file_url.toLowerCase().endsWith('.pdf') ||
-          (candidateRevision as Revision & { file_type?: string })?.file_path?.toLowerCase().endsWith('.pdf')
+    // Determine if candidate is a PDF (check pdf_url first, then file_url)
+    const candidateIsPdf = candidateRevision
+        ? Boolean(candidateRevision.pdf_url) ||
+          (candidateRevision.file_url?.toLowerCase().endsWith('.pdf') ?? false) ||
+          (candidateRevision.file_path?.toLowerCase().endsWith('.pdf') ?? false)
         : false;
 
-    const isPdf = (drawing.file_type || '').toLowerCase().includes('pdf') || drawing.file_name.toLowerCase().endsWith('.pdf');
-    const isImage = (drawing.file_type || '').toLowerCase().startsWith('image') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name);
+    // Get the candidate PDF URL
+    const candidatePdfUrl = candidateRevision?.pdf_url || candidateRevision?.file_url;
+
+    // Determine if we should use PDF viewer or image viewer
+    // Priority: Use PDF if pdf_url is available (including for drawing set sheets with original PDF)
+    const hasPdfUrl = Boolean(drawing.pdf_url);
+    const hasPreviewImage = Boolean(drawing.page_preview_s3_key);
+    const isPdf = hasPdfUrl || (!hasPreviewImage && ((drawing.file_type || '').toLowerCase().includes('pdf') || (drawing.file_name || '').toLowerCase().endsWith('.pdf')));
+    const isImage = !isPdf && (hasPreviewImage || (drawing.file_type || '').toLowerCase().startsWith('image') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name || ''));
     const canPanZoom = isPdf || isImage;
+
+    // Get the URL to use for PDF loading
+    const pdfUrl = drawing.pdf_url || drawing.file_url;
+
 
     // Handle alignment clicks on base layer
     const handleAlignmentBaseClick = useCallback(
@@ -400,11 +516,13 @@ export default function QaStageDrawingShow() {
         setHasUserPanned(false);
         setPdfTranslate({ x: 0, y: 0 });
         setPdfScale(1);
-        setViewerReady(!isPdf);
+        setBaseImageSize(null);
+        setIntrinsicPageSize(null);
+        setViewerReady(false);
     }, [drawing.id]);
 
     useEffect(() => {
-        if (!isPdf) {
+        if (!isPdf || !pdfUrl) {
             return;
         }
 
@@ -415,7 +533,9 @@ export default function QaStageDrawingShow() {
                 const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
                 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-                const loadingTask = pdfjs.getDocument({ url: drawing.file_url });
+                if (cancelled) return;
+
+                const loadingTask = pdfjs.getDocument({ url: pdfUrl });
                 const pdf = (await loadingTask.promise) as PDFDocumentProxy;
                 if (cancelled) return;
                 pdfRef.current = pdf;
@@ -431,7 +551,7 @@ export default function QaStageDrawingShow() {
         return () => {
             cancelled = true;
         };
-    }, [drawing.file_url, isPdf, targetPageNumber]);
+    }, [pdfUrl, isPdf, targetPageNumber]);
 
     useEffect(() => {
         const renderPage = async () => {
@@ -444,6 +564,14 @@ export default function QaStageDrawingShow() {
             if (!canvas) return;
 
             const page = await pdfRef.current.getPage(targetPageNumber);
+
+            // Get intrinsic size (scale=1) for fit-to-screen calculations
+            const intrinsicViewport = page.getViewport({ scale: 1 });
+            setIntrinsicPageSize({
+                width: intrinsicViewport.width,
+                height: intrinsicViewport.height,
+            });
+
             const viewport = page.getViewport({ scale: pdfScale * deviceScale });
             const context = canvas.getContext('2d');
             if (!context) return;
@@ -465,9 +593,96 @@ export default function QaStageDrawingShow() {
         renderPage();
     }, [pdfPageCount, pdfScale, targetPageNumber]);
 
+    // Create offscreen canvas from base image for diff computation (non-PDF only)
+    useEffect(() => {
+        if (isPdf) {
+            // For PDFs, the diff canvas ref will be set when the PDF canvas is rendered
+            baseOffscreenCanvasRef.current = null;
+            return;
+        }
+
+        if (!baseImageSize || !baseImageRef.current) {
+            baseOffscreenCanvasRef.current = null;
+            diffBaseCanvasRef.current = null;
+            return;
+        }
+
+        const img = baseImageRef.current;
+        if (!img.complete || img.naturalWidth === 0) {
+            return;
+        }
+
+        // Create offscreen canvas from the image
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            baseOffscreenCanvasRef.current = canvas;
+            diffBaseCanvasRef.current = canvas;
+            // Trigger diff recomputation
+            setDiffCanvasVersion((v) => v + 1);
+        }
+    }, [isPdf, baseImageSize]);
+
+    // Reset candidate image state when comparison changes
+    useEffect(() => {
+        if (!showCompareOverlay || !candidatePdfUrl || candidateIsPdf) {
+            setCandidateImageLoaded(false);
+            candidateImageRef.current = null;
+            candidateOffscreenCanvasRef.current = null;
+        }
+    }, [showCompareOverlay, candidatePdfUrl, candidateIsPdf]);
+
+    // Create offscreen canvas from candidate image for diff computation (non-PDF only)
+    useEffect(() => {
+        if (candidateIsPdf) {
+            // For PDF candidates, the diff canvas ref will be set when the PDF canvas is rendered
+            candidateOffscreenCanvasRef.current = null;
+            return;
+        }
+
+        if (!candidateImageLoaded || !candidateImageRef.current) {
+            candidateOffscreenCanvasRef.current = null;
+            diffCandidateCanvasRef.current = null;
+            return;
+        }
+
+        const img = candidateImageRef.current;
+        if (!img.complete || img.naturalWidth === 0) {
+            return;
+        }
+
+        // Create offscreen canvas from the candidate image
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            candidateOffscreenCanvasRef.current = canvas;
+            diffCandidateCanvasRef.current = canvas;
+            // Trigger diff recomputation
+            setDiffCanvasVersion((v) => v + 1);
+        }
+    }, [candidateIsPdf, candidateImageLoaded]);
+
+    // Trigger diff recomputation when offscreen canvases are created
+    useEffect(() => {
+        if (diffCanvasVersion > 0 && showCompareOverlay) {
+            // Small delay to ensure refs are updated
+            const timeoutId = setTimeout(() => {
+                diffOverlay.recompute();
+            }, 100);
+            return () => clearTimeout(timeoutId);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [diffCanvasVersion, showCompareOverlay]);
+
     // Load and render candidate PDF for overlay comparison
     useEffect(() => {
-        if (!showCompareOverlay || !candidateRevision?.file_url || !candidateIsPdf) {
+        if (!showCompareOverlay || !candidatePdfUrl || !candidateIsPdf) {
             setCandidatePdfLoaded(false);
             candidatePdfRef.current = null;
             return;
@@ -480,7 +695,9 @@ export default function QaStageDrawingShow() {
                 const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
                 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-                const loadingTask = pdfjs.getDocument({ url: candidateRevision.file_url });
+                if (cancelled) return;
+
+                const loadingTask = pdfjs.getDocument({ url: candidatePdfUrl });
                 const pdf = (await loadingTask.promise) as PDFDocumentProxy;
                 if (cancelled) return;
 
@@ -498,7 +715,7 @@ export default function QaStageDrawingShow() {
         return () => {
             cancelled = true;
         };
-    }, [showCompareOverlay, candidateRevision?.file_url, candidateIsPdf]);
+    }, [showCompareOverlay, candidatePdfUrl, candidateIsPdf]);
 
     // Render candidate PDF to overlay canvas
     const [candidateRenderKey, setCandidateRenderKey] = useState(0);
@@ -558,6 +775,53 @@ export default function QaStageDrawingShow() {
         });
         setViewerReady(true);
     }, [hasUserPanned, isPdf, pageSizes, pdfPageCount]);
+
+    // Fit image to container on load (for non-PDF images)
+    useLayoutEffect(() => {
+        if (isPdf || hasUserPanned || !containerRef.current || !baseImageSize) {
+            return;
+        }
+
+        // Use requestAnimationFrame to ensure layout is complete
+        const rafId = requestAnimationFrame(() => {
+            if (!containerRef.current) return;
+
+            const { clientWidth, clientHeight } = containerRef.current;
+            const { width: imgWidth, height: imgHeight } = baseImageSize;
+
+            // Skip if container has no dimensions yet
+            if (clientWidth === 0 || clientHeight === 0) {
+                return;
+            }
+
+            // Calculate scale to fit the image in the container with some padding
+            const padding = 40; // px padding on each side
+            const availableWidth = clientWidth - padding * 2;
+            const availableHeight = clientHeight - padding * 2;
+
+            const scaleX = availableWidth / imgWidth;
+            const scaleY = availableHeight / imgHeight;
+            const fitScale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 100%
+
+            // Clamp to valid range
+            const clampedScale = Math.min(PDF_SCALE_MAX, Math.max(PDF_SCALE_MIN, fitScale));
+            setPdfScale(clampedScale);
+
+            // Center the scaled image
+            const scaledWidth = imgWidth * clampedScale;
+            const scaledHeight = imgHeight * clampedScale;
+            const nextX = (clientWidth - scaledWidth) / 2;
+            const nextY = (clientHeight - scaledHeight) / 2;
+
+            setPdfTranslate({
+                x: isFinite(nextX) ? nextX : 0,
+                y: isFinite(nextY) ? nextY : 0,
+            });
+            setViewerReady(true);
+        });
+
+        return () => cancelAnimationFrame(rafId);
+    }, [hasUserPanned, isPdf, baseImageSize]);
 
     const handlePageClick = (pageNumber: number) => (event: React.MouseEvent<HTMLDivElement>) => {
         if (didDragRef.current) {
@@ -646,21 +910,34 @@ export default function QaStageDrawingShow() {
     };
 
     const fitToCanvas = useCallback(() => {
-        if (!containerRef.current || Object.keys(pageSizes).length === 0) return;
+        if (!containerRef.current) return;
 
-        const pageSize = pageSizes[1];
-        if (!pageSize) return;
+        // Get the intrinsic content size (at scale=1)
+        let contentWidth: number;
+        let contentHeight: number;
+
+        if (isPdf) {
+            // Use intrinsic PDF page size for accurate fit calculation
+            if (!intrinsicPageSize) return;
+            contentWidth = intrinsicPageSize.width;
+            contentHeight = intrinsicPageSize.height;
+        } else if (baseImageSize) {
+            contentWidth = baseImageSize.width;
+            contentHeight = baseImageSize.height;
+        } else {
+            return;
+        }
 
         const { clientWidth, clientHeight } = containerRef.current;
         const padding = 40;
 
-        const scaleX = (clientWidth - padding) / pageSize.width;
-        const scaleY = (clientHeight - padding) / pageSize.height;
+        const scaleX = (clientWidth - padding * 2) / contentWidth;
+        const scaleY = (clientHeight - padding * 2) / contentHeight;
         const fitScale = Math.min(scaleX, scaleY, PDF_SCALE_MAX);
         const clampedScale = Math.max(PDF_SCALE_MIN, fitScale);
 
-        const scaledWidth = pageSize.width * clampedScale;
-        const scaledHeight = pageSize.height * clampedScale;
+        const scaledWidth = contentWidth * clampedScale;
+        const scaledHeight = contentHeight * clampedScale;
 
         const nextX = (clientWidth - scaledWidth) / 2;
         const nextY = (clientHeight - scaledHeight) / 2;
@@ -671,7 +948,7 @@ export default function QaStageDrawingShow() {
             y: isFinite(nextY) ? nextY : 0,
         });
         setHasUserPanned(true);
-    }, [pageSizes]);
+    }, [isPdf, intrinsicPageSize, baseImageSize]);
 
     const resetDialog = () => {
         setPendingPoint(null);
@@ -788,7 +1065,7 @@ export default function QaStageDrawingShow() {
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {/* Header Bar */}
-                <div className="flex items-center justify-between border-b bg-background px-4 py-2">
+                <div className="flex shrink-0 items-center justify-between border-b bg-background px-4 py-2">
                     <div className="flex items-center gap-3">
                         <Link href={drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages'}>
                             <Button variant="ghost" size="sm">
@@ -880,7 +1157,7 @@ export default function QaStageDrawingShow() {
                 </div>
 
                 {/* Toolbar */}
-                <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 overflow-x-auto border-b bg-muted/30 px-4 py-2">
                     {/* View Mode */}
                     {canPanZoom && (
                         <div className="flex items-center rounded-md border bg-background p-0.5">
@@ -923,7 +1200,26 @@ export default function QaStageDrawingShow() {
                             >
                                 <MinusCircle className="h-3.5 w-3.5" />
                             </Button>
-                            <span className="w-12 text-center text-xs tabular-nums text-muted-foreground">{Math.round(pdfScale * 100)}%</span>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    min={Math.round(PDF_SCALE_MIN * 100)}
+                                    max={Math.round(PDF_SCALE_MAX * 100)}
+                                    step={5}
+                                    value={Math.round(pdfScale * 100)}
+                                    disabled={zoomLocked}
+                                    onChange={(e) => {
+                                        const value = parseInt(e.target.value, 10);
+                                        if (!isNaN(value)) {
+                                            const clampedScale = Math.min(PDF_SCALE_MAX, Math.max(PDF_SCALE_MIN, value / 100));
+                                            setHasUserPanned(true);
+                                            setPdfScale(clampedScale);
+                                        }
+                                    }}
+                                    className="h-7 w-14 rounded border bg-background px-1 pr-4 text-center text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                                />
+                                <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                            </div>
                             <Button
                                 type="button"
                                 size="sm"
@@ -1043,7 +1339,7 @@ export default function QaStageDrawingShow() {
                     )}
 
                     {/* Alignment Tool */}
-                    {showCompareOverlay && candidateRevision?.file_url && (
+                    {showCompareOverlay && candidatePdfUrl && (
                         <>
                             <div className="h-4 w-px bg-border" />
                             <AlignmentToolbar
@@ -1064,7 +1360,7 @@ export default function QaStageDrawingShow() {
                     )}
 
                     {/* Diff Controls */}
-                    {showCompareOverlay && candidateRevision?.file_url && (
+                    {showCompareOverlay && candidatePdfUrl && (
                         <>
                             <div className="h-4 w-px bg-border" />
                             <DiffControls
@@ -1088,36 +1384,37 @@ export default function QaStageDrawingShow() {
                     )}
                 </div>
 
-                {/* Main Viewer */}
-                <div
-                    ref={containerRef}
-                    className={`relative flex-1 overflow-hidden bg-neutral-100 dark:bg-neutral-900 ${
-                        alignmentTool.isAligning
-                            ? 'cursor-crosshair'
-                            : canPanZoom && viewMode === 'pan'
-                              ? 'cursor-grab active:cursor-grabbing'
-                              : canPanZoom && viewMode === 'select'
-                                ? 'cursor-crosshair'
-                                : ''
-                    }`}
-                    style={{
-                        touchAction: canPanZoom ? 'none' : 'auto',
-                        overscrollBehavior: canPanZoom ? 'contain' : 'auto',
-                    }}
-                    onPointerDown={canPanZoom ? handlePointerDown : undefined}
-                    onPointerMove={canPanZoom ? handlePointerMove : undefined}
-                    onPointerUp={canPanZoom ? handlePointerUp : undefined}
-                    onPointerLeave={canPanZoom ? handlePointerUp : undefined}
-                    onWheel={canPanZoom ? handleWheel : undefined}
-                    onWheelCapture={canPanZoom ? handleWheel : undefined}
-                >
+                {/* Main Viewer - Fixed container to prevent overflow */}
+                <div className="relative flex-1 overflow-hidden">
                     <div
-                        className="origin-top-left"
+                        ref={containerRef}
+                        className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${
+                            alignmentTool.isAligning
+                                ? 'cursor-crosshair'
+                                : canPanZoom && viewMode === 'pan'
+                                  ? 'cursor-grab active:cursor-grabbing'
+                                  : canPanZoom && viewMode === 'select'
+                                    ? 'cursor-crosshair'
+                                    : ''
+                        }`}
                         style={{
-                            transform: `translate(${pdfTranslate.x}px, ${pdfTranslate.y}px) scale(${isPdf ? 1 : pdfScale})`,
-                            opacity: viewerReady ? 1 : 0,
+                            touchAction: canPanZoom ? 'none' : 'auto',
+                            overscrollBehavior: canPanZoom ? 'contain' : 'auto',
                         }}
+                        onPointerDown={canPanZoom ? handlePointerDown : undefined}
+                        onPointerMove={canPanZoom ? handlePointerMove : undefined}
+                        onPointerUp={canPanZoom ? handlePointerUp : undefined}
+                        onPointerLeave={canPanZoom ? handlePointerUp : undefined}
+                        onWheel={canPanZoom ? handleWheel : undefined}
+                        onWheelCapture={canPanZoom ? handleWheel : undefined}
                     >
+                        <div
+                            className="origin-top-left"
+                            style={{
+                                transform: `translate(${pdfTranslate.x}px, ${pdfTranslate.y}px)${isPdf ? '' : ''}`,
+                                opacity: viewerReady ? 1 : 0,
+                            }}
+                        >
                         {isPdf ? (
                             <div>
                                 {(() => {
@@ -1137,12 +1434,16 @@ export default function QaStageDrawingShow() {
                                                 ref={(el) => {
                                                     canvasRefs.current[0] = el;
                                                     baseCanvasRef.current = el;
+                                                    diffBaseCanvasRef.current = el;
                                                 }}
                                                 className="block max-w-none rounded-sm shadow-lg"
                                             />
-                                            {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
+                                            {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
                                                 <canvas
-                                                    ref={candidateCanvasRef}
+                                                    ref={(el) => {
+                                                        candidateCanvasRef.current = el;
+                                                        diffCandidateCanvasRef.current = el;
+                                                    }}
                                                     className="pointer-events-none absolute left-0 top-0"
                                                     style={{
                                                         opacity: diffOverlay.state.showDiff
@@ -1158,12 +1459,14 @@ export default function QaStageDrawingShow() {
                                                     }}
                                                 />
                                             )}
-                                            {showCompareOverlay && candidateRevision?.file_url && !candidateIsPdf && (
+                                            {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && pageSize && (
                                                 <img
-                                                    src={candidateRevision.file_url}
-                                                    alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
-                                                    className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                                                    src={candidatePdfUrl}
+                                                    alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
+                                                    className="pointer-events-none absolute left-0 top-0"
                                                     style={{
+                                                        width: pageSize.width,
+                                                        height: pageSize.height,
                                                         opacity: diffOverlay.state.showDiff
                                                             ? 0
                                                             : alignmentTool.activeLayer === 'base'
@@ -1177,7 +1480,7 @@ export default function QaStageDrawingShow() {
                                                     onError={() => toast.error('Failed to load comparison revision')}
                                                 />
                                             )}
-                                            {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && !candidatePdfLoaded && (
+                                            {showCompareOverlay && candidatePdfUrl && candidateIsPdf && !candidatePdfLoaded && (
                                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
                                                     <div className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
                                                         Loading...
@@ -1231,45 +1534,78 @@ export default function QaStageDrawingShow() {
                                                     containerHeight={pageSize.height}
                                                 />
                                             )}
-                                            {showCompareOverlay && (
-                                                <DiffOverlayCanvas diffCanvas={diffOverlay.diffCanvas} visible={diffOverlay.state.showDiff} opacity={0.8} />
+                                            {showCompareOverlay && pageSize && (
+                                                <DiffOverlayCanvas
+                                                    diffCanvas={diffOverlay.diffCanvas}
+                                                    visible={diffOverlay.state.showDiff}
+                                                    opacity={0.8}
+                                                    displayWidth={pageSize.width}
+                                                    displayHeight={pageSize.height}
+                                                />
                                             )}
                                         </div>
                                     );
                                 })()}
                             </div>
                         ) : (
-                            <div className="relative" onClick={handlePageClick(1)}>
+                            <div
+                                className="relative"
+                                style={baseImageSize ? {
+                                    width: baseImageSize.width * pdfScale,
+                                    height: baseImageSize.height * pdfScale,
+                                } : undefined}
+                                onClick={handlePageClick(1)}
+                            >
                                 <img
                                     ref={baseImageRef}
-                                    src={drawing.file_url}
-                                    alt={drawing.name}
-                                    className="block max-w-none rounded-sm shadow-lg"
+                                    src={imageUrl || ''}
+                                    alt={displayName}
+                                    className="block rounded-sm shadow-lg"
+                                    style={baseImageSize ? {
+                                        width: baseImageSize.width * pdfScale,
+                                        height: baseImageSize.height * pdfScale,
+                                    } : undefined}
+                                    onLoad={(e) => {
+                                        const img = e.currentTarget;
+                                        setBaseImageSize({
+                                            width: img.naturalWidth,
+                                            height: img.naturalHeight,
+                                        });
+                                    }}
                                 />
-                                {showCompareOverlay && candidateRevision?.file_url && !candidateIsPdf && (
+                                {showCompareOverlay && candidatePdfUrl && !candidateIsPdf && baseImageSize && (
                                     <img
-                                        src={candidateRevision.file_url}
-                                        alt={`Rev ${candidateRevision.revision_number || '?'} overlay`}
-                                        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                                        ref={candidateImageRef}
+                                        src={candidatePdfUrl}
+                                        alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
+                                        className="pointer-events-none absolute left-0 top-0"
                                         style={{
+                                            width: baseImageSize.width * pdfScale,
+                                            height: baseImageSize.height * pdfScale,
                                             opacity: diffOverlay.state.showDiff ? 0 : overlayOpacity / 100,
                                             transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                             transformOrigin: 'top left',
                                         }}
-                                        onError={() => toast.error('Failed to load comparison revision')}
+                                        onLoad={() => setCandidateImageLoaded(true)}
+                                        onError={() => {
+                                            setCandidateImageLoaded(false);
+                                            toast.error('Failed to load comparison revision');
+                                        }}
                                     />
                                 )}
-                                {showCompareOverlay && candidateRevision?.file_url && candidateIsPdf && (
+                                {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
                                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
-                                        <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">PDF overlay not supported</span>
+                                        <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">PDF overlay not supported in image mode</span>
                                     </div>
                                 )}
-                                {showCompareOverlay && !compareRevisionId && hasDiffImage && (
+                                {showCompareOverlay && !compareRevisionId && hasDiffImage && baseImageSize && (
                                     <img
                                         src={drawing.diff_image_url!}
                                         alt="Changes overlay"
-                                        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                                        className="pointer-events-none absolute left-0 top-0"
                                         style={{
+                                            width: baseImageSize.width * pdfScale,
+                                            height: baseImageSize.height * pdfScale,
                                             opacity: overlayOpacity / 100,
                                             mixBlendMode: 'multiply',
                                         }}
@@ -1302,33 +1638,45 @@ export default function QaStageDrawingShow() {
                                             !
                                         </button>
                                     ))}
-                                {(alignmentTool.isAligning || alignmentTool.isAligned) && (
-                                    <MarkersLayer points={alignmentTool.points} state={alignmentTool.state} containerWidth={100} containerHeight={100} />
+                                {(alignmentTool.isAligning || alignmentTool.isAligned) && baseImageSize && (
+                                    <MarkersLayer
+                                        points={alignmentTool.points}
+                                        state={alignmentTool.state}
+                                        containerWidth={baseImageSize.width * pdfScale}
+                                        containerHeight={baseImageSize.height * pdfScale}
+                                    />
                                 )}
-                                {showCompareOverlay && (
-                                    <DiffOverlayCanvas diffCanvas={diffOverlay.diffCanvas} visible={diffOverlay.state.showDiff} opacity={0.8} />
+                                {showCompareOverlay && baseImageSize && (
+                                    <DiffOverlayCanvas
+                                        diffCanvas={diffOverlay.diffCanvas}
+                                        visible={diffOverlay.state.showDiff}
+                                        opacity={0.8}
+                                        displayWidth={baseImageSize.width * pdfScale}
+                                        displayHeight={baseImageSize.height * pdfScale}
+                                    />
                                 )}
                             </div>
                         )}
                     </div>
 
-                    {/* Magnifier lens */}
-                    {alignmentTool.isAligning && (
-                        <MagnifierLens
-                            active={alignmentTool.isAligning}
-                            sourceElement={
-                                alignmentTool.activeLayer === 'candidate'
-                                    ? candidateCanvasRef.current
-                                    : isPdf
-                                      ? baseCanvasRef.current
-                                      : baseImageRef.current
-                            }
-                            containerElement={containerRef.current}
-                            magnification={3}
-                            size={120}
-                            borderColor={alignmentTool.activeLayer === 'base' ? 'blue' : 'green'}
-                        />
-                    )}
+                        {/* Magnifier lens */}
+                        {alignmentTool.isAligning && (
+                            <MagnifierLens
+                                active={alignmentTool.isAligning}
+                                sourceElement={
+                                    alignmentTool.activeLayer === 'candidate'
+                                        ? candidateCanvasRef.current
+                                        : isPdf
+                                          ? baseCanvasRef.current
+                                          : baseImageRef.current
+                                }
+                                containerElement={containerRef.current}
+                                magnification={3}
+                                size={120}
+                                borderColor={alignmentTool.activeLayer === 'base' ? 'blue' : 'green'}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
 

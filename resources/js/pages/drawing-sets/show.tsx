@@ -9,8 +9,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
-import { AlertCircle, Check, CheckCircle, Clock, Edit2, Loader2, RefreshCw, Save, XCircle } from 'lucide-react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Loader2, RefreshCw, Save, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -338,6 +338,12 @@ export default function DrawingSetShow() {
                                     </Button>
                                     <Button variant="outline" size="sm" onClick={() => setDrawingTemplate(true)}>
                                         Draw Template
+                                    </Button>
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={`/qa-stage-drawings/${selectedSheet.id}`}>
+                                            <ExternalLink className="mr-2 h-4 w-4" />
+                                            View Full
+                                        </Link>
                                     </Button>
                                 </div>
                             </CardHeader>

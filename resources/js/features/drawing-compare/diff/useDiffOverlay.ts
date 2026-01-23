@@ -104,15 +104,8 @@ export function useDiffOverlay(
             return;
         }
 
-        if (!isAligned || !cssTransform) {
-            setState(prev => ({
-                ...prev,
-                isComputing: false,
-                error: null,
-                diffResult: null,
-            }));
-            return;
-        }
+        // If not aligned, use identity transform (no transformation)
+        const effectiveTransform = (isAligned && cssTransform) ? cssTransform : 'translate(0%, 0%) rotate(0deg) scale(1)';
 
         const computeId = ++computeIdRef.current;
 
@@ -129,7 +122,7 @@ export function useDiffOverlay(
                 // Render the candidate with transform applied to match base dimensions
                 const transformedCandidate = renderTransformedCanvas(
                     candidateCanvas,
-                    cssTransform,
+                    effectiveTransform,
                     baseCanvas.width,
                     baseCanvas.height
                 );
@@ -225,19 +218,19 @@ export function useDiffOverlay(
         setState(prev => ({ ...prev, sensitivity: value }));
     }, []);
 
-    // Recompute when showDiff is enabled
+    // Recompute when showDiff is enabled (works with or without alignment)
     useEffect(() => {
-        if (state.showDiff && isAligned) {
+        if (state.showDiff) {
             computeDiff();
         }
-    }, [state.showDiff, isAligned, computeDiff]);
+    }, [state.showDiff, computeDiff]);
 
     // Recompute (debounced) when sensitivity changes
     useEffect(() => {
-        if (state.showDiff && isAligned) {
+        if (state.showDiff) {
             debouncedRecompute();
         }
-    }, [state.sensitivity, debouncedRecompute, state.showDiff, isAligned]);
+    }, [state.sensitivity, debouncedRecompute, state.showDiff]);
 
     // Recompute when alignment/transform changes
     useEffect(() => {
@@ -248,10 +241,10 @@ export function useDiffOverlay(
 
     // Recompute when zoom scale changes (canvas dimensions change)
     useEffect(() => {
-        if (state.showDiff && isAligned) {
+        if (state.showDiff) {
             debouncedRecompute();
         }
-    }, [opts.scale, debouncedRecompute, state.showDiff, isAligned]);
+    }, [opts.scale, debouncedRecompute, state.showDiff]);
 
     // Cleanup
     useEffect(() => {

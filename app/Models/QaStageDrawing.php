@@ -70,7 +70,7 @@ class QaStageDrawing extends Model
         'extracted_at' => 'datetime',
     ];
 
-    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages'];
+    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages', 'pdf_url', 'is_drawing_set_sheet'];
 
     // Workflow status constants
     const STATUS_DRAFT = 'draft';
@@ -174,11 +174,52 @@ class QaStageDrawing extends Model
             return $this->drawingFile->file_url;
         }
 
+        // For drawing set sheets, use the S3 page preview
+        if ($this->drawing_set_id && $this->page_preview_s3_key) {
+            return route('drawing-sheets.preview', ['sheet' => $this->id]);
+        }
+
         // Fallback to legacy file_path
         if (!$this->file_path) {
             return null;
         }
         return '/storage/' . $this->file_path;
+    }
+
+    /**
+     * Get the PDF URL for this drawing.
+     * For drawing sets, returns the streaming endpoint that proxies from S3.
+     * For other drawings, returns the file_url if it's a PDF.
+     */
+    public function getPdfUrlAttribute(): ?string
+    {
+        // For drawing set sheets, return the streaming PDF endpoint (avoids CORS issues)
+        if ($this->drawing_set_id && $this->drawingSet) {
+            return route('drawing-sets.pdf', ['drawingSet' => $this->drawing_set_id]);
+        }
+
+        // For DrawingFile-based drawings, check if it's a PDF
+        if ($this->drawing_file_id && $this->drawingFile) {
+            if (str_contains($this->drawingFile->mime_type ?? '', 'pdf')) {
+                return $this->drawingFile->file_url;
+            }
+            return null;
+        }
+
+        // For legacy file_path, check if it's a PDF
+        if ($this->file_path && str_contains($this->file_type ?? '', 'pdf')) {
+            return '/storage/' . $this->file_path;
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if this drawing is from a drawing set (needs special PDF URL handling).
+     */
+    public function getIsDrawingSetSheetAttribute(): bool
+    {
+        return $this->drawing_set_id !== null;
     }
 
     /**
