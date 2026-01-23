@@ -45,7 +45,11 @@
       "Bash(more:*)",
       "Bash(Get-Content -Path \"storage\\\\logs\\\\laravel.log\" -Tail 100)",
       "Bash(git pull:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(\"C:\\\\poppler\\\\poppler-24.08.0\\\\Library\\\\bin\\\\pdftoppm.exe\" -v)",
+      "Bash(\"C:\\\\poppler\\\\poppler-24.08.0\\\\Library\\\\bin\\\\pdfinfo.exe\" --help)",
+      "Bash(if not exist \"C:\\\\php-8.3\\\\extras\\\\ssl\" mkdir \"C:\\\\php-8.3\\\\extras\\\\ssl\")",
+      "Bash(del:*)"
     ]
   }
 }

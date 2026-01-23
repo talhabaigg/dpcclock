@@ -15,6 +15,7 @@ class QaStageDrawing extends Model
         'qa_stage_id',
         'drawing_sheet_id',
         'drawing_file_id',
+        'drawing_set_id',
         'page_number',
         'page_label',
         'name',
@@ -33,6 +34,23 @@ class QaStageDrawing extends Model
         'page_dimensions',
         'diff_image_path',
         'previous_revision_id',
+        // Textract extraction fields
+        'page_preview_s3_key',
+        'page_width_px',
+        'page_height_px',
+        'page_orientation',
+        'size_bucket',
+        'drawing_number',
+        'drawing_title',
+        'revision',
+        'extraction_status',
+        'confidence_number',
+        'confidence_title',
+        'confidence_revision',
+        'used_template_id',
+        'extraction_raw',
+        'extraction_errors',
+        'extracted_at',
         'created_by',
         'updated_by',
     ];
@@ -42,16 +60,32 @@ class QaStageDrawing extends Model
         'ai_extracted_metadata' => 'array',
         'page_dimensions' => 'array',
         'page_number' => 'integer',
+        'page_width_px' => 'integer',
+        'page_height_px' => 'integer',
+        'extraction_raw' => 'array',
+        'extraction_errors' => 'array',
+        'confidence_number' => 'float',
+        'confidence_title' => 'float',
+        'confidence_revision' => 'float',
+        'extracted_at' => 'datetime',
     ];
 
     protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages'];
 
+    // Workflow status constants
     const STATUS_DRAFT = 'draft';
     const STATUS_PROCESSING = 'processing';
     const STATUS_PENDING_REVIEW = 'pending_review';
     const STATUS_ACTIVE = 'active';
     const STATUS_SUPERSEDED = 'superseded';
     const STATUS_ARCHIVED = 'archived';
+
+    // Extraction status constants
+    const EXTRACTION_QUEUED = 'queued';
+    const EXTRACTION_PROCESSING = 'processing';
+    const EXTRACTION_SUCCESS = 'success';
+    const EXTRACTION_NEEDS_REVIEW = 'needs_review';
+    const EXTRACTION_FAILED = 'failed';
 
     protected static function booted()
     {
@@ -85,6 +119,22 @@ class QaStageDrawing extends Model
     public function drawingFile()
     {
         return $this->belongsTo(DrawingFile::class, 'drawing_file_id');
+    }
+
+    /**
+     * The drawing set (PDF upload) this sheet belongs to.
+     */
+    public function drawingSet()
+    {
+        return $this->belongsTo(DrawingSet::class, 'drawing_set_id');
+    }
+
+    /**
+     * The title block template used for successful extraction.
+     */
+    public function usedTemplate()
+    {
+        return $this->belongsTo(TitleBlockTemplate::class, 'used_template_id');
     }
 
     public function observations()
@@ -136,11 +186,34 @@ class QaStageDrawing extends Model
      */
     public function getDisplayNameAttribute(): string
     {
-        $totalPages = $this->total_pages;
-        if ($totalPages > 1) {
-            return $this->page_label ?? "{$this->name} — Page {$this->page_number}";
+        // Use page_label if set
+        if ($this->page_label) {
+            return $this->page_label;
         }
-        return $this->page_label ?? $this->name;
+
+        // For drawing set sheets, use drawing number + title if available
+        if ($this->drawing_set_id) {
+            $parts = [];
+            if ($this->drawing_number) {
+                $parts[] = $this->drawing_number;
+            }
+            if ($this->drawing_title) {
+                $parts[] = $this->drawing_title;
+            }
+            if (!empty($parts)) {
+                return implode(' - ', $parts);
+            }
+            // Fallback to page number
+            return 'Page ' . ($this->page_number ?? '?');
+        }
+
+        // Legacy: use name with page number
+        $totalPages = $this->total_pages;
+        $baseName = $this->name ?? 'Drawing';
+        if ($totalPages > 1) {
+            return "{$baseName} — Page {$this->page_number}";
+        }
+        return $baseName;
     }
 
     /**
@@ -198,6 +271,21 @@ class QaStageDrawing extends Model
         return $query->where('status', '!=', self::STATUS_ARCHIVED);
     }
 
+    public function scopeExtractionQueued($query)
+    {
+        return $query->where('extraction_status', self::EXTRACTION_QUEUED);
+    }
+
+    public function scopeExtractionNeedsReview($query)
+    {
+        return $query->where('extraction_status', self::EXTRACTION_NEEDS_REVIEW);
+    }
+
+    public function scopeExtractionSuccess($query)
+    {
+        return $query->where('extraction_status', self::EXTRACTION_SUCCESS);
+    }
+
     // Methods
 
     /**
@@ -249,5 +337,48 @@ class QaStageDrawing extends Model
 
         $this->status = self::STATUS_ACTIVE;
         $this->save();
+    }
+
+    /**
+     * Get the page preview URL from S3 key.
+     */
+    public function getPagePreviewUrlAttribute(): ?string
+    {
+        if (!$this->page_preview_s3_key) {
+            return $this->thumbnail_url;
+        }
+        return '/storage/' . $this->page_preview_s3_key;
+    }
+
+    /**
+     * Check if extraction needs review.
+     */
+    public function needsExtractionReview(): bool
+    {
+        return $this->extraction_status === self::EXTRACTION_NEEDS_REVIEW;
+    }
+
+    /**
+     * Check if extraction was successful.
+     */
+    public function extractionSuccessful(): bool
+    {
+        return $this->extraction_status === self::EXTRACTION_SUCCESS;
+    }
+
+    /**
+     * Calculate the size bucket from page dimensions.
+     */
+    public static function calculateSizeBucket(int $width, int $height): string
+    {
+        return TitleBlockTemplate::createSizeBucket($width, $height);
+    }
+
+    /**
+     * Determine page orientation from dimensions.
+     */
+    public static function determineOrientation(int $width, int $height): string
+    {
+        return $width >= $height ? 'landscape' : 'portrait';
     }
 }

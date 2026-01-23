@@ -39,4 +39,15 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
     ],
 
+    'textract' => [
+        'key' => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        'region' => env('AWS_TEXTRACT_REGION', env('AWS_DEFAULT_REGION', 'ap-southeast-2')),
+        // Confidence thresholds for validation (0.0 to 1.0)
+        // Lower thresholds work better with template-based extraction
+        'confidence_number' => env('TEXTRACT_CONFIDENCE_NUMBER', 0.45),
+        'confidence_title' => env('TEXTRACT_CONFIDENCE_TITLE', 0.35),
+        'confidence_revision' => env('TEXTRACT_CONFIDENCE_REVISION', 0.45),
+    ],
+
 ];

@@ -22,6 +22,8 @@ use App\Http\Controllers\VariationController;
 use App\Http\Controllers\QaStageController;
 use App\Http\Controllers\QaStageDrawingController;
 use App\Http\Controllers\QaStageDrawingObservationController;
+use App\Http\Controllers\DrawingSetController;
+use App\Http\Controllers\TitleBlockTemplateController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -479,6 +481,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:qa-drawings.view');
     Route::delete('/qa-stage-drawings/{drawing}/alignment/{candidateDrawing}', [QaStageDrawingController::class, 'deleteAlignment'])->name('qa-stage-drawings.alignment.delete')
         ->middleware('permission:qa-drawings.view');
+
+    // ============================================
+    // DRAWING SETS (PDF Upload & Textract Extraction)
+    // ============================================
+    Route::middleware('permission:qa-drawings.view')->group(function () {
+        Route::get('/projects/{project}/drawing-sets', [DrawingSetController::class, 'index'])->name('drawing-sets.index');
+        Route::get('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'show'])->name('drawing-sets.show');
+        Route::get('/drawing-sheets/{sheet}/preview', [DrawingSetController::class, 'sheetPreview'])->name('drawing-sheets.preview');
+    });
+    Route::middleware('permission:qa-drawings.create')->group(function () {
+        Route::post('/projects/{project}/drawing-sets', [DrawingSetController::class, 'store'])->name('drawing-sets.store');
+        Route::patch('/drawing-sheets/{sheet}', [DrawingSetController::class, 'updateSheet'])->name('drawing-sheets.update');
+        Route::post('/drawing-sheets/{sheet}/retry', [DrawingSetController::class, 'retryExtraction'])->name('drawing-sheets.retry');
+        Route::post('/drawing-sets/{drawingSet}/retry-all', [DrawingSetController::class, 'retryAllExtraction'])->name('drawing-sets.retry-all');
+        Route::post('/drawing-sheets/{sheet}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawing-sheets.create-template');
+    });
+    Route::delete('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'destroy'])->name('drawing-sets.destroy')
+        ->middleware('permission:qa-drawings.delete');
+
+    // Title Block Templates
+    Route::middleware('permission:qa-drawings.view')->group(function () {
+        Route::get('/projects/{project}/templates', [TitleBlockTemplateController::class, 'index'])->name('title-block-templates.index');
+        Route::post('/templates/{template}/test', [TitleBlockTemplateController::class, 'test'])->name('title-block-templates.test');
+    });
+    Route::middleware('permission:qa-drawings.create')->group(function () {
+        Route::post('/projects/{project}/templates', [TitleBlockTemplateController::class, 'store'])->name('title-block-templates.store');
+        Route::put('/templates/{template}', [TitleBlockTemplateController::class, 'update'])->name('title-block-templates.update');
+        Route::delete('/templates/{template}', [TitleBlockTemplateController::class, 'destroy'])->name('title-block-templates.destroy');
+    });
 
     // ============================================
     // REPORTS
