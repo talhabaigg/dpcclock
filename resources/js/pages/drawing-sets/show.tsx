@@ -134,6 +134,13 @@ export default function DrawingSetShow() {
         if (flash.error) toast.error(flash.error);
     }, [flash.success, flash.error]);
 
+    // Auto-select the first sheet when the page loads
+    useEffect(() => {
+        if (!selectedSheet && drawingSet.sheets.length > 0) {
+            setSelectedSheet(drawingSet.sheets[0]);
+        }
+    }, [drawingSet.sheets]);
+
     const filteredSheets = drawingSet.sheets.filter((sheet) => {
         if (activeTab === 'all') return true;
         return sheet.extraction_status === activeTab;

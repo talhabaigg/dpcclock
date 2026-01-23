@@ -88,6 +88,15 @@ class DrawingSet extends Model
     }
 
     /**
+     * The first sheet (page 1) for thumbnail preview.
+     */
+    public function firstSheet()
+    {
+        return $this->hasOne(QaStageDrawing::class, 'drawing_set_id')
+            ->where('page_number', 1);
+    }
+
+    /**
      * Sheets that need review.
      */
     public function sheetsNeedingReview()

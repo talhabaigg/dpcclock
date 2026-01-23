@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Events\DrawingSetProcessingUpdated;
 use App\Models\DrawingSet;
 use App\Models\QaStageDrawing;
 use App\Models\TitleBlockTemplate;
@@ -44,6 +45,9 @@ class ProcessDrawingSetJob implements ShouldQueue
 
         $drawingSet->update(['status' => DrawingSet::STATUS_PROCESSING]);
 
+        // Broadcast that processing has started
+        $this->broadcastProgress($drawingSet, 'Processing started');
+
         try {
             // Download PDF from S3 to temp location
             $pdfContent = Storage::disk('s3')->get($drawingSet->original_pdf_s3_key);
@@ -85,6 +89,9 @@ class ProcessDrawingSetJob implements ShouldQueue
 
             // Update drawing set status
             $drawingSet->updateStatusFromSheets();
+
+            // Broadcast final status
+            $this->broadcastProgress($drawingSet->fresh(), 'Processing complete');
 
         } catch (\Exception $e) {
             Log::error('Failed to process drawing set', [
@@ -142,9 +149,24 @@ class ProcessDrawingSetJob implements ShouldQueue
                 'ContentType' => 'image/png',
             ]);
 
+            // Generate and upload thumbnail (small JPEG for list views)
+            $thumbnailS3Key = null;
+            $thumbnailPath = $this->generateThumbnail($pngPath, $tempOutputDir, $pageNumber);
+            if ($thumbnailPath && file_exists($thumbnailPath)) {
+                $thumbnailS3Key = 'drawing-thumbnails/' . $drawingSet->project_id . '/' .
+                         $drawingSet->id . '/thumb_' . str_pad($pageNumber, 4, '0', STR_PAD_LEFT) . '.jpg';
+
+                Storage::disk('s3')->put($thumbnailS3Key, file_get_contents($thumbnailPath), [
+                    'ContentType' => 'image/jpeg',
+                ]);
+
+                unlink($thumbnailPath);
+            }
+
             // Update sheet record
             $sheet->update([
                 'page_preview_s3_key' => $s3Key,
+                'thumbnail_s3_key' => $thumbnailS3Key,
                 'page_width_px' => $width,
                 'page_height_px' => $height,
                 'page_orientation' => $orientation,
@@ -364,6 +386,126 @@ class ProcessDrawingSetJob implements ShouldQueue
     }
 
     /**
+     * Generate a small thumbnail from the full-size PNG.
+     * Creates a ~300px wide JPEG for fast loading in list views.
+     */
+    private function generateThumbnail(string $pngPath, string $outputDir, int $pageNumber): ?string
+    {
+        $thumbnailPath = $outputDir . '/thumb_' . $pageNumber . '.jpg';
+        $targetWidth = 300;
+
+        try {
+            // Try ImageMagick convert command first (most memory efficient for large images)
+            $result = $this->tryImageMagickThumbnail($pngPath, $thumbnailPath, $targetWidth);
+            if ($result) {
+                return $thumbnailPath;
+            }
+
+            // Fallback to Imagick PHP extension
+            if (extension_loaded('imagick')) {
+                $imagick = new \Imagick($pngPath);
+                $imagick->thumbnailImage($targetWidth, 0); // 0 = proportional height
+                $imagick->setImageFormat('jpeg');
+                $imagick->setImageCompressionQuality(80);
+                $imagick->writeImage($thumbnailPath);
+                $imagick->clear();
+                $imagick->destroy();
+
+                if (file_exists($thumbnailPath)) {
+                    return $thumbnailPath;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to generate thumbnail', [
+                'error' => $e->getMessage(),
+                'page' => $pageNumber,
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Generate thumbnail using ImageMagick command line (memory efficient).
+     */
+    private function tryImageMagickThumbnail(string $sourcePath, string $outputPath, int $width): bool
+    {
+        // Check if magick command is available
+        $checkResult = Process::run(PHP_OS_FAMILY === 'Windows' ? 'where magick 2>nul' : 'which convert 2>/dev/null');
+        if (!$checkResult->successful()) {
+            return false;
+        }
+
+        // Use magick on Windows, convert on Linux/Mac
+        $cmd = PHP_OS_FAMILY === 'Windows' ? 'magick' : 'convert';
+
+        // Resize to width, auto height, output as JPEG with quality 80
+        $command = sprintf(
+            '%s %s -thumbnail %dx -quality 80 %s',
+            $cmd,
+            escapeshellarg($sourcePath),
+            $width,
+            escapeshellarg($outputPath)
+        );
+
+        $result = Process::timeout(60)->run($command);
+
+        return $result->successful() && file_exists($outputPath);
+    }
+
+    /**
+     * Broadcast processing progress for real-time UI updates.
+     */
+    private function broadcastProgress(DrawingSet $drawingSet, string $message = ''): void
+    {
+        try {
+            // Calculate stats for the drawing set
+            $stats = [
+                'total' => $drawingSet->page_count,
+                'queued' => $drawingSet->sheets()->where('extraction_status', 'queued')->count(),
+                'processing' => $drawingSet->sheets()->where('extraction_status', 'processing')->count(),
+                'success' => $drawingSet->sheets()->where('extraction_status', 'success')->count(),
+                'needs_review' => $drawingSet->sheets()->where('extraction_status', 'needs_review')->count(),
+                'failed' => $drawingSet->sheets()->where('extraction_status', 'failed')->count(),
+            ];
+
+            // Get thumbnail URL from first sheet if available
+            $thumbnailUrl = null;
+            $firstSheet = $drawingSet->sheets()->where('page_number', 1)->first();
+            if ($firstSheet && $firstSheet->thumbnail_s3_key) {
+                $thumbnailUrl = "/drawing-sheets/{$firstSheet->id}/thumbnail";
+            }
+
+            event(new DrawingSetProcessingUpdated(
+                projectId: $drawingSet->project_id,
+                drawingSetId: $drawingSet->id,
+                status: $drawingSet->status,
+                sheetId: null,
+                pageNumber: null,
+                extractionStatus: null,
+                drawingNumber: null,
+                drawingTitle: null,
+                revision: null,
+                stats: $stats,
+                thumbnailUrl: $thumbnailUrl
+            ));
+
+            Log::info('Broadcast drawing set progress', [
+                'drawing_set_id' => $drawingSet->id,
+                'status' => $drawingSet->status,
+                'message' => $message,
+                'stats' => $stats,
+            ]);
+        } catch (\Exception $e) {
+            // Don't fail the job if broadcasting fails
+            Log::warning('Failed to broadcast drawing set progress', [
+                'drawing_set_id' => $drawingSet->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Handle job failure.
      */
     public function failed(\Throwable $exception): void
@@ -382,6 +524,9 @@ class ProcessDrawingSetJob implements ShouldQueue
                     'failed_at' => now()->toIso8601String(),
                 ],
             ]);
+
+            // Broadcast failure status
+            $this->broadcastProgress($drawingSet->fresh(), 'Processing failed');
         }
     }
 }

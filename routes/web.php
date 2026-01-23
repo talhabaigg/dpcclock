@@ -491,6 +491,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'show'])->name('drawing-sets.show');
         Route::get('/drawing-sets/{drawingSet}/pdf', [DrawingSetController::class, 'servePdf'])->name('drawing-sets.pdf');
         Route::get('/drawing-sheets/{sheet}/preview', [DrawingSetController::class, 'sheetPreview'])->name('drawing-sheets.preview');
+        Route::get('/drawing-sheets/{sheet}/thumbnail', [DrawingSetController::class, 'sheetThumbnail'])->name('drawing-sheets.thumbnail');
     });
     Route::middleware('permission:qa-drawings.create')->group(function () {
         Route::post('/projects/{project}/drawing-sets', [DrawingSetController::class, 'store'])->name('drawing-sets.store');

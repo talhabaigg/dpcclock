@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Events\DrawingSetProcessingUpdated;
 use App\Models\DrawingSheet;
 use App\Models\QaStageDrawing;
 use App\Models\TitleBlockTemplate;
@@ -437,6 +438,63 @@ class ExtractSheetMetadataJob implements ShouldQueue
         // Update drawing set status if applicable
         if ($sheet->drawingSet) {
             $sheet->drawingSet->updateStatusFromSheets();
+            $drawingSet = $sheet->drawingSet->fresh();
+
+            // Broadcast real-time update
+            $this->broadcastProgress($sheet, $drawingSet, $updateData);
+        }
+    }
+
+    /**
+     * Broadcast extraction progress for real-time UI updates.
+     */
+    private function broadcastProgress(QaStageDrawing $sheet, $drawingSet, array $updateData): void
+    {
+        try {
+            // Calculate stats for the drawing set
+            $stats = [
+                'total' => $drawingSet->page_count,
+                'queued' => $drawingSet->sheets()->where('extraction_status', 'queued')->count(),
+                'processing' => $drawingSet->sheets()->where('extraction_status', 'processing')->count(),
+                'success' => $drawingSet->sheets()->where('extraction_status', 'success')->count(),
+                'needs_review' => $drawingSet->sheets()->where('extraction_status', 'needs_review')->count(),
+                'failed' => $drawingSet->sheets()->where('extraction_status', 'failed')->count(),
+            ];
+
+            // Get thumbnail URL from first sheet if available
+            $thumbnailUrl = null;
+            $firstSheet = $drawingSet->sheets()->where('page_number', 1)->first();
+            if ($firstSheet && $firstSheet->thumbnail_s3_key) {
+                $thumbnailUrl = "/drawing-sheets/{$firstSheet->id}/thumbnail";
+            }
+
+            Log::info('Broadcasting extraction progress', [
+                'drawing_set_id' => $drawingSet->id,
+                'sheet_id' => $sheet->id,
+                'status' => $drawingSet->status,
+                'stats' => $stats,
+                'thumbnail_url' => $thumbnailUrl,
+            ]);
+
+            event(new DrawingSetProcessingUpdated(
+                projectId: $drawingSet->project_id,
+                drawingSetId: $drawingSet->id,
+                status: $drawingSet->status,
+                sheetId: $sheet->id,
+                pageNumber: $sheet->page_number,
+                extractionStatus: $updateData['extraction_status'] ?? null,
+                drawingNumber: $updateData['drawing_number'] ?? null,
+                drawingTitle: $updateData['drawing_title'] ?? null,
+                revision: $updateData['revision'] ?? null,
+                stats: $stats,
+                thumbnailUrl: $thumbnailUrl
+            ));
+        } catch (\Exception $e) {
+            // Don't fail the job if broadcasting fails
+            Log::warning('Failed to broadcast extraction progress', [
+                'sheet_id' => $sheet->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -523,7 +581,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'error' => $exception->getMessage(),
         ]);
 
-        $sheet = QaStageDrawing::find($this->sheetId);
+        $sheet = QaStageDrawing::with('drawingSet')->find($this->sheetId);
         if ($sheet) {
             $sheet->update([
                 'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
@@ -535,6 +593,15 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
             if ($sheet->drawingSet) {
                 $sheet->drawingSet->updateStatusFromSheets();
+                $drawingSet = $sheet->drawingSet->fresh();
+
+                // Broadcast failure status
+                $this->broadcastProgress($sheet, $drawingSet, [
+                    'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
+                    'drawing_number' => $sheet->drawing_number,
+                    'drawing_title' => $sheet->drawing_title,
+                    'revision' => $sheet->revision,
+                ]);
             }
         }
     }

@@ -22,7 +22,10 @@ class DrawingSetController extends Controller
     public function index(Request $request, Location $project): Response
     {
         $drawingSets = DrawingSet::where('project_id', $project->id)
-            ->with(['createdBy:id,name'])
+            ->with([
+                'createdBy:id,name',
+                'firstSheet:id,drawing_set_id,thumbnail_s3_key',
+            ])
             ->withCount([
                 'sheets',
                 'sheetsNeedingReview',
@@ -30,6 +33,16 @@ class DrawingSetController extends Controller
             ])
             ->orderByDesc('created_at')
             ->paginate(20);
+
+        // Add thumbnail URL for each drawing set
+        $drawingSets->getCollection()->transform(function ($drawingSet) {
+            if ($drawingSet->firstSheet && $drawingSet->firstSheet->thumbnail_s3_key) {
+                $drawingSet->thumbnail_url = "/drawing-sheets/{$drawingSet->firstSheet->id}/thumbnail";
+            } else {
+                $drawingSet->thumbnail_url = null;
+            }
+            return $drawingSet;
+        });
 
         return Inertia::render('drawing-sets/index', [
             'project' => $project,
@@ -172,6 +185,14 @@ class DrawingSetController extends Controller
 
             // Dispatch processing job
             ProcessDrawingSetJob::dispatch($drawingSet->id);
+
+            // Load relationships and counts for the response
+            $drawingSet->load('createdBy:id,name');
+            $drawingSet->loadCount([
+                'sheets',
+                'sheetsNeedingReview',
+                'successfulSheets',
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -445,6 +466,32 @@ class DrawingSetController extends Controller
         // Generate a temporary URL (valid for 5 minutes)
         $url = Storage::disk('s3')->temporaryUrl(
             $sheet->page_preview_s3_key,
+            now()->addMinutes(5)
+        );
+
+        return redirect($url);
+    }
+
+    /**
+     * Serve a drawing sheet thumbnail image from S3 (small JPEG for list views).
+     */
+    public function sheetThumbnail(QaStageDrawing $sheet)
+    {
+        if (!$sheet->thumbnail_s3_key) {
+            // Fall back to full preview if no thumbnail
+            if ($sheet->page_preview_s3_key) {
+                $url = Storage::disk('s3')->temporaryUrl(
+                    $sheet->page_preview_s3_key,
+                    now()->addMinutes(5)
+                );
+                return redirect($url);
+            }
+            abort(404, 'No thumbnail available');
+        }
+
+        // Generate a temporary URL (valid for 5 minutes)
+        $url = Storage::disk('s3')->temporaryUrl(
+            $sheet->thumbnail_s3_key,
             now()->addMinutes(5)
         );
 
