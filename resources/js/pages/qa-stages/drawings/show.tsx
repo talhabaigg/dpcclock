@@ -83,6 +83,7 @@ type Revision = {
     thumbnail_url?: string;
     diff_image_url?: string;
     // For drawing set sheets
+    page_number?: number;
     page_preview_s3_key?: string | null;
     page_preview_url?: string;
     drawing_number?: string | null;
@@ -288,12 +289,74 @@ export default function QaStageDrawingShow() {
     const diffCandidateCanvasRef = useRef<HTMLCanvasElement | null>(null);
     // Counter to force diff recomputation when offscreen canvases are created
     const [diffCanvasVersion, setDiffCanvasVersion] = useState(0);
+    // Counter that increments after PDF render completes - used to trigger diff recomputation
+    const [renderVersion, setRenderVersion] = useState(0);
+    // Track the last scale that was fully rendered (both base and candidate if applicable)
+    const lastRenderedScaleRef = useRef<number>(1);
+    // Track which canvases have rendered at the current scale
+    const baseRenderedAtScaleRef = useRef<number | null>(null);
+    const candidateRenderedAtScaleRef = useRef<number | null>(null);
+    // Timer for delayed diff recomputation after render
+    const renderCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Diff overlay - uses the unified canvas refs
+    // Use renderVersion instead of pdfScale to ensure diff recomputes after canvas is fully rendered
     const diffOverlay = useDiffOverlay(diffBaseCanvasRef, diffCandidateCanvasRef, alignmentTool.transform.cssTransform, alignmentTool.isAligned, {
-        debounceMs: 500,
-        scale: pdfScale,
+        debounceMs: 300,
+        scale: renderVersion, // This triggers recomputation when render completes
     });
+
+    // Helper to signal base canvas render complete
+    const signalBaseRenderComplete = useCallback((renderedScale: number) => {
+        baseRenderedAtScaleRef.current = renderedScale;
+
+        // Clear any pending timer
+        if (renderCompleteTimerRef.current) {
+            clearTimeout(renderCompleteTimerRef.current);
+        }
+
+        // Wait a bit for candidate canvas to also finish rendering
+        renderCompleteTimerRef.current = setTimeout(() => {
+            // Only increment renderVersion if we're at the current scale
+            if (Math.abs(renderedScale - pdfScale) < 0.001) {
+                lastRenderedScaleRef.current = renderedScale;
+                setRenderVersion((v) => v + 1);
+            }
+        }, 200); // Increased delay to allow candidate canvas to render
+    }, [pdfScale]);
+
+    // Helper to signal candidate canvas render complete
+    const signalCandidateRenderComplete = useCallback((renderedScale: number) => {
+        candidateRenderedAtScaleRef.current = renderedScale;
+
+        // Clear any pending timer
+        if (renderCompleteTimerRef.current) {
+            clearTimeout(renderCompleteTimerRef.current);
+        }
+
+        // Check if base has also rendered at this scale
+        const baseReady = baseRenderedAtScaleRef.current !== null &&
+            Math.abs(baseRenderedAtScaleRef.current - renderedScale) < 0.001;
+
+        if (baseReady && Math.abs(renderedScale - pdfScale) < 0.001) {
+            // Both canvases rendered at current scale - trigger diff after short delay
+            renderCompleteTimerRef.current = setTimeout(() => {
+                if (Math.abs(renderedScale - pdfScale) < 0.001) {
+                    lastRenderedScaleRef.current = renderedScale;
+                    setRenderVersion((v) => v + 1);
+                }
+            }, 100);
+        }
+    }, [pdfScale]);
+
+    // Cleanup render complete timer on unmount
+    useEffect(() => {
+        return () => {
+            if (renderCompleteTimerRef.current) {
+                clearTimeout(renderCompleteTimerRef.current);
+            }
+        };
+    }, []);
 
     // View mode: 'pan' for panning, 'select' for adding observations
     const [viewMode, setViewMode] = useState<'pan' | 'select'>('pan');
@@ -588,10 +651,14 @@ export default function QaStageDrawingShow() {
             await page.render({ canvasContext: context, viewport }).promise;
 
             setPageSizes(nextSizes);
+            // Signal that base render is complete
+            signalBaseRenderComplete(pdfScale);
         };
 
+        // Reset candidate rendered state when scale changes
+        candidateRenderedAtScaleRef.current = null;
         renderPage();
-    }, [pdfPageCount, pdfScale, targetPageNumber]);
+    }, [pdfPageCount, pdfScale, targetPageNumber, signalBaseRenderComplete]);
 
     // Create offscreen canvas from base image for diff computation (non-PDF only)
     useEffect(() => {
@@ -739,7 +806,9 @@ export default function QaStageDrawingShow() {
 
             const deviceScale = window.devicePixelRatio || 1;
 
-            const candidatePageNum = Math.min(targetPageNumber, candidatePdfRef.current.numPages);
+            // Use the candidate revision's page number if available, otherwise fall back to base page number
+            const candidateRevisionPageNum = candidateRevision?.page_number || targetPageNumber;
+            const candidatePageNum = Math.min(candidateRevisionPageNum, candidatePdfRef.current.numPages);
             const page = await candidatePdfRef.current.getPage(candidatePageNum);
             const viewport = page.getViewport({ scale: pdfScale * deviceScale });
             const context = canvas.getContext('2d');
@@ -751,10 +820,12 @@ export default function QaStageDrawingShow() {
             canvas.style.height = `${viewport.height / deviceScale}px`;
 
             await page.render({ canvasContext: context, viewport }).promise;
+            // Signal that candidate render is complete
+            signalCandidateRenderComplete(pdfScale);
         }, 50);
 
         return () => clearTimeout(timeoutId);
-    }, [candidatePdfLoaded, pdfScale, targetPageNumber, showCompareOverlay, candidateRenderKey]);
+    }, [candidatePdfLoaded, pdfScale, targetPageNumber, showCompareOverlay, candidateRenderKey, signalCandidateRenderComplete, candidateRevision]);
 
     useEffect(() => {
         if (!isPdf || hasUserPanned || !containerRef.current || Object.keys(pageSizes).length === 0) {

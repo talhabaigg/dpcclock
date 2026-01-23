@@ -104,6 +104,84 @@ export function useDiffOverlay(
             return;
         }
 
+        // Validate that both canvases have valid dimensions (are actually rendered)
+        if (baseCanvas.width === 0 || baseCanvas.height === 0) {
+            setState(prev => ({
+                ...prev,
+                isComputing: false,
+                error: 'Base canvas not ready',
+                diffResult: null,
+            }));
+            return;
+        }
+
+        if (candidateCanvas.width === 0 || candidateCanvas.height === 0) {
+            setState(prev => ({
+                ...prev,
+                isComputing: false,
+                error: 'Candidate canvas not ready',
+                diffResult: null,
+            }));
+            return;
+        }
+
+        // Check if canvases have actual content by sampling a few pixels
+        // An empty/blank canvas would have all transparent pixels
+        const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
+        const candidateCtx = candidateCanvas.getContext('2d', { willReadFrequently: true });
+
+        if (!baseCtx || !candidateCtx) {
+            setState(prev => ({
+                ...prev,
+                isComputing: false,
+                error: 'Could not get canvas contexts',
+                diffResult: null,
+            }));
+            return;
+        }
+
+        // Sample corner pixels to check if canvases have similar backgrounds
+        // PDFs typically have white backgrounds
+        const baseCorner = baseCtx.getImageData(5, 5, 1, 1).data;
+        const candidateCorner = candidateCtx.getImageData(5, 5, 1, 1).data;
+
+        // Log canvas dimensions and sample data for debugging
+        console.log('Diff computation: base canvas', baseCanvas.width, 'x', baseCanvas.height, 'corner:', Array.from(baseCorner));
+        console.log('Diff computation: candidate canvas', candidateCanvas.width, 'x', candidateCanvas.height, 'corner:', Array.from(candidateCorner));
+
+        // Check if canvases have content (non-transparent alpha)
+        const baseHasContent = baseCorner[3] > 0;
+        const candidateHasContent = candidateCorner[3] > 0;
+
+        if (!baseHasContent) {
+            console.warn('Diff computation: Base canvas appears empty (transparent)');
+            setState(prev => ({
+                ...prev,
+                isComputing: false,
+                error: 'Base canvas appears empty',
+                diffResult: null,
+            }));
+            return;
+        }
+
+        if (!candidateHasContent) {
+            console.warn('Diff computation: Candidate canvas appears empty (transparent)');
+            setState(prev => ({
+                ...prev,
+                isComputing: false,
+                error: 'Candidate canvas appears empty',
+                diffResult: null,
+            }));
+            return;
+        }
+
+        // Warn if canvas dimensions are significantly different
+        const widthRatio = baseCanvas.width / candidateCanvas.width;
+        const heightRatio = baseCanvas.height / candidateCanvas.height;
+        if (widthRatio < 0.9 || widthRatio > 1.1 || heightRatio < 0.9 || heightRatio > 1.1) {
+            console.warn('Diff computation: Canvas dimensions significantly different - base:', baseCanvas.width, 'x', baseCanvas.height, 'candidate:', candidateCanvas.width, 'x', candidateCanvas.height);
+        }
+
         // If not aligned, use identity transform (no transformation)
         const effectiveTransform = (isAligned && cssTransform) ? cssTransform : 'translate(0%, 0%) rotate(0deg) scale(1)';
 
@@ -240,11 +318,15 @@ export function useDiffOverlay(
     }, [cssTransform, isAligned, debouncedRecompute, state.showDiff]);
 
     // Recompute when zoom scale changes (canvas dimensions change)
+    // Clear existing diff immediately to avoid showing stale/mismatched overlay
     useEffect(() => {
         if (state.showDiff) {
+            // Clear the current diff result to prevent showing stale data during zoom
+            setState(prev => ({ ...prev, diffResult: null }));
             debouncedRecompute();
         }
-    }, [opts.scale, debouncedRecompute, state.showDiff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opts.scale]); // Only depend on scale, not on state.showDiff or debouncedRecompute to avoid loops
 
     // Cleanup
     useEffect(() => {
