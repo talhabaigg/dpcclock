@@ -74,4 +74,14 @@ class Location extends Model
     {
         return $this->hasMany(QaStage::class);
     }
+
+    public function drawingSheets()
+    {
+        return $this->hasMany(DrawingSheet::class, 'project_id');
+    }
+
+    public function drawingSets()
+    {
+        return $this->hasMany(DrawingSet::class, 'project_id');
+    }
 }

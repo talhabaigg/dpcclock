@@ -37,6 +37,7 @@ class TitleBlockTemplate extends Model
         'project_id',
         'name',
         'crop_rect',
+        'field_mappings',
         'orientation',
         'size_bucket',
         'anchor_labels',
@@ -48,6 +49,7 @@ class TitleBlockTemplate extends Model
 
     protected $casts = [
         'crop_rect' => 'array',
+        'field_mappings' => 'array',
         'anchor_labels' => 'array',
         'success_count' => 'integer',
         'last_used_at' => 'datetime',

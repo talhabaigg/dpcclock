@@ -173,6 +173,120 @@ class TitleBlockTemplateController extends Controller
     }
 
     /**
+     * Detect all text blocks within a sheet's cropped title block region.
+     * Used for the field mapping UI where users can select which text belongs to which field.
+     */
+    public function detectTextBlocks(Request $request, QaStageDrawing $sheet): JsonResponse
+    {
+        // Increase memory limit for large images (300 DPI drawings can be 200MB+ uncompressed)
+        ini_set('memory_limit', '1G');
+
+        $validated = $request->validate([
+            'crop_rect' => ['required', 'array'],
+            'crop_rect.x' => ['required', 'numeric', 'min:0', 'max:1'],
+            'crop_rect.y' => ['required', 'numeric', 'min:0', 'max:1'],
+            'crop_rect.w' => ['required', 'numeric', 'min:0.01', 'max:1'],
+            'crop_rect.h' => ['required', 'numeric', 'min:0.01', 'max:1'],
+        ]);
+
+        if (!$sheet->page_preview_s3_key) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sheet has no preview image.',
+            ], 422);
+        }
+
+        $textract = app(\App\Services\TextractService::class);
+        $cropService = app(\App\Services\ImageCropService::class);
+
+        // Crop image using provided crop rect
+        $croppedBytes = $cropService->cropImage(
+            $sheet->page_preview_s3_key,
+            $validated['crop_rect'],
+            's3'
+        );
+
+        if (!$croppedBytes) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to crop image.',
+            ], 500);
+        }
+
+        // Get image dimensions of the cropped region for coordinate mapping
+        $tempImage = imagecreatefromstring($croppedBytes);
+        $croppedWidth = imagesx($tempImage);
+        $croppedHeight = imagesy($tempImage);
+        imagedestroy($tempImage);
+
+        \Log::info('detectTextBlocks: Cropped image ready', [
+            'sheet_id' => $sheet->id,
+            'crop_rect' => $validated['crop_rect'],
+            'cropped_size' => strlen($croppedBytes),
+            'cropped_dimensions' => "{$croppedWidth}x{$croppedHeight}",
+        ]);
+
+        // Detect all text in the cropped region
+        $result = $textract->detectAllText($croppedBytes);
+
+        \Log::info('detectTextBlocks: Textract result', [
+            'success' => $result['success'],
+            'text_blocks_count' => count($result['text_blocks'] ?? []),
+            'error' => $result['error'] ?? null,
+        ]);
+
+        if (!$result['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Textract text detection failed: ' . ($result['error'] ?? 'Unknown error'),
+            ], 500);
+        }
+
+        // Convert bounding boxes from cropped-region-relative to full-crop-relative
+        // (The text blocks have coordinates relative to the cropped image, 0-1 normalized)
+        $textBlocks = $result['text_blocks'];
+
+        return response()->json([
+            'success' => true,
+            'text_blocks' => $textBlocks,
+            'crop_dimensions' => [
+                'width' => $croppedWidth,
+                'height' => $croppedHeight,
+            ],
+        ]);
+    }
+
+    /**
+     * Save field mappings to a template.
+     * Field mappings specify which text blocks correspond to which metadata fields.
+     */
+    public function saveFieldMappings(Request $request, TitleBlockTemplate $template): JsonResponse
+    {
+        $validated = $request->validate([
+            'field_mappings' => ['required', 'array'],
+            'field_mappings.drawing_number' => ['nullable', 'array'],
+            'field_mappings.drawing_number.text' => ['nullable', 'string'],
+            'field_mappings.drawing_number.boundingBox' => ['nullable', 'array'],
+            'field_mappings.drawing_title' => ['nullable', 'array'],
+            'field_mappings.drawing_title.text' => ['nullable', 'string'],
+            'field_mappings.drawing_title.boundingBox' => ['nullable', 'array'],
+            'field_mappings.revision' => ['nullable', 'array'],
+            'field_mappings.revision.text' => ['nullable', 'string'],
+            'field_mappings.revision.boundingBox' => ['nullable', 'array'],
+        ]);
+
+        $template->update([
+            'field_mappings' => $validated['field_mappings'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Field mappings saved successfully.',
+            'template' => $template->fresh(),
+        ]);
+    }
+
+    /**
      * Create a template from a sheet's successful extraction.
      */
     public function createFromSheet(Request $request, QaStageDrawing $sheet): JsonResponse

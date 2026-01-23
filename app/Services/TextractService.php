@@ -297,4 +297,295 @@ class TextractService
     {
         return self::QUERIES;
     }
+
+    /**
+     * Detect all text blocks in an image (for field mapping UI).
+     *
+     * Uses Textract's detectDocumentText to find all LINE blocks with their
+     * bounding boxes. This allows users to select which text corresponds to
+     * which field when the query-based extraction has low confidence.
+     *
+     * @param string $imageBytes Raw image data
+     * @return array{success: bool, text_blocks: array, error?: string}
+     */
+    public function detectAllText(string $imageBytes): array
+    {
+        try {
+            Log::info('Textract detectAllText called', [
+                'image_size' => strlen($imageBytes),
+            ]);
+
+            $result = $this->client->detectDocumentText([
+                'Document' => [
+                    'Bytes' => $imageBytes,
+                ],
+            ]);
+
+            $blocks = $result->get('Blocks') ?? [];
+            $textBlocks = [];
+
+            Log::info('Textract detectDocumentText response', [
+                'total_blocks' => count($blocks),
+                'block_types' => array_count_values(array_column($blocks, 'BlockType')),
+            ]);
+
+            foreach ($blocks as $block) {
+                // We want LINE blocks (full lines of text)
+                if ($block['BlockType'] !== 'LINE') {
+                    continue;
+                }
+
+                $text = trim($block['Text'] ?? '');
+                if ($text === '') {
+                    continue;
+                }
+
+                $geometry = $block['Geometry'] ?? null;
+                $boundingBox = null;
+
+                if ($geometry && isset($geometry['BoundingBox'])) {
+                    $bb = $geometry['BoundingBox'];
+                    $boundingBox = [
+                        'x' => $bb['Left'] ?? 0,
+                        'y' => $bb['Top'] ?? 0,
+                        'w' => $bb['Width'] ?? 0,
+                        'h' => $bb['Height'] ?? 0,
+                    ];
+                }
+
+                $textBlocks[] = [
+                    'id' => $block['Id'],
+                    'text' => $text,
+                    'confidence' => ($block['Confidence'] ?? 0) / 100,
+                    'boundingBox' => $boundingBox,
+                ];
+            }
+
+            // Sort by position (top to bottom, left to right)
+            usort($textBlocks, function ($a, $b) {
+                $aY = $a['boundingBox']['y'] ?? 0;
+                $bY = $b['boundingBox']['y'] ?? 0;
+                $yDiff = abs($aY - $bY);
+
+                // If on roughly the same line (within 2% vertical), sort by X
+                if ($yDiff < 0.02) {
+                    $aX = $a['boundingBox']['x'] ?? 0;
+                    $bX = $b['boundingBox']['x'] ?? 0;
+                    return $aX <=> $bX;
+                }
+
+                return $aY <=> $bY;
+            });
+
+            return [
+                'success' => true,
+                'text_blocks' => $textBlocks,
+            ];
+
+        } catch (AwsException $e) {
+            Log::error('Textract detectDocumentText failed', [
+                'error' => $e->getMessage(),
+                'code' => $e->getAwsErrorCode(),
+            ]);
+
+            return [
+                'success' => false,
+                'text_blocks' => [],
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Extract ALL text from a user-drawn field region.
+     *
+     * Unlike extractFromRegion which tries to pick the best text block,
+     * this method joins all text found in the region. This is appropriate
+     * when the user has drawn the exact area they want - we trust their selection.
+     *
+     * @param string $imageBytes Cropped image data (already cropped to field region)
+     * @return array{success: bool, text: string, confidence: float, error?: string}
+     */
+    public function extractAllTextFromRegion(string $imageBytes): array
+    {
+        try {
+            $result = $this->client->detectDocumentText([
+                'Document' => [
+                    'Bytes' => $imageBytes,
+                ],
+            ]);
+
+            $blocks = $result->get('Blocks') ?? [];
+            $textParts = [];
+            $totalConfidence = 0;
+            $count = 0;
+
+            // Sort blocks by position (top to bottom, left to right) for proper reading order
+            $lineBlocks = [];
+            foreach ($blocks as $block) {
+                if ($block['BlockType'] !== 'LINE') {
+                    continue;
+                }
+
+                $text = trim($block['Text'] ?? '');
+                if ($text === '') {
+                    continue;
+                }
+
+                $bb = $block['Geometry']['BoundingBox'] ?? null;
+                $lineBlocks[] = [
+                    'text' => $text,
+                    'confidence' => ($block['Confidence'] ?? 0) / 100,
+                    'y' => $bb['Top'] ?? 0,
+                    'x' => $bb['Left'] ?? 0,
+                ];
+            }
+
+            // Sort by Y position (top to bottom), then X (left to right)
+            usort($lineBlocks, function ($a, $b) {
+                $yDiff = abs($a['y'] - $b['y']);
+                if ($yDiff < 0.05) { // Same line (within 5% vertical)
+                    return $a['x'] <=> $b['x'];
+                }
+                return $a['y'] <=> $b['y'];
+            });
+
+            foreach ($lineBlocks as $block) {
+                $textParts[] = $block['text'];
+                $totalConfidence += $block['confidence'];
+                $count++;
+            }
+
+            $combinedText = implode(' ', $textParts);
+            $avgConfidence = $count > 0 ? $totalConfidence / $count : 0;
+
+            Log::info('extractAllTextFromRegion result', [
+                'line_count' => $count,
+                'text' => $combinedText,
+                'confidence' => $avgConfidence,
+            ]);
+
+            return [
+                'success' => true,
+                'text' => $combinedText,
+                'confidence' => $avgConfidence,
+            ];
+
+        } catch (AwsException $e) {
+            Log::error('extractAllTextFromRegion failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return [
+                'success' => false,
+                'text' => '',
+                'confidence' => 0,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Extract text from a specific region of an image.
+     *
+     * Used when field mappings are defined - the image bytes are already cropped
+     * to the padded field region. We detect text and return the most centrally
+     * located text block (since padding expands equally on all sides, the original
+     * mapped text should be near the center).
+     *
+     * @param string $imageBytes Cropped image data (already cropped to field region)
+     * @param array $region Normalized region info (for logging)
+     * @return array{success: bool, text: string, confidence: float, error?: string}
+     * @deprecated Use extractAllTextFromRegion instead for user-drawn regions
+     */
+    public function extractFromRegion(string $imageBytes, array $region): array
+    {
+        try {
+            $result = $this->client->detectDocumentText([
+                'Document' => [
+                    'Bytes' => $imageBytes,
+                ],
+            ]);
+
+            $blocks = $result->get('Blocks') ?? [];
+            $textBlocks = [];
+
+            foreach ($blocks as $block) {
+                if ($block['BlockType'] !== 'LINE') {
+                    continue;
+                }
+
+                $text = trim($block['Text'] ?? '');
+                if ($text === '') {
+                    continue;
+                }
+
+                $bb = $block['Geometry']['BoundingBox'] ?? null;
+                $centerX = 0.5;
+                $centerY = 0.5;
+
+                if ($bb) {
+                    $centerX = ($bb['Left'] ?? 0) + (($bb['Width'] ?? 0) / 2);
+                    $centerY = ($bb['Top'] ?? 0) + (($bb['Height'] ?? 0) / 2);
+                }
+
+                // Calculate distance from center of image (0.5, 0.5)
+                // The original mapped text should be closest to center after padding
+                $distFromCenter = sqrt(pow($centerX - 0.5, 2) + pow($centerY - 0.5, 2));
+
+                $textBlocks[] = [
+                    'text' => $text,
+                    'confidence' => ($block['Confidence'] ?? 0) / 100,
+                    'distFromCenter' => $distFromCenter,
+                    'centerX' => $centerX,
+                    'centerY' => $centerY,
+                ];
+            }
+
+            if (empty($textBlocks)) {
+                return [
+                    'success' => true,
+                    'text' => '',
+                    'confidence' => 0,
+                ];
+            }
+
+            // If only one text block, use it
+            if (count($textBlocks) === 1) {
+                return [
+                    'success' => true,
+                    'text' => $textBlocks[0]['text'],
+                    'confidence' => $textBlocks[0]['confidence'],
+                ];
+            }
+
+            // Multiple text blocks - pick the one closest to center
+            usort($textBlocks, fn($a, $b) => $a['distFromCenter'] <=> $b['distFromCenter']);
+
+            $selected = $textBlocks[0];
+
+            Log::info('extractFromRegion: Multiple text blocks found, selected most central', [
+                'total_blocks' => count($textBlocks),
+                'selected_text' => $selected['text'],
+                'selected_dist' => $selected['distFromCenter'],
+                'all_texts' => array_map(fn($b) => [
+                    'text' => $b['text'],
+                    'dist' => round($b['distFromCenter'], 3),
+                ], $textBlocks),
+            ]);
+
+            return [
+                'success' => true,
+                'text' => $selected['text'],
+                'confidence' => $selected['confidence'],
+            ];
+
+        } catch (AwsException $e) {
+            return [
+                'success' => false,
+                'text' => '',
+                'confidence' => 0,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
 }

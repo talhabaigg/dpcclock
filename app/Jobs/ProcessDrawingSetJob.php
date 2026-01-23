@@ -322,9 +322,25 @@ class ProcessDrawingSetJob implements ShouldQueue
      */
     private function tryImageMagick(string $pdfPath, int $pageNumber, string $outputPrefix): ?string
     {
-        // Check if convert is available
-        $checkResult = Process::run(PHP_OS_FAMILY === 'Windows' ? 'where magick 2>nul' : 'which convert 2>/dev/null');
-        if (!$checkResult->successful()) {
+        // Check if magick (ImageMagick 7) or convert (ImageMagick 6) is available
+        $isWindows = PHP_OS_FAMILY === 'Windows';
+        $magickCommand = null;
+
+        if ($isWindows) {
+            // On Windows, prefer magick (ImageMagick 7)
+            $checkResult = Process::run('where magick 2>nul');
+            if ($checkResult->successful()) {
+                $magickCommand = 'magick';
+            }
+        } else {
+            // On Unix, check for convert
+            $checkResult = Process::run('which convert 2>/dev/null');
+            if ($checkResult->successful()) {
+                $magickCommand = 'convert';
+            }
+        }
+
+        if (!$magickCommand) {
             return null;
         }
 
@@ -332,7 +348,8 @@ class ProcessDrawingSetJob implements ShouldQueue
 
         // ImageMagick uses 0-based page index in brackets
         $command = sprintf(
-            'convert -density 300 %s[%d] -quality 90 %s',
+            '%s -density 300 %s[%d] -quality 90 %s',
+            $magickCommand,
             escapeshellarg($pdfPath),
             $pageNumber - 1, // 0-based index
             escapeshellarg($outputPath)

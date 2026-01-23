@@ -201,6 +201,13 @@ class DrawingSetController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Failed to upload drawing set', [
+                'project_id' => $project->id,
+                'original_name' => $file->getClientOriginalName(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to upload drawing set: ' . $e->getMessage(),

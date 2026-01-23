@@ -24,6 +24,7 @@ use App\Http\Controllers\QaStageDrawingController;
 use App\Http\Controllers\QaStageDrawingObservationController;
 use App\Http\Controllers\DrawingSetController;
 use App\Http\Controllers\TitleBlockTemplateController;
+use App\Http\Controllers\DrawingIndexController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Employee;
@@ -484,6 +485,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:qa-drawings.view');
 
     // ============================================
+    // DRAWING INDEX (All drawings for a project)
+    // ============================================
+    Route::get('/projects/{project}/drawings', [DrawingIndexController::class, 'index'])
+        ->name('drawings.index')
+        ->middleware('permission:qa-drawings.view');
+
+    // ============================================
     // DRAWING SETS (PDF Upload & Textract Extraction)
     // ============================================
     Route::middleware('permission:qa-drawings.view')->group(function () {
@@ -507,10 +515,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:qa-drawings.view')->group(function () {
         Route::get('/projects/{project}/templates', [TitleBlockTemplateController::class, 'index'])->name('title-block-templates.index');
         Route::post('/templates/{template}/test', [TitleBlockTemplateController::class, 'test'])->name('title-block-templates.test');
+        Route::post('/drawing-sheets/{sheet}/detect-text', [TitleBlockTemplateController::class, 'detectTextBlocks'])->name('drawing-sheets.detect-text');
     });
     Route::middleware('permission:qa-drawings.create')->group(function () {
         Route::post('/projects/{project}/templates', [TitleBlockTemplateController::class, 'store'])->name('title-block-templates.store');
         Route::put('/templates/{template}', [TitleBlockTemplateController::class, 'update'])->name('title-block-templates.update');
+        Route::put('/templates/{template}/field-mappings', [TitleBlockTemplateController::class, 'saveFieldMappings'])->name('title-block-templates.field-mappings');
         Route::delete('/templates/{template}', [TitleBlockTemplateController::class, 'destroy'])->name('title-block-templates.destroy');
     });
 

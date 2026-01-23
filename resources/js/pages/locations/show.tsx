@@ -21,6 +21,7 @@ import {
     Download,
     Edit,
     ExternalLink,
+    FileImage,
     FileSpreadsheet,
     FolderTree,
     Hash,
@@ -226,6 +227,12 @@ export default function LocationShow() {
                             <Button className="gap-2">
                                 <ChartColumnIncreasing className="h-4 w-4" />
                                 Job Forecast
+                            </Button>
+                        </Link>
+                        <Link href={`/projects/${location.id}/drawings`}>
+                            <Button variant="outline" className="gap-2">
+                                <FileImage className="h-4 w-4" />
+                                Drawings
                             </Button>
                         </Link>
                         <Dialog open={openDialog} onOpenChange={setOpenDialog}>

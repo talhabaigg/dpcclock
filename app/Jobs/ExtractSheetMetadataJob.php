@@ -225,6 +225,21 @@ class ExtractSheetMetadataJob implements ShouldQueue
         ImageCropService $cropService,
         DrawingMetadataValidationService $validator
     ): array {
+        Log::info('Starting template extraction', [
+            'sheet_id' => $sheet->id,
+            'template_id' => $template->id,
+            'crop_rect' => $template->crop_rect,
+            'has_field_mappings' => !empty($template->field_mappings),
+        ]);
+
+        // If template has field mappings, extract directly from those regions
+        if (!empty($template->field_mappings)) {
+            return $this->extractWithFieldMappings(
+                $sheet, $template, $textract, $cropService, $validator
+            );
+        }
+
+        // Otherwise, use query-based extraction on cropped region
         // Crop image using template
         $croppedBytes = $cropService->cropImage(
             $sheet->page_preview_s3_key,
@@ -233,6 +248,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         );
 
         if (!$croppedBytes) {
+            Log::warning('Template crop failed', ['sheet_id' => $sheet->id, 'template_id' => $template->id]);
             return [
                 'passes' => false,
                 'error' => 'Failed to crop image with template',
@@ -240,8 +256,20 @@ class ExtractSheetMetadataJob implements ShouldQueue
             ];
         }
 
+        Log::info('Template crop successful', [
+            'sheet_id' => $sheet->id,
+            'cropped_size' => strlen($croppedBytes),
+        ]);
+
         // Extract with Textract
         $textractResult = $textract->extractFromBytes($croppedBytes);
+
+        Log::info('Textract result', [
+            'sheet_id' => $sheet->id,
+            'success' => $textractResult['success'],
+            'fields' => $textractResult['fields'] ?? null,
+            'error' => $textractResult['error'] ?? null,
+        ]);
 
         if (!$textractResult['success']) {
             return [
@@ -254,12 +282,148 @@ class ExtractSheetMetadataJob implements ShouldQueue
         // Validate results
         $validation = $validator->validate($textractResult['fields']);
 
+        Log::info('Validation result', [
+            'sheet_id' => $sheet->id,
+            'passes' => $validation['passes'],
+            'validation' => $validation,
+        ]);
+
         return [
             'passes' => $validation['passes'],
             'fields' => $textractResult['fields'],
             'validation' => $validation,
             'raw' => $textractResult['raw'],
             'overall_confidence' => $validator->calculateOverallConfidence($validation),
+        ];
+    }
+
+    /**
+     * Extract using template's field mappings (user-drawn field regions).
+     *
+     * When a template has field_mappings, we extract text directly from each
+     * field's specific region instead of using Textract queries.
+     *
+     * Field mappings contain boundingBox coordinates relative to the template's crop_rect.
+     * Users draw exact regions they want, so no padding is applied.
+     */
+    private function extractWithFieldMappings(
+        QaStageDrawing $sheet,
+        TitleBlockTemplate $template,
+        TextractService $textract,
+        ImageCropService $cropService,
+        DrawingMetadataValidationService $validator
+    ): array {
+        Log::info('Using field mappings for extraction', [
+            'sheet_id' => $sheet->id,
+            'template_id' => $template->id,
+            'field_mappings' => $template->field_mappings,
+        ]);
+
+        $fieldMappings = $template->field_mappings;
+        $cropRect = $template->crop_rect;
+        $fields = [];
+
+        foreach (['drawing_number', 'drawing_title', 'revision'] as $fieldName) {
+            if (!isset($fieldMappings[$fieldName])) {
+                $fields[$fieldName] = [
+                    'text' => '',
+                    'confidence' => 0,
+                    'source_alias' => $fieldName,
+                    'boundingBox' => null,
+                ];
+                continue;
+            }
+
+            $mapping = $fieldMappings[$fieldName];
+
+            // Get boundingBox - coordinates are relative to the crop region
+            $fieldRect = null;
+            if (isset($mapping['boundingBox']) && $mapping['boundingBox']) {
+                $bb = $mapping['boundingBox'];
+                // Convert from crop-relative to full image coordinates
+                $fieldRect = [
+                    'x' => $cropRect['x'] + ($bb['x'] * $cropRect['w']),
+                    'y' => $cropRect['y'] + ($bb['y'] * $cropRect['h']),
+                    'w' => $bb['w'] * $cropRect['w'],
+                    'h' => $bb['h'] * $cropRect['h'],
+                ];
+            } elseif (isset($mapping['x']) && isset($mapping['y']) && isset($mapping['w']) && isset($mapping['h'])) {
+                // Legacy format: direct coordinates on full image
+                $fieldRect = $mapping;
+            }
+
+            if (!$fieldRect) {
+                Log::warning('Invalid field mapping format', [
+                    'sheet_id' => $sheet->id,
+                    'field' => $fieldName,
+                    'mapping' => $mapping,
+                ]);
+                $fields[$fieldName] = [
+                    'text' => '',
+                    'confidence' => 0,
+                    'source_alias' => $fieldName,
+                    'boundingBox' => null,
+                ];
+                continue;
+            }
+
+            Log::info('Extracting from user-drawn field region', [
+                'sheet_id' => $sheet->id,
+                'field' => $fieldName,
+                'fieldRect' => $fieldRect,
+            ]);
+
+            // Crop to the exact field region (no padding - user drew the exact area)
+            $fieldCroppedBytes = $cropService->cropImage(
+                $sheet->page_preview_s3_key,
+                $fieldRect,
+                's3'
+            );
+
+            if (!$fieldCroppedBytes) {
+                Log::warning('Field crop failed', [
+                    'sheet_id' => $sheet->id,
+                    'field' => $fieldName,
+                    'fieldRect' => $fieldRect,
+                ]);
+                $fields[$fieldName] = [
+                    'text' => '',
+                    'confidence' => 0,
+                    'source_alias' => $fieldName,
+                    'boundingBox' => null,
+                ];
+                continue;
+            }
+
+            // Extract all text from the field region and join it
+            $result = $textract->extractAllTextFromRegion($fieldCroppedBytes);
+
+            $fields[$fieldName] = [
+                'text' => $result['text'] ?? '',
+                'confidence' => $result['confidence'] ?? 0,
+                'source_alias' => $fieldName,
+                'boundingBox' => $fieldRect,
+            ];
+
+            Log::info('Field mapping extraction result', [
+                'sheet_id' => $sheet->id,
+                'field' => $fieldName,
+                'text' => $result['text'] ?? '',
+                'confidence' => $result['confidence'] ?? 0,
+            ]);
+        }
+
+        // When using field mappings, we trust the user's selections
+        // Skip strict validation - just check that we got some text
+        $validation = $validator->validate($fields, skipStrictChecks: true);
+
+        return [
+            'passes' => $validation['passes'],
+            'fields' => $fields,
+            'validation' => $validation,
+            'raw' => [],
+            'overall_confidence' => $validator->calculateOverallConfidence($validation),
+            'used_field_mappings' => true,
         ];
     }
 

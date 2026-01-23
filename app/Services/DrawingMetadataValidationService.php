@@ -26,7 +26,9 @@ class DrawingMetadataValidationService
     {
         // Lower thresholds to allow valid extractions with moderate confidence
         // Template-based extraction often has lower Textract confidence but better accuracy
-        $this->confidenceNumber = (float) config('services.textract.confidence_number', 0.50);
+        // Note: Textract can return low confidence even for correct values, especially for
+        // drawing numbers with special formatting (dashes, mixed alphanumeric)
+        $this->confidenceNumber = (float) config('services.textract.confidence_number', 0.20);
         $this->confidenceTitle = (float) config('services.textract.confidence_title', 0.40);
         $this->confidenceRevision = (float) config('services.textract.confidence_revision', 0.50);
     }
@@ -35,6 +37,7 @@ class DrawingMetadataValidationService
      * Validate all extracted fields and determine if extraction passes.
      *
      * @param array $fields Extracted fields with text and confidence
+     * @param bool $skipStrictChecks When true, use relaxed validation for user-mapped fields
      * @return array{
      *     passes: bool,
      *     drawing_number: array{value: string|null, valid: bool, confidence: float, errors: array},
@@ -43,8 +46,16 @@ class DrawingMetadataValidationService
      *     overall_errors: array
      * }
      */
-    public function validate(array $fields): array
+    public function validate(array $fields, bool $skipStrictChecks = false): array
     {
+        // When skipStrictChecks is true, we use relaxed validation because:
+        // - The user has explicitly mapped these fields via the UI
+        // - We trust the user's selections over pattern matching
+        // - We just need to verify we got some readable text
+        if ($skipStrictChecks) {
+            return $this->validateRelaxed($fields);
+        }
+
         $numberResult = $this->validateDrawingNumber($fields['drawing_number'] ?? []);
         $titleResult = $this->validateTitle($fields['drawing_title'] ?? []);
         $revisionResult = $this->validateRevision($fields['revision'] ?? []);
@@ -76,6 +87,89 @@ class DrawingMetadataValidationService
             'drawing_number' => $numberResult,
             'drawing_title' => $titleResult,
             'revision' => $revisionResult,
+            'overall_errors' => $overallErrors,
+        ];
+    }
+
+    /**
+     * Relaxed validation for user-mapped fields.
+     *
+     * When a user has explicitly mapped fields via the UI, we trust their selections
+     * and just verify we got some readable text. We skip pattern matching and confidence
+     * thresholds since the user has confirmed the locations are correct.
+     *
+     * @param array $fields Extracted fields with text and confidence
+     * @return array Validation result
+     */
+    private function validateRelaxed(array $fields): array
+    {
+        $results = [];
+        $overallErrors = [];
+
+        foreach (['drawing_number', 'drawing_title', 'revision'] as $fieldName) {
+            $field = $fields[$fieldName] ?? [];
+            $text = trim($field['text'] ?? '');
+            $confidence = (float) ($field['confidence'] ?? 0);
+
+            if ($text === '') {
+                $results[$fieldName] = [
+                    'value' => null,
+                    'valid' => false,
+                    'confidence' => $confidence,
+                    'errors' => [ucfirst(str_replace('_', ' ', $fieldName)) . ' is empty'],
+                ];
+            } else {
+                // Normalize whitespace
+                $normalized = preg_replace('/\s+/', ' ', $text);
+                $normalized = trim($normalized);
+
+                // Strip common label prefixes that may have been captured with padding
+                if ($fieldName === 'drawing_title') {
+                    // Remove common title labels: "Drawing", "Title:", "Drawing Title:", etc.
+                    $normalized = preg_replace('/^(DRAWING\s*TITLE|DRAWING|TITLE|DWG\s*TITLE|DWG)\s*[:.]?\s*/i', '', $normalized);
+                    $normalized = trim($normalized);
+                }
+
+                if ($fieldName === 'drawing_number') {
+                    // Remove common number labels: "Drawing No.", "DWG #", "Sheet No.", etc.
+                    $normalized = preg_replace('/^(DRAWING\s*NO|DRAWING\s*NUMBER|DWG\s*NO|DWG\s*#|SHEET\s*NO|SHEET\s*#|NO|#)\s*[:.]?\s*/i', '', $normalized);
+                    $normalized = trim($normalized);
+                }
+
+                // For revision, strip common prefixes
+                if ($fieldName === 'revision') {
+                    $normalized = preg_replace('/^(REV|REVISION|R)\s*[:.]?\s*/i', '', $normalized);
+                    $normalized = strtoupper(trim($normalized));
+                }
+
+                $results[$fieldName] = [
+                    'value' => $normalized,
+                    'valid' => true, // Trust user's mapping
+                    'confidence' => $confidence,
+                    'errors' => [],
+                ];
+            }
+        }
+
+        // Pass if we have at least a drawing number
+        $passes = $results['drawing_number']['valid'] ?? false;
+
+        if (!$passes) {
+            $overallErrors[] = 'Missing drawing number';
+        }
+
+        Log::info('Relaxed validation result (user-mapped fields)', [
+            'drawing_number' => $results['drawing_number']['value'] ?? null,
+            'drawing_title' => $results['drawing_title']['value'] ?? null,
+            'revision' => $results['revision']['value'] ?? null,
+            'passes' => $passes,
+        ]);
+
+        return [
+            'passes' => $passes,
+            'drawing_number' => $results['drawing_number'],
+            'drawing_title' => $results['drawing_title'],
+            'revision' => $results['revision'],
             'overall_errors' => $overallErrors,
         ];
     }
@@ -119,6 +213,14 @@ class DrawingMetadataValidationService
 
         if (strtoupper($normalized) === 'N/A' || strtoupper($normalized) === 'NA') {
             $errors[] = 'Drawing number is N/A';
+        }
+
+        // Reject common sheet sizes (A0, A1, A2, A3, A4, B0, B1, etc.)
+        $sheetSizes = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'B0', 'B1', 'B2', 'B3', 'B4', 'B5',
+                       'ANSI A', 'ANSI B', 'ANSI C', 'ANSI D', 'ANSI E', 'ARCH A', 'ARCH B',
+                       'ARCH C', 'ARCH D', 'ARCH E', 'ARCH E1'];
+        if (in_array(strtoupper($normalized), $sheetSizes)) {
+            $errors[] = 'Value appears to be a sheet size, not a drawing number';
         }
 
         // Check against valid patterns
