@@ -52,7 +52,11 @@
       "Bash(del:*)",
       "Bash(Get-Content \"c:\\\\Laravel\\\\dpcclock\\\\storage\\\\logs\\\\laravel.log\" -Tail 100)",
       "Bash(Select-String -Pattern \"Retry extraction|template_id|preferred template|Using preferred\")",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(if not exist \"c:\\\\Laravel\\\\dpcclock\\\\python_services\" mkdir \"c:\\\\Laravel\\\\dpcclock\\\\python_services\")",
+      "Bash(winget install:*)",
+      "Bash(pip install:*)",
+      "Bash(\"/c/Users/talha/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install flask opencv-python numpy)"
     ]
   }
 }

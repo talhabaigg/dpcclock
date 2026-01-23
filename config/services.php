@@ -52,4 +52,10 @@ return [
         'confidence_revision' => env('TEXTRACT_CONFIDENCE_REVISION', 0.45),
     ],
 
+    'cv_comparison' => [
+        'url' => env('CV_COMPARISON_SERVICE_URL', 'http://localhost:5050'),
+        'timeout' => env('CV_COMPARISON_TIMEOUT', 120),
+        'enabled' => env('CV_COMPARISON_ENABLED', true),
+    ],
+
 ];

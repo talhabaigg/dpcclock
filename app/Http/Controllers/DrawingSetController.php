@@ -655,7 +655,7 @@ class DrawingSetController extends Controller
 
         $comparisonService = app(DrawingComparisonService::class);
 
-        // Get images as base64 data URLs
+        // Get resized images for Pass 1 (overview detection)
         $imageA = $comparisonService->getImageDataUrl($imagePathA);
         $imageB = $comparisonService->getImageDataUrl($imagePathB);
 
@@ -666,18 +666,32 @@ class DrawingSetController extends Controller
             ], 500);
         }
 
-        \Log::info('Starting AI drawing comparison', [
+        // Get raw (full resolution) images for Pass 2 (detail zoom)
+        $rawImageA = $comparisonService->getRawImageData($imagePathA);
+        $rawImageB = $comparisonService->getRawImageData($imagePathB);
+
+        \Log::info('Starting drawing comparison (hybrid CV + AI)', [
             'sheet_a_id' => $sheetA->id,
             'sheet_b_id' => $sheetB->id,
             'sheet_a_revision' => $sheetA->revision,
             'sheet_b_revision' => $sheetB->revision,
             'sheet_a_drawing_number' => $sheetA->drawing_number,
+            'has_raw_images' => ($rawImageA && $rawImageB) ? 'yes' : 'no',
+            'cv_service_enabled' => config('services.cv_comparison.enabled', true),
         ]);
 
-        // Run comparison
+        // Run hybrid comparison: CV for detection + AI for classification
+        // Falls back to AI-only if CV service is unavailable
         $context = $validated['context'] ?? 'walls and ceilings construction drawings';
         $additionalPrompt = $validated['additional_prompt'] ?? null;
-        $result = $comparisonService->compareRevisions($imageA, $imageB, $context, $additionalPrompt);
+        $result = $comparisonService->compareRevisionsHybrid(
+            $imageA,
+            $imageB,
+            $rawImageA,
+            $rawImageB,
+            $context,
+            $additionalPrompt
+        );
 
         if (!$result['success']) {
             return response()->json([
@@ -704,6 +718,10 @@ class DrawingSetController extends Controller
                 'change_count' => $result['change_count'] ?? count($result['changes'] ?? []),
                 'confidence' => $result['confidence'] ?? 'unknown',
                 'notes' => $result['notes'] ?? null,
+                // Hybrid CV data (when available)
+                'method' => $result['method'] ?? 'ai_only',
+                'diff_image' => $result['diff_image'] ?? null,
+                'visualization' => $result['visualization'] ?? null,
             ],
         ]);
     }
@@ -746,6 +764,13 @@ class DrawingSetController extends Controller
             'changes.*.impact' => ['required', 'string', 'in:low,medium,high'],
             'changes.*.potential_change_order' => ['required', 'boolean'],
             'changes.*.reason' => ['nullable', 'string'],
+            'changes.*.page_number' => ['nullable', 'integer', 'min:1'],
+            'changes.*.coordinates' => ['nullable', 'array'],
+            'changes.*.coordinates.page' => ['nullable', 'integer', 'min:1'],
+            'changes.*.coordinates.x' => ['nullable', 'numeric'],
+            'changes.*.coordinates.y' => ['nullable', 'numeric'],
+            'changes.*.coordinates.width' => ['nullable', 'numeric'],
+            'changes.*.coordinates.height' => ['nullable', 'numeric'],
         ]);
 
         $targetSheet = QaStageDrawing::findOrFail($validated['target_sheet_id']);
@@ -755,17 +780,63 @@ class DrawingSetController extends Controller
             \DB::beginTransaction();
 
             foreach ($validated['changes'] as $index => $change) {
-                // Create observation from AI change
-                // AI doesn't provide exact coordinates, so we place markers in a grid pattern
-                // User can adjust positions later when reviewing
-                $gridX = 0.1 + (($index % 4) * 0.2); // 0.1, 0.3, 0.5, 0.7
-                $gridY = 0.1 + (floor($index / 4) * 0.15); // Stack vertically
+                // Prefer AI-provided coordinates; fall back to a grid if missing
+                $coords = $change['coordinates'] ?? null;
+                $pageNumber = $change['page_number']
+                    ?? ($coords['page'] ?? $coords['page_number'] ?? $targetSheet->page_number ?? 1);
+                $pageNumber = max(1, (int) $pageNumber);
+
+                $x = null;
+                $y = null;
+
+                if (is_array($coords) && isset($coords['x'], $coords['y'])) {
+                    $x = (float) $coords['x'];
+                    $y = (float) $coords['y'];
+
+                    // Convert percentage style values to decimals if needed
+                    if (($x > 1 || $y > 1) && $x <= 100 && $y <= 100) {
+                        $x = $x / 100;
+                        $y = $y / 100;
+                    }
+
+                    // Clamp to [0, 1] (coordinates should already be normalized/centered upstream)
+                    $x = max(0, min(1, $x));
+                    $y = max(0, min(1, $y));
+                }
+
+                // Extract bounding box dimensions if provided (from CV detection)
+                $bboxWidth = null;
+                $bboxHeight = null;
+                if (is_array($coords) && isset($coords['width'], $coords['height'])) {
+                    $bboxWidth = (float) $coords['width'];
+                    $bboxHeight = (float) $coords['height'];
+                    // Convert percentage to decimal if needed
+                    if ($bboxWidth > 1 && $bboxWidth <= 100) {
+                        $bboxWidth = $bboxWidth / 100;
+                    }
+                    if ($bboxHeight > 1 && $bboxHeight <= 100) {
+                        $bboxHeight = $bboxHeight / 100;
+                    }
+                    // Clamp to reasonable range
+                    $bboxWidth = max(0.01, min(1, $bboxWidth));
+                    $bboxHeight = max(0.01, min(1, $bboxHeight));
+                }
+
+                if ($x === null || $y === null) {
+                    // AI missed coordinates; place markers in a grid pattern
+                    $gridX = 0.1 + (($index % 4) * 0.2); // 0.1, 0.3, 0.5, 0.7
+                    $gridY = 0.1 + (floor($index / 4) * 0.15); // Stack vertically
+                    $x = min($gridX, 0.9);
+                    $y = min($gridY, 0.9);
+                }
 
                 $observation = \App\Models\QaStageDrawingObservation::create([
                     'qa_stage_drawing_id' => $targetSheet->id,
-                    'page_number' => $targetSheet->page_number ?? 1,
-                    'x' => min($gridX, 0.9),
-                    'y' => min($gridY, 0.9),
+                    'page_number' => $pageNumber,
+                    'x' => $x,
+                    'y' => $y,
+                    'bbox_width' => $bboxWidth,
+                    'bbox_height' => $bboxHeight,
                     'type' => 'observation',
                     'description' => "[{$change['type']}] {$change['description']}\n\nLocation: {$change['location']}" .
                         ($change['reason'] ? "\n\nReason: {$change['reason']}" : ''),

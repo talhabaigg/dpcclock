@@ -127,4 +127,161 @@ class QaStageDrawingObservationController extends Controller
             return response()->json(['message' => 'Failed to update observation.'], 500);
         }
     }
+
+    /**
+     * Confirm an AI-generated observation.
+     */
+    public function confirm(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    {
+        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+            abort(404);
+        }
+
+        if ($observation->source !== 'ai_comparison') {
+            return response()->json(['message' => 'Only AI-generated observations can be confirmed.'], 422);
+        }
+
+        if ($observation->is_confirmed) {
+            return response()->json(['message' => 'Observation is already confirmed.'], 422);
+        }
+
+        try {
+            $observation->update([
+                'is_confirmed' => true,
+                'confirmed_at' => now(),
+                'confirmed_by' => auth()->id(),
+            ]);
+
+            return response()->json($observation->fresh());
+        } catch (\Exception $e) {
+            Log::error('Observation confirmation failed', [
+                'drawing_id' => $drawing->id,
+                'observation_id' => $observation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Failed to confirm observation.'], 500);
+        }
+    }
+
+    /**
+     * Delete an observation.
+     */
+    public function destroy(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    {
+        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+            abort(404);
+        }
+
+        try {
+            // Delete associated photo if exists
+            if ($observation->photo_path) {
+                Storage::disk('public')->delete($observation->photo_path);
+            }
+
+            $observation->delete();
+
+            return response()->json(['message' => 'Observation deleted successfully.']);
+        } catch (\Exception $e) {
+            Log::error('Observation deletion failed', [
+                'drawing_id' => $drawing->id,
+                'observation_id' => $observation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Failed to delete observation.'], 500);
+        }
+    }
+
+    /**
+     * Describe an AI observation using GPT-4o (on-demand).
+     */
+    public function describe(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    {
+        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+            abort(404);
+        }
+
+        // Only AI observations can be described (they have source sheets)
+        if ($observation->source !== 'ai_comparison') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only AI-detected observations can be described.',
+            ], 422);
+        }
+
+        // Get the source QaStageDrawings (not DrawingSheets)
+        $qaDrawingA = \App\Models\QaStageDrawing::find($observation->source_sheet_a_id);
+        $qaDrawingB = \App\Models\QaStageDrawing::find($observation->source_sheet_b_id);
+
+        if (!$qaDrawingA || !$qaDrawingB) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Source drawings not found.',
+            ], 404);
+        }
+
+        // Get file paths - use page_preview_s3_key or thumbnail_path (same as comparison)
+        $filePathA = $qaDrawingA->page_preview_s3_key ?: $qaDrawingA->thumbnail_path;
+        $filePathB = $qaDrawingB->page_preview_s3_key ?: $qaDrawingB->thumbnail_path;
+
+        if (!$filePathA || !$filePathB) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Source drawing preview images not found.',
+            ], 404);
+        }
+
+        // Build bounding box from observation coordinates
+        // Use stored CV dimensions if available, otherwise default to 15%
+        $boundingBox = [
+            'x' => $observation->x,
+            'y' => $observation->y,
+            'width' => $observation->bbox_width ?? 0.15,
+            'height' => $observation->bbox_height ?? 0.15,
+        ];
+
+        try {
+            $comparisonService = new \App\Services\DrawingComparisonService();
+            $result = $comparisonService->describeRegionWithAI(
+                $filePathA,
+                $filePathB,
+                $boundingBox,
+                'walls and ceilings'
+            );
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error'] ?? 'Failed to describe region.',
+                ], 500);
+            }
+
+            // Update the observation with AI description
+            $observation->update([
+                'description' => $result['description'],
+                'ai_change_type' => $result['type'],
+                'ai_impact' => $result['impact'],
+                'ai_location' => $result['location'] ?? $result['room_name'],
+                'potential_change_order' => $result['potential_change_order'] ?? false,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'observation' => $observation->fresh(),
+                'ai_result' => $result,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AI describe failed', [
+                'observation_id' => $observation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to describe observation: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

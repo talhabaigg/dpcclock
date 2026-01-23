@@ -474,6 +474,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:qa-observations.manage')->group(function () {
         Route::post('/qa-stage-drawings/{drawing}/observations', [QaStageDrawingObservationController::class, 'store'])->name('qa-stage-drawings.observations.store');
         Route::post('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'update'])->name('qa-stage-drawings.observations.update');
+        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}/confirm', [QaStageDrawingObservationController::class, 'confirm'])->name('qa-stage-drawings.observations.confirm');
+        Route::delete('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'destroy'])->name('qa-stage-drawings.observations.destroy');
+        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}/describe', [QaStageDrawingObservationController::class, 'describe'])->name('qa-stage-drawings.observations.describe');
     });
 
     // Drawing alignment persistence

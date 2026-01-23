@@ -15,6 +15,8 @@ class QaStageDrawingObservation extends Model
         'page_number',
         'x',
         'y',
+        'bbox_width',
+        'bbox_height',
         'type',
         'description',
         'photo_path',

@@ -179,6 +179,15 @@ export default function DrawingSetShow() {
             impact: string;
             potential_change_order: boolean;
             reason?: string;
+            page_number?: number;
+            coordinates?: {
+                page?: number;
+                x: number;
+                y: number;
+                width?: number;
+                height?: number;
+                reference?: string;
+            };
         }>;
         change_count: number;
         confidence: string;

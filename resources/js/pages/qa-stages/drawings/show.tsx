@@ -39,6 +39,7 @@ import {
     RotateCcw,
     Save,
     Sparkles,
+    Trash2,
     Unlock,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -63,11 +64,24 @@ type Observation = {
     page_number: number;
     x: number;
     y: number;
+    bbox_width?: number | null;
+    bbox_height?: number | null;
     type: 'defect' | 'observation';
     description: string;
     photo_url?: string | null;
     created_at?: string;
     created_by_user?: { name: string };
+    // AI-specific fields
+    source?: 'ai_comparison' | null;
+    source_sheet_a_id?: number | null;
+    source_sheet_b_id?: number | null;
+    ai_change_type?: string | null;
+    ai_impact?: 'low' | 'medium' | 'high' | null;
+    ai_location?: string | null;
+    potential_change_order?: boolean;
+    is_confirmed?: boolean;
+    confirmed_at?: string | null;
+    confirmed_by?: number | null;
 };
 
 type Revision = {
@@ -230,6 +244,10 @@ export default function QaStageDrawingShow() {
     const [description, setDescription] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [saving, setSaving] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [describing, setDescribing] = useState(false);
 
     const [serverObservations, setServerObservations] = useState<Observation[]>(drawing.observations || []);
     const [hasUserPanned, setHasUserPanned] = useState(false);
@@ -268,6 +286,15 @@ export default function QaStageDrawingShow() {
             impact: string;
             potential_change_order: boolean;
             reason?: string;
+            page_number?: number;
+            coordinates?: {
+                page?: number;
+                x: number;
+                y: number;
+                width?: number;
+                height?: number;
+                reference?: string;
+            };
         }>;
         confidence?: string;
         notes?: string;
@@ -1157,6 +1184,167 @@ export default function QaStageDrawingShow() {
         }
     };
 
+    // Confirm AI observation handler
+    const handleConfirmObservation = async () => {
+        if (!editingObservation || editingObservation.source !== 'ai_comparison') return;
+
+        setConfirming(true);
+
+        try {
+            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}/confirm`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+
+            const confirmed = (await response.json()) as Observation;
+            setServerObservations((prev) => prev.map((obs) => (obs.id === confirmed.id ? confirmed : obs)));
+            setEditingObservation(confirmed);
+            toast.success('AI observation confirmed.');
+        } catch {
+            toast.error('Failed to confirm observation.');
+        } finally {
+            setConfirming(false);
+        }
+    };
+
+    // Delete observation handler
+    const handleDeleteObservation = async () => {
+        if (!editingObservation) return;
+
+        if (!confirm('Are you sure you want to delete this observation? This action cannot be undone.')) {
+            return;
+        }
+
+        setDeleting(true);
+
+        try {
+            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+
+            setServerObservations((prev) => prev.filter((obs) => obs.id !== editingObservation.id));
+            setDialogOpen(false);
+            resetDialog();
+            toast.success('Observation deleted.');
+        } catch {
+            toast.error('Failed to delete observation.');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    // Describe observation with AI (on-demand)
+    const handleDescribeWithAI = async () => {
+        if (!editingObservation || editingObservation.source !== 'ai_comparison') return;
+
+        setDescribing(true);
+
+        try {
+            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}/describe`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Request failed');
+            }
+
+            // Update local state with the new description
+            setServerObservations((prev) =>
+                prev.map((obs) => (obs.id === editingObservation.id ? data.observation : obs))
+            );
+            setEditingObservation(data.observation);
+            setDescription(data.observation.description);
+            toast.success('AI description generated.');
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to describe with AI.');
+        } finally {
+            setDescribing(false);
+        }
+    };
+
+    // Bulk delete all AI observations
+    const handleDeleteAllAIObservations = async () => {
+        const aiObservations = serverObservations.filter((obs) => obs.source === 'ai_comparison');
+        if (aiObservations.length === 0) {
+            toast.info('No AI observations to delete.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete all ${aiObservations.length} AI-generated observations? This action cannot be undone.`)) {
+            return;
+        }
+
+        setBulkDeleting(true);
+
+        try {
+            // Delete all AI observations in parallel
+            const deletePromises = aiObservations.map((obs) =>
+                fetch(`/qa-stage-drawings/${drawing.id}/observations/${obs.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-XSRF-TOKEN': getXsrfToken(),
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                })
+            );
+
+            const results = await Promise.allSettled(deletePromises);
+            const successCount = results.filter((r) => r.status === 'fulfilled' && (r.value as Response).ok).length;
+            const failCount = aiObservations.length - successCount;
+
+            // Remove successfully deleted observations from state
+            const deletedIds = new Set(
+                aiObservations
+                    .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
+                    .map((obs) => obs.id)
+            );
+            setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
+
+            if (failCount === 0) {
+                toast.success(`Deleted ${successCount} AI observations.`);
+            } else {
+                toast.warning(`Deleted ${successCount} observations. ${failCount} failed.`);
+            }
+        } catch {
+            toast.error('Failed to delete AI observations.');
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
     // AI Comparison handler
     const handleAICompare = async (additionalPrompt?: string) => {
         if (!aiCompareSheetA || !aiCompareSheetB) {
@@ -1272,11 +1460,16 @@ export default function QaStageDrawingShow() {
 
             const data = await response.json();
 
-            toast.success(`Saved ${data.created_count} observations successfully!`);
-            setSelectedChanges(new Set());
+            if (data.success) {
+                const created = Array.isArray(data.observations) ? data.observations.length : 0;
+                toast.success(data.message || `Saved ${created} observations successfully!`);
+                setSelectedChanges(new Set());
 
-            // Refresh observations
-            router.reload({ only: ['drawing'] });
+                // Refresh observations
+                router.reload({ only: ['drawing'] });
+            } else {
+                throw new Error(data.message || 'Failed to save observations');
+            }
         } catch (error) {
             console.error('Save observations error:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to save observations');
@@ -1636,6 +1829,18 @@ export default function QaStageDrawingShow() {
                             <Badge variant="outline" className="text-xs">
                                 {serverObservations.length} observation{serverObservations.length !== 1 ? 's' : ''}
                             </Badge>
+                            {serverObservations.filter((obs) => obs.source === 'ai_comparison').length > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 gap-1 px-2 text-xs text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
+                                    onClick={handleDeleteAllAIObservations}
+                                    disabled={bulkDeleting}
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                    {bulkDeleting ? 'Deleting...' : `Delete ${serverObservations.filter((obs) => obs.source === 'ai_comparison').length} AI`}
+                                </Button>
+                            )}
                         </>
                     )}
                 </div>
@@ -1757,29 +1962,54 @@ export default function QaStageDrawingShow() {
                                                 {pageSize &&
                                                     serverObservations
                                                         .filter((obs) => obs.page_number === 1)
-                                                        .map((obs) => (
-                                                            <button
-                                                                key={obs.id}
-                                                                type="button"
-                                                                className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${obs.type === 'defect'
-                                                                        ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                                        : 'bg-blue-500 ring-2 ring-blue-500/30'
-                                                                    }`}
-                                                                style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
-                                                                title={obs.description}
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    setEditingObservation(obs);
-                                                                    setPendingPoint(null);
-                                                                    setObservationType(obs.type);
-                                                                    setDescription(obs.description);
-                                                                    setPhotoFile(null);
-                                                                    setDialogOpen(true);
-                                                                }}
-                                                            >
-                                                                !
-                                                            </button>
-                                                        ))}
+                                                        .map((obs) => {
+                                                            const isAI = obs.source === 'ai_comparison';
+                                                            const isUnconfirmed = isAI && !obs.is_confirmed;
+                                                            const colorClass = isAI
+                                                                ? isUnconfirmed
+                                                                    ? 'bg-violet-500 ring-2 ring-violet-500/30 border-2 border-dashed border-white'
+                                                                    : 'bg-violet-600 ring-2 ring-violet-600/30'
+                                                                : obs.type === 'defect'
+                                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                                    : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                                            const tooltipPrefix = isAI
+                                                                ? `[AI ${obs.ai_change_type || 'detected'}${isUnconfirmed ? ' - Unconfirmed' : ''}] `
+                                                                : '';
+                                                            const hasBbox = isAI && obs.bbox_width && obs.bbox_height;
+                                                            return (
+                                                                <div key={obs.id}>
+                                                                    {/* CV bounding box highlight for AI observations */}
+                                                                    {hasBbox && (
+                                                                        <div
+                                                                            className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10"
+                                                                            style={{
+                                                                                left: `${(obs.x - obs.bbox_width! / 2) * 100}%`,
+                                                                                top: `${(obs.y - obs.bbox_height! / 2) * 100}%`,
+                                                                                width: `${obs.bbox_width! * 100}%`,
+                                                                                height: `${obs.bbox_height! * 100}%`,
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
+                                                                        style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
+                                                                        title={`${tooltipPrefix}${obs.description}`}
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation();
+                                                                            setEditingObservation(obs);
+                                                                            setPendingPoint(null);
+                                                                            setObservationType(obs.type);
+                                                                            setDescription(obs.description);
+                                                                            setPhotoFile(null);
+                                                                            setDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        {isAI ? <Sparkles className="h-4 w-4" /> : '!'}
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
                                                 {(alignmentTool.isAligning || alignmentTool.isAligned) && pageSize && (
                                                     <MarkersLayer
                                                         points={alignmentTool.points}
@@ -1868,29 +2098,56 @@ export default function QaStageDrawingShow() {
                                     )}
                                     {serverObservations
                                         .filter((obs) => obs.page_number === 1)
-                                        .map((obs) => (
-                                            <button
-                                                key={obs.id}
-                                                type="button"
-                                                className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-110 ${obs.type === 'defect'
-                                                        ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                        : 'bg-blue-500 ring-2 ring-blue-500/30'
-                                                    }`}
-                                                style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
-                                                title={obs.description}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    setEditingObservation(obs);
-                                                    setPendingPoint(null);
-                                                    setObservationType(obs.type);
-                                                    setDescription(obs.description);
-                                                    setPhotoFile(null);
-                                                    setDialogOpen(true);
-                                                }}
-                                            >
-                                                !
-                                            </button>
-                                        ))}
+                                        .map((obs) => {
+                                            const isAI = obs.source === 'ai_comparison';
+                                            const isUnconfirmed = isAI && !obs.is_confirmed;
+                                            // AI observations: purple/violet color scheme with sparkle icon
+                                            // Manual: red for defect, blue for observation
+                                            const colorClass = isAI
+                                                ? isUnconfirmed
+                                                    ? 'bg-violet-500 ring-2 ring-violet-500/30 border-2 border-dashed border-white'
+                                                    : 'bg-violet-600 ring-2 ring-violet-600/30'
+                                                : obs.type === 'defect'
+                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                    : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                            const tooltipPrefix = isAI
+                                                ? `[AI ${obs.ai_change_type || 'detected'}${isUnconfirmed ? ' - Unconfirmed' : ''}] `
+                                                : '';
+                                            const hasBbox = isAI && obs.bbox_width && obs.bbox_height;
+                                            return (
+                                                <div key={obs.id}>
+                                                    {/* CV bounding box highlight for AI observations */}
+                                                    {hasBbox && (
+                                                        <div
+                                                            className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10"
+                                                            style={{
+                                                                left: `${(obs.x - obs.bbox_width! / 2) * 100}%`,
+                                                                top: `${(obs.y - obs.bbox_height! / 2) * 100}%`,
+                                                                width: `${obs.bbox_width! * 100}%`,
+                                                                height: `${obs.bbox_height! * 100}%`,
+                                                            }}
+                                                        />
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
+                                                        style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
+                                                        title={`${tooltipPrefix}${obs.description}`}
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setEditingObservation(obs);
+                                                            setPendingPoint(null);
+                                                            setObservationType(obs.type);
+                                                            setDescription(obs.description);
+                                                            setPhotoFile(null);
+                                                            setDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        {isAI ? <Sparkles className="h-4 w-4" /> : '!'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
                                     {(alignmentTool.isAligning || alignmentTool.isAligned) && baseImageSize && (
                                         <MarkersLayer
                                             points={alignmentTool.points}
@@ -1945,9 +2202,84 @@ export default function QaStageDrawingShow() {
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{editingObservation ? 'Edit Observation' : 'Add Observation'}</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2">
+                            {editingObservation?.source === 'ai_comparison' && (
+                                <Sparkles className="h-4 w-4 text-violet-500" />
+                            )}
+                            {editingObservation ? 'Edit Observation' : 'Add Observation'}
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4">
+                        {/* AI Observation Info Panel */}
+                        {editingObservation?.source === 'ai_comparison' && (
+                            <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-950/30">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                                        <Sparkles className="h-3 w-3" />
+                                        AI-Generated Observation
+                                    </span>
+                                    {editingObservation.is_confirmed ? (
+                                        <Badge variant="default" className="bg-green-600 text-xs">Confirmed</Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="border-amber-500 text-xs text-amber-600">Unconfirmed</Badge>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    {editingObservation.ai_change_type && (
+                                        <div>
+                                            <span className="text-muted-foreground">Change Type:</span>{' '}
+                                            <span className="capitalize">{editingObservation.ai_change_type}</span>
+                                        </div>
+                                    )}
+                                    {editingObservation.ai_impact && (
+                                        <div>
+                                            <span className="text-muted-foreground">Impact:</span>{' '}
+                                            <Badge
+                                                variant={editingObservation.ai_impact === 'high' ? 'destructive' : editingObservation.ai_impact === 'medium' ? 'default' : 'secondary'}
+                                                className="ml-1 text-[10px]"
+                                            >
+                                                {editingObservation.ai_impact}
+                                            </Badge>
+                                        </div>
+                                    )}
+                                    {editingObservation.ai_location && (
+                                        <div className="col-span-2">
+                                            <span className="text-muted-foreground">AI Location:</span>{' '}
+                                            <span>{editingObservation.ai_location}</span>
+                                        </div>
+                                    )}
+                                    {editingObservation.potential_change_order && (
+                                        <div className="col-span-2">
+                                            <Badge variant="destructive" className="text-[10px]">Potential Change Order</Badge>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="mt-3 flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="flex-1 gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900"
+                                        onClick={handleDescribeWithAI}
+                                        disabled={describing || confirming}
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        {describing ? 'Analyzing...' : 'Describe with AI'}
+                                    </Button>
+                                    {!editingObservation.is_confirmed && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1 border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-900"
+                                            onClick={handleConfirmObservation}
+                                            disabled={confirming || describing}
+                                        >
+                                            {confirming ? 'Confirming...' : 'Confirm'}
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid gap-2">
                             <Label className="text-xs">Type</Label>
                             <Select value={observationType} onValueChange={(value) => setObservationType(value as 'defect' | 'observation')}>
@@ -1994,13 +2326,29 @@ export default function QaStageDrawingShow() {
                             )}
                         </div>
                     </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button size="sm" onClick={editingObservation ? handleUpdateObservation : handleCreateObservation} disabled={saving}>
-                            {saving ? 'Saving...' : editingObservation ? 'Update' : 'Save'}
-                        </Button>
+                    <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+                        <div>
+                            {editingObservation && (
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={handleDeleteObservation}
+                                    disabled={deleting || saving}
+                                    className="gap-1"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    {deleting ? 'Deleting...' : 'Delete'}
+                                </Button>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button size="sm" onClick={editingObservation ? handleUpdateObservation : handleCreateObservation} disabled={saving || deleting}>
+                                {saving ? 'Saving...' : editingObservation ? 'Update' : 'Save'}
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
