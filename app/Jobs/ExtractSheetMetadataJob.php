@@ -304,7 +304,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * field's specific region instead of using Textract queries.
      *
      * Field mappings contain boundingBox coordinates relative to the template's crop_rect.
-     * Users draw exact regions they want, so no padding is applied.
+     * Small regions are automatically padded to ensure Textract can process them.
      */
     private function extractWithFieldMappings(
         QaStageDrawing $sheet,
@@ -313,18 +313,24 @@ class ExtractSheetMetadataJob implements ShouldQueue
         ImageCropService $cropService,
         DrawingMetadataValidationService $validator
     ): array {
-        Log::info('Using field mappings for extraction', [
-            'sheet_id' => $sheet->id,
-            'template_id' => $template->id,
-            'field_mappings' => $template->field_mappings,
-        ]);
-
         $fieldMappings = $template->field_mappings;
         $cropRect = $template->crop_rect;
         $fields = [];
 
+        Log::info('Using field mappings for extraction', [
+            'sheet_id' => $sheet->id,
+            'template_id' => $template->id,
+            'template_name' => $template->name,
+            'crop_rect' => $cropRect,
+            'field_mappings_keys' => array_keys($fieldMappings ?? []),
+            'field_mappings_raw' => $fieldMappings,
+        ]);
+
         foreach (['drawing_number', 'drawing_title', 'revision'] as $fieldName) {
             if (!isset($fieldMappings[$fieldName])) {
+                Log::info("Field mapping not set for: {$fieldName}", [
+                    'sheet_id' => $sheet->id,
+                ]);
                 $fields[$fieldName] = [
                     'text' => '',
                     'confidence' => 0,
@@ -336,10 +342,23 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
             $mapping = $fieldMappings[$fieldName];
 
+            Log::info("Processing field mapping: {$fieldName}", [
+                'sheet_id' => $sheet->id,
+                'mapping' => $mapping,
+                'has_boundingBox' => isset($mapping['boundingBox']),
+            ]);
+
             // Get boundingBox - coordinates are relative to the crop region
             $fieldRect = null;
             if (isset($mapping['boundingBox']) && $mapping['boundingBox']) {
                 $bb = $mapping['boundingBox'];
+
+                Log::info("Converting {$fieldName} coordinates from crop-relative to full image", [
+                    'sheet_id' => $sheet->id,
+                    'crop_rect' => $cropRect,
+                    'original_bb' => $bb,
+                ]);
+
                 // Convert from crop-relative to full image coordinates
                 $fieldRect = [
                     'x' => $cropRect['x'] + ($bb['x'] * $cropRect['w']),
@@ -347,13 +366,22 @@ class ExtractSheetMetadataJob implements ShouldQueue
                     'w' => $bb['w'] * $cropRect['w'],
                     'h' => $bb['h'] * $cropRect['h'],
                 ];
+
+                Log::info("Converted {$fieldName} to full image coordinates", [
+                    'sheet_id' => $sheet->id,
+                    'fieldRect' => $fieldRect,
+                ]);
             } elseif (isset($mapping['x']) && isset($mapping['y']) && isset($mapping['w']) && isset($mapping['h'])) {
                 // Legacy format: direct coordinates on full image
                 $fieldRect = $mapping;
+                Log::info("Using legacy format for {$fieldName}", [
+                    'sheet_id' => $sheet->id,
+                    'fieldRect' => $fieldRect,
+                ]);
             }
 
             if (!$fieldRect) {
-                Log::warning('Invalid field mapping format', [
+                Log::warning('Invalid field mapping format - no valid coordinates', [
                     'sheet_id' => $sheet->id,
                     'field' => $fieldName,
                     'mapping' => $mapping,
@@ -373,10 +401,22 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 'fieldRect' => $fieldRect,
             ]);
 
-            // Crop to the exact field region (no padding - user drew the exact area)
+            // Add padding to small regions to ensure Textract can process them
+            // Small single-character fields (like revision "F") need more context
+            $paddedRect = $this->addPaddingToSmallRegion($fieldRect, $fieldName);
+
+            if ($paddedRect !== $fieldRect) {
+                Log::info("Added padding to small region for {$fieldName}", [
+                    'sheet_id' => $sheet->id,
+                    'original' => $fieldRect,
+                    'padded' => $paddedRect,
+                ]);
+            }
+
+            // Crop using the (potentially padded) region
             $fieldCroppedBytes = $cropService->cropImage(
                 $sheet->page_preview_s3_key,
-                $fieldRect,
+                $paddedRect,
                 's3'
             );
 
@@ -395,22 +435,36 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 continue;
             }
 
+            // Log the cropped image size for debugging
+            $croppedImageSize = strlen($fieldCroppedBytes);
+            Log::info("Cropped region for {$fieldName}", [
+                'sheet_id' => $sheet->id,
+                'cropped_bytes_size' => $croppedImageSize,
+                'fieldRect' => $fieldRect,
+            ]);
+
             // Extract all text from the field region and join it
             $result = $textract->extractAllTextFromRegion($fieldCroppedBytes);
 
-            $fields[$fieldName] = [
-                'text' => $result['text'] ?? '',
-                'confidence' => $result['confidence'] ?? 0,
-                'source_alias' => $fieldName,
-                'boundingBox' => $fieldRect,
-            ];
+            $extractedText = $result['text'] ?? '';
+            $extractedConfidence = $result['confidence'] ?? 0;
 
             Log::info('Field mapping extraction result', [
                 'sheet_id' => $sheet->id,
                 'field' => $fieldName,
-                'text' => $result['text'] ?? '',
-                'confidence' => $result['confidence'] ?? 0,
+                'extracted_text' => $extractedText,
+                'text_length' => strlen($extractedText),
+                'confidence' => $extractedConfidence,
+                'success' => $result['success'] ?? false,
+                'error' => $result['error'] ?? null,
             ]);
+
+            $fields[$fieldName] = [
+                'text' => $extractedText,
+                'confidence' => $extractedConfidence,
+                'source_alias' => $fieldName,
+                'boundingBox' => $fieldRect,
+            ];
         }
 
         // When using field mappings, we trust the user's selections
@@ -424,6 +478,84 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'raw' => [],
             'overall_confidence' => $validator->calculateOverallConfidence($validation),
             'used_field_mappings' => true,
+        ];
+    }
+
+    /**
+     * Add padding to small field regions to ensure Textract can process them.
+     *
+     * Small regions (like single-character revision fields) produce tiny cropped
+     * images that Textract cannot detect text in. This method ensures regions
+     * meet minimum size thresholds by adding symmetric padding.
+     *
+     * @param array $rect {x, y, w, h} normalized coordinates (0-1)
+     * @param string $fieldName For logging purposes
+     * @return array Padded rect (clamped to 0-1 bounds)
+     */
+    private function addPaddingToSmallRegion(array $rect, string $fieldName): array
+    {
+        // Minimum dimensions as fraction of image
+        // Too small = Textract can't detect text
+        // Too large = captures surrounding text
+        $minWidth = 0.025;
+        $minHeight = 0.02;
+
+        // Revision fields need more padding to ensure Textract captures the letter
+        // Some sheets have the revision letter detected, others don't - more context helps
+        if ($fieldName === 'revision') {
+            $minWidth = 0.045;
+            $minHeight = 0.035;
+        }
+
+        $x = $rect['x'];
+        $y = $rect['y'];
+        $w = $rect['w'];
+        $h = $rect['h'];
+
+        // Calculate how much padding is needed (if any)
+        $needsWidthPadding = $w < $minWidth;
+        $needsHeightPadding = $h < $minHeight;
+
+        if (!$needsWidthPadding && !$needsHeightPadding) {
+            return $rect;
+        }
+
+        // Calculate new dimensions
+        $newW = max($w, $minWidth);
+        $newH = max($h, $minHeight);
+
+        // Calculate padding to add on each side (symmetric)
+        $padX = ($newW - $w) / 2;
+        $padY = ($newH - $h) / 2;
+
+        // Apply padding, keeping the center point the same
+        $newX = $x - $padX;
+        $newY = $y - $padY;
+
+        // Clamp to image bounds (0-1)
+        // If we hit a boundary, shift the region inward
+        if ($newX < 0) {
+            $newX = 0;
+        }
+        if ($newY < 0) {
+            $newY = 0;
+        }
+        if ($newX + $newW > 1) {
+            $newX = max(0, 1 - $newW);
+        }
+        if ($newY + $newH > 1) {
+            $newY = max(0, 1 - $newH);
+        }
+
+        // Final clamp on dimensions
+        $newW = min($newW, 1 - $newX);
+        $newH = min($newH, 1 - $newY);
+
+        return [
+            'x' => $newX,
+            'y' => $newY,
+            'w' => $newW,
+            'h' => $newH,
         ];
     }
 
@@ -563,6 +695,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'extraction_raw' => [
                 'fields' => $result['fields'],
                 'raw_queries' => $result['raw'] ?? [],
+                'used_field_mappings' => $result['used_field_mappings'] ?? false,
             ],
             'extracted_at' => now(),
         ];
@@ -686,10 +819,13 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
         try {
             // Find or create a DrawingSheet for this drawing number
+            // Pass the sheet's creator as fallback since we're in a job context without auth
             $drawingSheet = DrawingSheet::findOrCreateByDrawingNumber(
                 $projectId,
                 $drawingNumber,
-                $title
+                $title,
+                null, // discipline
+                $sheet->created_by // Pass original uploader as creator
             );
 
             // Add this sheet as a revision

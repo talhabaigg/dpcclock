@@ -423,6 +423,76 @@ class DrawingSetController extends Controller
     }
 
     /**
+     * Re-link sheets that have a drawing_number but no drawing_sheet_id.
+     * This fixes sheets that weren't linked due to errors during initial extraction.
+     */
+    public function relinkSheets(DrawingSet $drawingSet): JsonResponse
+    {
+        $projectId = $drawingSet->project_id;
+
+        // Find all sheets with drawing_number but no drawing_sheet_id
+        $unlinkedSheets = $drawingSet->sheets()
+            ->whereNotNull('drawing_number')
+            ->where('drawing_number', '!=', '')
+            ->whereNull('drawing_sheet_id')
+            ->get();
+
+        if ($unlinkedSheets->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'All sheets are already linked.',
+                'linked_count' => 0,
+            ]);
+        }
+
+        $linkedCount = 0;
+        $errors = [];
+
+        foreach ($unlinkedSheets as $sheet) {
+            try {
+                // Find or create DrawingSheet for this drawing number
+                $drawingSheet = \App\Models\DrawingSheet::findOrCreateByDrawingNumber(
+                    $projectId,
+                    $sheet->drawing_number,
+                    $sheet->drawing_title,
+                    null, // discipline
+                    $sheet->created_by
+                );
+
+                // Link the sheet
+                $drawingSheet->addRevision($sheet, $sheet->revision);
+                $linkedCount++;
+
+                \Log::info('Re-linked sheet to DrawingSheet', [
+                    'sheet_id' => $sheet->id,
+                    'drawing_sheet_id' => $drawingSheet->id,
+                    'drawing_number' => $sheet->drawing_number,
+                    'revision' => $sheet->revision,
+                ]);
+            } catch (\Exception $e) {
+                $errors[] = "Sheet {$sheet->id}: {$e->getMessage()}";
+                \Log::warning('Failed to re-link sheet', [
+                    'sheet_id' => $sheet->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $message = "Linked {$linkedCount} of {$unlinkedSheets->count()} sheets.";
+        if (!empty($errors)) {
+            $message .= " Errors: " . implode('; ', array_slice($errors, 0, 3));
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'linked_count' => $linkedCount,
+            'total_unlinked' => $unlinkedSheets->count(),
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
      * Delete a drawing set and all associated sheets.
      */
     public function destroy(DrawingSet $drawingSet): JsonResponse

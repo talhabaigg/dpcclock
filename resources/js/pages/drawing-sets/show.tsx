@@ -73,6 +73,7 @@ type Sheet = {
             revision?: ExtractionField;
         };
         raw_queries?: Record<string, { text: string; confidence: number; boundingBox?: BoundingBox | null }>;
+        used_field_mappings?: boolean;
     } | null;
     used_template_id: number | null;
 };
@@ -162,6 +163,7 @@ export default function DrawingSetShow() {
     const [activeFieldTool, setActiveFieldTool] = useState<'drawing_number' | 'drawing_title' | 'revision' | null>(null);
     const [savingFieldMappings, setSavingFieldMappings] = useState(false);
     const [extractingAfterMapping, setExtractingAfterMapping] = useState(false);
+    const [retrySyncLoading, setRetrySyncLoading] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -228,6 +230,10 @@ export default function DrawingSetShow() {
     };
 
     const handleRetryExtraction = async (sheetId: number, templateId?: string, sync: boolean = false) => {
+        if (sync) {
+            setRetrySyncLoading(true);
+        }
+
         try {
             const body: Record<string, unknown> = {};
             const effectiveTemplateId = templateId ?? selectedTemplateId;
@@ -259,6 +265,10 @@ export default function DrawingSetShow() {
             }
         } catch {
             toast.error('Failed to retry extraction');
+        } finally {
+            if (sync) {
+                setRetrySyncLoading(false);
+            }
         }
     };
 
@@ -280,6 +290,29 @@ export default function DrawingSetShow() {
             }
         } catch {
             toast.error('Failed to retry extractions');
+        }
+    };
+
+    const handleRelinkSheets = async () => {
+        try {
+            const response = await fetch(`/drawing-sets/${drawingSet.id}/relink-sheets`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                toast.success(data.message);
+                if (data.linked_count > 0) {
+                    router.reload();
+                }
+            } else {
+                toast.error(data.message);
+            }
+        } catch {
+            toast.error('Failed to re-link sheets');
         }
     };
 
@@ -498,6 +531,9 @@ export default function DrawingSetShow() {
                             <RefreshCw className="mr-2 h-4 w-4" />
                             Force Retry All ({stats.total})
                         </Button>
+                        <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={handleRelinkSheets}>
+                            Re-link Revisions
+                        </Button>
                     </div>
                 </Card>
 
@@ -540,9 +576,18 @@ export default function DrawingSetShow() {
                                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setShowTemplateManager(true)} title="Manage Templates">
                                             <Settings className="h-4 w-4" />
                                         </Button>
-                                        <Button variant="outline" size="sm" onClick={() => handleRetryExtraction(selectedSheet.id, undefined, true)}>
-                                            <RefreshCw className="mr-2 h-4 w-4" />
-                                            Retry (sync)
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleRetryExtraction(selectedSheet.id, undefined, true)}
+                                            disabled={retrySyncLoading}
+                                        >
+                                            {retrySyncLoading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <RefreshCw className="mr-2 h-4 w-4" />
+                                            )}
+                                            {retrySyncLoading ? 'Extracting...' : 'Retry (sync)'}
                                         </Button>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => handleEditSheet(selectedSheet)}>
@@ -560,7 +605,25 @@ export default function DrawingSetShow() {
                                     </Button>
                                 </div>
                             </CardHeader>
-                            <CardContent className="flex flex-1 gap-4 overflow-hidden p-4">
+                            <CardContent className="flex flex-1 gap-4 overflow-hidden p-4 relative">
+                                {/* Sync Extraction Loading Overlay */}
+                                {retrySyncLoading && (
+                                    <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+                                        <div className="text-center space-y-4">
+                                            <div className="relative">
+                                                <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
+                                                <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-slate-800">Extracting Metadata</h3>
+                                                <p className="text-sm text-muted-foreground mt-1">
+                                                    Running OCR extraction...
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Image Preview with Overlays */}
                                 <div className="relative flex-1 overflow-hidden rounded-lg border bg-gray-50">
                                     {getPreviewUrl(selectedSheet) ? (
@@ -659,6 +722,11 @@ export default function DrawingSetShow() {
                                     {selectedSheet.used_template_id && (
                                         <div className="text-muted-foreground text-xs">
                                             Used template: {templates.find((t) => t.id === selectedSheet.used_template_id)?.name || 'Unknown'}
+                                            {selectedSheet.extraction_raw?.used_field_mappings && (
+                                                <Badge variant="outline" className="ml-2 text-[10px] bg-violet-50 text-violet-700 border-violet-200">
+                                                    Field Mappings
+                                                </Badge>
+                                            )}
                                         </div>
                                     )}
                                 </div>

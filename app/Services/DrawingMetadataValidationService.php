@@ -136,10 +136,17 @@ class DrawingMetadataValidationService
                     $normalized = trim($normalized);
                 }
 
-                // For revision, strip common prefixes
+                // For revision, strip common prefixes and trailing issue/sheet numbers
                 if ($fieldName === 'revision') {
-                    $normalized = preg_replace('/^(REV|REVISION|R)\s*[:.]?\s*/i', '', $normalized);
+                    // Remove common prefixes: "REV:", "REVISION:", "ISSUE:", etc.
+                    $normalized = preg_replace('/^(ISSUE|REV|REVISION|R)\s*[:.]?\s*/i', '', $normalized);
                     $normalized = strtoupper(trim($normalized));
+
+                    // If result is like "F 001" or "A 123", extract just the revision part
+                    // Common formats: "F 001" (revision F, issue 001), "A - 02" (revision A, sheet 02)
+                    if (preg_match('/^([A-Z]{1,2})\s+[\d\-]+/', $normalized, $matches)) {
+                        $normalized = $matches[1];
+                    }
                 }
 
                 $results[$fieldName] = [

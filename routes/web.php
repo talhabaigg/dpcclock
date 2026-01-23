@@ -506,6 +506,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/drawing-sheets/{sheet}', [DrawingSetController::class, 'updateSheet'])->name('drawing-sheets.update');
         Route::post('/drawing-sheets/{sheet}/retry', [DrawingSetController::class, 'retryExtraction'])->name('drawing-sheets.retry');
         Route::post('/drawing-sets/{drawingSet}/retry-all', [DrawingSetController::class, 'retryAllExtraction'])->name('drawing-sets.retry-all');
+        Route::post('/drawing-sets/{drawingSet}/relink-sheets', [DrawingSetController::class, 'relinkSheets'])->name('drawing-sets.relink-sheets');
         Route::post('/drawing-sheets/{sheet}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawing-sheets.create-template');
     });
     Route::delete('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'destroy'])->name('drawing-sets.destroy')

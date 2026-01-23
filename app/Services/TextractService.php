@@ -420,28 +420,32 @@ class TextractService
             $totalConfidence = 0;
             $count = 0;
 
-            // Sort blocks by position (top to bottom, left to right) for proper reading order
+            // Collect both LINE and WORD blocks
             $lineBlocks = [];
-            foreach ($blocks as $block) {
-                if ($block['BlockType'] !== 'LINE') {
-                    continue;
-                }
+            $wordBlocks = [];
 
+            foreach ($blocks as $block) {
                 $text = trim($block['Text'] ?? '');
                 if ($text === '') {
                     continue;
                 }
 
                 $bb = $block['Geometry']['BoundingBox'] ?? null;
-                $lineBlocks[] = [
+                $blockData = [
                     'text' => $text,
                     'confidence' => ($block['Confidence'] ?? 0) / 100,
                     'y' => $bb['Top'] ?? 0,
                     'x' => $bb['Left'] ?? 0,
                 ];
+
+                if ($block['BlockType'] === 'LINE') {
+                    $lineBlocks[] = $blockData;
+                } elseif ($block['BlockType'] === 'WORD') {
+                    $wordBlocks[] = $blockData;
+                }
             }
 
-            // Sort by Y position (top to bottom), then X (left to right)
+            // Sort LINE blocks by position (top to bottom, left to right)
             usort($lineBlocks, function ($a, $b) {
                 $yDiff = abs($a['y'] - $b['y']);
                 if ($yDiff < 0.05) { // Same line (within 5% vertical)
@@ -459,8 +463,40 @@ class TextractService
             $combinedText = implode(' ', $textParts);
             $avgConfidence = $count > 0 ? $totalConfidence / $count : 0;
 
+            // Fallback: if LINE result looks like just a label (Issue:, Rev:, etc.)
+            // look for single-character WORD blocks that might be the revision letter
+            $looksLikeJustLabel = preg_match('/^(ISSUE|REV|REVISION|R)\s*[:.]?\s*$/i', $combinedText);
+            if ($looksLikeJustLabel && !empty($wordBlocks)) {
+                // Find single-character words that look like revision letters
+                $revisionLetters = [];
+                foreach ($wordBlocks as $word) {
+                    // Single uppercase letter or digit
+                    if (preg_match('/^[A-Z0-9]$/i', $word['text'])) {
+                        $revisionLetters[] = $word;
+                    }
+                }
+
+                if (!empty($revisionLetters)) {
+                    // Pick the one with highest confidence or rightmost position
+                    usort($revisionLetters, fn($a, $b) => $b['x'] <=> $a['x']);
+                    $revLetter = $revisionLetters[0];
+
+                    Log::info('extractAllTextFromRegion: Found revision letter in WORD blocks', [
+                        'label_text' => $combinedText,
+                        'found_letter' => $revLetter['text'],
+                        'all_words' => array_map(fn($w) => $w['text'], $wordBlocks),
+                    ]);
+
+                    $combinedText = $combinedText . ' ' . $revLetter['text'];
+                    $totalConfidence += $revLetter['confidence'];
+                    $count++;
+                    $avgConfidence = $totalConfidence / $count;
+                }
+            }
+
             Log::info('extractAllTextFromRegion result', [
-                'line_count' => $count,
+                'line_count' => count($lineBlocks),
+                'word_count' => count($wordBlocks),
                 'text' => $combinedText,
                 'confidence' => $avgConfidence,
             ]);

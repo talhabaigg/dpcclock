@@ -37,7 +37,10 @@ class DrawingSheet extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            $model->created_by = auth()->id();
+            // Only set created_by from auth if not already set (allows job context to pass it explicitly)
+            if ($model->created_by === null) {
+                $model->created_by = auth()->id();
+            }
         });
 
         static::updating(function ($model) {
@@ -212,12 +215,19 @@ class DrawingSheet extends Model
     /**
      * Find or create a sheet by drawing number within a project.
      * Used for grouping sheets from drawing sets (bulk PDF uploads).
+     *
+     * @param int $projectId
+     * @param string $drawingNumber
+     * @param string|null $title
+     * @param string|null $discipline
+     * @param int|null $createdBy User ID to use when creating (for job context where auth() is unavailable)
      */
     public static function findOrCreateByDrawingNumber(
         int $projectId,
         string $drawingNumber,
         ?string $title = null,
-        ?string $discipline = null
+        ?string $discipline = null,
+        ?int $createdBy = null
     ): self {
         // Normalize drawing number for comparison
         $normalizedNumber = strtoupper(trim($drawingNumber));
@@ -242,6 +252,7 @@ class DrawingSheet extends Model
             'title' => $title,
             'discipline' => $discipline,
             'revision_count' => 0,
+            'created_by' => $createdBy,
         ]);
     }
 }
