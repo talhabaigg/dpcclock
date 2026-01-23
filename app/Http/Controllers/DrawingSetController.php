@@ -295,9 +295,19 @@ class DrawingSetController extends Controller
             ], 422);
         }
 
+        // Clear all cached extraction data to force fresh template selection
         $sheet->update([
             'extraction_status' => QaStageDrawing::EXTRACTION_QUEUED,
             'extraction_errors' => null,
+            'used_template_id' => null,
+            'extraction_raw' => null,
+            'drawing_number' => null,
+            'drawing_title' => null,
+            'revision' => null,
+            'confidence_number' => null,
+            'confidence_title' => null,
+            'confidence_revision' => null,
+            'extracted_at' => null,
         ]);
 
         // Dispatch extraction job for this sheet
@@ -322,9 +332,19 @@ class DrawingSetController extends Controller
             ->get();
 
         foreach ($sheets as $sheet) {
+            // Clear all cached extraction data to force fresh template selection
             $sheet->update([
                 'extraction_status' => QaStageDrawing::EXTRACTION_QUEUED,
                 'extraction_errors' => null,
+                'used_template_id' => null,
+                'extraction_raw' => null,
+                'drawing_number' => null,
+                'drawing_title' => null,
+                'revision' => null,
+                'confidence_number' => null,
+                'confidence_title' => null,
+                'confidence_revision' => null,
+                'extracted_at' => null,
             ]);
 
             \App\Jobs\ExtractSheetMetadataJob::dispatch($sheet->id);
