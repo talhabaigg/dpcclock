@@ -120,6 +120,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // LOCATION MANAGEMENT
     // ============================================
+    // Static routes MUST come before wildcard routes to avoid {location} capturing "sync", "load-job-data", etc.
+    Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync')
+        ->middleware('permission:locations.sync');
+    Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
+        ->middleware('permission:locations.load-job-data');
     Route::middleware('permission:locations.view')->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
@@ -132,10 +137,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.edit');
     Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy')
         ->middleware('permission:locations.delete');
-    Route::get('/locations/sync', [LocationController::class, 'sync'])->name('locations.sync')
-        ->middleware('permission:locations.sync');
-    Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
-        ->middleware('permission:locations.load-job-data');
     Route::post('sub-locations', [LocationController::class, 'createSubLocation'])->name('sub-locations.create')
         ->middleware('permission:locations.create');
 
