@@ -33,7 +33,8 @@ class ExtractSheetMetadataJob implements ShouldQueue
     public int $timeout = 300; // 5 minutes
 
     public function __construct(
-        public int $sheetId
+        public int $sheetId,
+        public ?int $preferredTemplateId = null
     ) {}
 
     public function handle(
@@ -43,6 +44,13 @@ class ExtractSheetMetadataJob implements ShouldQueue
     ): void {
         // Increase memory limit for large images (300 DPI drawings can be 200MB+ uncompressed)
         ini_set('memory_limit', '1G');
+
+        // Debug: Log job parameters immediately
+        Log::info('ExtractSheetMetadataJob started', [
+            'sheet_id' => $this->sheetId,
+            'preferred_template_id' => $this->preferredTemplateId,
+            'has_preferred_template' => $this->preferredTemplateId !== null,
+        ]);
 
         $sheet = QaStageDrawing::with('drawingSet')->find($this->sheetId);
 
@@ -82,8 +90,42 @@ class ExtractSheetMetadataJob implements ShouldQueue
         }
 
         try {
-            // Attempt 1: Try matching templates (always allowed - templates target small regions)
-            if ($projectId) {
+            // Attempt 1: Try preferred template if specified (user explicitly chose this template)
+            $usedPreferredTemplate = false;
+            if ($this->preferredTemplateId && $projectId) {
+                $preferredTemplate = TitleBlockTemplate::where('id', $this->preferredTemplateId)
+                    ->where('project_id', $projectId)
+                    ->first();
+
+                if ($preferredTemplate) {
+                    Log::info('Using preferred template for extraction', [
+                        'sheet_id' => $sheet->id,
+                        'template_id' => $preferredTemplate->id,
+                        'template_name' => $preferredTemplate->name,
+                    ]);
+
+                    $result = $this->extractWithTemplate(
+                        $sheet, $preferredTemplate, $textract, $cropService, $validator
+                    );
+                    $result['used_template_id'] = $preferredTemplate->id;
+                    $allAttempts[] = [
+                        'method' => 'preferred_template',
+                        'template_id' => $preferredTemplate->id,
+                        'result' => $result,
+                    ];
+
+                    $bestResult = $result;
+                    $usedPreferredTemplate = true;
+
+                    if ($result['passes']) {
+                        $preferredTemplate->recordSuccess();
+                    }
+                    // Don't try other templates - user specifically chose this one
+                }
+            }
+
+            // Attempt 2: Try auto-selected templates if no preferred template was used
+            if (!$usedPreferredTemplate && $projectId) {
                 $templates = TitleBlockTemplate::findBestMatches(
                     $projectId,
                     $sheet->page_orientation,

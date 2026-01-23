@@ -49,7 +49,9 @@
       "Bash(\"C:\\\\poppler\\\\poppler-24.08.0\\\\Library\\\\bin\\\\pdftoppm.exe\" -v)",
       "Bash(\"C:\\\\poppler\\\\poppler-24.08.0\\\\Library\\\\bin\\\\pdfinfo.exe\" --help)",
       "Bash(if not exist \"C:\\\\php-8.3\\\\extras\\\\ssl\" mkdir \"C:\\\\php-8.3\\\\extras\\\\ssl\")",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(Get-Content \"c:\\\\Laravel\\\\dpcclock\\\\storage\\\\logs\\\\laravel.log\" -Tail 100)",
+      "Bash(Select-String -Pattern \"Retry extraction|template_id|preferred template|Using preferred\")"
     ]
   }
 }

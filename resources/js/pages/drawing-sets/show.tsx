@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Loader2, RefreshCw, Save, XCircle } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Loader2, RefreshCw, Save, Settings, Trash2, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -117,6 +118,9 @@ export default function DrawingSetShow() {
     const [templateName, setTemplateName] = useState('');
     const [activeTab, setActiveTab] = useState('all');
     const [showOverlays, setShowOverlays] = useState(true);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('auto');
+    const [showTemplateManager, setShowTemplateManager] = useState(false);
+    const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -175,18 +179,32 @@ export default function DrawingSetShow() {
         }
     };
 
-    const handleRetryExtraction = async (sheetId: number) => {
+    const handleRetryExtraction = async (sheetId: number, templateId?: string, sync: boolean = false) => {
         try {
+            const body: Record<string, unknown> = {};
+            const effectiveTemplateId = templateId ?? selectedTemplateId;
+            if (effectiveTemplateId && effectiveTemplateId !== 'auto') {
+                body.template_id = parseInt(effectiveTemplateId, 10);
+            }
+            if (sync) {
+                body.sync = true;
+            }
+
+            console.log('Retry extraction:', { sheetId, effectiveTemplateId, body, sync });
+
             const response = await fetch(`/drawing-sheets/${sheetId}/retry`, {
                 method: 'POST',
                 headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
+                body: JSON.stringify(body),
             });
 
             const data = await response.json();
             if (data.success) {
-                toast.success('Extraction retry queued');
+                toast.success(data.message || 'Extraction retry queued');
                 router.reload();
             } else {
                 toast.error(data.message);
@@ -196,9 +214,9 @@ export default function DrawingSetShow() {
         }
     };
 
-    const handleRetryAll = async () => {
+    const handleRetryAll = async (force: boolean = false) => {
         try {
-            const response = await fetch(`/drawing-sets/${drawingSet.id}/retry-all`, {
+            const response = await fetch(`/drawing-sets/${drawingSet.id}/retry-all${force ? '?force=1' : ''}`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
@@ -221,6 +239,30 @@ export default function DrawingSetShow() {
         if (sheet.page_preview_s3_key) return `/drawing-sheets/${sheet.id}/preview`;
         if (sheet.thumbnail_path) return `/storage/${sheet.thumbnail_path}`;
         return null;
+    };
+
+    const handleDeleteTemplate = async (templateId: number) => {
+        setDeletingTemplateId(templateId);
+        try {
+            const response = await fetch(`/templates/${templateId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                toast.success('Template deleted successfully');
+                router.reload();
+            } else {
+                toast.error(data.message || 'Failed to delete template');
+            }
+        } catch {
+            toast.error('Failed to delete template');
+        } finally {
+            setDeletingTemplateId(null);
+        }
     };
 
     return (
@@ -295,14 +337,18 @@ export default function DrawingSetShow() {
                             </TabsContent>
                         </Tabs>
                     </CardContent>
-                    {stats.needs_review > 0 && (
-                        <div className="border-t p-2">
-                            <Button variant="outline" size="sm" className="w-full" onClick={handleRetryAll}>
+                    <div className="space-y-2 border-t p-2">
+                        {(stats.needs_review > 0 || stats.failed > 0) && (
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => handleRetryAll(false)}>
                                 <RefreshCw className="mr-2 h-4 w-4" />
-                                Retry All Failed
+                                Retry Failed ({stats.needs_review + stats.failed})
                             </Button>
-                        </div>
-                    )}
+                        )}
+                        <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => handleRetryAll(true)}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Force Retry All ({stats.total})
+                        </Button>
+                    </div>
                 </Card>
 
                 {/* Right Panel - Preview & Edit */}
@@ -326,12 +372,29 @@ export default function DrawingSetShow() {
                                     >
                                         {showOverlays ? 'Hide' : 'Show'} Overlays
                                     </Button>
-                                    {selectedSheet.extraction_status !== 'success' && (
-                                        <Button variant="outline" size="sm" onClick={() => handleRetryExtraction(selectedSheet.id)}>
-                                            <RefreshCw className="mr-2 h-4 w-4" />
-                                            Retry
+                                    {/* Template selector and Retry button */}
+                                    <div className="flex items-center gap-1">
+                                        <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                                            <SelectTrigger className="h-8 w-[140px] text-xs">
+                                                <SelectValue placeholder="Template" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="auto">Auto (best match)</SelectItem>
+                                                {templates.map((template) => (
+                                                    <SelectItem key={template.id} value={String(template.id)}>
+                                                        {template.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setShowTemplateManager(true)} title="Manage Templates">
+                                            <Settings className="h-4 w-4" />
                                         </Button>
-                                    )}
+                                        <Button variant="outline" size="sm" onClick={() => handleRetryExtraction(selectedSheet.id, undefined, true)}>
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                            Retry (sync)
+                                        </Button>
+                                    </div>
                                     <Button variant="outline" size="sm" onClick={() => handleEditSheet(selectedSheet)}>
                                         <Edit2 className="mr-2 h-4 w-4" />
                                         Edit
@@ -355,6 +418,11 @@ export default function DrawingSetShow() {
                                             imageUrl={getPreviewUrl(selectedSheet)!}
                                             sheet={selectedSheet}
                                             template={templates.find((t) => t.id === selectedSheet.used_template_id) || null}
+                                            selectedTemplate={
+                                                selectedTemplateId !== 'auto'
+                                                    ? templates.find((t) => t.id === parseInt(selectedTemplateId, 10)) || null
+                                                    : null
+                                            }
                                             showOverlays={showOverlays}
                                         />
                                     ) : (
@@ -585,6 +653,56 @@ export default function DrawingSetShow() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Template Manager Dialog */}
+            <Dialog open={showTemplateManager} onOpenChange={setShowTemplateManager}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Manage Templates</DialogTitle>
+                        <DialogDescription>View and manage extraction templates for this project.</DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-96 overflow-y-auto">
+                        {templates.length === 0 ? (
+                            <p className="text-muted-foreground py-4 text-center text-sm">No templates created yet.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {templates.map((template) => (
+                                    <div
+                                        key={template.id}
+                                        className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium">{template.name}</p>
+                                            <div className="text-muted-foreground flex gap-2 text-xs">
+                                                <span>{template.success_count} uses</span>
+                                                {template.orientation && <span>• {template.orientation}</span>}
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8 flex-shrink-0"
+                                            onClick={() => handleDeleteTemplate(template.id)}
+                                            disabled={deletingTemplateId === template.id}
+                                        >
+                                            {deletingTemplateId === template.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Trash2 className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowTemplateManager(false)}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
@@ -594,11 +712,13 @@ function PreviewWithOverlays({
     imageUrl,
     sheet,
     template,
+    selectedTemplate,
     showOverlays,
 }: {
     imageUrl: string;
     sheet: Sheet;
     template: Template | null;
+    selectedTemplate?: Template | null;
     showOverlays: boolean;
 }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -687,7 +807,24 @@ function PreviewWithOverlays({
 
             {imageLoaded && showOverlays && imageBounds && (
                 <>
-                    {/* Template region overlay */}
+                    {/* Selected template region overlay (from dropdown - shown in cyan) */}
+                    {selectedTemplate && selectedTemplate.id !== template?.id && (
+                        <div
+                            className="pointer-events-none absolute border-3 border-solid border-cyan-500 bg-cyan-500/20"
+                            style={toPixelStyle(
+                                selectedTemplate.crop_rect.x,
+                                selectedTemplate.crop_rect.y,
+                                selectedTemplate.crop_rect.w,
+                                selectedTemplate.crop_rect.h
+                            )}
+                        >
+                            <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1 text-[10px] font-semibold text-white">
+                                Selected: {selectedTemplate.name}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Used template region overlay (amber dashed - what was used for extraction) */}
                     {template && (
                         <div
                             className="pointer-events-none absolute border-2 border-dashed border-amber-500 bg-amber-500/10"
@@ -699,7 +836,7 @@ function PreviewWithOverlays({
                             )}
                         >
                             <span className="absolute -top-5 left-0 rounded bg-amber-500 px-1 text-[10px] text-white">
-                                Template: {template.name}
+                                Used: {template.name}
                             </span>
                         </div>
                     )}
@@ -750,10 +887,16 @@ function PreviewWithOverlays({
 
                     {/* Legend */}
                     <div className="absolute bottom-2 left-2 flex flex-wrap gap-2 rounded bg-white/90 p-2 text-[10px]">
+                        {selectedTemplate && selectedTemplate.id !== template?.id && (
+                            <span className="flex items-center gap-1">
+                                <span className="h-3 w-3 border-2 border-solid border-cyan-500 bg-cyan-500/20" />
+                                Selected
+                            </span>
+                        )}
                         {template && (
                             <span className="flex items-center gap-1">
                                 <span className="h-3 w-3 border-2 border-dashed border-amber-500 bg-amber-500/20" />
-                                Template
+                                Used
                             </span>
                         )}
                         {extractionFields?.drawing_number?.boundingBox && (

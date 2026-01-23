@@ -261,6 +261,12 @@ class DrawingMetadataValidationService
         // Uppercase for consistency
         $normalized = strtoupper($normalized);
 
+        // Reject common garbage/placeholder values
+        $garbage = ['-', '--', '---', 'N/A', 'NA', 'NONE', 'TBD', 'TBC', '...', '.', '–', '—'];
+        if (in_array($normalized, $garbage) || in_array(strtoupper($normalized), $garbage)) {
+            $errors[] = 'Revision is a placeholder value';
+        }
+
         // Valid revision patterns
         $validPatterns = [
             // Single or double letter: A, B, AA, AB

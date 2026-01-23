@@ -285,8 +285,9 @@ class DrawingSetController extends Controller
 
     /**
      * Retry extraction for a specific sheet.
+     * Optionally accepts a template_id to force use of a specific template.
      */
-    public function retryExtraction(QaStageDrawing $sheet): JsonResponse
+    public function retryExtraction(Request $request, QaStageDrawing $sheet): JsonResponse
     {
         if (!$sheet->drawing_set_id) {
             return response()->json([
@@ -294,6 +295,14 @@ class DrawingSetController extends Controller
                 'message' => 'Sheet is not part of a drawing set.',
             ], 422);
         }
+
+        $templateId = $request->input('template_id') ? (int) $request->input('template_id') : null;
+
+        \Log::info('Retry extraction requested', [
+            'sheet_id' => $sheet->id,
+            'template_id' => $templateId,
+            'request_all' => $request->all(),
+        ]);
 
         // Clear all cached extraction data to force fresh template selection
         $sheet->update([
@@ -310,26 +319,53 @@ class DrawingSetController extends Controller
             'extracted_at' => null,
         ]);
 
-        // Dispatch extraction job for this sheet
-        \App\Jobs\ExtractSheetMetadataJob::dispatch($sheet->id);
+        // Dispatch extraction job for this sheet with optional preferred template
+        $job = new \App\Jobs\ExtractSheetMetadataJob($sheet->id, $templateId);
+
+        \Log::info('Dispatching extraction job', [
+            'sheet_id' => $sheet->id,
+            'template_id' => $templateId,
+            'job_preferred_template_id' => $job->preferredTemplateId,
+        ]);
+
+        // Run synchronously if sync=1 param is passed (for debugging)
+        if ($request->boolean('sync')) {
+            \Log::info('Running job synchronously for debugging');
+            dispatch_sync($job);
+        } else {
+            dispatch($job);
+        }
+
+        $message = $templateId
+            ? 'Extraction retry queued with selected template.'
+            : 'Extraction retry queued.';
 
         return response()->json([
             'success' => true,
-            'message' => 'Extraction retry queued.',
+            'message' => $message,
         ]);
     }
 
     /**
      * Retry extraction for all failed/needs_review sheets in a set.
+     * If force=true, also retry successful sheets.
      */
-    public function retryAllExtraction(DrawingSet $drawingSet): JsonResponse
+    public function retryAllExtraction(Request $request, DrawingSet $drawingSet): JsonResponse
     {
-        $sheets = $drawingSet->sheets()
-            ->whereIn('extraction_status', [
+        $force = $request->boolean('force', false);
+
+        $query = $drawingSet->sheets();
+
+        if ($force) {
+            // Force retry: include all sheets including successful ones
+            $sheets = $query->get();
+        } else {
+            // Normal retry: only failed/needs_review sheets
+            $sheets = $query->whereIn('extraction_status', [
                 QaStageDrawing::EXTRACTION_NEEDS_REVIEW,
                 QaStageDrawing::EXTRACTION_FAILED,
-            ])
-            ->get();
+            ])->get();
+        }
 
         foreach ($sheets as $sheet) {
             // Clear all cached extraction data to force fresh template selection
