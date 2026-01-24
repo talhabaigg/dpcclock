@@ -41,6 +41,7 @@ import {
     Sparkles,
     Trash2,
     Unlock,
+    X,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -248,6 +249,17 @@ export default function QaStageDrawingShow() {
     const [deleting, setDeleting] = useState(false);
     const [bulkDeleting, setBulkDeleting] = useState(false);
     const [describing, setDescribing] = useState(false);
+
+    // Multi-select state for drag selection
+    const [selectedObservationIds, setSelectedObservationIds] = useState<Set<number>>(new Set());
+    const [selectionRect, setSelectionRect] = useState<{
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
+    } | null>(null);
+    const isSelectingRef = useRef(false);
+    const didSelectDragRef = useRef(false);
 
     const [serverObservations, setServerObservations] = useState<Observation[]>(drawing.observations || []);
     const [hasUserPanned, setHasUserPanned] = useState(false);
@@ -954,6 +966,17 @@ export default function QaStageDrawingShow() {
             return;
         }
 
+        // Skip if this was a selection drag
+        if (didSelectDragRef.current) {
+            didSelectDragRef.current = false;
+            return;
+        }
+
+        // Skip if there are selected observations (user is in multi-select workflow)
+        if (selectedObservationIds.size > 0) {
+            return;
+        }
+
         if (alignmentTool.isAligning) {
             if (alignmentTool.activeLayer === 'base') {
                 handleAlignmentBaseClick(event);
@@ -985,6 +1008,25 @@ export default function QaStageDrawingShow() {
         if (target?.closest('button, input, textarea, select, a')) {
             return;
         }
+
+        // In select mode, start drag selection
+        if (viewMode === 'select') {
+            isSelectingRef.current = true;
+            didSelectDragRef.current = false;
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) {
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                setSelectionRect({ startX: x, startY: y, currentX: x, currentY: y });
+            }
+            // Clear previous selection unless shift is held
+            if (!event.shiftKey) {
+                setSelectedObservationIds(new Set());
+            }
+            return;
+        }
+
+        // Pan mode
         isDraggingRef.current = true;
         didDragRef.current = false;
         dragStartRef.current = { x: event.clientX, y: event.clientY };
@@ -992,6 +1034,24 @@ export default function QaStageDrawingShow() {
     };
 
     const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        // Handle drag selection in select mode
+        if (isSelectingRef.current && selectionRect) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) {
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                // Mark as a drag if moved beyond threshold
+                const dx = Math.abs(x - selectionRect.startX);
+                const dy = Math.abs(y - selectionRect.startY);
+                if (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX) {
+                    didSelectDragRef.current = true;
+                }
+                setSelectionRect((prev) => prev ? { ...prev, currentX: x, currentY: y } : null);
+            }
+            return;
+        }
+
+        // Pan mode
         if (!isDraggingRef.current) return;
         const dx = event.clientX - dragStartRef.current.x;
         const dy = event.clientY - dragStartRef.current.y;
@@ -1007,7 +1067,56 @@ export default function QaStageDrawingShow() {
         }
     };
 
+    // Helper to get observations within selection rectangle
+    const getObservationsInSelectionRect = useCallback(() => {
+        if (!selectionRect || !containerRef.current) return [];
+
+        // Get content dimensions
+        const contentWidth = isPdf
+            ? (pageSizes[1]?.width || 0)
+            : (baseImageSize?.width || 0) * pdfScale;
+        const contentHeight = isPdf
+            ? (pageSizes[1]?.height || 0)
+            : (baseImageSize?.height || 0) * pdfScale;
+
+        if (contentWidth === 0 || contentHeight === 0) return [];
+
+        // Normalize selection rect (handle any drag direction)
+        const minX = Math.min(selectionRect.startX, selectionRect.currentX);
+        const maxX = Math.max(selectionRect.startX, selectionRect.currentX);
+        const minY = Math.min(selectionRect.startY, selectionRect.currentY);
+        const maxY = Math.max(selectionRect.startY, selectionRect.currentY);
+
+        // Convert selection rect from screen coords to content coords
+        // Account for translate offset
+        const selMinX = (minX - pdfTranslate.x) / contentWidth;
+        const selMaxX = (maxX - pdfTranslate.x) / contentWidth;
+        const selMinY = (minY - pdfTranslate.y) / contentHeight;
+        const selMaxY = (maxY - pdfTranslate.y) / contentHeight;
+
+        // Find observations within the selection
+        return serverObservations.filter((obs) => {
+            if (obs.page_number !== 1) return false;
+            return obs.x >= selMinX && obs.x <= selMaxX && obs.y >= selMinY && obs.y <= selMaxY;
+        });
+    }, [selectionRect, isPdf, pageSizes, baseImageSize, pdfScale, pdfTranslate, serverObservations]);
+
     const handlePointerUp = () => {
+        // Finalize drag selection
+        if (isSelectingRef.current && selectionRect) {
+            const selectedObs = getObservationsInSelectionRect();
+            if (selectedObs.length > 0) {
+                setSelectedObservationIds((prev) => {
+                    const newSet = new Set(prev);
+                    selectedObs.forEach((obs) => newSet.add(obs.id));
+                    return newSet;
+                });
+            }
+            isSelectingRef.current = false;
+            setSelectionRect(null);
+            return;
+        }
+
         isDraggingRef.current = false;
     };
 
@@ -1343,6 +1452,82 @@ export default function QaStageDrawingShow() {
         } finally {
             setBulkDeleting(false);
         }
+    };
+
+    // Bulk delete selected observations
+    const handleDeleteSelectedObservations = async () => {
+        if (selectedObservationIds.size === 0) {
+            toast.info('No observations selected.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete ${selectedObservationIds.size} selected observation${selectedObservationIds.size !== 1 ? 's' : ''}? This action cannot be undone.`)) {
+            return;
+        }
+
+        setBulkDeleting(true);
+
+        try {
+            const selectedObs = serverObservations.filter((obs) => selectedObservationIds.has(obs.id));
+
+            if (selectedObs.length === 0) {
+                toast.warning('Selected observations not found in current list.');
+                setBulkDeleting(false);
+                setSelectedObservationIds(new Set());
+                return;
+            }
+
+            const deletePromises = selectedObs.map((obs) =>
+                fetch(`/qa-stage-drawings/${drawing.id}/observations/${obs.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-XSRF-TOKEN': getXsrfToken(),
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                })
+            );
+
+            const results = await Promise.allSettled(deletePromises);
+            const successCount = results.filter((r) => r.status === 'fulfilled' && (r.value as Response).ok).length;
+            const failCount = selectedObs.length - successCount;
+
+            // Log failures for debugging
+            results.forEach((result, i) => {
+                if (result.status === 'rejected') {
+                    console.error(`Failed to delete observation ${selectedObs[i].id}:`, result.reason);
+                } else if (!result.value.ok) {
+                    console.error(`Failed to delete observation ${selectedObs[i].id}: HTTP ${result.value.status}`);
+                }
+            });
+
+            // Remove successfully deleted observations from state
+            const deletedIds = new Set(
+                selectedObs
+                    .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
+                    .map((obs) => obs.id)
+            );
+            setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
+            setSelectedObservationIds(new Set());
+
+            if (failCount === 0) {
+                toast.success(`Deleted ${successCount} observation${successCount !== 1 ? 's' : ''}.`);
+            } else {
+                toast.warning(`Deleted ${successCount} observations. ${failCount} failed.`);
+            }
+        } catch (err) {
+            console.error('Failed to delete selected observations:', err);
+            toast.error('Failed to delete selected observations.');
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
+    // Clear selection
+    const handleClearSelection = () => {
+        setSelectedObservationIds(new Set());
     };
 
     // AI Comparison handler
@@ -1822,8 +2007,37 @@ export default function QaStageDrawingShow() {
                         </>
                     )}
 
+                    {/* Selection controls */}
+                    {selectedObservationIds.size > 0 && (
+                        <>
+                            <div className="ml-auto" />
+                            <Badge variant="secondary" className="gap-1 bg-yellow-100 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                {selectedObservationIds.size} selected
+                            </Badge>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 gap-1 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                onClick={handleDeleteSelectedObservations}
+                                disabled={bulkDeleting}
+                            >
+                                <Trash2 className="h-3 w-3" />
+                                {bulkDeleting ? 'Deleting...' : 'Delete'}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={handleClearSelection}
+                                title="Clear selection"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </Button>
+                        </>
+                    )}
+
                     {/* Observations count */}
-                    {serverObservations.length > 0 && (
+                    {serverObservations.length > 0 && selectedObservationIds.size === 0 && (
                         <>
                             <div className="ml-auto" />
                             <Badge variant="outline" className="text-xs">
@@ -1965,6 +2179,7 @@ export default function QaStageDrawingShow() {
                                                         .map((obs) => {
                                                             const isAI = obs.source === 'ai_comparison';
                                                             const isUnconfirmed = isAI && !obs.is_confirmed;
+                                                            const isSelected = selectedObservationIds.has(obs.id);
                                                             const colorClass = isAI
                                                                 ? isUnconfirmed
                                                                     ? 'bg-violet-500 ring-2 ring-violet-500/30 border-2 border-dashed border-white'
@@ -1972,6 +2187,9 @@ export default function QaStageDrawingShow() {
                                                                 : obs.type === 'defect'
                                                                     ? 'bg-red-500 ring-2 ring-red-500/30'
                                                                     : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                                            const selectedClass = isSelected
+                                                                ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-transparent scale-125'
+                                                                : '';
                                                             const tooltipPrefix = isAI
                                                                 ? `[AI ${obs.ai_change_type || 'detected'}${isUnconfirmed ? ' - Unconfirmed' : ''}] `
                                                                 : '';
@@ -1981,7 +2199,7 @@ export default function QaStageDrawingShow() {
                                                                     {/* CV bounding box highlight for AI observations */}
                                                                     {hasBbox && (
                                                                         <div
-                                                                            className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10"
+                                                                            className={`pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10 ${isSelected ? 'border-yellow-400 bg-yellow-400/20' : ''}`}
                                                                             style={{
                                                                                 left: `${(obs.x - obs.bbox_width! / 2) * 100}%`,
                                                                                 top: `${(obs.y - obs.bbox_height! / 2) * 100}%`,
@@ -1992,11 +2210,24 @@ export default function QaStageDrawingShow() {
                                                                     )}
                                                                     <button
                                                                         type="button"
-                                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
+                                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${selectedClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
                                                                         style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
                                                                         title={`${tooltipPrefix}${obs.description}`}
                                                                         onClick={(event) => {
                                                                             event.stopPropagation();
+                                                                            // In select mode, toggle selection on click
+                                                                            if (viewMode === 'select') {
+                                                                                setSelectedObservationIds((prev) => {
+                                                                                    const newSet = new Set(prev);
+                                                                                    if (newSet.has(obs.id)) {
+                                                                                        newSet.delete(obs.id);
+                                                                                    } else {
+                                                                                        newSet.add(obs.id);
+                                                                                    }
+                                                                                    return newSet;
+                                                                                });
+                                                                                return;
+                                                                            }
                                                                             setEditingObservation(obs);
                                                                             setPendingPoint(null);
                                                                             setObservationType(obs.type);
@@ -2101,6 +2332,7 @@ export default function QaStageDrawingShow() {
                                         .map((obs) => {
                                             const isAI = obs.source === 'ai_comparison';
                                             const isUnconfirmed = isAI && !obs.is_confirmed;
+                                            const isSelected = selectedObservationIds.has(obs.id);
                                             // AI observations: purple/violet color scheme with sparkle icon
                                             // Manual: red for defect, blue for observation
                                             const colorClass = isAI
@@ -2110,6 +2342,9 @@ export default function QaStageDrawingShow() {
                                                 : obs.type === 'defect'
                                                     ? 'bg-red-500 ring-2 ring-red-500/30'
                                                     : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                            const selectedClass = isSelected
+                                                ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-transparent scale-125'
+                                                : '';
                                             const tooltipPrefix = isAI
                                                 ? `[AI ${obs.ai_change_type || 'detected'}${isUnconfirmed ? ' - Unconfirmed' : ''}] `
                                                 : '';
@@ -2119,7 +2354,7 @@ export default function QaStageDrawingShow() {
                                                     {/* CV bounding box highlight for AI observations */}
                                                     {hasBbox && (
                                                         <div
-                                                            className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10"
+                                                            className={`pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10 ${isSelected ? 'border-yellow-400 bg-yellow-400/20' : ''}`}
                                                             style={{
                                                                 left: `${(obs.x - obs.bbox_width! / 2) * 100}%`,
                                                                 top: `${(obs.y - obs.bbox_height! / 2) * 100}%`,
@@ -2130,11 +2365,24 @@ export default function QaStageDrawingShow() {
                                                     )}
                                                     <button
                                                         type="button"
-                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
+                                                        className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-110 ${colorClass} ${selectedClass} ${isAI ? 'h-7 w-7' : 'h-6 w-6 text-[10px] font-bold'}`}
                                                         style={{ left: `${obs.x * 100}%`, top: `${obs.y * 100}%` }}
                                                         title={`${tooltipPrefix}${obs.description}`}
                                                         onClick={(event) => {
                                                             event.stopPropagation();
+                                                            // In select mode, toggle selection on click
+                                                            if (viewMode === 'select') {
+                                                                setSelectedObservationIds((prev) => {
+                                                                    const newSet = new Set(prev);
+                                                                    if (newSet.has(obs.id)) {
+                                                                        newSet.delete(obs.id);
+                                                                    } else {
+                                                                        newSet.add(obs.id);
+                                                                    }
+                                                                    return newSet;
+                                                                });
+                                                                return;
+                                                            }
                                                             setEditingObservation(obs);
                                                             setPendingPoint(null);
                                                             setObservationType(obs.type);
@@ -2184,6 +2432,19 @@ export default function QaStageDrawingShow() {
                                 magnification={3}
                                 size={120}
                                 borderColor={alignmentTool.activeLayer === 'base' ? 'blue' : 'green'}
+                            />
+                        )}
+
+                        {/* Selection rectangle overlay */}
+                        {selectionRect && (
+                            <div
+                                className="pointer-events-none absolute border-2 border-dashed border-blue-500 bg-blue-500/10"
+                                style={{
+                                    left: Math.min(selectionRect.startX, selectionRect.currentX),
+                                    top: Math.min(selectionRect.startY, selectionRect.currentY),
+                                    width: Math.abs(selectionRect.currentX - selectionRect.startX),
+                                    height: Math.abs(selectionRect.currentY - selectionRect.startY),
+                                }}
                             />
                         )}
                     </div>
