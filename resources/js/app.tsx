@@ -1,11 +1,25 @@
 import '../css/app.css';
 import './echo';
 
+import {
+    browserSupportsWebAuthn,
+    startAuthentication,
+    startRegistration,
+} from '@simplewebauthn/browser';
+
 declare global {
     interface Window {
         Echo: any;
+        browserSupportsWebAuthn: typeof browserSupportsWebAuthn;
+        startAuthentication: typeof startAuthentication;
+        startRegistration: typeof startRegistration;
     }
 }
+
+// Expose WebAuthn functions globally for passkey support
+window.browserSupportsWebAuthn = browserSupportsWebAuthn;
+window.startAuthentication = startAuthentication;
+window.startRegistration = startRegistration;
 
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';

@@ -57,7 +57,13 @@
       "Bash(winget install:*)",
       "Bash(pip install:*)",
       "Bash(\"/c/Users/talha/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install flask opencv-python numpy)",
-      "WebFetch(domain:api.keypay.com.au)"
+      "WebFetch(domain:api.keypay.com.au)",
+      "WebFetch(domain:timdiff.web.app)",
+      "Bash(composer create-project:*)",
+      "Bash(git init:*)",
+      "WebFetch(domain:spatie.be)",
+      "Bash(Get-Content c:Laraveldpcclockstoragelogslaravel.log -Tail 100)",
+      "Bash(Select-String -Pattern \"passkey|Passkey|WebAuthn|webauthn\" -Context 5,5)"
     ]
   }
 }

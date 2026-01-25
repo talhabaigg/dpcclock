@@ -11,11 +11,13 @@ use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
 use NotificationChannels\WebPush\HasPushSubscriptions;
+use Spatie\LaravelPasskeys\Models\Concerns\HasPasskeys;
+use Spatie\LaravelPasskeys\Models\Concerns\InteractsWithPasskeys;
 
-class User extends Authenticatable
+class User extends Authenticatable implements HasPasskeys
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords, HasPushSubscriptions;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords, HasPushSubscriptions, InteractsWithPasskeys;
 
     /**
      * The attributes that are mass assignable.
@@ -28,6 +30,7 @@ class User extends Authenticatable
         'password',
         'phone',
         'disable_kiosk_notifications',
+        'passkey_prompt_dismissed',
     ];
 
     /**
@@ -50,6 +53,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'passkey_prompt_dismissed' => 'boolean',
         ];
     }
 

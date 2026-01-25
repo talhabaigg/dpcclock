@@ -1,5 +1,6 @@
 import { Toaster } from '@/components/ui/sonner';
 import { PushNotificationPrompt } from '@/components/push-notification-prompt';
+import PasskeyPrompt from '@/components/passkey-prompt';
 import AppLayoutTemplate from '@/layouts/app/app-sidebar-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type ReactNode } from 'react';
@@ -14,5 +15,6 @@ export default ({ children, breadcrumbs, ...props }: AppLayoutProps) => (
         {children}
         <Toaster />
         <PushNotificationPrompt />
+        <PasskeyPrompt />
     </AppLayoutTemplate>
 );

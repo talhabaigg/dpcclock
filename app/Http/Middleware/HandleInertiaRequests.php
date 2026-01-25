@@ -81,6 +81,10 @@ class HandleInertiaRequests extends Middleware
                         'created_at' => $n->created_at,
                     ]),
             ] : ['unreadCount' => 0, 'latest' => []],
+            'passkeyPrompt' => fn() => $request->user() ? [
+                'hasPasskeys' => $request->user()->passkeys()->exists(),
+                'dismissed' => (bool) $request->user()->passkey_prompt_dismissed,
+            ] : null,
         ];
     }
 }

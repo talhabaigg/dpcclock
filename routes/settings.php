@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\PasskeyController;
 use App\Notifications\TestPushNotification;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -15,6 +16,14 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');
+
+    // Passkey Management Routes
+    Route::get('settings/passkeys', [PasskeyController::class, 'index'])->name('passkeys.index');
+    Route::get('settings/passkeys/generate-options', [PasskeyController::class, 'generateOptions'])->name('passkeys.generate-options');
+    Route::post('settings/passkeys', [PasskeyController::class, 'store'])->name('passkeys.store');
+    Route::put('settings/passkeys/{id}', [PasskeyController::class, 'update'])->name('passkeys.update');
+    Route::delete('settings/passkeys/{id}', [PasskeyController::class, 'destroy'])->name('passkeys.destroy');
+    Route::post('settings/passkeys/dismiss-prompt', [PasskeyController::class, 'dismissPrompt'])->name('passkeys.dismiss-prompt');
 
     Route::get('settings/kiosk-admin-pin', function () {
         return Inertia::render('settings/kiosk-admin-pin');
