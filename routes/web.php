@@ -37,6 +37,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\LabourForecastController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -413,6 +414,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/cash-forecast/cash-out-adjustments', [CashForecastController::class, 'storeCashOutAdjustments'])->name('cashForecast.storeCashOutAdjustments');
         Route::post('/cash-forecast/vendor-payment-delays', [CashForecastController::class, 'storeVendorPaymentDelays'])->name('cashForecast.storeVendorPaymentDelays');
     });
+
+    // Labour Forecast
+    Route::get('/labour-forecast', [LabourForecastController::class, 'index'])->name('labour-forecast.index');
+    Route::get('/location/{location}/labour-forecast/show', [LabourForecastController::class, 'show'])->name('labour-forecast.show');
 
     // ============================================
     // BUDGET MANAGEMENT (Admin only)

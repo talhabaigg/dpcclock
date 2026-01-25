@@ -22,6 +22,7 @@ import {
     Hourglass,
     Key,
     LayoutGrid,
+    PersonStanding,
     Pickaxe,
     Settings,
     Shield,
@@ -48,6 +49,12 @@ const mainNavItems: NavItem[] = [
         title: 'Turnover Forecast',
         href: '/turnover-forecast',
         icon: ChartLine,
+        permission: 'turnover-forecast.view',
+    },
+    {
+        title: 'Labour Forecast',
+        href: '/labour-forecast',
+        icon: PersonStanding,
         permission: 'turnover-forecast.view',
     },
     {
