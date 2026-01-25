@@ -10,7 +10,7 @@ interface JobForecastStatusNotificationProps {
 }
 
 const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastStatusNotificationProps) => {
-    const { action, title, body, job_number, forecast_month, location_id } = notification.data;
+    const { type, action, title, body, job_number, forecast_month, location_id } = notification.data;
 
     // Configuration based on action type
     const config = {
@@ -23,6 +23,14 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
             badgeText: 'Pending Review',
         },
         finalized: {
+            Icon: CheckCircle,
+            iconBg: 'bg-green-100 dark:bg-green-900/50',
+            iconColor: 'text-green-600 dark:text-green-400',
+            borderColor: 'border-l-green-500',
+            badgeColor: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+            badgeText: 'Approved',
+        },
+        approved: {
             Icon: CheckCircle,
             iconBg: 'bg-green-100 dark:bg-green-900/50',
             iconColor: 'text-green-600 dark:text-green-400',
@@ -89,12 +97,16 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
         }
     };
 
-    // Navigate to the job forecast
+    // Navigate to the forecast
     const handleViewForecast = useCallback(() => {
         if (location_id && forecast_month) {
-            router.visit(`/location/${location_id}/job-forecast?forecast_month=${forecast_month}`);
+            if (type === 'LabourForecastStatus') {
+                router.visit(`/location/${location_id}/labour-forecast/show?forecast_month=${forecast_month}`);
+            } else {
+                router.visit(`/location/${location_id}/job-forecast?forecast_month=${forecast_month}`);
+            }
         }
-    }, [location_id, forecast_month]);
+    }, [location_id, forecast_month, type]);
 
     // Dismiss notification
     const handleDismiss = useCallback(
