@@ -1,14 +1,18 @@
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import type { CellValueChangedEvent } from 'ag-grid-community';
+import { router } from '@inertiajs/react';
+import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Expand, HardHat, TrendingUp, UserCheck, UserCog, Users, Wrench } from 'lucide-react';
+import { Calculator, DollarSign, Expand, Info, Pencil, Plus, Settings, Trash2, TrendingUp, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildLabourForecastShowColumnDefs } from './column-builders';
-import { type ChartDataPoint, type LabourCategory, LabourForecastChart } from './LabourForecastChart';
+import { type ChartDataPoint, LabourForecastChart } from './LabourForecastChart';
 import type { Week } from './types';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -23,6 +27,73 @@ const TIME_RANGE_OPTIONS: { id: TimeRange; label: string; weeks: number | null }
 ];
 const LOCAL_STORAGE_KEY = 'labour-forecast-time-range';
 
+interface CostCodes {
+    prefix: string | null;
+    wages: string | null;
+    super: string;
+    bert: string;
+    bewt: string;
+    cipq: string;
+    payroll_tax: string;
+    workcover: string;
+}
+
+interface CostBreakdown {
+    base_hourly_rate: number;
+    hours_per_week: number;
+    base_weekly_wages: number;
+    allowances: {
+        fares_travel: { name: string | null; rate: number; type: string; weekly: number };
+        site: { name: string | null; rate: number; type: string; weekly: number };
+        multistorey: { name: string | null; rate: number; type: string; weekly: number };
+        total: number;
+    };
+    gross_wages: number;
+    leave_markups: {
+        annual_leave_rate: number;
+        annual_leave_amount: number;
+        leave_loading_rate: number;
+        leave_loading_amount: number;
+    };
+    marked_up_wages: number;
+    super: number;
+    on_costs: {
+        bert: number;
+        bewt: number;
+        cipq: number;
+        payroll_tax_rate: number;
+        payroll_tax: number;
+        workcover_rate: number;
+        workcover: number;
+        total: number;
+    };
+    cost_codes: CostCodes;
+    total_weekly_cost: number;
+}
+
+interface ConfiguredTemplate {
+    id: number;
+    template_id: number;
+    name: string;
+    label: string;
+    hourly_rate: number | null;
+    cost_code_prefix: string | null;
+    sort_order: number;
+    cost_breakdown: CostBreakdown;
+}
+
+interface AvailableTemplate {
+    id: number;
+    name: string;
+    hourly_rate: number | null;
+}
+
+interface LocationWorktype {
+    id: number;
+    name: string;
+    eh_worktype_id: number;
+}
+
 interface LabourForecastShowProps {
     location: {
         id: number;
@@ -31,31 +102,23 @@ interface LabourForecastShowProps {
     };
     projectEndDate: string | null;
     weeks: Week[];
+    configuredTemplates: ConfiguredTemplate[];
+    availableTemplates: AvailableTemplate[];
+    locationWorktypes: LocationWorktype[];
+    flash?: { success?: string; error?: string };
 }
 
 interface RowData {
     id: string;
     workType: string;
+    hourlyRate?: number | null;
+    weeklyCost?: number;
     isTotal?: boolean;
-    [key: string]: string | number | boolean | undefined;
+    isCostRow?: boolean;
+    [key: string]: string | number | boolean | undefined | null;
 }
 
-const WORK_TYPES = [
-    { id: 'wages_apprentices', name: 'Wages & Apprentices' },
-    { id: 'foreman', name: 'Foreman' },
-    { id: 'leading_hands', name: 'Leading Hands' },
-    { id: 'labourer', name: 'Labourer' },
-];
-
-const CATEGORY_OPTIONS: { id: LabourCategory; name: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'all', name: 'All', icon: Users },
-    { id: 'wages_apprentices', name: 'Wages & Apprentices', icon: Wrench },
-    { id: 'foreman', name: 'Foreman', icon: UserCheck },
-    { id: 'leading_hands', name: 'Leading Hands', icon: UserCog },
-    { id: 'labourer', name: 'Labourer', icon: HardHat },
-];
-
-const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastShowProps) => {
+const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplates, availableTemplates, locationWorktypes, flash }: LabourForecastShowProps) => {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Labour Forecast', href: '/labour-forecast' },
         { title: location.name, href: '#' },
@@ -63,7 +126,26 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
 
     // Chart dialog state
     const [chartOpen, setChartOpen] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState<LabourCategory>('all');
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+    // Settings dialog state
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [editingLabel, setEditingLabel] = useState<{ id: number; label: string } | null>(null);
+    const [editingCostCode, setEditingCostCode] = useState<{ id: number; costCodePrefix: string } | null>(null);
+    const [newTemplateId, setNewTemplateId] = useState<string>('');
+
+    // Cost breakdown dialog state
+    const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
+    const [selectedTemplateForCost, setSelectedTemplateForCost] = useState<ConfiguredTemplate | null>(null);
+
+    // Selected cell state for fill operations
+    const [selectedCell, setSelectedCell] = useState<{
+        rowId: string;
+        field: string;
+        value: number;
+        weekIndex: number;
+        workType: string;
+    } | null>(null);
 
     // Time range state with localStorage persistence
     const [timeRange, setTimeRange] = useState<TimeRange>(() => {
@@ -81,12 +163,39 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
         localStorage.setItem(LOCAL_STORAGE_KEY, timeRange);
     }, [timeRange]);
 
+    // Build work types from configured templates
+    const workTypes = useMemo(() => {
+        return configuredTemplates.map((template) => ({
+            id: `template_${template.template_id}`,
+            name: template.label,
+            hourlyRate: template.hourly_rate,
+            configId: template.id,
+            weeklyCost: template.cost_breakdown.total_weekly_cost,
+        }));
+    }, [configuredTemplates]);
+
+    // Build category options for toggle buttons
+    const categoryOptions = useMemo(() => {
+        const options: { id: string; name: string; hourlyRate?: number | null; weeklyCost?: number }[] = [{ id: 'all', name: 'All' }];
+        workTypes.forEach((wt) => {
+            options.push({
+                id: wt.id,
+                name: wt.name,
+                hourlyRate: wt.hourlyRate,
+                weeklyCost: wt.weeklyCost,
+            });
+        });
+        return options;
+    }, [workTypes]);
+
     // Initialize row data with work types
     const [rowData, setRowData] = useState<RowData[]>(() =>
-        WORK_TYPES.map((wt) => {
+        workTypes.map((wt) => {
             const row: RowData = {
                 id: wt.id,
                 workType: wt.name,
+                hourlyRate: wt.hourlyRate,
+                weeklyCost: wt.weeklyCost,
             };
             // Initialize all week columns with 0
             weeks.forEach((week) => {
@@ -96,8 +205,32 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
         }),
     );
 
-    // Calculate totals row
+    // Update row data when work types change
+    useEffect(() => {
+        setRowData((prevRows) => {
+            const newRows: RowData[] = workTypes.map((wt) => {
+                const existingRow = prevRows.find((r) => r.id === wt.id);
+                if (existingRow) {
+                    return { ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost };
+                }
+                const row: RowData = {
+                    id: wt.id,
+                    workType: wt.name,
+                    hourlyRate: wt.hourlyRate,
+                    weeklyCost: wt.weeklyCost,
+                };
+                weeks.forEach((week) => {
+                    row[week.key] = 0;
+                });
+                return row;
+            });
+            return newRows;
+        });
+    }, [workTypes, weeks]);
+
+    // Calculate totals and cost rows
     const rowDataWithTotals = useMemo(() => {
+        // Total headcount row
         const totalRow: RowData = {
             id: 'total',
             workType: 'Total Headcount',
@@ -106,23 +239,94 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
         weeks.forEach((week) => {
             totalRow[week.key] = rowData.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
-        return [...rowData, totalRow];
+
+        // Total weekly cost row (headcount × weekly cost per template)
+        const costRow: RowData = {
+            id: 'cost',
+            workType: 'Total Weekly Cost',
+            isCostRow: true,
+        };
+        weeks.forEach((week) => {
+            costRow[week.key] = rowData.reduce((sum, row) => {
+                const headcount = Number(row[week.key]) || 0;
+                const weeklyCost = row.weeklyCost || 0;
+                return sum + headcount * weeklyCost;
+            }, 0);
+        });
+
+        return [...rowData, totalRow, costRow];
     }, [rowData, weeks]);
 
-    // Row class for total row styling (dark mode support)
+    // Row class for total and cost row styling (dark mode support)
     const getRowClass = useCallback((params: { data: RowData }) => {
         if (params.data?.isTotal) {
-            return 'bg-gray-100 dark:bg-gray-700';
+            return 'bg-gray-100 dark:bg-gray-700 font-semibold';
+        }
+        if (params.data?.isCostRow) {
+            return 'bg-green-50 dark:bg-green-900/20 font-semibold text-green-700 dark:text-green-300';
         }
         return '';
     }, []);
 
     // Handle cell value changes
     const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-        if (event.data?.isTotal) return;
+        if (event.data?.isTotal || event.data?.isCostRow) return;
 
         setRowData((prevRows) => prevRows.map((row) => (row.id === event.data.id ? { ...row, [event.colDef.field!]: event.newValue } : row)));
     }, []);
+
+    // Handle cell click to track selected cell for fill operations
+    const onCellClicked = useCallback(
+        (event: CellClickedEvent) => {
+            // Only track week cells that are editable
+            if (!event.colDef.field?.startsWith('week_')) {
+                setSelectedCell(null);
+                return;
+            }
+            if (event.data?.isTotal || event.data?.isCostRow) {
+                setSelectedCell(null);
+                return;
+            }
+
+            const weekIndex = weeks.findIndex((w) => w.key === event.colDef.field);
+            if (weekIndex === -1) return;
+
+            setSelectedCell({
+                rowId: event.data.id,
+                field: event.colDef.field!,
+                value: Number(event.value) || 0,
+                weekIndex,
+                workType: event.data.workType,
+            });
+        },
+        [weeks],
+    );
+
+    // Fill value to specified number of weeks
+    const handleFillRight = useCallback(
+        (weeksToFill: number | 'all') => {
+            if (!selectedCell) return;
+
+            const { rowId, weekIndex } = selectedCell;
+            // Get current value from the cell (may have been edited)
+            const currentRow = rowData.find((r) => r.id === rowId);
+            const value = currentRow ? Number(currentRow[selectedCell.field]) || 0 : 0;
+
+            const endIndex = weeksToFill === 'all' ? weeks.length : Math.min(weekIndex + weeksToFill, weeks.length);
+
+            setRowData((prevRows) =>
+                prevRows.map((row) => {
+                    if (row.id !== rowId) return row;
+                    const updated = { ...row };
+                    for (let i = weekIndex; i < endIndex; i++) {
+                        updated[weeks[i].key] = value;
+                    }
+                    return updated;
+                }),
+            );
+        },
+        [selectedCell, weeks, rowData],
+    );
 
     // Build chart data based on selected category
     const chartData = useMemo<ChartDataPoint[]>(() => {
@@ -149,6 +353,26 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
         return chartData.slice(0, rangeOption.weeks);
     }, [chartData, timeRange]);
 
+    // Calculate grand total cost (sum of all weeks' costs)
+    const grandTotalCost = useMemo(() => {
+        return weeks.reduce((total, week) => {
+            const weekCost = rowData.reduce((sum, row) => {
+                const headcount = Number(row[week.key]) || 0;
+                const weeklyCost = row.weeklyCost || 0;
+                return sum + headcount * weeklyCost;
+            }, 0);
+            return total + weekCost;
+        }, 0);
+    }, [rowData, weeks]);
+
+    // Calculate total headcount across all weeks
+    const grandTotalHeadcount = useMemo(() => {
+        return weeks.reduce((total, week) => {
+            const weekHeadcount = rowData.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+            return total + weekHeadcount;
+        }, 0);
+    }, [rowData, weeks]);
+
     // Handle chart edit (shared between inline and dialog)
     const handleChartEdit = useCallback(
         (weekKey: string, value: number) => {
@@ -157,8 +381,8 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
                 const currentTotal = rowData.reduce((sum, row) => sum + (Number(row[weekKey]) || 0), 0);
                 if (currentTotal === 0) {
                     // If current total is 0, distribute evenly
-                    const perType = Math.floor(value / WORK_TYPES.length);
-                    const remainder = value % WORK_TYPES.length;
+                    const perType = Math.floor(value / workTypes.length);
+                    const remainder = value % workTypes.length;
                     setRowData((prevRows) =>
                         prevRows.map((row, idx) => ({
                             ...row,
@@ -180,37 +404,89 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
                 setRowData((prevRows) => prevRows.map((row) => (row.id === selectedCategory ? { ...row, [weekKey]: value } : row)));
             }
         },
-        [selectedCategory, rowData],
+        [selectedCategory, rowData, workTypes.length],
     );
 
     // Get category display name
     const getCategoryDisplayName = () => {
-        const category = CATEGORY_OPTIONS.find((c) => c.id === selectedCategory);
+        const category = categoryOptions.find((c) => c.id === selectedCategory);
         return category?.name || 'Labour';
+    };
+
+    // Handle adding a new template
+    const handleAddTemplate = () => {
+        if (!newTemplateId) return;
+        router.post(route('labour-forecast.add-template', { location: location.id }), { template_id: newTemplateId }, { preserveScroll: true });
+        setNewTemplateId('');
+    };
+
+    // Handle removing a template
+    const handleRemoveTemplate = (configId: number) => {
+        if (!confirm('Are you sure you want to remove this template?')) return;
+        router.delete(route('labour-forecast.remove-template', { location: location.id, template: configId }), { preserveScroll: true });
+    };
+
+    // Handle updating a template label
+    const handleUpdateLabel = () => {
+        if (!editingLabel) return;
+        router.put(
+            route('labour-forecast.update-template-label', { location: location.id, template: editingLabel.id }),
+            { label: editingLabel.label },
+            { preserveScroll: true },
+        );
+        setEditingLabel(null);
+    };
+
+    // Handle updating a template cost code prefix
+    const handleUpdateCostCode = () => {
+        if (!editingCostCode) return;
+        router.put(
+            route('labour-forecast.update-template-label', { location: location.id, template: editingCostCode.id }),
+            { cost_code_prefix: editingCostCode.costCodePrefix },
+            { preserveScroll: true },
+        );
+        setEditingCostCode(null);
+    };
+
+    // Get templates not yet added
+    const availableToAdd = useMemo(() => {
+        const addedIds = new Set(configuredTemplates.map((t) => t.template_id));
+        return availableTemplates.filter((t) => !addedIds.has(t.id));
+    }, [configuredTemplates, availableTemplates]);
+
+    // Format currency
+    const formatCurrency = (value: number | null) => {
+        if (value === null) return '-';
+        return new Intl.NumberFormat('en-AU', {
+            style: 'currency',
+            currency: 'AUD',
+        }).format(value);
     };
 
     // Category toggle buttons component (reused in both inline and dialog)
     const CategoryToggleButtons = () => (
         <TooltipProvider delayDuration={300}>
-            <div className="inline-flex flex-shrink-0 rounded-lg bg-slate-200/80 p-0.5 sm:p-1 dark:bg-slate-700">
-                {CATEGORY_OPTIONS.map((category) => {
-                    const Icon = category.icon;
+            <div className="inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-lg bg-slate-200/80 p-0.5 sm:p-1 dark:bg-slate-700">
+                {categoryOptions.map((category) => {
                     return (
                         <Tooltip key={category.id}>
                             <TooltipTrigger asChild>
                                 <button
-                                    className={`flex items-center justify-center rounded-md px-2 py-1 transition-all sm:px-3 sm:py-1.5 ${
+                                    className={`flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs transition-all sm:px-3 sm:py-1.5 ${
                                         selectedCategory === category.id
                                             ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
                                             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                     }`}
                                     onClick={() => setSelectedCategory(category.id)}
                                 >
-                                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    {category.id === 'all' ? <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : null}
+                                    <span className="max-w-[60px] truncate sm:max-w-none">{category.name}</span>
                                 </button>
                             </TooltipTrigger>
                             <TooltipContent side="bottom">
                                 <p>{category.name}</p>
+                                {category.hourlyRate && <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr</p>}
+                                {category.weeklyCost && <p className="text-xs text-green-400">Weekly: {formatCurrency(category.weeklyCost)}</p>}
                             </TooltipContent>
                         </Tooltip>
                     );
@@ -240,6 +516,420 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            {/* Settings Dialog */}
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            Configure Pay Rate Templates
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {/* Flash messages */}
+                        {flash?.success && (
+                            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                {flash.success}
+                            </div>
+                        )}
+                        {flash?.error && (
+                            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
+                        )}
+
+                        {/* Add new template */}
+                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                            <h3 className="mb-3 text-sm font-medium">Add Template</h3>
+                            <div className="flex gap-2">
+                                <Select value={newTemplateId} onValueChange={setNewTemplateId}>
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select a template..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableToAdd.length === 0 ? (
+                                            <SelectItem value="" disabled>
+                                                All templates added
+                                            </SelectItem>
+                                        ) : (
+                                            availableToAdd.map((template) => (
+                                                <SelectItem key={template.id} value={String(template.id)}>
+                                                    {template.name} {template.hourly_rate ? `(${formatCurrency(template.hourly_rate)}/hr)` : ''}
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleAddTemplate} disabled={!newTemplateId}>
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Add
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Configured templates list */}
+                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                            <h3 className="mb-3 text-sm font-medium">Configured Templates</h3>
+                            {configuredTemplates.length === 0 ? (
+                                <p className="text-sm text-slate-500">No templates configured. Add templates above to get started.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {configuredTemplates.map((template) => (
+                                        <div
+                                            key={template.id}
+                                            className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                {editingLabel?.id === template.id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            value={editingLabel.label}
+                                                            onChange={(e) => setEditingLabel({ ...editingLabel, label: e.target.value })}
+                                                            placeholder="Custom label"
+                                                            className="h-8"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') handleUpdateLabel();
+                                                                if (e.key === 'Escape') setEditingLabel(null);
+                                                            }}
+                                                            autoFocus
+                                                        />
+                                                        <Button size="sm" onClick={handleUpdateLabel}>
+                                                            Save
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" onClick={() => setEditingLabel(null)}>
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium">{template.label}</span>
+                                                        {template.label !== template.name && (
+                                                            <span className="text-xs text-slate-500">({template.name})</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="mt-1 flex items-center gap-4 text-xs text-slate-500">
+                                                    <span className="flex items-center gap-1">
+                                                        <DollarSign className="h-3 w-3" />
+                                                        {formatCurrency(template.hourly_rate)}/hr
+                                                    </span>
+                                                    <span className="text-green-600 dark:text-green-400">
+                                                        Weekly Cost: {formatCurrency(template.cost_breakdown.total_weekly_cost)}
+                                                    </span>
+                                                </div>
+                                                {/* Cost Code Prefix */}
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <span className="text-xs text-slate-500">Cost Code:</span>
+                                                    {editingCostCode?.id === template.id ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <Input
+                                                                value={editingCostCode.costCodePrefix}
+                                                                onChange={(e) => setEditingCostCode({ ...editingCostCode, costCodePrefix: e.target.value })}
+                                                                placeholder="e.g., 03"
+                                                                className="h-6 w-16 text-xs"
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') handleUpdateCostCode();
+                                                                    if (e.key === 'Escape') setEditingCostCode(null);
+                                                                }}
+                                                                autoFocus
+                                                            />
+                                                            <Button size="sm" className="h-6 px-2 text-xs" onClick={handleUpdateCostCode}>
+                                                                Save
+                                                            </Button>
+                                                            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setEditingCostCode(null)}>
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setEditingCostCode({ id: template.id, costCodePrefix: template.cost_code_prefix || '' })}
+                                                            className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                                                        >
+                                                            {template.cost_code_prefix ? `${template.cost_code_prefix}-01` : 'Not set'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {!editingLabel && !editingCostCode && (
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-indigo-500 hover:text-indigo-700"
+                                                        onClick={() => {
+                                                            setSelectedTemplateForCost(template);
+                                                            setCostBreakdownOpen(true);
+                                                        }}
+                                                        title="View cost breakdown"
+                                                    >
+                                                        <Calculator className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setEditingLabel({ id: template.id, label: template.label })}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-red-500 hover:text-red-700"
+                                                        onClick={() => handleRemoveTemplate(template.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <p className="text-xs text-slate-500">
+                            Templates are sourced from KeyPay Pay Rate Templates. Hourly rates are based on the "Permanent Ordinary Hours" pay
+                            category.
+                        </p>
+
+                        {/* Location Worktypes (Shift Conditions) */}
+                        {locationWorktypes.length > 0 && (
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+                                    <Info className="h-4 w-4 text-slate-400" />
+                                    Active Shift Conditions
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {locationWorktypes.map((wt) => (
+                                        <span
+                                            key={wt.id}
+                                            className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
+                                        >
+                                            {wt.name}
+                                        </span>
+                                    ))}
+                                </div>
+                                <p className="mt-2 text-xs text-slate-500">
+                                    These shift conditions affect allowance calculations in job costing.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cost Breakdown Dialog */}
+            <Dialog open={costBreakdownOpen} onOpenChange={setCostBreakdownOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calculator className="h-5 w-5" />
+                            Job Cost Breakdown - {selectedTemplateForCost?.label}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {selectedTemplateForCost?.cost_breakdown && (
+                        <div className="space-y-4">
+                            {/* Base Wages */}
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Base Wages</h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600 dark:text-slate-400">Hourly Rate</span>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.base_hourly_rate)}/hr</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600 dark:text-slate-400">Hours Per Week</span>
+                                        <span className="font-medium">{selectedTemplateForCost.cost_breakdown.hours_per_week} hrs</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                                        <span className="font-medium text-slate-700 dark:text-slate-300">Base Weekly Wages</span>
+                                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                            {formatCurrency(selectedTemplateForCost.cost_breakdown.base_weekly_wages)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Allowances */}
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Allowances</h3>
+                                <div className="space-y-2 text-sm">
+                                    {selectedTemplateForCost.cost_breakdown.allowances.fares_travel.name && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600 dark:text-slate-400">
+                                                {selectedTemplateForCost.cost_breakdown.allowances.fares_travel.name}
+                                                <span className="ml-1 text-xs text-slate-400">
+                                                    ({formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.fares_travel.rate)}/day × 5)
+                                                </span>
+                                            </span>
+                                            <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.fares_travel.weekly)}</span>
+                                        </div>
+                                    )}
+                                    {selectedTemplateForCost.cost_breakdown.allowances.site.name && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600 dark:text-slate-400">
+                                                {selectedTemplateForCost.cost_breakdown.allowances.site.name}
+                                                <span className="ml-1 text-xs text-slate-400">
+                                                    ({formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.site.rate)}/hr × 40)
+                                                </span>
+                                            </span>
+                                            <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.site.weekly)}</span>
+                                        </div>
+                                    )}
+                                    {selectedTemplateForCost.cost_breakdown.allowances.multistorey.name && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600 dark:text-slate-400">
+                                                {selectedTemplateForCost.cost_breakdown.allowances.multistorey.name}
+                                                <span className="ml-1 text-xs text-slate-400">
+                                                    ({formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.multistorey.rate)}/hr × 40)
+                                                </span>
+                                            </span>
+                                            <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.multistorey.weekly)}</span>
+                                        </div>
+                                    )}
+                                    {selectedTemplateForCost.cost_breakdown.allowances.total === 0 && (
+                                        <p className="text-xs text-slate-500 italic">No allowances applied. Configure shift conditions in Employment Hero.</p>
+                                    )}
+                                    <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                                        <span className="font-medium text-slate-700 dark:text-slate-300">Total Allowances</span>
+                                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                            {formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.total)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Gross Wages */}
+                            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
+                                <div className="flex justify-between text-sm">
+                                    <span className="font-medium text-indigo-700 dark:text-indigo-300">Gross Wages (Base + Allowances)</span>
+                                    <span className="font-bold text-indigo-700 dark:text-indigo-300">
+                                        {formatCurrency(selectedTemplateForCost.cost_breakdown.gross_wages)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Leave Markups */}
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Leave Accrual Markups</h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600 dark:text-slate-400">
+                                            Annual Leave ({selectedTemplateForCost.cost_breakdown.leave_markups.annual_leave_rate}%)
+                                        </span>
+                                        <span className="font-medium">+{formatCurrency(selectedTemplateForCost.cost_breakdown.leave_markups.annual_leave_amount)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600 dark:text-slate-400">
+                                            Leave Loading ({selectedTemplateForCost.cost_breakdown.leave_markups.leave_loading_rate}%)
+                                        </span>
+                                        <span className="font-medium">+{formatCurrency(selectedTemplateForCost.cost_breakdown.leave_markups.leave_loading_amount)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">Marked-Up Wages</span>
+                                            {selectedTemplateForCost.cost_breakdown.cost_codes.wages && (
+                                                <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    {selectedTemplateForCost.cost_breakdown.cost_codes.wages}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                            {formatCurrency(selectedTemplateForCost.cost_breakdown.marked_up_wages)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Super */}
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <div className="flex justify-between text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-600 dark:text-slate-400">Superannuation (Fixed Weekly)</span>
+                                        <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                            {selectedTemplateForCost.cost_breakdown.cost_codes.super}
+                                        </span>
+                                    </div>
+                                    <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.super)}</span>
+                                </div>
+                            </div>
+
+                            {/* On-Costs */}
+                            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">On-Costs</h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-600 dark:text-slate-400">BERT (Building Industry Redundancy)</span>
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                {selectedTemplateForCost.cost_breakdown.cost_codes.bert}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.bert)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-600 dark:text-slate-400">BEWT (Building Employees Withholding Tax)</span>
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                {selectedTemplateForCost.cost_breakdown.cost_codes.bewt}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.bewt)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-600 dark:text-slate-400">CIPQ (Construction Induction)</span>
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                {selectedTemplateForCost.cost_breakdown.cost_codes.cipq}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.cipq)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-600 dark:text-slate-400">
+                                                Payroll Tax ({selectedTemplateForCost.cost_breakdown.on_costs.payroll_tax_rate}%)
+                                            </span>
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                {selectedTemplateForCost.cost_breakdown.cost_codes.payroll_tax}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.payroll_tax)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-600 dark:text-slate-400">
+                                                WorkCover ({selectedTemplateForCost.cost_breakdown.on_costs.workcover_rate}%)
+                                            </span>
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                {selectedTemplateForCost.cost_breakdown.cost_codes.workcover}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.workcover)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                                        <span className="font-medium text-slate-700 dark:text-slate-300">Total On-Costs</span>
+                                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                            {formatCurrency(selectedTemplateForCost.cost_breakdown.on_costs.total)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Total Weekly Cost */}
+                            <div className="rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:border-green-600 dark:bg-green-900/20">
+                                <div className="flex justify-between">
+                                    <span className="text-lg font-bold text-green-700 dark:text-green-300">Total Weekly Job Cost</span>
+                                    <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                        {formatCurrency(selectedTemplateForCost.cost_breakdown.total_weekly_cost)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
             {/* Chart Dialog (Full Screen) */}
             <Dialog open={chartOpen} onOpenChange={setChartOpen}>
                 <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] sm:rounded-xl lg:min-w-7xl dark:border-slate-700 dark:bg-slate-900">
@@ -295,89 +985,195 @@ const LabourForecastShow = ({ location, projectEndDate, weeks }: LabourForecastS
 
             <div className="p-4">
                 {/* Header */}
-                <div className="mb-4">
-                    <h1 className="text-xl font-semibold">{location.name}</h1>
-                    <p className="text-sm text-gray-500">Job Number: {location.job_number}</p>
-                    {projectEndDate && <p className="text-sm text-gray-500">Project End: {projectEndDate}</p>}
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <h1 className="text-xl font-semibold">{location.name}</h1>
+                        <p className="text-sm text-gray-500">Job Number: {location.job_number}</p>
+                        {projectEndDate && <p className="text-sm text-gray-500">Project End: {projectEndDate}</p>}
+                    </div>
+                    <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Configure Templates
+                    </Button>
                 </div>
 
-                {/* Inline Chart Card */}
-                <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                    {/* Chart Header */}
-                    <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-slate-50 via-indigo-50/30 to-violet-50/20 px-3 py-2 sm:px-4 sm:py-3 dark:border-slate-700 dark:from-slate-800 dark:via-indigo-950/20 dark:to-slate-800">
-                        <div className="absolute -top-16 -right-16 h-32 w-32 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
-                        <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            {/* Title row */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                    <div className="hidden h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30 sm:flex">
-                                        <TrendingUp className="h-4 w-4 text-white" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                            {getCategoryDisplayName()} - Labour Trend
-                                        </h2>
-                                        <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Headcount Forecast</p>
-                                    </div>
-                                </div>
-                                {/* Expand button - visible on mobile in title row */}
-                                <button
-                                    onClick={() => setChartOpen(true)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:border-indigo-300 hover:text-indigo-600 sm:hidden dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
-                                    title="Expand chart"
-                                >
-                                    <Expand className="h-4 w-4" />
-                                </button>
-                            </div>
-                            {/* Controls row */}
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-                                <TimeRangeToggle />
-                                <div className="h-6 w-px flex-shrink-0 bg-slate-300 dark:bg-slate-600" />
-                                <CategoryToggleButtons />
-                                {/* Expand button - hidden on mobile, visible on desktop */}
-                                <button
-                                    onClick={() => setChartOpen(true)}
-                                    className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:border-indigo-300 hover:text-indigo-600 sm:flex dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
-                                    title="Expand chart"
-                                >
-                                    <Expand className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
+                {/* Flash messages outside dialog */}
+                {flash?.success && !settingsOpen && (
+                    <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                        {flash.success}
                     </div>
+                )}
 
-                    {/* Inline Chart */}
-                    <div className="h-[220px] max-w-96 min-w-96 bg-white p-2 sm:h-[280px] sm:min-w-full sm:p-3 dark:bg-slate-900">
-                        <LabourForecastChart data={inlineChartData} editable={selectedCategory !== 'all'} onEdit={handleChartEdit} />
-                    </div>
-
-                    {/* Chart Footer Tip */}
-                    <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
-                        <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Click points to edit or drag to adjust. Use
-                            category buttons to filter.
+                {/* Empty state when no templates configured */}
+                {configuredTemplates.length === 0 && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
+                        <h3 className="font-medium text-amber-800 dark:text-amber-200">No Pay Rate Templates Configured</h3>
+                        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                            Click "Configure Templates" above to add KeyPay Pay Rate Templates for labour forecasting.
                         </p>
                     </div>
-                </div>
+                )}
 
-                {/* Grid */}
-                <div className="ag-theme-alpine dark:ag-theme-alpine-dark" style={{ height: 300, width: '100%' }}>
-                    <AgGridReact
-                        rowData={rowDataWithTotals}
-                        columnDefs={buildLabourForecastShowColumnDefs(weeks)}
-                        onCellValueChanged={onCellValueChanged}
-                        defaultColDef={{
-                            resizable: true,
-                            sortable: false,
-                            filter: false,
-                        }}
-                        headerHeight={50}
-                        getRowId={(params) => params.data.id}
-                        getRowClass={getRowClass}
-                        singleClickEdit={true}
-                        stopEditingWhenCellsLoseFocus={true}
-                    />
-                </div>
+                {/* Inline Chart Card - only show if templates configured */}
+                {configuredTemplates.length > 0 && (
+                    <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                        {/* Chart Header */}
+                        <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-slate-50 via-indigo-50/30 to-violet-50/20 px-3 py-2 sm:px-4 sm:py-3 dark:border-slate-700 dark:from-slate-800 dark:via-indigo-950/20 dark:to-slate-800">
+                            <div className="absolute -top-16 -right-16 h-32 w-32 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                            <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                {/* Title row */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 sm:gap-3">
+                                        <div className="hidden h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30 sm:flex">
+                                            <TrendingUp className="h-4 w-4 text-white" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                                {getCategoryDisplayName()} - Labour Trend
+                                            </h2>
+                                            <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Headcount Forecast</p>
+                                        </div>
+                                    </div>
+                                    {/* Expand button - visible on mobile in title row */}
+                                    <button
+                                        onClick={() => setChartOpen(true)}
+                                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:border-indigo-300 hover:text-indigo-600 sm:hidden dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                                        title="Expand chart"
+                                    >
+                                        <Expand className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                {/* Controls row */}
+                                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                                    <TimeRangeToggle />
+                                    <div className="h-6 w-px flex-shrink-0 bg-slate-300 dark:bg-slate-600" />
+                                    <CategoryToggleButtons />
+                                    {/* Expand button - hidden on mobile, visible on desktop */}
+                                    <button
+                                        onClick={() => setChartOpen(true)}
+                                        className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:border-indigo-300 hover:text-indigo-600 sm:flex dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                                        title="Expand chart"
+                                    >
+                                        <Expand className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Inline Chart */}
+                        <div className="h-[220px] max-w-96 min-w-96 bg-white p-2 sm:h-[280px] sm:min-w-full sm:p-3 dark:bg-slate-900">
+                            <LabourForecastChart data={inlineChartData} editable={selectedCategory !== 'all'} onEdit={handleChartEdit} />
+                        </div>
+
+                        {/* Chart Footer Tip */}
+                        <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+                            <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Click points to edit or drag to adjust.
+                                Use category buttons to filter.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Summary Cards - only show if templates configured and has data */}
+                {configuredTemplates.length > 0 && grandTotalHeadcount > 0 && (
+                    <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Person-Weeks</p>
+                            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{grandTotalHeadcount.toLocaleString()}</p>
+                        </div>
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                            <p className="text-xs font-medium text-green-600 dark:text-green-400">Total Labour Cost</p>
+                            <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(grandTotalCost)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Forecast Weeks</p>
+                            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{weeks.length}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Avg Cost/Week</p>
+                            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                                {grandTotalHeadcount > 0 ? formatCurrency(grandTotalCost / weeks.length) : '-'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Grid - only show if templates configured */}
+                {configuredTemplates.length > 0 && (
+                    <>
+                        {/* Fill Toolbar - shows when a cell is selected */}
+                        {selectedCell && (
+                            <div className="mb-2 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-800 dark:bg-indigo-900/20">
+                                <span className="text-xs text-slate-600 dark:text-slate-400">
+                                    <span className="font-medium text-slate-800 dark:text-slate-200">{selectedCell.workType}</span>
+                                    {' · '}
+                                    Week {selectedCell.weekIndex + 1}
+                                    {' · '}
+                                    Value: <span className="font-semibold">{rowData.find((r) => r.id === selectedCell.rowId)?.[selectedCell.field] ?? 0}</span>
+                                </span>
+                                <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">Fill:</span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs"
+                                    onClick={() => handleFillRight(4)}
+                                    disabled={selectedCell.weekIndex + 4 > weeks.length}
+                                >
+                                    4 weeks
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs"
+                                    onClick={() => handleFillRight(8)}
+                                    disabled={selectedCell.weekIndex + 8 > weeks.length}
+                                >
+                                    8 weeks
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs"
+                                    onClick={() => handleFillRight(12)}
+                                    disabled={selectedCell.weekIndex + 12 > weeks.length}
+                                >
+                                    12 weeks
+                                </Button>
+                                <Button size="sm" variant="default" className="h-6 px-2 text-xs" onClick={() => handleFillRight('all')}>
+                                    To end
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-auto h-6 px-2 text-xs text-slate-500"
+                                    onClick={() => setSelectedCell(null)}
+                                >
+                                    Clear
+                                </Button>
+                            </div>
+                        )}
+                        <div className="ag-theme-alpine dark:ag-theme-alpine-dark" style={{ height: 350, width: '100%' }}>
+                            <AgGridReact
+                                rowData={rowDataWithTotals}
+                                columnDefs={buildLabourForecastShowColumnDefs(weeks)}
+                                onCellValueChanged={onCellValueChanged}
+                                onCellClicked={onCellClicked}
+                                defaultColDef={{
+                                    resizable: true,
+                                    sortable: false,
+                                    filter: false,
+                                }}
+                                headerHeight={50}
+                                getRowId={(params) => params.data.id}
+                                getRowClass={getRowClass}
+                                singleClickEdit={true}
+                                stopEditingWhenCellsLoseFocus={true}
+                            />
+                        </div>
+                    </>
+                )}
             </div>
         </AppLayout>
     );

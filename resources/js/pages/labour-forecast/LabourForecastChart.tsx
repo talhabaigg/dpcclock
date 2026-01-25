@@ -20,10 +20,6 @@ import { Line } from 'react-chartjs-2';
 ChartJS.register(dragData);
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTooltip, Filler, Legend);
 
-export type LabourCategory = 'all' | 'wages_apprentices' | 'foreman' | 'leading_hands' | 'labourer';
-
-export const LABOUR_CATEGORY_IDS: LabourCategory[] = ['all', 'wages_apprentices', 'foreman', 'leading_hands', 'labourer'];
-
 export interface ChartDataPoint {
     weekKey: string;
     weekLabel: string;

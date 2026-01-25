@@ -84,4 +84,17 @@ class Location extends Model
     {
         return $this->hasMany(DrawingSet::class, 'project_id');
     }
+
+    public function labourForecastTemplates()
+    {
+        return $this->hasMany(LocationPayRateTemplate::class)
+            ->where('is_active', true)
+            ->orderBy('sort_order');
+    }
+
+    public function allLabourForecastTemplates()
+    {
+        return $this->hasMany(LocationPayRateTemplate::class)
+            ->orderBy('sort_order');
+    }
 }

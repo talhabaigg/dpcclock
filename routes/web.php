@@ -38,6 +38,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\LabourForecastController;
+use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -418,6 +419,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Labour Forecast
     Route::get('/labour-forecast', [LabourForecastController::class, 'index'])->name('labour-forecast.index');
     Route::get('/location/{location}/labour-forecast/show', [LabourForecastController::class, 'show'])->name('labour-forecast.show');
+    Route::post('/location/{location}/labour-forecast/templates', [LabourForecastController::class, 'updateTemplates'])->name('labour-forecast.update-templates');
+    Route::post('/location/{location}/labour-forecast/templates/add', [LabourForecastController::class, 'addTemplate'])->name('labour-forecast.add-template');
+    Route::delete('/location/{location}/labour-forecast/templates/{template}', [LabourForecastController::class, 'removeTemplate'])->name('labour-forecast.remove-template');
+    Route::put('/location/{location}/labour-forecast/templates/{template}/label', [LabourForecastController::class, 'updateTemplateLabel'])->name('labour-forecast.update-template-label');
+
+    // ============================================
+    // PAY RATE TEMPLATES
+    // ============================================
+    Route::get('/pay-rate-templates', [PayRateTemplateController::class, 'index'])->name('pay-rate-templates.index');
+    Route::get('/pay-rate-templates/sync-categories', [PayRateTemplateController::class, 'syncPayCategories'])->name('pay-rate-templates.sync-categories');
+    Route::get('/pay-rate-templates/sync-templates', [PayRateTemplateController::class, 'syncPayRateTemplates'])->name('pay-rate-templates.sync-templates');
+    Route::get('/pay-rate-templates/sync-all', [PayRateTemplateController::class, 'syncAll'])->name('pay-rate-templates.sync-all');
 
     // ============================================
     // BUDGET MANAGEMENT (Admin only)

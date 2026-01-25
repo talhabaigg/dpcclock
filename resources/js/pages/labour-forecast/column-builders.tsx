@@ -51,6 +51,16 @@ export const buildLabourForecastColumnDefs = (): ColDef[] => {
     ];
 };
 
+// Currency formatter for cost row
+const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: 'AUD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(value);
+};
+
 export const buildLabourForecastShowColumnDefs = (weeks: Week[]): ColDef[] => {
     const cols: ColDef[] = [
         {
@@ -59,7 +69,11 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[]): ColDef[] => {
             pinned: 'left',
             width: 180,
             editable: false,
-            cellClass: (params) => (params.data?.isTotal ? 'font-bold' : ''),
+            cellClass: (params) => {
+                if (params.data?.isTotal) return 'font-bold';
+                if (params.data?.isCostRow) return 'font-bold text-green-700 dark:text-green-300';
+                return '';
+            },
         },
     ];
 
@@ -69,12 +83,22 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[]): ColDef[] => {
             headerComponent: WeekHeader,
             field: week.key,
             width: 90,
-            editable: (params) => !params.data?.isTotal,
+            editable: (params) => !params.data?.isTotal && !params.data?.isCostRow,
             cellDataType: 'number',
-            cellClass: (params) => (params.data?.isTotal ? 'font-bold text-center' : 'text-center'),
+            cellClass: (params) => {
+                if (params.data?.isTotal) return 'font-bold text-center';
+                if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300';
+                return 'text-center';
+            },
             valueParser: (params) => {
                 const val = Number(params.newValue);
                 return isNaN(val) ? 0 : Math.max(0, Math.floor(val));
+            },
+            valueFormatter: (params) => {
+                if (params.data?.isCostRow) {
+                    return formatCurrency(params.value || 0);
+                }
+                return params.value;
             },
         });
     });
