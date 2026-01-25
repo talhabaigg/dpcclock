@@ -4,11 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\JobSummary;
+use App\Models\LabourForecast;
+use App\Models\LabourForecastEntry;
 use App\Models\LocationPayRateTemplate;
 use App\Models\PayRateTemplate;
+use App\Models\User;
+use App\Notifications\LabourForecastStatusNotification;
 use App\Services\LabourCostCalculator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 
 class LabourForecastController extends Controller
@@ -27,9 +34,41 @@ class LabourForecastController extends Controller
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
         }
 
+        // Get current month for forecast status
+        $currentMonth = now()->startOfMonth();
+
+        // Calculate current week ending (next Sunday)
+        $currentWeekEnding = now()->copy();
+        if ($currentWeekEnding->dayOfWeek !== 0) { // 0 = Sunday
+            $currentWeekEnding = $currentWeekEnding->next('Sunday');
+        }
+
+        // Get all forecasts for current month for these locations
+        $locationIds = $locationsQuery->pluck('id');
+        $currentForecasts = LabourForecast::whereIn('location_id', $locationIds)
+            ->where('forecast_month', $currentMonth)
+            ->with('entries')
+            ->get()
+            ->keyBy('location_id');
+
         $locations = $locationsQuery
             ->get()
-            ->map(function ($location) {
+            ->map(function ($location) use ($currentForecasts, $currentWeekEnding) {
+                $forecast = $currentForecasts->get($location->id);
+
+                // Calculate stats for current week - sum ALL entries for this week (across all templates)
+                $currentWeekHeadcount = 0;
+                $currentWeekCost = 0;
+                if ($forecast) {
+                    $currentWeekEntries = $forecast->entries->filter(function ($entry) use ($currentWeekEnding) {
+                        return $entry->week_ending->format('Y-m-d') === $currentWeekEnding->format('Y-m-d');
+                    });
+                    foreach ($currentWeekEntries as $entry) {
+                        $currentWeekHeadcount += $entry->headcount;
+                        $currentWeekCost += $entry->headcount * ($entry->weekly_cost ?? 0);
+                    }
+                }
+
                 return [
                     'id' => $location->id,
                     'name' => $location->name,
@@ -37,21 +76,34 @@ class LabourForecastController extends Controller
                     'eh_parent_id' => $location->eh_parent_id,
                     'state' => $location->state,
                     'job_number' => $location->external_id,
+                    'forecast_status' => $forecast?->status,
+                    'forecast_submitted_at' => $forecast?->submitted_at?->format('d M Y'),
+                    'forecast_approved_at' => $forecast?->approved_at?->format('d M Y'),
+                    'current_week_headcount' => $currentWeekHeadcount,
+                    'current_week_cost' => $currentWeekCost,
                 ];
             });
+
         return Inertia::render('labour-forecast/index', [
-            'locations' => $locations
+            'locations' => $locations,
+            'currentMonth' => $currentMonth->format('F Y'),
+            'currentWeekEnding' => $currentWeekEnding->format('d M Y'),
         ]);
     }
 
-    public function show(Location $location)
+    public function show(Request $request, Location $location)
     {
         // Get project end date from JobSummary if available
         $jobSummary = JobSummary::where('job_number', $location->external_id)->first();
         $projectEndDate = $jobSummary?->actual_end_date;
 
-        // Calculate weeks from current month start to project end date
-        $weeks = $this->generateWeeks($projectEndDate);
+        // Determine which month to display (default to current month)
+        $selectedMonth = $request->query('month')
+            ? Carbon::parse($request->query('month'))->startOfMonth()
+            : now()->startOfMonth();
+
+        // Calculate weeks from selected month start to project end date
+        $weeks = $this->generateWeeks($projectEndDate, $selectedMonth);
 
         // Load location worktypes for cost calculation
         $location->load('worktypes');
@@ -110,6 +162,49 @@ class LabourForecastController extends Controller
             ];
         });
 
+        // Load existing forecast for selected month (if any)
+        $forecast = LabourForecast::where('location_id', $location->id)
+            ->where('forecast_month', $selectedMonth)
+            ->with('entries', 'creator', 'submitter', 'approver')
+            ->first();
+
+        // Build saved data structure from forecast entries
+        $savedData = null;
+        if ($forecast) {
+            $savedData = [
+                'id' => $forecast->id,
+                'status' => $forecast->status,
+                'forecast_month' => $forecast->forecast_month->format('Y-m-d'),
+                'notes' => $forecast->notes,
+                'created_by' => $forecast->creator?->name,
+                'submitted_at' => $forecast->submitted_at?->format('Y-m-d H:i'),
+                'submitted_by' => $forecast->submitter?->name,
+                'approved_at' => $forecast->approved_at?->format('Y-m-d H:i'),
+                'approved_by' => $forecast->approver?->name,
+                'rejection_reason' => $forecast->rejection_reason,
+                'entries' => [],
+            ];
+
+            // Group entries by template ID
+            foreach ($forecast->entries as $entry) {
+                $templateId = $entry->location_pay_rate_template_id;
+                if (!isset($savedData['entries'][$templateId])) {
+                    $savedData['entries'][$templateId] = [
+                        'hourly_rate' => $entry->hourly_rate,
+                        'weekly_cost' => $entry->weekly_cost,
+                        'cost_breakdown' => $entry->cost_breakdown_snapshot,
+                        'weeks' => [],
+                    ];
+                }
+                $savedData['entries'][$templateId]['weeks'][$entry->week_ending->format('Y-m-d')] = $entry->headcount;
+            }
+        }
+
+        // Get current user permissions for workflow buttons
+        $user = Auth::user();
+        $canSubmit = $user->hasRole('admin') || $user->hasRole('backoffice') || $user->can('forecast.submit');
+        $canApprove = $user->hasRole('admin') || $user->hasRole('backoffice') || $user->can('forecast.approve');
+
         return Inertia::render('labour-forecast/show', [
             'location' => [
                 'id' => $location->id,
@@ -117,11 +212,193 @@ class LabourForecastController extends Controller
                 'job_number' => $location->external_id,
             ],
             'projectEndDate' => $projectEndDate?->format('Y-m-d'),
+            'selectedMonth' => $selectedMonth->format('Y-m'),
             'weeks' => $weeks,
             'configuredTemplates' => $configuredTemplates,
             'availableTemplates' => $availableTemplates,
             'locationWorktypes' => $locationWorktypes,
+            'savedForecast' => $savedData,
+            'permissions' => [
+                'canSubmit' => $canSubmit,
+                'canApprove' => $canApprove,
+            ],
         ]);
+    }
+
+    /**
+     * Save the labour forecast data
+     */
+    public function save(Request $request, Location $location)
+    {
+        $request->validate([
+            'forecast_month' => 'required|date',
+            'notes' => 'nullable|string|max:1000',
+            'entries' => 'required|array',
+            'entries.*.template_id' => 'required|exists:location_pay_rate_templates,id',
+            'entries.*.weeks' => 'required|array',
+            'entries.*.weeks.*.week_ending' => 'required|date',
+            'entries.*.weeks.*.headcount' => 'required|integer|min:0',
+        ]);
+
+        $user = Auth::user();
+        $forecastMonth = Carbon::parse($request->forecast_month)->startOfMonth();
+
+        // Load cost calculator for snapshot
+        $costCalculator = new LabourCostCalculator();
+        $location->load('worktypes');
+
+        DB::transaction(function () use ($request, $location, $user, $forecastMonth, $costCalculator) {
+            // Get or create forecast for this month
+            $forecast = LabourForecast::updateOrCreate(
+                [
+                    'location_id' => $location->id,
+                    'forecast_month' => $forecastMonth,
+                ],
+                [
+                    'notes' => $request->notes,
+                    'created_by' => $user->id,
+                ]
+            );
+
+            // Only allow editing if draft
+            if (!$forecast->isEditable() && $forecast->wasRecentlyCreated === false) {
+                abort(403, 'This forecast has been submitted and cannot be edited.');
+            }
+
+            // Delete existing entries for this forecast
+            $forecast->entries()->delete();
+
+            // Insert new entries with cost snapshot
+            foreach ($request->entries as $entryData) {
+                $templateConfig = LocationPayRateTemplate::with('payRateTemplate.payCategories.payCategory')
+                    ->find($entryData['template_id']);
+
+                if (!$templateConfig) continue;
+
+                // Calculate cost breakdown snapshot
+                $costBreakdown = $costCalculator->calculate($location, $templateConfig);
+
+                foreach ($entryData['weeks'] as $weekData) {
+                    if ($weekData['headcount'] > 0) {
+                        LabourForecastEntry::create([
+                            'labour_forecast_id' => $forecast->id,
+                            'location_pay_rate_template_id' => $templateConfig->id,
+                            'week_ending' => Carbon::parse($weekData['week_ending']),
+                            'headcount' => $weekData['headcount'],
+                            'hourly_rate' => $costBreakdown['base_hourly_rate'],
+                            'weekly_cost' => $costBreakdown['total_weekly_cost'],
+                            'cost_breakdown_snapshot' => $costBreakdown,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        return redirect()->back()->with('success', 'Labour forecast saved successfully.');
+    }
+
+    /**
+     * Submit forecast for approval
+     */
+    public function submit(Location $location, LabourForecast $forecast)
+    {
+        if ($forecast->location_id !== $location->id) {
+            abort(403);
+        }
+
+        if (!$forecast->canBeSubmitted()) {
+            return redirect()->back()->with('error', 'This forecast cannot be submitted.');
+        }
+
+        $user = Auth::user();
+        $forecast->submit($user);
+
+        // Notify admin and backoffice users
+        $approvers = User::role(['admin', 'backoffice'])->get();
+        Notification::send($approvers, new LabourForecastStatusNotification(
+            $forecast,
+            'submitted',
+            $user
+        ));
+
+        return redirect()->back()->with('success', 'Labour forecast submitted for approval.');
+    }
+
+    /**
+     * Approve forecast
+     */
+    public function approve(Location $location, LabourForecast $forecast)
+    {
+        if ($forecast->location_id !== $location->id) {
+            abort(403);
+        }
+
+        if (!$forecast->canBeApproved()) {
+            return redirect()->back()->with('error', 'This forecast cannot be approved.');
+        }
+
+        $user = Auth::user();
+        $submitter = $forecast->submitter;
+        $forecast->approve($user);
+
+        // Notify the submitter
+        if ($submitter && $submitter->id !== $user->id) {
+            $submitter->notify(new LabourForecastStatusNotification(
+                $forecast,
+                'approved',
+                $user
+            ));
+        }
+
+        return redirect()->back()->with('success', 'Labour forecast approved.');
+    }
+
+    /**
+     * Reject forecast
+     */
+    public function reject(Request $request, Location $location, LabourForecast $forecast)
+    {
+        if ($forecast->location_id !== $location->id) {
+            abort(403);
+        }
+
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        if (!$forecast->canBeApproved()) {
+            return redirect()->back()->with('error', 'This forecast cannot be rejected.');
+        }
+
+        $user = Auth::user();
+        $submitter = $forecast->submitter;
+        $forecast->reject($user, $request->reason);
+
+        // Notify the submitter
+        if ($submitter && $submitter->id !== $user->id) {
+            $submitter->notify(new LabourForecastStatusNotification(
+                $forecast,
+                'rejected',
+                $user,
+                $request->reason
+            ));
+        }
+
+        return redirect()->back()->with('success', 'Labour forecast rejected.');
+    }
+
+    /**
+     * Revert forecast to draft
+     */
+    public function revertToDraft(Location $location, LabourForecast $forecast)
+    {
+        if ($forecast->location_id !== $location->id) {
+            abort(403);
+        }
+
+        $forecast->revertToDraft();
+
+        return redirect()->back()->with('success', 'Labour forecast reverted to draft.');
     }
 
     /**
@@ -248,20 +525,20 @@ class LabourForecastController extends Controller
     }
 
     /**
-     * Generate weeks from current month start to project end date
+     * Generate weeks from specified month start to project end date
      * Returns array of weeks with key and label (week ending date)
      */
-    private function generateWeeks($projectEndDate): array
+    private function generateWeeks($projectEndDate, ?Carbon $startMonth = null): array
     {
         $weeks = [];
 
-        // Start from beginning of current month
-        $startDate = now()->startOfMonth();
+        // Start from beginning of specified month (or current month if not specified)
+        $startDate = $startMonth ? $startMonth->copy()->startOfMonth() : now()->startOfMonth();
 
-        // End date - default to 6 months from now if no project end date
+        // End date - default to 6 months from start if no project end date
         $endDate = $projectEndDate
             ? $projectEndDate->copy()
-            : now()->addMonths(6)->endOfMonth();
+            : $startDate->copy()->addMonths(6)->endOfMonth();
 
         // Find the first Sunday (week ending) on or after start date
         $currentDate = $startDate->copy();

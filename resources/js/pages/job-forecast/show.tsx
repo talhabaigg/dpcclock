@@ -24,6 +24,7 @@ import {
     DollarSign,
     FileSpreadsheet,
     FileText,
+    Loader2,
     Lock,
     MessageSquare,
     Percent,
@@ -34,6 +35,7 @@ import {
     Trash2,
     TrendingUp,
     Unlock,
+    Users,
     XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -81,14 +83,14 @@ const ShowJobForecastPage = ({
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
-            { title: 'Forecast Projects', href: '/forecast-projects' },
-            { title: jobName || 'Forecast Project', href: '#' },
-        ]
+              { title: 'Forecast Projects', href: '/forecast-projects' },
+              { title: jobName || 'Forecast Project', href: '#' },
+          ]
         : [
-            { title: 'Locations', href: '/locations' },
-            { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
-            { title: 'Job Forecast', href: '#' },
-        ];
+              { title: 'Locations', href: '/locations' },
+              { title: ` ${jobName || `Location ${locationId}`}`, href: `/locations/${locationId}` },
+              { title: 'Job Forecast', href: '#' },
+          ];
 
     // ===========================
     // State Management
@@ -102,9 +104,7 @@ const ShowJobForecastPage = ({
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
-    const [selectedForecastMonth, setSelectedForecastMonth] = useState(
-        initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7),
-    );
+    const [selectedForecastMonth, setSelectedForecastMonth] = useState(initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7));
     // Workflow state
     const [isWorkflowProcessing, setIsWorkflowProcessing] = useState(false);
     const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -147,6 +147,23 @@ const ShowJobForecastPage = ({
         revenue: [],
     });
     const nextTempId = useRef(-1); // Temporary IDs for new items (negative to distinguish from real IDs)
+
+    // Labour Cost Population State
+    interface LabourCostResponse {
+        success: boolean;
+        forecast_data: Array<{ cost_item: string; months: Record<string, number> }>;
+        summary: { total_cost_codes: number; total_months: number; total_amount: number; date_range: { start: string; end: string } | null };
+        approved_at: string | null;
+        approved_by: string | null;
+        forecast_month: string;
+    }
+    const [labourDialogOpen, setLabourDialogOpen] = useState(false);
+    const [labourCostData, setLabourCostData] = useState<LabourCostResponse | null>(null);
+    const [isLoadingLabourCosts, setIsLoadingLabourCosts] = useState(false);
+    const [labourCostError, setLabourCostError] = useState<string | null>(null);
+    const [labourPopulateMode, setLabourPopulateMode] = useState<'merge' | 'replace'>('replace');
+    const [isPopulatingLabour, setIsPopulatingLabour] = useState(false);
+    const [isLabourPopulated, setIsLabourPopulated] = useState(false);
 
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
@@ -214,9 +231,7 @@ const ShowJobForecastPage = ({
     const handleToggleLock = useCallback(() => {
         if (!locationId) return;
         const targetLock = !isEditingLocked;
-        const message = targetLock
-            ? 'Lock this forecast? It will become view-only.'
-            : 'Unlock this forecast to allow edits?';
+        const message = targetLock ? 'Lock this forecast? It will become view-only.' : 'Unlock this forecast to allow edits?';
         if (!confirm(message)) return;
 
         router.post(
@@ -289,7 +304,12 @@ const ShowJobForecastPage = ({
 
     const handleCopyFromPreviousMonth = useCallback(() => {
         if (!locationId || !selectedForecastMonth) return;
-        if (!confirm('Copy forecast data from the previous month? This will copy all cost and revenue forecasts, shifting them forward by one month. Any existing data for this month will be merged/updated.')) return;
+        if (
+            !confirm(
+                'Copy forecast data from the previous month? This will copy all cost and revenue forecasts, shifting them forward by one month. Any existing data for this month will be merged/updated.',
+            )
+        )
+            return;
 
         setIsWorkflowProcessing(true);
         router.post(
@@ -302,6 +322,78 @@ const ShowJobForecastPage = ({
             },
         );
     }, [locationId, selectedForecastMonth]);
+
+    // ===========================
+    // Labour Cost Population
+    // ===========================
+    const fetchLabourCosts = useCallback(async () => {
+        if (!locationId) return;
+
+        setIsLoadingLabourCosts(true);
+        setLabourCostError(null);
+
+        try {
+            const response = await fetch(`/location/${locationId}/job-forecast/labour-costs`);
+            const data = await response.json();
+
+            if (data.success) {
+                setLabourCostData(data);
+                setLabourDialogOpen(true);
+            } else {
+                setLabourCostError(data.message || 'Failed to load labour costs');
+            }
+        } catch {
+            setLabourCostError('Failed to fetch labour cost data. Please try again.');
+        } finally {
+            setIsLoadingLabourCosts(false);
+        }
+    }, [locationId]);
+
+    const handlePopulateLabourCosts = useCallback(() => {
+        if (!labourCostData) return;
+
+        setIsPopulatingLabour(true);
+
+        // 3 second delay to give user perception that the system is working hard
+        setTimeout(() => {
+            setCostGridData((prev) =>
+                prev.map((row) => {
+                    // Find matching labour cost data for this cost item
+                    const labourItem = labourCostData.forecast_data.find((item) => item.cost_item === row.cost_item);
+
+                    if (!labourItem) return row;
+
+                    const updatedRow = { ...row };
+
+                    // Apply values to forecast months
+                    Object.entries(labourItem.months).forEach(([month, amount]) => {
+                        if (forecastMonths.includes(month)) {
+                            // Handle current month overlap scenario
+                            const fieldName = currentMonth === month && row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
+
+                            if (labourPopulateMode === 'replace') {
+                                updatedRow[fieldName] = amount;
+                            } else {
+                                // Merge: add to existing value
+                                updatedRow[fieldName] = (Number(updatedRow[fieldName]) || 0) + amount;
+                            }
+                        }
+                    });
+
+                    return updatedRow;
+                }),
+            );
+
+            setIsPopulatingLabour(false);
+            setIsLabourPopulated(true);
+        }, 3000);
+    }, [labourCostData, forecastMonths, currentMonth, labourPopulateMode]);
+
+    const handleCloseLabourDialog = useCallback(() => {
+        setLabourDialogOpen(false);
+        setLabourCostData(null);
+        setIsLabourPopulated(false);
+    }, []);
 
     // ===========================
     // Summary Comments
@@ -938,11 +1030,11 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] lg:min-w-7xl sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] sm:rounded-xl lg:min-w-7xl dark:border-slate-700 dark:bg-slate-900">
                     {/* Header - indigo accent with subtle gradient */}
                     <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
                         {/* Subtle decorative element */}
-                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-3">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
@@ -959,7 +1051,7 @@ const ShowJobForecastPage = ({
                                 <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
                                     {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
                                 </p>
-                                <p className="text-[10px] font-medium uppercase tracking-wide text-indigo-500 dark:text-indigo-400">Budget</p>
+                                <p className="text-[10px] font-medium tracking-wide text-indigo-500 uppercase dark:text-indigo-400">Budget</p>
                             </div>
                         </div>
                     </div>
@@ -1010,7 +1102,7 @@ const ShowJobForecastPage = ({
                         <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="min-h-0 flex-1 bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
+                    <div className="min-h-0 flex-1 bg-white px-3 py-3 sm:px-5 sm:py-4 dark:bg-slate-900">
                         <ForecastDialogChart
                             data={activeChartRows}
                             editable={chartCtx.open ? chartCtx.editable : false}
@@ -1024,7 +1116,11 @@ const ShowJobForecastPage = ({
                     {chartCtx.open && chartCtx.editable && (
                         <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
                             <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> <span className="hidden sm:inline">Click forecast points to edit values. In Monthly view, drag points to adjust. Actual data points are locked.</span><span className="sm:hidden">Click or drag forecast points to edit.</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span>{' '}
+                                <span className="hidden sm:inline">
+                                    Click forecast points to edit values. In Monthly view, drag points to adjust. Actual data points are locked.
+                                </span>
+                                <span className="sm:hidden">Click or drag forecast points to edit.</span>
                             </p>
                         </div>
                     )}
@@ -1058,7 +1154,7 @@ const ShowJobForecastPage = ({
                     {/* Header - indigo accent with subtle gradient */}
                     <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
                         {/* Subtle decorative element */}
-                        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-3">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
@@ -1076,13 +1172,15 @@ const ShowJobForecastPage = ({
                                     <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
                                         {totalCostBudget ? `$${totalCostBudget.toLocaleString()}` : '-'}
                                     </p>
-                                    <p className="text-[10px] font-medium uppercase tracking-wide text-blue-500 dark:text-blue-400">Cost Budget</p>
+                                    <p className="text-[10px] font-medium tracking-wide text-blue-500 uppercase dark:text-blue-400">Cost Budget</p>
                                 </div>
                                 <div>
                                     <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
                                         {totalRevenueBudget ? `$${totalRevenueBudget.toLocaleString()}` : '-'}
                                     </p>
-                                    <p className="text-[10px] font-medium uppercase tracking-wide text-green-500 dark:text-green-400">Revenue Budget</p>
+                                    <p className="text-[10px] font-medium tracking-wide text-green-500 uppercase dark:text-green-400">
+                                        Revenue Budget
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -1134,7 +1232,7 @@ const ShowJobForecastPage = ({
                         <DialogTitle>Accrual Summary</DialogTitle>
                     </DialogHeader>
 
-                    <div className="min-h-0 flex-1 overflow-auto bg-white px-3 py-3 dark:bg-slate-900 sm:px-5 sm:py-4">
+                    <div className="min-h-0 flex-1 overflow-auto bg-white px-3 py-3 sm:px-5 sm:py-4 dark:bg-slate-900">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -1148,7 +1246,8 @@ const ShowJobForecastPage = ({
 
                     <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
                         <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines represent forecast values. Click legend items to toggle visibility.
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines
+                            represent forecast values. Click legend items to toggle visibility.
                         </p>
                     </div>
                 </DialogContent>
@@ -1252,17 +1351,269 @@ const ShowJobForecastPage = ({
                         >
                             Cancel
                         </Button>
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={handleRejectForecast}
-                            disabled={isWorkflowProcessing}
-                        >
+                        <Button type="button" variant="destructive" onClick={handleRejectForecast} disabled={isWorkflowProcessing}>
                             {isWorkflowProcessing ? 'Rejecting...' : 'Reject Forecast'}
                         </Button>
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Labour Cost Populate Dialog */}
+            <Dialog open={labourDialogOpen} onOpenChange={(open) => !open && handleCloseLabourDialog()}>
+                <DialogContent className={`w-full ${isPopulatingLabour ? 'max-w-sm' : 'min-w-96 sm:min-w-xl md:min-w-5xl lg:min-w-full'}`}>
+                    {/* Big Loading Overlay - uses negative margins to cover dialog padding */}
+                    {isPopulatingLabour && (
+                        <div className="absolute -inset-6 z-50 flex flex-col items-center justify-center rounded-lg bg-white dark:bg-slate-900">
+                            <div className="flex flex-col items-center gap-6">
+                                {/* Large spinning circle */}
+                                <div className="relative">
+                                    <div className="h-24 w-24 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600 dark:border-indigo-800 dark:border-t-indigo-400" />
+                                    <Users className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                {/* Loading text */}
+                                <div className="text-center">
+                                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Populating Labour Costs</h3>
+                                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                                        Calculating and distributing costs across forecast months...
+                                    </p>
+                                </div>
+                                {/* Progress dots */}
+                                <div className="flex gap-2">
+                                    <div
+                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
+                                        style={{ animationDelay: '0ms' }}
+                                    />
+                                    <div
+                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
+                                        style={{ animationDelay: '150ms' }}
+                                    />
+                                    <div
+                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
+                                        style={{ animationDelay: '300ms' }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogHeader className="shrink-0">
+                        <DialogTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5" />
+                            Populate Labour Costs
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {labourCostData && (
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
+                            {/* Summary Info */}
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                                <h4 className="mb-2 font-medium text-slate-700 dark:text-slate-300">Approved Labour Forecast</h4>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <span className="text-slate-500">Forecast Month:</span>{' '}
+                                        <span className="font-medium">{labourCostData.forecast_month}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500">Approved:</span>{' '}
+                                        <span className="font-medium">{labourCostData.approved_at || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500">By:</span>{' '}
+                                        <span className="font-medium">{labourCostData.approved_by || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500">Cost Codes:</span>{' '}
+                                        <span className="font-medium">{labourCostData.summary.total_cost_codes}</span>
+                                    </div>
+                                    {labourCostData.summary.date_range && (
+                                        <div className="col-span-2">
+                                            <span className="text-slate-500">Period:</span>{' '}
+                                            <span className="font-medium">
+                                                {labourCostData.summary.date_range.start} to {labourCostData.summary.date_range.end}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="col-span-2">
+                                        <span className="text-slate-500">Total Amount:</span>{' '}
+                                        <span className="font-medium text-green-600">
+                                            ${labourCostData.summary.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Preview Table - Show amounts by month */}
+                            {(() => {
+                                // Get all unique months from the data, sorted
+                                const allMonths = Array.from(
+                                    new Set(labourCostData.forecast_data.flatMap((item) => Object.keys(item.months))),
+                                ).sort();
+
+                                // Calculate totals per month
+                                const monthTotals: Record<string, number> = {};
+                                allMonths.forEach((month) => {
+                                    monthTotals[month] = labourCostData.forecast_data.reduce((sum, item) => sum + (item.months[month] || 0), 0);
+                                });
+
+                                // Format month for display (e.g., "2025-01" -> "Jan 25")
+                                const formatMonth = (monthStr: string) => {
+                                    const [year, month] = monthStr.split('-');
+                                    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                                    return date.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+                                };
+
+                                return (
+                                    <div className="max-h-72 overflow-auto rounded-lg border">
+                                        <table className="w-full text-sm">
+                                            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left whitespace-nowrap">Cost Code</th>
+                                                    {allMonths.map((month) => (
+                                                        <th key={month} className="px-3 py-2 text-right whitespace-nowrap">
+                                                            {formatMonth(month)}
+                                                        </th>
+                                                    ))}
+                                                    <th className="px-3 py-2 text-right font-bold whitespace-nowrap">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {[...labourCostData.forecast_data]
+                                                    .sort((a, b) => a.cost_item.localeCompare(b.cost_item))
+                                                    .map((item) => {
+                                                        const rowTotal = Object.values(item.months).reduce((a, b) => a + b, 0);
+                                                        return (
+                                                            <tr key={item.cost_item} className="border-t hover:bg-slate-50 dark:hover:bg-slate-800">
+                                                                <td className="px-3 py-2 font-mono whitespace-nowrap text-slate-700 dark:text-slate-300">
+                                                                    {item.cost_item}
+                                                                </td>
+                                                                {allMonths.map((month) => (
+                                                                    <td key={month} className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                                                                        {item.months[month]
+                                                                            ? `$${item.months[month].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                                                                            : '-'}
+                                                                    </td>
+                                                                ))}
+                                                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap text-slate-900 tabular-nums dark:text-slate-100">
+                                                                    $
+                                                                    {rowTotal.toLocaleString(undefined, {
+                                                                        minimumFractionDigits: 0,
+                                                                        maximumFractionDigits: 0,
+                                                                    })}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                            </tbody>
+                                            <tfoot className="sticky bottom-0 bg-slate-100 dark:bg-slate-700">
+                                                <tr className="border-t-2 border-slate-300 font-bold dark:border-slate-600">
+                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">Total</td>
+                                                    {allMonths.map((month) => (
+                                                        <td
+                                                            key={month}
+                                                            className="px-3 py-2 text-right text-green-700 tabular-nums dark:text-green-400"
+                                                        >
+                                                            $
+                                                            {monthTotals[month].toLocaleString(undefined, {
+                                                                minimumFractionDigits: 0,
+                                                                maximumFractionDigits: 0,
+                                                            })}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-3 py-2 text-right text-green-700 tabular-nums dark:text-green-400">
+                                                        $
+                                                        {labourCostData.summary.total_amount.toLocaleString(undefined, {
+                                                            minimumFractionDigits: 0,
+                                                            maximumFractionDigits: 0,
+                                                        })}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Populate Mode Selection */}
+                            <div className="space-y-2">
+                                <Label>Populate Mode</Label>
+                                <div className="flex gap-4">
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="populateMode"
+                                            value="replace"
+                                            checked={labourPopulateMode === 'replace'}
+                                            onChange={() => setLabourPopulateMode('replace')}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">Replace existing values</span>
+                                    </label>
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="populateMode"
+                                            value="merge"
+                                            checked={labourPopulateMode === 'merge'}
+                                            onChange={() => setLabourPopulateMode('merge')}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">Merge (add to existing)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Warning - show only before population */}
+                            {!isLabourPopulated && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <strong>Note:</strong> This will populate labour cost codes for months within your forecast period. Remember to
+                                    save the forecast after populating.
+                                </div>
+                            )}
+
+                            {/* Success message - show after population */}
+                            {isLabourPopulated && (
+                                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">
+                                    <strong>Success!</strong> Labour costs have been populated into the forecast grid. Please review the changes below
+                                    and save the forecast when ready.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex shrink-0 justify-end gap-2 pt-2">
+                        {!isLabourPopulated ? (
+                            <>
+                                <Button variant="outline" onClick={handleCloseLabourDialog}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handlePopulateLabourCosts} disabled={!labourCostData || isPopulatingLabour}>
+                                    <Users className="mr-2 h-4 w-4" />
+                                    Populate Costs
+                                </Button>
+                            </>
+                        ) : (
+                            <Button onClick={handleCloseLabourDialog}>Done - Review & Save</Button>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Labour Cost Error Dialog */}
+            {labourCostError && (
+                <Dialog open={!!labourCostError} onOpenChange={() => setLabourCostError(null)}>
+                    <DialogContent className="sm:max-w-[400px]">
+                        <DialogHeader>
+                            <DialogTitle className="text-red-600">Cannot Load Labour Costs</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">{labourCostError}</p>
+                        <div className="flex justify-end">
+                            <Button variant="outline" onClick={() => setLabourCostError(null)}>
+                                Close
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Saving Loader Dialog */}
             {isSaving && (
@@ -1362,7 +1713,11 @@ const ShowJobForecastPage = ({
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Link href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`} target="_blank" rel="noopener noreferrer">
+                                        <Link
+                                            href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
                                             <Button variant="ghost" size="icon" className="h-8 w-8">
                                                 <Scale className="h-4 w-4 lg:h-5 lg:w-5" />
                                             </Button>
@@ -1402,7 +1757,13 @@ const ShowJobForecastPage = ({
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={saveForecast}
+                                            disabled={isSaving || isEditingLocked}
+                                        >
                                             <Save className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
@@ -1448,9 +1809,7 @@ const ShowJobForecastPage = ({
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span className="cursor-help text-[10px] text-red-600 lg:text-xs dark:text-red-400">
-                                            Rejected
-                                        </span>
+                                        <span className="cursor-help text-[10px] text-red-600 lg:text-xs dark:text-red-400">Rejected</span>
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xs">
                                         <p className="text-sm">{forecastWorkflow.rejectionNote}</p>
@@ -1515,6 +1874,28 @@ const ShowJobForecastPage = ({
                                         <TooltipContent>Copy forecast data from previous month</TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 lg:h-8 lg:w-8"
+                                                onClick={fetchLabourCosts}
+                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked || isLoadingLabourCosts}
+                                                title="Populate from Labour Forecast"
+                                            >
+                                                {isLoadingLabourCosts ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin lg:h-4 lg:w-4" />
+                                                ) : (
+                                                    <Users className="h-3 w-3 lg:h-4 lg:w-4" />
+                                                )}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Populate labour costs from approved Labour Forecast</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             </div>
                         )}
 
@@ -1559,7 +1940,8 @@ const ShowJobForecastPage = ({
                                             <div
                                                 className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
                                                 style={{
-                                                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
+                                                    background:
+                                                        'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
                                                     backgroundSize: '300% 100%',
                                                     animation: 'rainbow-flow 3s linear infinite',
                                                 }}
@@ -1568,7 +1950,8 @@ const ShowJobForecastPage = ({
                                             <div
                                                 className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                                                 style={{
-                                                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
+                                                    background:
+                                                        'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
                                                     backgroundSize: '300% 100%',
                                                     animation: 'rainbow-flow 3s linear infinite',
                                                 }}
@@ -1599,7 +1982,8 @@ const ShowJobForecastPage = ({
                                                 <div
                                                     className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
                                                     style={{
-                                                        background: 'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
+                                                        background:
+                                                            'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
                                                         backgroundSize: '300% 100%',
                                                         animation: 'rainbow-flow 3s linear infinite',
                                                     }}
@@ -1608,7 +1992,8 @@ const ShowJobForecastPage = ({
                                                 <div
                                                     className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                                                     style={{
-                                                        background: 'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
+                                                        background:
+                                                            'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
                                                         backgroundSize: '300% 100%',
                                                         animation: 'rainbow-flow 3s linear infinite',
                                                     }}
@@ -1636,7 +2021,8 @@ const ShowJobForecastPage = ({
                                                 <div
                                                     className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
                                                     style={{
-                                                        background: 'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
+                                                        background:
+                                                            'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
                                                         backgroundSize: '300% 100%',
                                                         animation: 'rainbow-flow 3s linear infinite',
                                                     }}
@@ -1645,7 +2031,8 @@ const ShowJobForecastPage = ({
                                                 <div
                                                     className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                                                     style={{
-                                                        background: 'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
+                                                        background:
+                                                            'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
                                                         backgroundSize: '300% 100%',
                                                         animation: 'rainbow-flow 3s linear infinite',
                                                     }}
@@ -1681,9 +2068,7 @@ const ShowJobForecastPage = ({
                 {/* Forecast Summary Comments Section */}
                 {!isForecastProject && (
                     <div className="mx-2 mb-2">
-                        <div
-                            className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
-                        >
+                        <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800">
                             <button
                                 type="button"
                                 className="flex w-full items-center justify-between px-4 py-2"
@@ -1691,12 +2076,11 @@ const ShowJobForecastPage = ({
                             >
                                 <div className="flex items-center gap-2">
                                     <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                        Forecast Summary
-                                    </span>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Forecast Summary</span>
                                     {summaryComments && !summaryCommentsExpanded && (
                                         <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
-                                            - {summaryComments.substring(0, 60)}{summaryComments.length > 60 ? '...' : ''}
+                                            - {summaryComments.substring(0, 60)}
+                                            {summaryComments.length > 60 ? '...' : ''}
                                         </span>
                                     )}
                                 </div>
@@ -1713,7 +2097,7 @@ const ShowJobForecastPage = ({
                                         value={summaryComments}
                                         onChange={(e) => setSummaryComments(e.target.value)}
                                         placeholder="Add comments about this forecast (key assumptions, risks, notes for reviewers...)"
-                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
                                         disabled={isEditingLocked}
                                     />
                                     <div className="mt-2 flex items-center justify-between">

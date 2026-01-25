@@ -8,6 +8,7 @@ use App\Models\JobForecast;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
+use App\Models\LabourForecast;
 use App\Models\Location;
 use App\Models\User;
 use App\Notifications\JobForecastStatusNotification;
@@ -936,6 +937,127 @@ class JobForecastController extends Controller
             DB::rollBack();
             return redirect()->back()->withErrors(['error' => 'Failed to copy forecast data: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * Get aggregated labour costs by month for populating job forecast
+     * This endpoint fetches approved labour forecast data and transforms it
+     * into monthly costs by cost code for use in job forecast.
+     */
+    public function getLabourCostsForJobForecast(Location $location)
+    {
+        // Find the latest approved labour forecast for this location
+        $labourForecast = LabourForecast::where('location_id', $location->id)
+            ->where('status', LabourForecast::STATUS_APPROVED)
+            ->with(['entries.template'])
+            ->latest('approved_at')
+            ->first();
+
+        if (!$labourForecast) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No approved labour forecast found for this location.',
+            ], 404);
+        }
+
+        // Aggregate weekly entries into monthly costs by cost code
+        $monthlyCosts = [];
+
+        foreach ($labourForecast->entries as $entry) {
+            // Get month from week_ending (e.g., "2025-11" from "2025-11-09")
+            $month = $entry->week_ending->format('Y-m');
+
+            // Get cost breakdown from snapshot
+            $breakdown = $entry->cost_breakdown_snapshot;
+            if (!$breakdown) {
+                continue;
+            }
+
+            $headcount = $entry->headcount;
+            if ($headcount <= 0) {
+                continue;
+            }
+
+            // Get cost code prefix from the current template configuration (not snapshot)
+            // This ensures we always use the latest prefix setting
+            $template = $entry->template;
+            $prefix = $template?->cost_code_prefix;
+
+            // Skip if no prefix configured
+            if (empty($prefix)) {
+                continue;
+            }
+
+            // Calculate cost codes dynamically based on current prefix
+            // On-cost prefix is wages prefix + 1 (e.g., 01 -> 02, 03 -> 04)
+            $prefixNum = intval($prefix);
+            $onCostPrefix = str_pad($prefixNum + 1, 2, '0', STR_PAD_LEFT);
+
+            // Initialize month if not exists
+            if (!isset($monthlyCosts[$month])) {
+                $monthlyCosts[$month] = [];
+            }
+
+            // Wages go to {prefix}-01 (e.g., 01-01, 03-01)
+            $wagesCode = "{$prefix}-01";
+            $monthlyCosts[$month][$wagesCode] =
+                ($monthlyCosts[$month][$wagesCode] ?? 0) +
+                (($breakdown['marked_up_wages'] ?? 0) * $headcount);
+
+            // On-costs go to {prefix+1}-XX series (e.g., if wages is 01-01, on-costs go to 02-XX)
+            $onCostMappings = [
+                ['code' => "{$onCostPrefix}-01", 'value' => $breakdown['super'] ?? 0],
+                ['code' => "{$onCostPrefix}-05", 'value' => $breakdown['on_costs']['bert'] ?? 0],
+                ['code' => "{$onCostPrefix}-10", 'value' => $breakdown['on_costs']['bewt'] ?? 0],
+                ['code' => "{$onCostPrefix}-15", 'value' => $breakdown['on_costs']['cipq'] ?? 0],
+                ['code' => "{$onCostPrefix}-20", 'value' => $breakdown['on_costs']['payroll_tax'] ?? 0],
+                ['code' => "{$onCostPrefix}-25", 'value' => $breakdown['on_costs']['workcover'] ?? 0],
+            ];
+
+            foreach ($onCostMappings as $mapping) {
+                $code = $mapping['code'];
+                $value = $mapping['value'] * $headcount;
+                $monthlyCosts[$month][$code] = ($monthlyCosts[$month][$code] ?? 0) + $value;
+            }
+        }
+
+        // Transform to job forecast format: array of { cost_item, months: { YYYY-MM: amount } }
+        $forecastData = [];
+        foreach ($monthlyCosts as $month => $costItems) {
+            foreach ($costItems as $costItem => $amount) {
+                if (!isset($forecastData[$costItem])) {
+                    $forecastData[$costItem] = [
+                        'cost_item' => $costItem,
+                        'months' => [],
+                    ];
+                }
+                $forecastData[$costItem]['months'][$month] = round($amount, 2);
+            }
+        }
+
+        // Calculate summary statistics
+        $totalAmount = 0;
+        foreach ($forecastData as $item) {
+            $totalAmount += array_sum($item['months']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'forecast_id' => $labourForecast->id,
+            'forecast_month' => $labourForecast->forecast_month->format('Y-m'),
+            'approved_at' => $labourForecast->approved_at?->format('Y-m-d H:i'),
+            'approved_by' => $labourForecast->approver?->name,
+            'forecast_data' => array_values($forecastData),
+            'summary' => [
+                'total_cost_codes' => count($forecastData),
+                'total_months' => count($monthlyCosts),
+                'total_amount' => round($totalAmount, 2),
+                'date_range' => !empty($monthlyCosts) ? [
+                    'start' => min(array_keys($monthlyCosts)),
+                    'end' => max(array_keys($monthlyCosts)),
+                ] : null,
+            ],
+        ]);
     }
 
 }

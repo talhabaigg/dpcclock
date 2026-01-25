@@ -352,24 +352,33 @@ class LabourCostCalculator
     /**
      * Build cost code mappings based on prefix
      * Wages: {prefix}-01
-     * Super: 04-01
-     * BERT: 04-05
-     * BEWT: 04-10
-     * CIPQ: 04-15
-     * Payroll Tax: 04-20
-     * WorkCover: 04-25
+     * On-costs: {prefix+1}-XX (e.g., if wages is 01, on-costs go to 02-XX)
+     *   Super: {oncost_prefix}-01
+     *   BERT: {oncost_prefix}-05
+     *   BEWT: {oncost_prefix}-10
+     *   CIPQ: {oncost_prefix}-15
+     *   Payroll Tax: {oncost_prefix}-20
+     *   WorkCover: {oncost_prefix}-25
      */
     private function buildCostCodeMappings(?string $prefix): array
     {
+        // Calculate on-cost prefix as wages prefix + 1
+        $onCostPrefix = null;
+        if ($prefix) {
+            $prefixNum = intval($prefix);
+            $onCostPrefix = str_pad($prefixNum + 1, 2, '0', STR_PAD_LEFT);
+        }
+
         return [
             'prefix' => $prefix,
+            'oncost_prefix' => $onCostPrefix,
             'wages' => $prefix ? "{$prefix}-01" : null,
-            'super' => '04-01',
-            'bert' => '04-05',
-            'bewt' => '04-10',
-            'cipq' => '04-15',
-            'payroll_tax' => '04-20',
-            'workcover' => '04-25',
+            'super' => $onCostPrefix ? "{$onCostPrefix}-01" : null,
+            'bert' => $onCostPrefix ? "{$onCostPrefix}-05" : null,
+            'bewt' => $onCostPrefix ? "{$onCostPrefix}-10" : null,
+            'cipq' => $onCostPrefix ? "{$onCostPrefix}-15" : null,
+            'payroll_tax' => $onCostPrefix ? "{$onCostPrefix}-20" : null,
+            'workcover' => $onCostPrefix ? "{$onCostPrefix}-25" : null,
         ];
     }
 

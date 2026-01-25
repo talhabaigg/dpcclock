@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -9,7 +9,7 @@ import { router } from '@inertiajs/react';
 import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Calculator, DollarSign, Expand, Info, Pencil, Plus, Settings, Trash2, TrendingUp, Users } from 'lucide-react';
+import { Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, DollarSign, Expand, Info, Loader2, MessageSquare, Pencil, Plus, Save, Send, Settings, Trash2, TrendingUp, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildLabourForecastShowColumnDefs } from './column-builders';
 import { type ChartDataPoint, LabourForecastChart } from './LabourForecastChart';
@@ -94,6 +94,27 @@ interface LocationWorktype {
     eh_worktype_id: number;
 }
 
+interface SavedForecast {
+    id: number;
+    status: 'draft' | 'submitted' | 'approved' | 'rejected';
+    forecast_month: string;
+    notes: string | null;
+    created_by: string | null;
+    submitted_at: string | null;
+    submitted_by: string | null;
+    approved_at: string | null;
+    approved_by: string | null;
+    rejection_reason: string | null;
+    entries: {
+        [templateId: number]: {
+            hourly_rate: number | null;
+            weekly_cost: number | null;
+            cost_breakdown: CostBreakdown | null;
+            weeks: { [weekEnding: string]: number };
+        };
+    };
+}
+
 interface LabourForecastShowProps {
     location: {
         id: number;
@@ -101,10 +122,16 @@ interface LabourForecastShowProps {
         job_number: string;
     };
     projectEndDate: string | null;
+    selectedMonth: string; // YYYY-MM format
     weeks: Week[];
     configuredTemplates: ConfiguredTemplate[];
     availableTemplates: AvailableTemplate[];
     locationWorktypes: LocationWorktype[];
+    savedForecast: SavedForecast | null;
+    permissions: {
+        canSubmit: boolean;
+        canApprove: boolean;
+    };
     flash?: { success?: string; error?: string };
 }
 
@@ -118,15 +145,32 @@ interface RowData {
     [key: string]: string | number | boolean | undefined | null;
 }
 
-const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplates, availableTemplates, locationWorktypes, flash }: LabourForecastShowProps) => {
+const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, configuredTemplates, availableTemplates, locationWorktypes, savedForecast, permissions, flash }: LabourForecastShowProps) => {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Labour Forecast', href: '/labour-forecast' },
         { title: location.name, href: '#' },
     ];
 
+    // Month navigation
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+
     // Chart dialog state
     const [chartOpen, setChartOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+    // Workflow dialog state
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Summary comments state
+    const [summaryExpanded, setSummaryExpanded] = useState(false);
+    const [notes, setNotes] = useState(savedForecast?.notes || '');
+
+    // Sync notes when savedForecast changes
+    useEffect(() => {
+        setNotes(savedForecast?.notes || '');
+    }, [savedForecast?.notes]);
 
     // Settings dialog state
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -188,7 +232,11 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
         return options;
     }, [workTypes]);
 
-    // Initialize row data with work types
+    // Saving state
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Initialize row data with work types (and saved data if available)
     const [rowData, setRowData] = useState<RowData[]>(() =>
         workTypes.map((wt) => {
             const row: RowData = {
@@ -197,9 +245,11 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
                 hourlyRate: wt.hourlyRate,
                 weeklyCost: wt.weeklyCost,
             };
-            // Initialize all week columns with 0
+            // Initialize week columns - use saved data if available
+            const savedEntry = savedForecast?.entries?.[wt.configId];
             weeks.forEach((week) => {
-                row[week.key] = 0;
+                const savedHeadcount = savedEntry?.weeks?.[week.weekEnding];
+                row[week.key] = savedHeadcount ?? 0;
             });
             return row;
         }),
@@ -273,6 +323,7 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
         if (event.data?.isTotal || event.data?.isCostRow) return;
 
         setRowData((prevRows) => prevRows.map((row) => (row.id === event.data.id ? { ...row, [event.colDef.field!]: event.newValue } : row)));
+        setHasUnsavedChanges(true);
     }, []);
 
     // Handle cell click to track selected cell for fill operations
@@ -324,6 +375,7 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
                     return updated;
                 }),
             );
+            setHasUnsavedChanges(true);
         },
         [selectedCell, weeks, rowData],
     );
@@ -403,9 +455,131 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
                 // Update specific category
                 setRowData((prevRows) => prevRows.map((row) => (row.id === selectedCategory ? { ...row, [weekKey]: value } : row)));
             }
+            setHasUnsavedChanges(true);
         },
         [selectedCategory, rowData, workTypes.length],
     );
+
+    // Handle saving forecast data
+    const handleSave = useCallback(() => {
+        if (isSaving) return;
+
+        setIsSaving(true);
+
+        // Build entries structure: { configId: { weeks: [ { week_ending, headcount } ] } }
+        const entries = configuredTemplates.map((template) => {
+            const row = rowData.find((r) => r.id === `template_${template.template_id}`);
+            const weekData = weeks.map((week) => ({
+                week_ending: week.weekEnding,
+                headcount: row ? Number(row[week.key]) || 0 : 0,
+            }));
+            return {
+                template_id: template.id,
+                weeks: weekData,
+            };
+        });
+
+        // Use selected month for forecast_month
+        const forecastMonthStr = `${selectedMonth}-01`;
+
+        router.post(
+            route('labour-forecast.save', { location: location.id }),
+            { entries, forecast_month: forecastMonthStr, notes },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setHasUnsavedChanges(false);
+                    setIsSaving(false);
+                },
+                onError: () => {
+                    setIsSaving(false);
+                },
+            },
+        );
+    }, [isSaving, configuredTemplates, rowData, weeks, location.id, selectedMonth, notes]);
+
+    // Month navigation handlers
+    const navigateMonth = useCallback((direction: 'prev' | 'next') => {
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const date = new Date(year, month - 1, 1);
+        if (direction === 'prev') {
+            date.setMonth(date.getMonth() - 1);
+        } else {
+            date.setMonth(date.getMonth() + 1);
+        }
+        const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        router.get(route('labour-forecast.show', { location: location.id }), { month: newMonth }, { preserveScroll: true });
+    }, [selectedMonth, location.id]);
+
+    const formatMonthDisplay = (monthStr: string) => {
+        const [year, month] = monthStr.split('-').map(Number);
+        const date = new Date(year, month - 1, 1);
+        return date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    };
+
+    // Workflow action handlers
+    const handleSubmit = useCallback(() => {
+        if (!savedForecast?.id || isSubmitting) return;
+        setIsSubmitting(true);
+        router.post(
+            route('labour-forecast.submit', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
+    }, [savedForecast?.id, location.id, isSubmitting]);
+
+    const handleApprove = useCallback(() => {
+        if (!savedForecast?.id || isSubmitting) return;
+        setIsSubmitting(true);
+        router.post(
+            route('labour-forecast.approve', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
+    }, [savedForecast?.id, location.id, isSubmitting]);
+
+    const handleReject = useCallback(() => {
+        if (!savedForecast?.id || isSubmitting || !rejectionReason.trim()) return;
+        setIsSubmitting(true);
+        router.post(
+            route('labour-forecast.reject', { location: location.id, forecast: savedForecast.id }),
+            { reason: rejectionReason },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsSubmitting(false);
+                    setRejectDialogOpen(false);
+                    setRejectionReason('');
+                },
+                onError: () => setIsSubmitting(false),
+            },
+        );
+    }, [savedForecast?.id, location.id, isSubmitting, rejectionReason]);
+
+    const handleRevertToDraft = useCallback(() => {
+        if (!savedForecast?.id || isSubmitting) return;
+        setIsSubmitting(true);
+        router.post(
+            route('labour-forecast.revert', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
+    }, [savedForecast?.id, location.id, isSubmitting]);
+
+    // Check if editing is allowed (only draft status)
+    const isEditingLocked = savedForecast && savedForecast.status !== 'draft';
 
     // Get category display name
     const getCategoryDisplayName = () => {
@@ -930,6 +1104,42 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
                 </DialogContent>
             </Dialog>
 
+            {/* Rejection Dialog */}
+            <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <X className="h-5 w-5" />
+                            Reject Labour Forecast
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Please provide a reason for rejecting this labour forecast. The submitter will be notified.
+                        </p>
+                        <textarea
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="Enter rejection reason..."
+                            className="min-h-[100px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleReject}
+                            disabled={isSubmitting || !rejectionReason.trim()}
+                        >
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Reject Forecast
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Chart Dialog (Full Screen) */}
             <Dialog open={chartOpen} onOpenChange={setChartOpen}>
                 <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] sm:rounded-xl lg:min-w-7xl dark:border-slate-700 dark:bg-slate-900">
@@ -985,17 +1195,165 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
 
             <div className="p-4">
                 {/* Header */}
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <h1 className="text-xl font-semibold">{location.name}</h1>
-                        <p className="text-sm text-gray-500">Job Number: {location.job_number}</p>
-                        {projectEndDate && <p className="text-sm text-gray-500">Project End: {projectEndDate}</p>}
+                <div className="mb-4 space-y-3">
+                    {/* Title Row */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h1 className="text-lg font-semibold sm:text-xl">{location.name}</h1>
+                                {savedForecast && (
+                                    <span
+                                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                            savedForecast.status === 'draft'
+                                                ? 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                                                : savedForecast.status === 'submitted'
+                                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                  : savedForecast.status === 'approved'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                        }`}
+                                    >
+                                        {savedForecast.status.charAt(0).toUpperCase() + savedForecast.status.slice(1)}
+                                    </span>
+                                )}
+                                {hasUnsavedChanges && (
+                                    <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved</span>
+                                )}
+                            </div>
+                            <p className="text-sm text-gray-500">Job: {location.job_number}</p>
+                        </div>
+
+                        {/* Month Navigation - always visible */}
+                        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1 dark:border-slate-700 dark:bg-slate-800">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => navigateMonth('prev')}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="min-w-[120px] text-center text-sm font-medium sm:min-w-[140px]">
+                                {formatMonthDisplay(selectedMonth)}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => navigateMonth('next')}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
-                    <Button variant="outline" onClick={() => setSettingsOpen(true)}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Configure Templates
-                    </Button>
+
+                    {/* Action Buttons Row */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Save Button */}
+                        {configuredTemplates.length > 0 && !isEditingLocked && (
+                            <Button
+                                onClick={handleSave}
+                                disabled={isSaving || !hasUnsavedChanges}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="mr-1.5 h-4 w-4" />
+                                )}
+                                <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
+                            </Button>
+                        )}
+
+                        {/* Workflow Buttons */}
+                        {savedForecast && savedForecast.status === 'draft' && permissions.canSubmit && (
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting || hasUnsavedChanges}
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="mr-1.5 h-4 w-4" />
+                                )}
+                                <span className="hidden sm:inline">Submit</span>
+                            </Button>
+                        )}
+
+                        {savedForecast && savedForecast.status === 'submitted' && permissions.canApprove && (
+                            <>
+                                <Button
+                                    onClick={handleApprove}
+                                    disabled={isSubmitting}
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700"
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Check className="mr-1.5 h-4 w-4" />
+                                    )}
+                                    <span className="hidden sm:inline">Approve</span>
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => setRejectDialogOpen(true)}
+                                    disabled={isSubmitting}
+                                >
+                                    <X className="mr-1.5 h-4 w-4" />
+                                    <span className="hidden sm:inline">Reject</span>
+                                </Button>
+                            </>
+                        )}
+
+                        {savedForecast && (savedForecast.status === 'approved' || savedForecast.status === 'rejected') && permissions.canApprove && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRevertToDraft}
+                                disabled={isSubmitting}
+                            >
+                                <span className="hidden sm:inline">Revert to Draft</span>
+                                <span className="sm:hidden">Revert</span>
+                            </Button>
+                        )}
+
+                        <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+                            <Settings className="h-4 w-4 sm:mr-1.5" />
+                            <span className="hidden sm:inline">Configure</span>
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Rejection reason display */}
+                {savedForecast?.status === 'rejected' && savedForecast.rejection_reason && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                        <h3 className="font-medium text-red-800 dark:text-red-200">Rejection Reason</h3>
+                        <p className="mt-1 text-sm text-red-700 dark:text-red-300">{savedForecast.rejection_reason}</p>
+                    </div>
+                )}
+
+                {/* Approval info display */}
+                {savedForecast?.status === 'approved' && (
+                    <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                            Approved by {savedForecast.approved_by} on {savedForecast.approved_at}
+                        </p>
+                    </div>
+                )}
+
+                {/* Submitted info display */}
+                {savedForecast?.status === 'submitted' && (
+                    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                            Submitted by {savedForecast.submitted_by} on {savedForecast.submitted_at} - Awaiting approval
+                        </p>
+                    </div>
+                )}
 
                 {/* Flash messages outside dialog */}
                 {flash?.success && !settingsOpen && (
@@ -1095,6 +1453,56 @@ const LabourForecastShow = ({ location, projectEndDate, weeks, configuredTemplat
                             <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
                                 {grandTotalHeadcount > 0 ? formatCurrency(grandTotalCost / weeks.length) : '-'}
                             </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Forecast Summary/Notes Section */}
+                {configuredTemplates.length > 0 && (
+                    <div className="mb-4">
+                        <div
+                            className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                        >
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between px-4 py-2"
+                                onClick={() => setSummaryExpanded(!summaryExpanded)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Forecast Notes
+                                    </span>
+                                    {notes && !summaryExpanded && (
+                                        <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
+                                            - {notes.substring(0, 60)}{notes.length > 60 ? '...' : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                {summaryExpanded ? (
+                                    <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                )}
+                            </button>
+
+                            {summaryExpanded && (
+                                <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+                                    <textarea
+                                        value={notes}
+                                        onChange={(e) => {
+                                            setNotes(e.target.value);
+                                            setHasUnsavedChanges(true);
+                                        }}
+                                        placeholder="Add notes about this forecast (key assumptions, risks, notes for reviewers...)"
+                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                        disabled={isEditingLocked}
+                                    />
+                                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                        {isEditingLocked ? 'Forecast is locked - cannot edit notes' : 'Notes are saved when you click Save'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

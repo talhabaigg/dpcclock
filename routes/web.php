@@ -362,6 +362,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:forecast.view')->group(function () {
         Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
+        Route::get('/location/{location}/job-forecast/labour-costs', [JobForecastController::class, 'getLabourCostsForJobForecast'])->name('jobForecast.labourCosts');
         Route::get('/location/{location}/compare-forecast-actuals', [JobForecastController::class, 'compareForecast'])->name('forecast.compareForecast');
     });
     Route::middleware('permission:forecast.edit')->group(function () {
@@ -423,6 +424,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/location/{location}/labour-forecast/templates/add', [LabourForecastController::class, 'addTemplate'])->name('labour-forecast.add-template');
     Route::delete('/location/{location}/labour-forecast/templates/{template}', [LabourForecastController::class, 'removeTemplate'])->name('labour-forecast.remove-template');
     Route::put('/location/{location}/labour-forecast/templates/{template}/label', [LabourForecastController::class, 'updateTemplateLabel'])->name('labour-forecast.update-template-label');
+    // Labour Forecast - Save & Workflow
+    Route::post('/location/{location}/labour-forecast/save', [LabourForecastController::class, 'save'])->name('labour-forecast.save');
+    Route::post('/location/{location}/labour-forecast/{forecast}/submit', [LabourForecastController::class, 'submit'])->name('labour-forecast.submit');
+    Route::post('/location/{location}/labour-forecast/{forecast}/approve', [LabourForecastController::class, 'approve'])->name('labour-forecast.approve');
+    Route::post('/location/{location}/labour-forecast/{forecast}/reject', [LabourForecastController::class, 'reject'])->name('labour-forecast.reject');
+    Route::post('/location/{location}/labour-forecast/{forecast}/revert', [LabourForecastController::class, 'revertToDraft'])->name('labour-forecast.revert');
 
     // ============================================
     // PAY RATE TEMPLATES
