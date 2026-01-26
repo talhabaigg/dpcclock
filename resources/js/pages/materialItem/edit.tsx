@@ -13,12 +13,25 @@ import { CostCode } from '../purchasing/types';
 import ActivitySheet from './Partials/activity-sheet';
 import OrderHistorySheet from './Partials/order-history-sheet';
 
+type SupplierCategory = {
+    id: number;
+    code: string;
+    name: string;
+    supplier_id: number;
+    supplier?: {
+        id: number;
+        code: string;
+        name: string;
+    };
+};
+
 type MaterialItem = {
     id: number;
     code: string;
     description: string;
     unit_cost: number;
     price_expiry_date: string | null;
+    supplier_category_id: number | null;
     cost_code?: {
         id: number;
         code: string;
@@ -27,7 +40,7 @@ type MaterialItem = {
         id: number;
         code: string;
     };
-
+    supplier_category?: SupplierCategory | null;
     order_history: any[];
 };
 
@@ -38,10 +51,11 @@ type Supplier = {
 };
 
 export default function EditMaterialItem() {
-    const { item, flash, costCodes, suppliers, activities } = usePage<{
+    const { item, flash, costCodes, suppliers, categories, activities } = usePage<{
         item: MaterialItem | null;
         costCodes: CostCode[];
         suppliers: Supplier[];
+        categories: SupplierCategory[];
         flash: { success: string; error: string };
         activities: any[];
     }>().props;
@@ -52,7 +66,14 @@ export default function EditMaterialItem() {
         price_expiry_date: item?.price_expiry_date || '',
         cost_code_id: item?.cost_code?.id || '',
         supplier_id: item?.supplier?.id || '',
+        supplier_category_id: item?.supplier_category?.id || '',
     });
+
+    // Filter categories based on selected supplier
+    const filteredCategories = React.useMemo(() => {
+        if (!form.data.supplier_id) return [];
+        return categories.filter((c) => c.supplier_id === Number(form.data.supplier_id));
+    }, [categories, form.data.supplier_id]);
 
     const handleSubmit = () => {
         if (!item) {
@@ -188,14 +209,39 @@ export default function EditMaterialItem() {
                             </SelectContent>
                         </Select>
                         <Label>Supplier</Label>
-                        <Select value={String(form.data.supplier_id)} onValueChange={(value) => form.setData('supplier_id', value)}>
+                        <Select
+                            value={String(form.data.supplier_id)}
+                            onValueChange={(value) => {
+                                form.setData('supplier_id', value);
+                                form.setData('supplier_category_id', '');
+                            }}
+                        >
                             <SelectTrigger>
-                                {suppliers.find((cc) => cc.id.toString() === String(form.data.supplier_id))?.code || 'Select a cost code'}
+                                {suppliers.find((cc) => cc.id.toString() === String(form.data.supplier_id))?.code || 'Select a supplier'}
                             </SelectTrigger>
                             <SelectContent>
                                 {suppliers.map((supplier) => (
                                     <SelectItem key={supplier.id} value={supplier.id.toString()}>
                                         {supplier.code}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Label>Category</Label>
+                        <Select
+                            value={form.data.supplier_category_id ? String(form.data.supplier_category_id) : 'none'}
+                            onValueChange={(value) => form.setData('supplier_category_id', value === 'none' ? '' : value)}
+                            disabled={!form.data.supplier_id}
+                        >
+                            <SelectTrigger>
+                                {filteredCategories.find((c) => c.id.toString() === String(form.data.supplier_category_id))?.name ||
+                                    (form.data.supplier_id ? 'Select a category' : 'Select a supplier first')}
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {filteredCategories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id.toString()}>
+                                        {category.code} - {category.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

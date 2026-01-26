@@ -21,7 +21,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
     use Exportable;
     public function query()
     {
-        return MaterialItem::with('supplier', 'costCode');
+        return MaterialItem::with('supplier', 'costCode', 'supplierCategory');
     }
     public function columnFormats(): array
     {
@@ -32,6 +32,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'D' => NumberFormat::FORMAT_GENERAL,
             'E' => NumberFormat::FORMAT_GENERAL,
             'F' => NumberFormat::FORMAT_DATE_DDMMYYYY,
+            'G' => NumberFormat::FORMAT_GENERAL,
         ];
     }
     public function styles(Worksheet $sheet)
@@ -52,6 +53,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'Supplier Code',
             'Cost Code',
             'Expiry Date',
+            'Category Code',
         ];
     }
 
@@ -64,6 +66,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             $materialItem->supplier ? $materialItem->supplier->code : '',
             $materialItem->costCode ? $materialItem->costCode->code : '',
             $materialItem->price_expiry_date ? $materialItem->price_expiry_date->format('Y-m-d') : '',
+            $materialItem->supplierCategory ? $materialItem->supplierCategory->code : '',
         ];
     }
 

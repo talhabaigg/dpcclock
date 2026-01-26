@@ -20,6 +20,7 @@ class MaterialItem extends Model
         'unit_cost',
         'price_expiry_date',
         'supplier_id',
+        'supplier_category_id',
         'cost_code_id',
         'created_by',
         'updated_by',
@@ -44,6 +45,11 @@ class MaterialItem extends Model
     public function costCode()
     {
         return $this->belongsTo(CostCode::class);
+    }
+
+    public function supplierCategory()
+    {
+        return $this->belongsTo(SupplierCategory::class);
     }
 
     public function locations()

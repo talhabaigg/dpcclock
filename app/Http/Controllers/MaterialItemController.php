@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use App\Models\Supplier;
+use App\Models\SupplierCategory;
 use App\Models\CostCode;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
@@ -26,12 +27,13 @@ class MaterialItemController extends Controller
      */
     public function index()
     {
-        // Fetch all material items with their cost codes
-        $materialItems = MaterialItem::with('costCode', 'supplier')->get();
-
+        // Fetch all material items with their cost codes and categories
+        $materialItems = MaterialItem::with('costCode', 'supplier', 'supplierCategory')->get();
+        $categories = SupplierCategory::with('supplier')->get();
 
         return Inertia::render('materialItem/index', [
             'items' => $materialItems,
+            'categories' => $categories,
         ]);
     }
 
@@ -44,6 +46,7 @@ class MaterialItemController extends Controller
             'item' => null,
             'costCodes' => CostCode::all(),
             'suppliers' => Supplier::all(),
+            'categories' => SupplierCategory::with('supplier')->get(),
             'maxItems' => MaterialItem::count(),
         ]);
     }
@@ -60,6 +63,7 @@ class MaterialItemController extends Controller
             'price_expiry_date' => 'nullable|date',
             'cost_code_id' => 'nullable|exists:cost_codes,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
+            'supplier_category_id' => 'nullable|exists:supplier_categories,id',
         ]);
 
         MaterialItem::create([
@@ -69,6 +73,7 @@ class MaterialItemController extends Controller
             'price_expiry_date' => $request->input('price_expiry_date'),
             'cost_code_id' => $request->input('cost_code_id'),
             'supplier_id' => $request->input('supplier_id'),
+            'supplier_category_id' => $request->input('supplier_category_id'),
         ]);
 
         return redirect()->route('material-items.index')->with('success', 'Material item created successfully.');
@@ -90,7 +95,7 @@ class MaterialItemController extends Controller
         if (!$materialItem->exists) {
             return redirect()->route('material-items.index')->with('error', 'Material item not found.');
         }
-        $item = $materialItem->load('costCode', 'supplier', 'orderHistory.requisition.location');
+        $item = $materialItem->load('costCode', 'supplier', 'supplierCategory', 'orderHistory.requisition.location');
         // dd($item);
         $activities = Activity::query()
             ->with('causer')
@@ -108,6 +113,7 @@ class MaterialItemController extends Controller
             'item' => $item,
             'costCodes' => CostCode::all(),
             'suppliers' => Supplier::all(),
+            'categories' => SupplierCategory::with('supplier')->get(),
             'maxItems' => $maxItems,
             'activities' => $activities,
 
@@ -163,6 +169,7 @@ class MaterialItemController extends Controller
             'price_expiry_date' => 'nullable|date',
             'cost_code_id' => 'nullable|exists:cost_codes,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
+            'supplier_category_id' => 'nullable|exists:supplier_categories,id',
         ]);
 
         $materialItem->update([
@@ -172,6 +179,7 @@ class MaterialItemController extends Controller
             'price_expiry_date' => $request->input('price_expiry_date') ?: null,
             'cost_code_id' => $request->input('cost_code_id'),
             'supplier_id' => $request->input('supplier_id'),
+            'supplier_category_id' => $request->input('supplier_category_id') ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Material item updated successfully.');
@@ -195,7 +203,22 @@ class MaterialItemController extends Controller
 
         MaterialItem::whereIn('id', $ids)->delete();
         return redirect()->route('material-items.index');
-        ;
+    }
+
+    /**
+     * Update the category of a material item (inline edit from AG Grid)
+     */
+    public function updateCategory(Request $request, MaterialItem $materialItem)
+    {
+        $request->validate([
+            'supplier_category_id' => 'nullable|exists:supplier_categories,id',
+        ]);
+
+        $materialItem->update([
+            'supplier_category_id' => $request->input('supplier_category_id'),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Category updated successfully.']);
     }
 
     public function upload(Request $request)
@@ -206,6 +229,7 @@ class MaterialItemController extends Controller
         ]);
         $suppliers = Supplier::all()->keyBy(fn($s) => trim($s->code));
         $costCodes = CostCode::all()->keyBy(fn($c) => trim($c->code));
+        $supplierCategories = SupplierCategory::all()->keyBy(fn($c) => trim($c->code));
         $file = fopen($request->file('file')->getRealPath(), 'r');
         $header = fgetcsv($file); // Skip header row
         $missingCostCodeRows = [];
@@ -217,6 +241,7 @@ class MaterialItemController extends Controller
             $supplier_code = $row[3] ?? '';
             $costcode = $row[4] ?? '';
             $expiry_date = $row[5] ?? null;
+            $category_code = $row[6] ?? null;
 
             $supplier = $suppliers->get($supplier_code);
             $costCode = $costCodes->get($costcode);
@@ -238,6 +263,15 @@ class MaterialItemController extends Controller
                 }
             }
 
+            // Find category by code (must also match supplier)
+            $supplierCategoryId = null;
+            if (!empty($category_code)) {
+                $category = $supplierCategories->get($category_code);
+                if ($category && $category->supplier_id === $supplier->id) {
+                    $supplierCategoryId = $category->id;
+                }
+            }
+
             MaterialItem::updateOrCreate(
                 ['code' => $code, 'supplier_id' => $supplier->id],
                 [
@@ -245,6 +279,7 @@ class MaterialItemController extends Controller
                     'unit_cost' => (float) $unit_cost,
                     'cost_code_id' => $costCode->id,
                     'price_expiry_date' => $parsedExpiryDate,
+                    'supplier_category_id' => $supplierCategoryId,
                 ]
             );
         }

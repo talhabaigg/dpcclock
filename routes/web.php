@@ -35,6 +35,8 @@ use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierCategoryController;
+use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\LabourForecastController;
@@ -281,6 +283,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('material-items/{materialItem}/next', [MaterialItemController::class, 'next'])->name('material-items.next');
         Route::get('material-items/{materialItem}/previous', [MaterialItemController::class, 'previous'])->name('material-items.previous');
         Route::put('material-items/{materialItem}', [MaterialItemController::class, 'update'])->name('material-items.update');
+        Route::patch('material-items/{materialItem}/category', [MaterialItemController::class, 'updateCategory'])->name('material-items.update-category');
     });
     Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
         ->middleware('permission:materials.delete');
@@ -305,6 +308,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:suppliers.export');
     Route::post('/suppliers/upload', [SupplierController::class, 'upload'])->name('suppliers.upload')
         ->middleware('permission:suppliers.import');
+
+    // ============================================
+    // SUPPLIER CATEGORY MANAGEMENT
+    // ============================================
+    Route::get('/supplier-categories', [SupplierCategoryController::class, 'index'])->name('supplier-categories.index');
+    Route::get('/supplier-categories/create', [SupplierCategoryController::class, 'create'])->name('supplier-categories.create');
+    Route::post('/supplier-categories/store', [SupplierCategoryController::class, 'store'])->name('supplier-categories.store');
+    Route::get('/supplier-categories/{supplierCategory}/edit', [SupplierCategoryController::class, 'edit'])->name('supplier-categories.edit');
+    Route::put('/supplier-categories/{supplierCategory}', [SupplierCategoryController::class, 'update'])->name('supplier-categories.update');
+    Route::delete('/supplier-categories/{supplierCategory}', [SupplierCategoryController::class, 'destroy'])->name('supplier-categories.destroy');
+    Route::get('/supplier-categories/by-supplier/{supplierId}', [SupplierCategoryController::class, 'getBySupplier']);
+
+    // ============================================
+    // UPDATE PRICING
+    // ============================================
+    Route::get('/update-pricing', [UpdatePricingController::class, 'index'])->name('update-pricing.index');
+    Route::post('/update-pricing/preview', [UpdatePricingController::class, 'preview'])->name('update-pricing.preview');
+    Route::post('/update-pricing/apply', [UpdatePricingController::class, 'apply'])->name('update-pricing.apply');
 
     // ============================================
     // COST CODE MANAGEMENT

@@ -18,12 +18,25 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+type SupplierCategory = {
+    id: number;
+    code: string;
+    name: string;
+    supplier_id: number;
+    supplier?: {
+        id: number;
+        code: string;
+        name: string;
+    };
+};
+
 type MaterialItem = {
     id: number;
     code: string;
     description: string;
     unit_cost: number;
     price_expiry_date: string | null;
+    supplier_category_id: number | null;
     cost_code: {
         id: number;
         code: string;
@@ -32,11 +45,16 @@ type MaterialItem = {
         id: number;
         code: string;
     };
+    supplier_category: SupplierCategory | null;
     actions?: string;
 };
 
 export default function ItemList() {
-    const { items, flash } = usePage<{ items: MaterialItem[]; flash: { success: string; error: string } }>().props;
+    const { items, flash, categories } = usePage<{
+        items: MaterialItem[];
+        categories: SupplierCategory[];
+        flash: { success: string; error: string };
+    }>().props;
     const isDarkMode = document.documentElement.classList.contains('dark');
     const appliedTheme = isDarkMode ? darkTheme : myTheme;
     const gridRef = useRef<AgGridReact>(null);
@@ -44,7 +62,7 @@ export default function ItemList() {
     const filteredItems = useMemo(() => {
         return items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [items, searchQuery]);
-    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date']);
+    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date', 'category_code']);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0); // ⭐ NEW
@@ -116,6 +134,31 @@ export default function ItemList() {
         setSelectedCount(selectedNodes.length);
     };
 
+    const handleCategoryChange = async (itemId: number, categoryId: number | null) => {
+        try {
+            const response = await fetch(`/material-items/${itemId}/category`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ supplier_category_id: categoryId }),
+            });
+
+            if (response.ok) {
+                toast.success('Category updated successfully');
+            } else {
+                toast.error('Failed to update category');
+            }
+        } catch {
+            toast.error('Failed to update category');
+        }
+    };
+
+    const categoryOptions = useMemo(() => {
+        return [{ id: null, label: '(None)' }, ...categories.map((c) => ({ id: c.id, label: `${c.code} - ${c.name}` }))];
+    }, [categories]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
@@ -183,6 +226,23 @@ export default function ItemList() {
                                 if (!value) return '';
                                 const date = new Date(value);
                                 return date.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                            },
+                        },
+                        {
+                            field: 'supplier_category_id',
+                            headerName: 'Category',
+                            editable: true,
+                            cellEditor: 'agSelectCellEditor',
+                            cellEditorParams: {
+                                values: categoryOptions.map((c) => c.id),
+                            },
+                            valueFormatter: ({ value }) => {
+                                if (!value) return '';
+                                const cat = categories.find((c) => c.id === value);
+                                return cat ? `${cat.code} - ${cat.name}` : '';
+                            },
+                            onCellValueChanged: (params: { data: MaterialItem; newValue: number | null }) => {
+                                handleCategoryChange(params.data.id, params.newValue);
                             },
                         },
                         {
