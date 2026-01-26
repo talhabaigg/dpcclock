@@ -8,22 +8,35 @@ const WeekHeader = (props: IHeaderParams) => {
         </div>
     );
 };
-// Status badge renderer
+// Status badge renderer with improved styling
 const StatusBadge = ({ status }: { status: string | null }) => {
-    if (!status) {
-        return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">Not Started</span>;
-    }
-    const styles: Record<string, string> = {
-        draft: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-        submitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-        approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-        rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    const config: Record<string, { label: string; className: string }> = {
+        not_started: {
+            label: 'Not Started',
+            className: 'border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+        },
+        draft: {
+            label: 'Draft',
+            className: 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+        },
+        submitted: {
+            label: 'Submitted',
+            className: 'border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+        },
+        approved: {
+            label: 'Approved',
+            className: 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+        },
+        rejected: {
+            label: 'Rejected',
+            className: 'border border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300',
+        },
     };
-    return (
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] || styles.draft}`}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-        </span>
-    );
+
+    const statusKey = status || 'not_started';
+    const { label, className } = config[statusKey] || config.not_started;
+
+    return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>{label}</span>;
 };
 
 export const buildLabourForecastColumnDefs = (): ColDef[] => {
@@ -96,19 +109,26 @@ export const buildLabourForecastColumnDefs = (): ColDef[] => {
         },
         {
             headerName: '',
-            minWidth: 80,
-            width: 90,
+            minWidth: 100,
+            width: 110,
             filter: false,
             sortable: false,
             cellRenderer: (params: ValueGetterParams) => {
                 const id = params.data?.id;
                 if (!id) return '';
                 return (
-                    <a href={`/location/${id}/labour-forecast/show`} className="text-blue-600 underline hover:text-blue-800">
+                    <a
+                        href={`/location/${id}/labour-forecast/show`}
+                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                    >
                         Open
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
                     </a>
                 );
             },
+            cellClass: 'flex items-center justify-end pr-4',
         },
     ];
 };
