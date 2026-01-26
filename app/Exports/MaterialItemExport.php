@@ -31,6 +31,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'C' => NumberFormat::FORMAT_GENERAL,
             'D' => NumberFormat::FORMAT_GENERAL,
             'E' => NumberFormat::FORMAT_GENERAL,
+            'F' => NumberFormat::FORMAT_DATE_DDMMYYYY,
         ];
     }
     public function styles(Worksheet $sheet)
@@ -50,6 +51,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'Unit Cost',
             'Supplier Code',
             'Cost Code',
+            'Expiry Date',
         ];
     }
 
@@ -61,6 +63,7 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             $materialItem->unit_cost,
             $materialItem->supplier ? $materialItem->supplier->code : '',
             $materialItem->costCode ? $materialItem->costCode->code : '',
+            $materialItem->price_expiry_date ? $materialItem->price_expiry_date->format('Y-m-d') : '',
         ];
     }
 

@@ -18,6 +18,7 @@ type MaterialItem = {
     code: string;
     description: string;
     unit_cost: number;
+    price_expiry_date: string | null;
     cost_code?: {
         id: number;
         code: string;
@@ -48,6 +49,7 @@ export default function EditMaterialItem() {
         code: item?.code || '',
         description: item?.description || '',
         unit_cost: item?.unit_cost || 0,
+        price_expiry_date: item?.price_expiry_date || '',
         cost_code_id: item?.cost_code?.id || '',
         supplier_id: item?.supplier?.id || '',
     });
@@ -165,6 +167,12 @@ export default function EditMaterialItem() {
                                 const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                 form.setData('unit_cost', value);
                             }}
+                        />
+                        <Label>Price Expiry Date</Label>
+                        <Input
+                            type="date"
+                            value={form.data.price_expiry_date}
+                            onChange={(e) => form.setData('price_expiry_date', e.target.value)}
                         />
                         <Label>Cost Code</Label>
                         <Select value={String(form.data.cost_code_id)} onValueChange={(value) => form.setData('cost_code_id', value)}>

@@ -23,6 +23,7 @@ type MaterialItem = {
     code: string;
     description: string;
     unit_cost: number;
+    price_expiry_date: string | null;
     cost_code: {
         id: number;
         code: string;
@@ -43,7 +44,7 @@ export default function ItemList() {
     const filteredItems = useMemo(() => {
         return items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [items, searchQuery]);
-    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code']);
+    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date']);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0); // ⭐ NEW
@@ -175,6 +176,15 @@ export default function ItemList() {
                         { field: 'unit_cost', headerName: 'Unit Cost', valueFormatter: ({ value }) => `$${value}` },
                         { field: 'cost_code.code', headerName: 'Cost Code' },
                         { field: 'supplier.code', headerName: 'Supplier Code' },
+                        {
+                            field: 'price_expiry_date',
+                            headerName: 'Expiry Date',
+                            valueFormatter: ({ value }) => {
+                                if (!value) return '';
+                                const date = new Date(value);
+                                return date.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                            },
+                        },
                         {
                             field: 'actions',
                             headerName: 'Actions',

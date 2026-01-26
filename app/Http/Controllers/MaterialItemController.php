@@ -57,6 +57,7 @@ class MaterialItemController extends Controller
             'code' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'unit_cost' => 'required|numeric|min:0',
+            'price_expiry_date' => 'nullable|date',
             'cost_code_id' => 'nullable|exists:cost_codes,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
         ]);
@@ -65,6 +66,7 @@ class MaterialItemController extends Controller
             'code' => $request->input('code'),
             'description' => $request->input('description'),
             'unit_cost' => $request->input('unit_cost'),
+            'price_expiry_date' => $request->input('price_expiry_date'),
             'cost_code_id' => $request->input('cost_code_id'),
             'supplier_id' => $request->input('supplier_id'),
         ]);
@@ -158,6 +160,7 @@ class MaterialItemController extends Controller
             'code' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'unit_cost' => 'required|numeric|min:0',
+            'price_expiry_date' => 'nullable|date',
             'cost_code_id' => 'nullable|exists:cost_codes,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
         ]);
@@ -166,9 +169,9 @@ class MaterialItemController extends Controller
             'code' => $request->input('code'),
             'description' => $request->input('description'),
             'unit_cost' => $request->input('unit_cost'),
+            'price_expiry_date' => $request->input('price_expiry_date') ?: null,
             'cost_code_id' => $request->input('cost_code_id'),
             'supplier_id' => $request->input('supplier_id'),
-
         ]);
 
         return redirect()->back()->with('success', 'Material item updated successfully.');
@@ -207,7 +210,13 @@ class MaterialItemController extends Controller
         $header = fgetcsv($file); // Skip header row
         $missingCostCodeRows = [];
         while (($row = fgetcsv($file)) !== false) {
-            [$code, $description, $unit_cost, $supplier_code, $costcode] = array_map('trim', $row);
+            $row = array_map('trim', $row);
+            $code = $row[0] ?? '';
+            $description = $row[1] ?? '';
+            $unit_cost = $row[2] ?? 0;
+            $supplier_code = $row[3] ?? '';
+            $costcode = $row[4] ?? '';
+            $expiry_date = $row[5] ?? null;
 
             $supplier = $suppliers->get($supplier_code);
             $costCode = $costCodes->get($costcode);
@@ -218,12 +227,24 @@ class MaterialItemController extends Controller
                 continue;
             }
 
+            // Parse expiry date if provided
+            $parsedExpiryDate = null;
+            if (!empty($expiry_date)) {
+                try {
+                    $parsedExpiryDate = \Carbon\Carbon::parse($expiry_date)->format('Y-m-d');
+                } catch (\Exception $e) {
+                    // Invalid date format, leave as null
+                    $parsedExpiryDate = null;
+                }
+            }
+
             MaterialItem::updateOrCreate(
                 ['code' => $code, 'supplier_id' => $supplier->id],
                 [
                     'description' => trim($description),
                     'unit_cost' => (float) $unit_cost,
                     'cost_code_id' => $costCode->id,
+                    'price_expiry_date' => $parsedExpiryDate,
                 ]
             );
         }
@@ -484,14 +505,26 @@ class MaterialItemController extends Controller
 
         Log::info('Location price fetched: ' . json_encode($location_price));
 
+        // Check if base price is expired (only applies when no location price exists)
+        $priceExpired = false;
+        $priceExpiryDate = null;
+
         if ($location_price) {
             $item->unit_cost = $location_price->unit_cost_override;
+        } else {
+            // Using base price - check if it's expired
+            if ($item->price_expiry_date && $item->price_expiry_date->isPast()) {
+                $priceExpired = true;
+                $priceExpiryDate = $item->price_expiry_date->format('Y-m-d');
+            }
         }
 
         // Convert to array for response
         $itemArray = $item->toArray();
         $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
         $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+        $itemArray['price_expired'] = $priceExpired;
+        $itemArray['price_expiry_date'] = $priceExpiryDate;
 
         Log::info('Material item found: ' . json_encode($itemArray));
 
@@ -521,19 +554,29 @@ class MaterialItemController extends Controller
 
         Log::info('Location price fetched: ' . json_encode($location_price));
 
+        // Check if base price is expired (only applies when no location price exists)
+        $priceExpired = false;
+        $priceExpiryDate = null;
+
         if ($location_price) {
             $item->unit_cost = $location_price->unit_cost_override;
+        } else {
+            // Using base price - check if it's expired
+            if ($item->price_expiry_date && $item->price_expiry_date->isPast()) {
+                $priceExpired = true;
+                $priceExpiryDate = $item->price_expiry_date->format('Y-m-d');
+            }
         }
 
         // Convert to array for response
         $itemArray = $item->toArray();
         $itemArray['price_list'] = $location_price ? $location_price->location_name : 'base_price';
         $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
+        $itemArray['price_expired'] = $priceExpired;
+        $itemArray['price_expiry_date'] = $priceExpiryDate;
 
         Log::info('Material item found: ' . json_encode($itemArray));
 
         return response()->json($itemArray);
     }
-
-
 }

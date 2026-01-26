@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ClipboardPaste } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PasteTableButtonProps {
     rowData: any[];
@@ -29,6 +30,8 @@ const handlePasteTableData = async (
             return;
         }
 
+        const expiredItems: string[] = [];
+
         const parsedRows = await Promise.all(
             rows.slice(1).map(async (row, index) => {
                 const [codeRaw, descRaw, qtyRaw, unitCostRaw] = row.split('\t');
@@ -46,6 +49,12 @@ const handlePasteTableData = async (
                     alert(`Failed to fetch item with code ${code}. Please check the code and try again.` + err);
                 }
 
+                // Check if price is expired
+                if (item?.price_expired) {
+                    expiredItems.push(code);
+                    return null; // Skip this item
+                }
+
                 return {
                     code: code,
                     description: item?.description || `${code} ${fallbackDescription}`.trim(),
@@ -59,7 +68,18 @@ const handlePasteTableData = async (
             }),
         );
 
-        setRowData([...rowData, ...parsedRows]);
+        // Filter out null items (expired ones)
+        const validRows = parsedRows.filter((row) => row !== null);
+
+        // Show warning for expired items
+        if (expiredItems.length > 0) {
+            toast.error(
+                `The following items have expired prices and were not added: ${expiredItems.join(', ')}. Please update the prices in the database or get a quote from the supplier.`,
+                { duration: 10000 },
+            );
+        }
+
+        setRowData([...rowData, ...validRows]);
         await new Promise((resolve) => setTimeout(resolve, 2000));
         setPastingItems(false);
     } catch (err) {

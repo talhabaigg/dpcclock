@@ -269,7 +269,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:materials.view')->group(function () {
         Route::get('material-items/all', [MaterialItemController::class, 'index'])->name('material-items.index');
         Route::get('/material-items', [MaterialItemController::class, 'getMaterialItems']);
-        Route::get('/material-items/{id}/{locationId}', [MaterialItemController::class, 'getMaterialItemById']);
+        Route::get('/material-items/{id}/{locationId}', [MaterialItemController::class, 'getMaterialItemById'])->where(['id' => '[0-9]+', 'locationId' => '[0-9]+']);
         Route::get('/material-items/code/{code}/{locationId}', [MaterialItemController::class, 'getMaterialItemByCode']);
     });
     Route::middleware('permission:materials.create')->group(function () {

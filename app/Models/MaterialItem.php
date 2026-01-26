@@ -18,11 +18,16 @@ class MaterialItem extends Model
         'code',
         'description',
         'unit_cost',
+        'price_expiry_date',
         'supplier_id',
         'cost_code_id',
         'created_by',
         'updated_by',
         'deleted_by',
+    ];
+
+    protected $casts = [
+        'price_expiry_date' => 'date',
     ];
     public function getActivitylogOptions(): LogOptions
     {

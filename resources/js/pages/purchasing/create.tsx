@@ -1,6 +1,16 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { SearchSelect } from '@/components/search-select';
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -109,6 +119,12 @@ export default function Create() {
     const permissions = usePage<CreateRequisitionProps & { auth: { permissions: string[] } }>().props.auth?.permissions ?? [];
     const gridRef = useRef<AgGridReact>(null);
     const [pastingItems, setPastingItems] = useState(false);
+    const [expiredPriceDialog, setExpiredPriceDialog] = useState<{
+        open: boolean;
+        itemCode: string;
+        itemId: number | null;
+        expiryDate: string | null;
+    }>({ open: false, itemCode: '', itemId: null, expiryDate: null });
 
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
@@ -266,6 +282,27 @@ export default function Create() {
                     const res = await fetch(`/material-items/${itemCode}/${locationId}`);
                     if (!res.ok) throw new Error('Failed to fetch item');
                     const item = await res.json();
+
+                    // Check if price is expired (only for base price, not project price)
+                    if (item.price_expired) {
+                        setExpiredPriceDialog({
+                            open: true,
+                            itemCode: item.code,
+                            itemId: item.id,
+                            expiryDate: item.price_expiry_date,
+                        });
+                        // Clear the row data since price is expired
+                        e.data.code = '';
+                        e.data.description = '';
+                        e.data.unit_cost = 0;
+                        e.data.price_list = '';
+                        e.data.cost_code = '';
+                        e.data.total_cost = 0;
+                        const updated = [...rowData];
+                        updated[e.rowIndex] = e.data;
+                        setRowData(updated);
+                        return;
+                    }
 
                     // Update the row with full item data
                     e.data.code = item.code; // assuming code is a string
@@ -499,6 +536,40 @@ export default function Create() {
                         </DialogDescription>
                     </DialogContent>
                 </Dialog>
+
+                <AlertDialog open={expiredPriceDialog.open} onOpenChange={(open) => setExpiredPriceDialog({ ...expiredPriceDialog, open })}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Price Expired</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                The base price for item <strong>{expiredPriceDialog.itemCode}</strong> expired on{' '}
+                                <strong>
+                                    {expiredPriceDialog.expiryDate
+                                        ? new Date(expiredPriceDialog.expiryDate).toLocaleDateString('en-AU')
+                                        : 'N/A'}
+                                </strong>
+                                . This item cannot be added to the requisition until the price is updated.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => {
+                                    window.open(`/material-items/${expiredPriceDialog.itemId}/edit`, '_blank');
+                                }}
+                            >
+                                Update Price in Database
+                            </AlertDialogAction>
+                            <AlertDialogAction
+                                onClick={() => {
+                                    toast.info('Please contact the supplier to get an updated quote.');
+                                }}
+                            >
+                                Get Quote from Supplier
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 <Card className="my-4 p-4">
                     <div className="flex flex-col items-center gap-2 md:flex-row">
