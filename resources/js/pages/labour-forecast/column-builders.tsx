@@ -123,7 +123,7 @@ const formatCurrency = (value: number): string => {
     }).format(value);
 };
 
-export const buildLabourForecastShowColumnDefs = (weeks: Week[]): ColDef[] => {
+export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?: string): ColDef[] => {
     const cols: ColDef[] = [
         {
             headerName: 'Work Type',
@@ -163,6 +163,58 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[]): ColDef[] => {
                 return params.value;
             },
         });
+    });
+
+    // Filter weeks to only those in the selected month for the Month Total column
+    const currentMonthWeeks = selectedMonth
+        ? weeks.filter((week) => {
+              // weekEnding is in YYYY-MM-DD format, extract YYYY-MM
+              const weekMonth = week.weekEnding.substring(0, 7);
+              return weekMonth === selectedMonth;
+          })
+        : weeks;
+
+    // Add Month Total column at the end - shows HOURS for work types, COST for cost row
+    cols.push({
+        headerName: 'Month Hours',
+        field: 'monthTotal',
+        pinned: 'right',
+        width: 120,
+        editable: false,
+        cellClass: (params) => {
+            if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
+            if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
+            return 'text-center bg-slate-50 dark:bg-slate-800/50';
+        },
+        headerClass: 'ag-right-aligned-header',
+        valueGetter: (params) => {
+            if (!params.data) return 0;
+
+            // For cost row, sum the weekly costs
+            if (params.data.isCostRow) {
+                let total = 0;
+                currentMonthWeeks.forEach((week) => {
+                    total += Number(params.data[week.key]) || 0;
+                });
+                return total;
+            }
+
+            // For work type rows and total row, calculate hours (headcount × hoursPerWeek)
+            const hoursPerWeek = params.data.hoursPerWeek || 40; // default to 40 if not set
+            let totalHours = 0;
+            currentMonthWeeks.forEach((week) => {
+                const headcount = Number(params.data[week.key]) || 0;
+                totalHours += headcount * hoursPerWeek;
+            });
+            return totalHours;
+        },
+        valueFormatter: (params) => {
+            if (params.data?.isCostRow) {
+                return formatCurrency(params.value || 0);
+            }
+            // Format hours with "hrs" suffix
+            return `${(params.value || 0).toLocaleString()} hrs`;
+        },
     });
 
     return cols;

@@ -11,6 +11,7 @@ use App\Models\PayRateTemplate;
 use App\Models\User;
 use App\Notifications\LabourForecastStatusNotification;
 use App\Services\LabourCostCalculator;
+use App\Services\LabourVarianceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -525,6 +526,86 @@ class LabourForecastController extends Controller
     }
 
     /**
+     * Copy forecast from previous month as starting point for current month
+     */
+    public function copyFromPreviousMonth(Request $request, Location $location)
+    {
+        $targetMonth = $request->query('month')
+            ? Carbon::parse($request->query('month'))->startOfMonth()
+            : now()->startOfMonth();
+
+        $previousMonth = $targetMonth->copy()->subMonth()->startOfMonth();
+
+        // Find the most recent approved forecast for previous month
+        $previousForecast = LabourForecast::where('location_id', $location->id)
+            ->where('forecast_month', $previousMonth)
+            ->where('status', 'approved')
+            ->with('entries')
+            ->first();
+
+        if (!$previousForecast) {
+            return redirect()->back()->with('error', 'No approved forecast found for ' . $previousMonth->format('F Y') . '.');
+        }
+
+        // Check if there's already a forecast for target month
+        $existingForecast = LabourForecast::where('location_id', $location->id)
+            ->where('forecast_month', $targetMonth)
+            ->first();
+
+        if ($existingForecast && $existingForecast->status !== 'draft') {
+            return redirect()->back()->with('error', 'Cannot overwrite a submitted or approved forecast.');
+        }
+
+        $user = Auth::user();
+        $costCalculator = new LabourCostCalculator();
+        $location->load('worktypes');
+
+        DB::transaction(function () use ($location, $user, $targetMonth, $previousForecast, $costCalculator) {
+            // Create or get draft forecast for target month
+            $newForecast = LabourForecast::updateOrCreate(
+                [
+                    'location_id' => $location->id,
+                    'forecast_month' => $targetMonth,
+                ],
+                [
+                    'notes' => 'Copied from ' . $previousForecast->forecast_month->format('F Y'),
+                    'created_by' => $user->id,
+                    'status' => 'draft',
+                ]
+            );
+
+            // Clear existing entries
+            $newForecast->entries()->delete();
+
+            // Copy entries with shifted dates
+            foreach ($previousForecast->entries as $entry) {
+                // Shift week ending forward by the number of days between months
+                $newWeekEnding = $entry->week_ending->copy()->addMonth();
+
+                // Recalculate cost breakdown (rates may have changed)
+                $templateConfig = LocationPayRateTemplate::with('payRateTemplate.payCategories.payCategory')
+                    ->find($entry->location_pay_rate_template_id);
+
+                if (!$templateConfig) continue;
+
+                $costBreakdown = $costCalculator->calculate($location, $templateConfig);
+
+                LabourForecastEntry::create([
+                    'labour_forecast_id' => $newForecast->id,
+                    'location_pay_rate_template_id' => $entry->location_pay_rate_template_id,
+                    'week_ending' => $newWeekEnding,
+                    'headcount' => $entry->headcount,
+                    'hourly_rate' => $costBreakdown['base_hourly_rate'],
+                    'weekly_cost' => $costBreakdown['total_weekly_cost'],
+                    'cost_breakdown_snapshot' => $costBreakdown,
+                ]);
+            }
+        });
+
+        return redirect()->back()->with('success', 'Forecast copied from ' . $previousMonth->format('F Y') . '. Review and save to confirm.');
+    }
+
+    /**
      * Generate weeks from specified month start to project end date
      * Returns array of weeks with key and label (week ending date)
      */
@@ -560,5 +641,40 @@ class LabourForecastController extends Controller
         }
 
         return $weeks;
+    }
+
+    /**
+     * Show the forecast vs actuals variance report
+     */
+    public function variance(Request $request, Location $location)
+    {
+        // Determine which month to analyze (default to current month)
+        $targetMonth = $request->query('month')
+            ? Carbon::parse($request->query('month'))->startOfMonth()
+            : now()->startOfMonth();
+
+        // Get variance data
+        $varianceService = new LabourVarianceService();
+        $varianceData = $varianceService->getVarianceData($location, $targetMonth);
+
+        // Get available months for navigation (months with approved forecasts)
+        $availableMonths = LabourForecast::where('location_id', $location->id)
+            ->where('status', 'approved')
+            ->orderBy('forecast_month', 'desc')
+            ->pluck('forecast_month')
+            ->map(fn ($month) => $month->format('Y-m'))
+            ->unique()
+            ->values();
+
+        return Inertia::render('labour-forecast/variance', [
+            'location' => [
+                'id' => $location->id,
+                'name' => $location->name,
+                'job_number' => $location->external_id,
+            ],
+            'targetMonth' => $targetMonth->format('Y-m'),
+            'varianceData' => $varianceData,
+            'availableMonths' => $availableMonths,
+        ]);
     }
 }

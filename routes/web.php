@@ -441,12 +441,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Labour Forecast
     Route::get('/labour-forecast', [LabourForecastController::class, 'index'])->name('labour-forecast.index');
     Route::get('/location/{location}/labour-forecast/show', [LabourForecastController::class, 'show'])->name('labour-forecast.show');
+    Route::get('/location/{location}/labour-forecast/variance', [LabourForecastController::class, 'variance'])->name('labour-forecast.variance');
     Route::post('/location/{location}/labour-forecast/templates', [LabourForecastController::class, 'updateTemplates'])->name('labour-forecast.update-templates');
     Route::post('/location/{location}/labour-forecast/templates/add', [LabourForecastController::class, 'addTemplate'])->name('labour-forecast.add-template');
     Route::delete('/location/{location}/labour-forecast/templates/{template}', [LabourForecastController::class, 'removeTemplate'])->name('labour-forecast.remove-template');
     Route::put('/location/{location}/labour-forecast/templates/{template}/label', [LabourForecastController::class, 'updateTemplateLabel'])->name('labour-forecast.update-template-label');
     // Labour Forecast - Save & Workflow
     Route::post('/location/{location}/labour-forecast/save', [LabourForecastController::class, 'save'])->name('labour-forecast.save');
+    Route::post('/location/{location}/labour-forecast/copy-previous', [LabourForecastController::class, 'copyFromPreviousMonth'])->name('labour-forecast.copy-previous');
     Route::post('/location/{location}/labour-forecast/{forecast}/submit', [LabourForecastController::class, 'submit'])->name('labour-forecast.submit');
     Route::post('/location/{location}/labour-forecast/{forecast}/approve', [LabourForecastController::class, 'approve'])->name('labour-forecast.approve');
     Route::post('/location/{location}/labour-forecast/{forecast}/reject', [LabourForecastController::class, 'reject'])->name('labour-forecast.reject');

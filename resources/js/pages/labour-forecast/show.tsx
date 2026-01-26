@@ -9,7 +9,7 @@ import { router } from '@inertiajs/react';
 import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, DollarSign, Expand, Info, Loader2, MessageSquare, Pencil, Plus, Save, Send, Settings, Trash2, TrendingUp, Users, X } from 'lucide-react';
+import { BarChart3, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, DollarSign, Expand, Info, Loader2, MessageSquare, Pencil, Plus, Save, Send, Settings, Trash2, TrendingUp, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildLabourForecastShowColumnDefs } from './column-builders';
 import { type ChartDataPoint, LabourForecastChart } from './LabourForecastChart';
@@ -140,6 +140,7 @@ interface RowData {
     workType: string;
     hourlyRate?: number | null;
     weeklyCost?: number;
+    hoursPerWeek?: number;
     isTotal?: boolean;
     isCostRow?: boolean;
     [key: string]: string | number | boolean | undefined | null;
@@ -215,6 +216,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             hourlyRate: template.hourly_rate,
             configId: template.id,
             weeklyCost: template.cost_breakdown.total_weekly_cost,
+            hoursPerWeek: template.cost_breakdown.hours_per_week,
         }));
     }, [configuredTemplates]);
 
@@ -244,6 +246,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 workType: wt.name,
                 hourlyRate: wt.hourlyRate,
                 weeklyCost: wt.weeklyCost,
+                hoursPerWeek: wt.hoursPerWeek,
             };
             // Initialize week columns - use saved data if available
             const savedEntry = savedForecast?.entries?.[wt.configId];
@@ -261,13 +264,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             const newRows: RowData[] = workTypes.map((wt) => {
                 const existingRow = prevRows.find((r) => r.id === wt.id);
                 if (existingRow) {
-                    return { ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost };
+                    return { ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek };
                 }
                 const row: RowData = {
                     id: wt.id,
                     workType: wt.name,
                     hourlyRate: wt.hourlyRate,
                     weeklyCost: wt.weeklyCost,
+                    hoursPerWeek: wt.hoursPerWeek,
                 };
                 weeks.forEach((week) => {
                     row[week.key] = 0;
@@ -578,6 +582,23 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         );
     }, [savedForecast?.id, location.id, isSubmitting]);
 
+    // Copy from previous month handler
+    const [isCopying, setIsCopying] = useState(false);
+    const handleCopyFromPrevious = useCallback(() => {
+        if (isCopying) return;
+        if (!confirm('This will copy the approved forecast from the previous month. Any unsaved changes will be lost. Continue?')) return;
+        setIsCopying(true);
+        router.post(
+            route('labour-forecast.copy-previous', { location: location.id }) + `?month=${selectedMonth}`,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsCopying(false),
+                onError: () => setIsCopying(false),
+            },
+        );
+    }, [location.id, selectedMonth, isCopying]);
+
     // Check if editing is allowed (only draft status)
     const isEditingLocked = savedForecast && savedForecast.status !== 'draft';
 
@@ -637,11 +658,19 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         }).format(value);
     };
 
+    // Get cost breakdown for a category
+    const getCategoryBreakdown = (categoryId: string) => {
+        if (categoryId === 'all') return null;
+        const template = configuredTemplates.find((t) => `template_${t.template_id}` === categoryId);
+        return template?.cost_breakdown || null;
+    };
+
     // Category toggle buttons component (reused in both inline and dialog)
     const CategoryToggleButtons = () => (
         <TooltipProvider delayDuration={300}>
             <div className="inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-lg bg-slate-200/80 p-0.5 sm:p-1 dark:bg-slate-700">
                 {categoryOptions.map((category) => {
+                    const breakdown = getCategoryBreakdown(category.id);
                     return (
                         <Tooltip key={category.id}>
                             <TooltipTrigger asChild>
@@ -657,10 +686,25 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                     <span className="max-w-[60px] truncate sm:max-w-none">{category.name}</span>
                                 </button>
                             </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                                <p>{category.name}</p>
-                                {category.hourlyRate && <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr</p>}
-                                {category.weeklyCost && <p className="text-xs text-green-400">Weekly: {formatCurrency(category.weeklyCost)}</p>}
+                            <TooltipContent side="bottom" className={breakdown ? 'max-w-xs' : ''}>
+                                <p className="font-medium">{category.name}</p>
+                                {category.hourlyRate && <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr base</p>}
+                                {breakdown && (
+                                    <div className="mt-2 space-y-0.5 border-t border-slate-600 pt-2 text-xs">
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-slate-400">Wages + Allowances</span>
+                                            <span>{formatCurrency(breakdown.gross_wages)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-slate-400">Leave + Super + On-costs</span>
+                                            <span>{formatCurrency(breakdown.total_weekly_cost - breakdown.gross_wages)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3 border-t border-slate-600 pt-1 font-semibold text-green-400">
+                                            <span>Weekly Cost</span>
+                                            <span>{formatCurrency(breakdown.total_weekly_cost)}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </TooltipContent>
                         </Tooltip>
                     );
@@ -786,9 +830,44 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                                         <DollarSign className="h-3 w-3" />
                                                         {formatCurrency(template.hourly_rate)}/hr
                                                     </span>
-                                                    <span className="text-green-600 dark:text-green-400">
-                                                        Weekly Cost: {formatCurrency(template.cost_breakdown.total_weekly_cost)}
-                                                    </span>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span className="cursor-help text-green-600 underline decoration-dotted underline-offset-2 dark:text-green-400">
+                                                                Weekly Cost: {formatCurrency(template.cost_breakdown.total_weekly_cost)}
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="bottom" className="max-w-xs">
+                                                            <div className="space-y-1 text-xs">
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span>Base Wages ({template.cost_breakdown.hours_per_week}hrs)</span>
+                                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</span>
+                                                                </div>
+                                                                {template.cost_breakdown.allowances.total > 0 && (
+                                                                    <div className="flex justify-between gap-4">
+                                                                        <span>+ Allowances</span>
+                                                                        <span className="font-medium">{formatCurrency(template.cost_breakdown.allowances.total)}</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span>+ Leave Accruals</span>
+                                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.leave_markups.annual_leave_amount + template.cost_breakdown.leave_markups.leave_loading_amount)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span>+ Super</span>
+                                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.super)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span>+ On-Costs</span>
+                                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.on_costs.total)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-4 border-t border-slate-600 pt-1 font-semibold text-green-400">
+                                                                    <span>Total Weekly Cost</span>
+                                                                    <span>{formatCurrency(template.cost_breakdown.total_weekly_cost)}</span>
+                                                                </div>
+                                                                <p className="pt-1 text-[10px] text-slate-400">Click calculator icon for full breakdown</p>
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
                                                 </div>
                                                 {/* Cost Code Prefix */}
                                                 <div className="mt-2 flex items-center gap-2">
@@ -1266,6 +1345,24 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                             </Button>
                         )}
 
+                        {/* Copy from Previous Month Button */}
+                        {configuredTemplates.length > 0 && !isEditingLocked && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleCopyFromPrevious}
+                                disabled={isCopying}
+                                title="Copy headcount from previous month's approved forecast"
+                            >
+                                {isCopying ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Copy className="mr-1.5 h-4 w-4" />
+                                )}
+                                <span className="hidden sm:inline">{isCopying ? 'Copying...' : 'Copy Previous'}</span>
+                            </Button>
+                        )}
+
                         {/* Workflow Buttons */}
                         {savedForecast && savedForecast.status === 'draft' && permissions.canSubmit && (
                             <Button
@@ -1325,6 +1422,17 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
                             <Settings className="h-4 w-4 sm:mr-1.5" />
                             <span className="hidden sm:inline">Configure</span>
+                        </Button>
+
+                        {/* Variance Report Button */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.get(route('labour-forecast.variance', { location: location.id }), { month: selectedMonth })}
+                            title="View forecast vs actual variance report"
+                        >
+                            <BarChart3 className="h-4 w-4 sm:mr-1.5" />
+                            <span className="hidden sm:inline">Variance</span>
                         </Button>
                     </div>
                 </div>
@@ -1565,7 +1673,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         <div className="ag-theme-alpine dark:ag-theme-alpine-dark" style={{ height: 350, width: '100%' }}>
                             <AgGridReact
                                 rowData={rowDataWithTotals}
-                                columnDefs={buildLabourForecastShowColumnDefs(weeks)}
+                                columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth)}
                                 onCellValueChanged={onCellValueChanged}
                                 onCellClicked={onCellClicked}
                                 defaultColDef={{
