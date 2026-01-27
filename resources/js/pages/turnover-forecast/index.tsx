@@ -52,6 +52,7 @@ type TurnoverRow = {
     revenue_forecast: MonthlyData;
     cost_actuals: MonthlyData;
     cost_forecast: MonthlyData;
+    labour_forecast_headcount?: MonthlyData;
 };
 
 type TurnoverForecastProps = {
@@ -322,6 +323,13 @@ export default function TurnoverForecastIndex({
             totalRow[`month_${month}`] = safeNumber(totalRevenue);
             // Labour requirement = total revenue / $26,000 per worker
             labourRow[`month_${month}`] = totalRevenue / 26000;
+
+            // Calculate labour forecast total for this month
+            let totalLabourForecast = 0;
+            filteredData.forEach((row) => {
+                totalLabourForecast += safeNumber(row.labour_forecast_headcount?.[month]);
+            });
+            labourRow[`labour_forecast_month_${month}`] = totalLabourForecast;
         });
 
         // Calculate summary fields
@@ -792,14 +800,75 @@ export default function TurnoverForecastIndex({
                     }
                     return 0;
                 },
-                valueFormatter: (params) => {
-                    const rowData = params.data as any;
-                    // For labour requirement row, show number of workers (rounded up, no decimals)
+                cellRenderer: (params: any) => {
+                    const rowData = params.data;
+
                     if (rowData?.job_number === 'Labour Req') {
-                        return params.value ? Math.ceil(params.value).toString() : '0';
+                        const reqValue = params.value ? Math.ceil(params.value) : 0;
+                        const forecastValue = rowData[`labour_forecast_month_${month}`];
+
+                        // If no forecast, just show requirement
+                        if (!forecastValue) {
+                            return <span>Req: {reqValue}</span>;
+                        }
+
+                        const forecastRounded = Math.round(forecastValue * 10) / 10;
+                        const variance = forecastRounded - reqValue;
+                        const varianceRounded = Math.round(variance * 10) / 10;
+
+                        const varianceColor = varianceRounded < 0
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-green-600 dark:text-green-400';
+
+                        return (
+                            <div className="flex flex-col justify-center h-full py-0.5 text-xs text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-normal">Req</span>
+                                    <span className="tabular-nums">{reqValue}</span>
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-normal">Fcst</span>
+                                    <div className="flex items-center gap-1">
+                                        <span className="font-bold tabular-nums">{forecastRounded}</span>
+                                        <span className={`text-[10px] font-bold ${varianceColor}`}>
+                                            ({varianceRounded > 0 ? '+' : ''}{varianceRounded})
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
                     }
-                    return formatCurrency(params.value);
+
+                    if (rowData.job_number === 'Total') {
+                        return safeNumber(rowData[`month_${month}`]).toLocaleString('en-AU', {
+                            style: 'currency',
+                            currency: 'AUD',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                        });
+                    }
+
+                    const hasActual = rowData.revenue_actuals && rowData.revenue_actuals[month];
+                    const hasForecast = rowData.revenue_forecast && rowData.revenue_forecast[month];
+
+                    if (hasActual) {
+                        return safeNumber(rowData.revenue_actuals[month]).toLocaleString('en-AU', {
+                            style: 'currency',
+                            currency: 'AUD',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                        });
+                    } else if (hasForecast) {
+                        return safeNumber(rowData.revenue_forecast[month]).toLocaleString('en-AU', {
+                            style: 'currency',
+                            currency: 'AUD',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                        });
+                    }
+                    return '';
                 },
+                valueFormatter: undefined,
             };
         });
 
@@ -1345,6 +1414,12 @@ export default function TurnoverForecastIndex({
                                     theme={shadcnTheme}
                                     enableCellTextSelection={true}
                                     ensureDomOrder={true}
+                                    getRowHeight={(params) => {
+                                        if (params.data?.job_number === 'Labour Req') {
+                                            return 50;
+                                        }
+                                        return 30;
+                                    }}
                                     getRowId={getRowId}
                                     pinnedBottomRowData={revenueTotalRowData}
                                     onGridReady={() => {

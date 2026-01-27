@@ -11,6 +11,7 @@ use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
 use App\Models\Location;
+use App\Models\LabourForecast;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -250,6 +251,38 @@ class TurnoverForecastController extends Controller
             // Remaining budget = total budget - cost to date
             $remainingBudget = $budget - $costToDate;
 
+            // ============ LABOUR FORECAST DATA ============
+            // Get labour forecasts for this location
+            // We want all forecasts that overlap with our range, but for simplicity let's just get all approved/submitted ones
+            // Actually simpler: Get all forecasts for this location, then group by month
+            $labourForecasts = LabourForecast::where('location_id', $location->id)
+                ->with('entries')
+                ->get();
+            
+            $labourForecastHeadcount = [];
+            foreach ($labourForecasts as $forecast) {
+                $monthKey = $forecast->forecast_month->format('Y-m');
+                
+                // Calculate average weekly headcount for this month
+                // First group entries by week
+                $weeklyHeadcounts = [];
+                foreach ($forecast->entries as $entry) {
+                    $weekKey = $entry->week_ending->format('Y-m-d');
+                    if (!isset($weeklyHeadcounts[$weekKey])) {
+                        $weeklyHeadcounts[$weekKey] = 0;
+                    }
+                    $weeklyHeadcounts[$weekKey] += $entry->headcount;
+                }
+                
+                // Calculate average
+                $count = count($weeklyHeadcounts);
+                if ($count > 0) {
+                    $averageHeadcount = array_sum($weeklyHeadcounts) / $count;
+                    // Use the latest forecast if multiple exist for same month (shouldn't happen with unique constraint but good safety)
+                    $labourForecastHeadcount[$monthKey] = $averageHeadcount;
+                }
+            }
+
             // Determine forecast submission status from the actual forecast status field
             $forecastStatus = 'not_started';
             $lastSubmittedAt = null;
@@ -295,6 +328,7 @@ class TurnoverForecastController extends Controller
                 'revenue_forecast' => $revenueForecast,
                 'cost_actuals' => $costActuals,
                 'cost_forecast' => $costForecast,
+                'labour_forecast_headcount' => $labourForecastHeadcount,
             ];
         }
 
@@ -414,6 +448,7 @@ class TurnoverForecastController extends Controller
                 'revenue_forecast' => $revenueForecast,
                 'cost_actuals' => [],
                 'cost_forecast' => $costForecast,
+                'labour_forecast_headcount' => [],
             ];
         }
 
