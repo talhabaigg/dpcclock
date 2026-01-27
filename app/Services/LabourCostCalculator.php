@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Location;
+use App\Models\Oncost;
 use App\Models\PayRateTemplate;
 use App\Models\LocationPayRateTemplate;
 
@@ -16,21 +17,47 @@ class LabourCostCalculator
     const ANNUAL_LEAVE_ACCRUAL = 0.0928;  // 9.28%
     const LEAVE_LOADING = 0.0461;          // 4.61%
 
-    // Fixed weekly amounts
-    const SUPER_WEEKLY = 304.00;
-    const BERT_WEEKLY = 151.00;
-    const BEWT_WEEKLY = 25.00;
-    const CIPQ_WEEKLY = 49.10;
+    // Overtime multiplier
+    const OVERTIME_MULTIPLIER = 2.0;
 
-    // Percentage-based on-costs
-    const PAYROLL_TAX_RATE = 0.0495;    // 4.95%
-    const WORKCOVER_RATE = 0.0297;       // 2.97%
+    // Cache for oncosts
+    private ?array $oncostsCache = null;
+
+    /**
+     * Get active oncosts from database (cached)
+     */
+    private function getOncosts(): array
+    {
+        if ($this->oncostsCache === null) {
+            $this->oncostsCache = Oncost::active()->ordered()->get()->toArray();
+        }
+        return $this->oncostsCache;
+    }
 
     /**
      * Calculate cost breakdown for a location's pay rate template
+     * This is the legacy method that calculates for 1 headcount with no overtime
      */
     public function calculate(Location $location, LocationPayRateTemplate $config): array
     {
+        return $this->calculateWithOvertime($location, $config, 1.0, 0.0);
+    }
+
+    /**
+     * Calculate cost breakdown with support for decimal headcount and overtime
+     *
+     * @param Location $location The location
+     * @param LocationPayRateTemplate $config The pay rate template configuration
+     * @param float $headcount Number of workers (can be decimal, e.g., 0.4 for 2 days)
+     * @param float $overtimeHours Total overtime hours
+     * @return array Cost breakdown
+     */
+    public function calculateWithOvertime(
+        Location $location,
+        LocationPayRateTemplate $config,
+        float $headcount = 1.0,
+        float $overtimeHours = 0.0
+    ): array {
         // Load relationships including custom allowances
         $config->load([
             'payRateTemplate.payCategories.payCategory',
@@ -55,8 +82,15 @@ class LabourCostCalculator
         // Get cost code prefix for mapping
         $costCodePrefix = $config->cost_code_prefix;
 
-        // Calculate breakdown
-        return $this->buildBreakdown($baseHourlyRate, $allowances, $customAllowances, $costCodePrefix);
+        // Calculate breakdown with headcount and overtime support
+        return $this->buildBreakdownWithOvertime(
+            $baseHourlyRate,
+            $allowances,
+            $customAllowances,
+            $costCodePrefix,
+            $headcount,
+            $overtimeHours
+        );
     }
 
     /**
@@ -390,6 +424,311 @@ class LabourCostCalculator
 
             'total_weekly_cost' => round($totalWeeklyCost, 2),
         ];
+    }
+
+    /**
+     * Build cost breakdown with overtime support
+     * Uses oncosts from database and calculates based on hours
+     */
+    private function buildBreakdownWithOvertime(
+        float $baseHourlyRate,
+        array $allowances,
+        array $customAllowances = [],
+        ?string $costCodePrefix = null,
+        float $headcount = 1.0,
+        float $overtimeHours = 0.0
+    ): array {
+        // Calculate hours
+        $ordinaryHours = $headcount * self::HOURS_PER_WEEK;
+        $totalHours = $ordinaryHours + $overtimeHours;
+
+        // ==========================================
+        // ORDINARY HOURS CALCULATION
+        // ==========================================
+
+        // Base wages for ordinary hours
+        $ordinaryBaseWages = $ordinaryHours * $baseHourlyRate;
+
+        // Calculate allowances for ordinary hours
+        $ordinaryFaresTravel = $allowances['fares_travel']['weekly'] * $headcount;
+        $ordinarySiteAllowance = $allowances['site']['rate'] * $ordinaryHours;
+        $ordinaryMultistorey = $allowances['multistorey']['rate'] * $ordinaryHours;
+
+        // Custom allowances for ordinary hours
+        $ordinaryCustomAllowances = 0;
+        $customAllowanceDetails = [];
+        foreach ($customAllowances as $allowance) {
+            $weekly = match($allowance['rate_type']) {
+                'hourly' => $allowance['rate'] * $ordinaryHours,
+                'daily' => $allowance['rate'] * self::DAYS_PER_WEEK * $headcount,
+                'weekly' => $allowance['rate'] * $headcount,
+                default => 0
+            };
+            $ordinaryCustomAllowances += $weekly;
+            $customAllowanceDetails[] = [
+                'type_id' => $allowance['type_id'],
+                'name' => $allowance['name'],
+                'code' => $allowance['code'],
+                'rate' => round($allowance['rate'], 2),
+                'rate_type' => $allowance['rate_type'],
+                'ordinary_amount' => round($weekly, 2),
+            ];
+        }
+
+        $ordinaryTotalAllowances = $ordinaryFaresTravel + $ordinarySiteAllowance + $ordinaryMultistorey + $ordinaryCustomAllowances;
+        $ordinaryGross = $ordinaryBaseWages + $ordinaryTotalAllowances;
+
+        // Apply leave markups to ordinary
+        $ordinaryWithAnnualLeave = $ordinaryGross * (1 + self::ANNUAL_LEAVE_ACCRUAL);
+        $ordinaryMarkedUp = $ordinaryWithAnnualLeave * (1 + self::LEAVE_LOADING);
+
+        // ==========================================
+        // OVERTIME CALCULATION
+        // ==========================================
+
+        $overtimeBaseWages = 0;
+        $overtimeTotalAllowances = 0;
+        $overtimeGross = 0;
+        $overtimeMarkedUp = 0;
+
+        if ($overtimeHours > 0) {
+            // Base wages for overtime (2x rate)
+            $overtimeBaseWages = $overtimeHours * $baseHourlyRate * self::OVERTIME_MULTIPLIER;
+
+            // Allowances for overtime hours (at normal rates, not 2x)
+            $overtimeSiteAllowance = $allowances['site']['rate'] * $overtimeHours;
+            $overtimeMultistorey = $allowances['multistorey']['rate'] * $overtimeHours;
+
+            // Custom allowances for overtime (hourly only)
+            $overtimeCustomAllowances = 0;
+            foreach ($customAllowances as $index => $allowance) {
+                if ($allowance['rate_type'] === 'hourly') {
+                    $otAmount = $allowance['rate'] * $overtimeHours;
+                    $overtimeCustomAllowances += $otAmount;
+                    $customAllowanceDetails[$index]['overtime_amount'] = round($otAmount, 2);
+                } else {
+                    $customAllowanceDetails[$index]['overtime_amount'] = 0;
+                }
+            }
+
+            $overtimeTotalAllowances = $overtimeSiteAllowance + $overtimeMultistorey + $overtimeCustomAllowances;
+            $overtimeGross = $overtimeBaseWages + $overtimeTotalAllowances;
+
+            // Apply leave markups to overtime
+            $overtimeWithAnnualLeave = $overtimeGross * (1 + self::ANNUAL_LEAVE_ACCRUAL);
+            $overtimeMarkedUp = $overtimeWithAnnualLeave * (1 + self::LEAVE_LOADING);
+        }
+
+        // ==========================================
+        // ONCOSTS (from database, only on ordinary hours)
+        // ==========================================
+
+        $oncosts = $this->getOncosts();
+        $fixedOncostsTotal = 0;
+        $percentageOncostsTotal = 0;
+        $oncostDetails = [];
+
+        // Calculate taxable base for percentage oncosts
+        // For percentage oncosts, we need to add super first
+        $superOncost = collect($oncosts)->firstWhere('code', 'SUPER');
+        $superAmount = 0;
+        if ($superOncost && !$superOncost['is_percentage']) {
+            $superAmount = (float) $superOncost['hourly_rate'] * $ordinaryHours;
+        }
+
+        $taxableBase = $ordinaryMarkedUp + $superAmount;
+
+        foreach ($oncosts as $oncost) {
+            $amount = 0;
+            $hours = $ordinaryHours;
+
+            // Check if this oncost applies to overtime
+            if ($oncost['applies_to_overtime'] && $overtimeHours > 0) {
+                $hours = $totalHours;
+            }
+
+            if ($oncost['is_percentage']) {
+                // Percentage-based oncost (on taxable base)
+                $amount = $taxableBase * (float) $oncost['percentage_rate'];
+                $percentageOncostsTotal += $amount;
+            } else {
+                // Fixed oncost (hourly rate × hours)
+                $amount = (float) $oncost['hourly_rate'] * $hours;
+                $fixedOncostsTotal += $amount;
+            }
+
+            $oncostDetails[] = [
+                'code' => $oncost['code'],
+                'name' => $oncost['name'],
+                'is_percentage' => $oncost['is_percentage'],
+                'hourly_rate' => $oncost['is_percentage'] ? null : round((float) $oncost['hourly_rate'], 4),
+                'percentage_rate' => $oncost['is_percentage'] ? round((float) $oncost['percentage_rate'] * 100, 2) : null,
+                'hours_applied' => $hours,
+                'amount' => round($amount, 2),
+            ];
+        }
+
+        $totalOncosts = $fixedOncostsTotal + $percentageOncostsTotal;
+
+        // ==========================================
+        // TOTALS
+        // ==========================================
+
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $totalOncosts;
+
+        // Build cost code mappings
+        $costCodes = $this->buildCostCodeMappings($costCodePrefix);
+
+        return [
+            'base_hourly_rate' => round($baseHourlyRate, 2),
+            'headcount' => round($headcount, 2),
+            'ordinary_hours' => round($ordinaryHours, 2),
+            'overtime_hours' => round($overtimeHours, 2),
+            'total_hours' => round($totalHours, 2),
+
+            'ordinary' => [
+                'base_wages' => round($ordinaryBaseWages, 2),
+                'allowances' => [
+                    'fares_travel' => [
+                        'name' => $allowances['fares_travel']['name'],
+                        'rate' => round($allowances['fares_travel']['rate'], 2),
+                        'type' => 'daily',
+                        'amount' => round($ordinaryFaresTravel, 2),
+                    ],
+                    'site' => [
+                        'name' => $allowances['site']['name'],
+                        'rate' => round($allowances['site']['rate'], 2),
+                        'type' => 'hourly',
+                        'hours' => round($ordinaryHours, 2),
+                        'amount' => round($ordinarySiteAllowance, 2),
+                    ],
+                    'multistorey' => [
+                        'name' => $allowances['multistorey']['name'],
+                        'rate' => round($allowances['multistorey']['rate'], 2),
+                        'type' => 'hourly',
+                        'hours' => round($ordinaryHours, 2),
+                        'amount' => round($ordinaryMultistorey, 2),
+                    ],
+                    'custom' => $customAllowanceDetails,
+                    'total' => round($ordinaryTotalAllowances, 2),
+                ],
+                'gross' => round($ordinaryGross, 2),
+                'annual_leave_markup' => round($ordinaryGross * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                'leave_loading_markup' => round($ordinaryWithAnnualLeave * self::LEAVE_LOADING, 2),
+                'marked_up' => round($ordinaryMarkedUp, 2),
+            ],
+
+            'overtime' => [
+                'base_wages' => round($overtimeBaseWages, 2),
+                'multiplier' => self::OVERTIME_MULTIPLIER,
+                'effective_rate' => round($baseHourlyRate * self::OVERTIME_MULTIPLIER, 2),
+                'allowances_total' => round($overtimeTotalAllowances, 2),
+                'gross' => round($overtimeGross, 2),
+                'annual_leave_markup' => round($overtimeGross * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                'leave_loading_markup' => round(($overtimeGross * (1 + self::ANNUAL_LEAVE_ACCRUAL)) * self::LEAVE_LOADING, 2),
+                'marked_up' => round($overtimeMarkedUp, 2),
+            ],
+
+            'oncosts' => [
+                'items' => $oncostDetails,
+                'fixed_total' => round($fixedOncostsTotal, 2),
+                'percentage_total' => round($percentageOncostsTotal, 2),
+                'total' => round($totalOncosts, 2),
+            ],
+
+            'leave_markups' => [
+                'annual_leave_rate' => self::ANNUAL_LEAVE_ACCRUAL * 100,
+                'annual_leave_amount' => round($ordinaryGross * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                'leave_loading_rate' => self::LEAVE_LOADING * 100,
+                'leave_loading_amount' => round($ordinaryWithAnnualLeave * self::LEAVE_LOADING, 2),
+            ],
+
+            'cost_codes' => $costCodes,
+
+            'total_weekly_cost' => round($totalWeeklyCost, 2),
+
+            // Legacy fields for backward compatibility
+            'hours_per_week' => self::HOURS_PER_WEEK,
+            'base_weekly_wages' => round($ordinaryBaseWages, 2),
+            'allowances' => [
+                'fares_travel' => [
+                    'name' => $allowances['fares_travel']['name'],
+                    'rate' => round($allowances['fares_travel']['rate'], 2),
+                    'type' => $allowances['fares_travel']['type'],
+                    'weekly' => round($ordinaryFaresTravel, 2),
+                ],
+                'site' => [
+                    'name' => $allowances['site']['name'],
+                    'rate' => round($allowances['site']['rate'], 2),
+                    'type' => $allowances['site']['type'],
+                    'weekly' => round($ordinarySiteAllowance, 2),
+                ],
+                'multistorey' => [
+                    'name' => $allowances['multistorey']['name'],
+                    'rate' => round($allowances['multistorey']['rate'], 2),
+                    'type' => $allowances['multistorey']['type'],
+                    'weekly' => round($ordinaryMultistorey, 2),
+                ],
+                'custom' => array_map(function ($a) {
+                    return [
+                        'type_id' => $a['type_id'],
+                        'name' => $a['name'],
+                        'code' => $a['code'],
+                        'rate' => $a['rate'],
+                        'rate_type' => $a['rate_type'],
+                        'weekly' => $a['ordinary_amount'],
+                    ];
+                }, $customAllowanceDetails),
+                'total' => round($ordinaryTotalAllowances, 2),
+            ],
+            'gross_wages' => round($ordinaryGross, 2),
+            'marked_up_wages' => round($ordinaryMarkedUp, 2),
+
+            // Legacy on_costs structure for backward compatibility with frontend
+            'super' => round($superAmount, 2),
+            'on_costs' => $this->buildLegacyOncostsArray($oncostDetails, $totalOncosts),
+        ];
+    }
+
+    /**
+     * Build legacy on_costs array for backward compatibility
+     */
+    private function buildLegacyOncostsArray(array $oncostDetails, float $totalOncosts): array
+    {
+        $legacy = [
+            'bert' => 0,
+            'bewt' => 0,
+            'cipq' => 0,
+            'payroll_tax_rate' => 0,
+            'payroll_tax' => 0,
+            'workcover_rate' => 0,
+            'workcover' => 0,
+            'total' => round($totalOncosts, 2),
+        ];
+
+        foreach ($oncostDetails as $oncost) {
+            switch ($oncost['code']) {
+                case 'BERT':
+                    $legacy['bert'] = $oncost['amount'];
+                    break;
+                case 'BEWT':
+                    $legacy['bewt'] = $oncost['amount'];
+                    break;
+                case 'CIPQ':
+                    $legacy['cipq'] = $oncost['amount'];
+                    break;
+                case 'PAYROLL_TAX':
+                    $legacy['payroll_tax'] = $oncost['amount'];
+                    $legacy['payroll_tax_rate'] = $oncost['percentage_rate'] ?? 0;
+                    break;
+                case 'WORKCOVER':
+                    $legacy['workcover'] = $oncost['amount'];
+                    $legacy['workcover_rate'] = $oncost['percentage_rate'] ?? 0;
+                    break;
+            }
+        }
+
+        return $legacy;
     }
 
     /**

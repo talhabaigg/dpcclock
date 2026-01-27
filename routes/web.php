@@ -45,6 +45,7 @@ use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\AllowanceTypeController;
+use App\Http\Controllers\OncostController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -356,6 +357,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'update'])->name('allowance-types.update')
         ->middleware('permission:materials.view');
     Route::delete('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'destroy'])->name('allowance-types.destroy')
+        ->middleware('permission:materials.view');
+
+    // Oncosts
+    Route::get('/oncosts', [OncostController::class, 'index'])->name('oncosts.index')
+        ->middleware('permission:materials.view');
+    Route::post('/oncosts', [OncostController::class, 'store'])->name('oncosts.store')
+        ->middleware('permission:materials.view');
+    Route::put('/oncosts/{oncost}', [OncostController::class, 'update'])->name('oncosts.update')
+        ->middleware('permission:materials.view');
+    Route::delete('/oncosts/{oncost}', [OncostController::class, 'destroy'])->name('oncosts.destroy')
         ->middleware('permission:materials.view');
 
     // Location Cost Codes

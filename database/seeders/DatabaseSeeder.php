@@ -27,9 +27,9 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
-
             EmployeeSeeder::class,
             RolesAndPermissionsSeeder::class,
+            OncostSeeder::class,
         ]);
 
         $admin->assignRole('admin');

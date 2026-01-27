@@ -152,8 +152,10 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
             width: 180,
             editable: false,
             cellClass: (params) => {
+                if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold';
                 if (params.data?.isCostRow) return 'font-bold text-green-700 dark:text-green-300';
+                if (params.data?.isOvertimeRow) return 'text-orange-600 dark:text-orange-400 italic';
                 return '';
             },
         },
@@ -168,19 +170,33 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
             editable: (params) => !params.data?.isTotal && !params.data?.isCostRow,
             cellDataType: 'number',
             cellClass: (params) => {
+                if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold text-center';
                 if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300';
+                if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
                 return 'text-center';
             },
             valueParser: (params) => {
                 const val = Number(params.newValue);
-                return isNaN(val) ? 0 : Math.max(0, Math.floor(val));
+                if (isNaN(val)) return 0;
+                // Allow decimals for headcount (e.g., 0.4 for 2 days)
+                // For overtime rows, allow whole numbers only
+                if (params.data?.isOvertimeRow) {
+                    return Math.max(0, Math.floor(val));
+                }
+                // For headcount, allow 1 decimal place
+                return Math.max(0, Math.round(val * 10) / 10);
             },
             valueFormatter: (params) => {
                 if (params.data?.isCostRow) {
                     return formatCurrency(params.value || 0);
                 }
-                return params.value;
+                if (params.data?.isOvertimeRow) {
+                    return params.value || 0;
+                }
+                // Show decimal only if needed
+                const val = params.value || 0;
+                return val % 1 === 0 ? val.toString() : val.toFixed(1);
             },
         });
     });
@@ -196,14 +212,16 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
 
     // Add Month Total column at the end - shows HOURS for work types, COST for cost row
     cols.push({
-        headerName: 'Month Hours',
+        headerName: 'Month Total',
         field: 'monthTotal',
         pinned: 'right',
         width: 120,
         editable: false,
         cellClass: (params) => {
+            if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30';
             if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
             if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
+            if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20';
             return 'text-center bg-slate-50 dark:bg-slate-800/50';
         },
         headerClass: 'ag-right-aligned-header',
@@ -219,6 +237,15 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 return total;
             }
 
+            // For overtime rows, just sum the hours
+            if (params.data.isOvertimeRow) {
+                let totalOtHours = 0;
+                currentMonthWeeks.forEach((week) => {
+                    totalOtHours += Number(params.data[week.key]) || 0;
+                });
+                return totalOtHours;
+            }
+
             // For work type rows and total row, calculate hours (headcount × hoursPerWeek)
             const hoursPerWeek = params.data.hoursPerWeek || 40; // default to 40 if not set
             let totalHours = 0;
@@ -231,6 +258,9 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
         valueFormatter: (params) => {
             if (params.data?.isCostRow) {
                 return formatCurrency(params.value || 0);
+            }
+            if (params.data?.isOvertimeRow) {
+                return `${(params.value || 0).toLocaleString()} OT hrs`;
             }
             // Format hours with "hrs" suffix
             return `${(params.value || 0).toLocaleString()} hrs`;

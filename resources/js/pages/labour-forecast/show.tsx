@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
@@ -99,6 +100,7 @@ interface ConfiguredTemplate {
     hourly_rate: number | null;
     cost_code_prefix: string | null;
     sort_order: number;
+    overtime_enabled: boolean;
     cost_breakdown: CostBreakdown;
     custom_allowances?: CustomAllowance[];
 }
@@ -123,6 +125,11 @@ interface AllowanceType {
     default_rate: number | null;
 }
 
+interface WeekEntry {
+    headcount: number;
+    overtime_hours: number;
+}
+
 interface SavedForecast {
     id: number;
     status: 'draft' | 'submitted' | 'approved' | 'rejected';
@@ -139,7 +146,7 @@ interface SavedForecast {
             hourly_rate: number | null;
             weekly_cost: number | null;
             cost_breakdown: CostBreakdown | null;
-            weeks: { [weekEnding: string]: number };
+            weeks: { [weekEnding: string]: WeekEntry | number }; // Support both old (number) and new (WeekEntry) format
         };
     };
 }
@@ -173,6 +180,8 @@ interface RowData {
     hoursPerWeek?: number;
     isTotal?: boolean;
     isCostRow?: boolean;
+    isOvertimeRow?: boolean;
+    parentTemplateId?: string; // For overtime rows, links to parent template
     [key: string]: string | number | boolean | undefined | null;
 }
 
@@ -258,6 +267,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             configId: template.id,
             weeklyCost: template.cost_breakdown.total_weekly_cost,
             hoursPerWeek: template.cost_breakdown.hours_per_week,
+            overtimeEnabled: template.overtime_enabled ?? false,
         }));
     }, [configuredTemplates]);
 
@@ -279,9 +289,26 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     const [isSaving, setIsSaving] = useState(false);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+    // Helper to extract headcount from saved data (handles both old and new format)
+    const getHeadcountFromSaved = (savedWeekData: WeekEntry | number | undefined): number => {
+        if (savedWeekData === undefined) return 0;
+        if (typeof savedWeekData === 'number') return savedWeekData;
+        return savedWeekData.headcount ?? 0;
+    };
+
+    // Helper to extract overtime hours from saved data
+    const getOvertimeFromSaved = (savedWeekData: WeekEntry | number | undefined): number => {
+        if (savedWeekData === undefined) return 0;
+        if (typeof savedWeekData === 'number') return 0; // Old format has no overtime
+        return savedWeekData.overtime_hours ?? 0;
+    };
+
     // Initialize row data with work types (and saved data if available)
-    const [rowData, setRowData] = useState<RowData[]>(() =>
-        workTypes.map((wt) => {
+    // Creates both regular rows and overtime rows for each work type (if overtime enabled)
+    const [rowData, setRowData] = useState<RowData[]>(() => {
+        const rows: RowData[] = [];
+        workTypes.forEach((wt) => {
+            // Regular headcount row
             const row: RowData = {
                 id: wt.id,
                 workType: wt.name,
@@ -292,32 +319,72 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             // Initialize week columns - use saved data if available
             const savedEntry = savedForecast?.entries?.[wt.configId];
             weeks.forEach((week) => {
-                const savedHeadcount = savedEntry?.weeks?.[week.weekEnding];
-                row[week.key] = savedHeadcount ?? 0;
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                row[week.key] = getHeadcountFromSaved(savedWeekData);
             });
-            return row;
-        }),
-    );
+            rows.push(row);
+
+            // Only create overtime row if overtime is enabled for this work type
+            if (wt.overtimeEnabled) {
+                const otRow: RowData = {
+                    id: `${wt.id}_ot`,
+                    workType: `${wt.name} (OT Hrs)`,
+                    hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
+                    isOvertimeRow: true,
+                    parentTemplateId: wt.id,
+                };
+                weeks.forEach((week) => {
+                    const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                    otRow[week.key] = getOvertimeFromSaved(savedWeekData);
+                });
+                rows.push(otRow);
+            }
+        });
+        return rows;
+    });
 
     // Update row data when work types change
     useEffect(() => {
         setRowData((prevRows) => {
-            const newRows: RowData[] = workTypes.map((wt) => {
+            const newRows: RowData[] = [];
+            workTypes.forEach((wt) => {
+                // Regular row
                 const existingRow = prevRows.find((r) => r.id === wt.id);
                 if (existingRow) {
-                    return { ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek };
+                    newRows.push({ ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek });
+                } else {
+                    const row: RowData = {
+                        id: wt.id,
+                        workType: wt.name,
+                        hourlyRate: wt.hourlyRate,
+                        weeklyCost: wt.weeklyCost,
+                        hoursPerWeek: wt.hoursPerWeek,
+                    };
+                    weeks.forEach((week) => {
+                        row[week.key] = 0;
+                    });
+                    newRows.push(row);
                 }
-                const row: RowData = {
-                    id: wt.id,
-                    workType: wt.name,
-                    hourlyRate: wt.hourlyRate,
-                    weeklyCost: wt.weeklyCost,
-                    hoursPerWeek: wt.hoursPerWeek,
-                };
-                weeks.forEach((week) => {
-                    row[week.key] = 0;
-                });
-                return row;
+
+                // Only handle overtime row if overtime is enabled for this work type
+                if (wt.overtimeEnabled) {
+                    const existingOtRow = prevRows.find((r) => r.id === `${wt.id}_ot`);
+                    if (existingOtRow) {
+                        newRows.push({ ...existingOtRow, workType: `${wt.name} (OT Hrs)`, hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null });
+                    } else {
+                        const otRow: RowData = {
+                            id: `${wt.id}_ot`,
+                            workType: `${wt.name} (OT Hrs)`,
+                            hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
+                            isOvertimeRow: true,
+                            parentTemplateId: wt.id,
+                        };
+                        weeks.forEach((week) => {
+                            otRow[week.key] = 0;
+                        });
+                        newRows.push(otRow);
+                    }
+                }
             });
             return newRows;
         });
@@ -325,40 +392,77 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
     // Calculate totals and cost rows
     const rowDataWithTotals = useMemo(() => {
-        // Total headcount row
+        // Get only headcount rows (not overtime rows)
+        const headcountRows = rowData.filter((r) => !r.isOvertimeRow);
+
+        // Total headcount row (excludes overtime rows)
         const totalRow: RowData = {
             id: 'total',
             workType: 'Total Headcount',
             isTotal: true,
         };
         weeks.forEach((week) => {
-            totalRow[week.key] = rowData.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+            totalRow[week.key] = headcountRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
-        // Total weekly cost row (headcount × weekly cost per template)
+        // Total overtime hours row
+        const totalOtRow: RowData = {
+            id: 'total_ot',
+            workType: 'Total OT Hours',
+            isTotal: true,
+            isOvertimeRow: true,
+        };
+        const overtimeRows = rowData.filter((r) => r.isOvertimeRow);
+        weeks.forEach((week) => {
+            totalOtRow[week.key] = overtimeRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
+
+        // Total weekly cost row (headcount × weekly cost + overtime calculation)
+        // Note: This is a simplified calculation - actual cost comes from backend
         const costRow: RowData = {
             id: 'cost',
             workType: 'Total Weekly Cost',
             isCostRow: true,
         };
         weeks.forEach((week) => {
-            costRow[week.key] = rowData.reduce((sum, row) => {
+            let totalCost = 0;
+            headcountRows.forEach((row) => {
                 const headcount = Number(row[week.key]) || 0;
                 const weeklyCost = row.weeklyCost || 0;
-                return sum + headcount * weeklyCost;
-            }, 0);
+                // Find corresponding overtime row
+                const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
+                const otHours = otRow ? Number(otRow[week.key]) || 0 : 0;
+                const baseHourlyRate = row.hourlyRate || 0;
+
+                // Estimate: base cost + overtime premium (simplified)
+                // Actual calculation happens on backend with full oncost logic
+                const baseCost = headcount * weeklyCost;
+                const otCost = otHours * baseHourlyRate * 2 * 1.14; // Rough estimate with markups
+                totalCost += baseCost + otCost;
+            });
+            costRow[week.key] = Math.round(totalCost * 100) / 100;
         });
 
+        // Only include overtime total row if there are overtime-enabled work types
+        if (overtimeRows.length > 0) {
+            return [...rowData, totalRow, totalOtRow, costRow];
+        }
         return [...rowData, totalRow, costRow];
     }, [rowData, weeks]);
 
     // Row class for total and cost row styling (dark mode support)
     const getRowClass = useCallback((params: { data: RowData }) => {
+        if (params.data?.isTotal && params.data?.isOvertimeRow) {
+            return 'bg-orange-100 dark:bg-orange-900/30 font-semibold text-orange-700 dark:text-orange-300';
+        }
         if (params.data?.isTotal) {
             return 'bg-gray-100 dark:bg-gray-700 font-semibold';
         }
         if (params.data?.isCostRow) {
             return 'bg-green-50 dark:bg-green-900/20 font-semibold text-green-700 dark:text-green-300';
+        }
+        if (params.data?.isOvertimeRow) {
+            return 'bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300';
         }
         return '';
     }, []);
@@ -511,12 +615,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
         setIsSaving(true);
 
-        // Build entries structure: { configId: { weeks: [ { week_ending, headcount } ] } }
+        // Build entries structure: { configId: { weeks: [ { week_ending, headcount, overtime_hours } ] } }
         const entries = configuredTemplates.map((template) => {
             const row = rowData.find((r) => r.id === `template_${template.template_id}`);
+            const otRow = rowData.find((r) => r.id === `template_${template.template_id}_ot`);
             const weekData = weeks.map((week) => ({
                 week_ending: week.weekEnding,
                 headcount: row ? Number(row[week.key]) || 0 : 0,
+                overtime_hours: otRow ? Number(otRow[week.key]) || 0 : 0,
             }));
             return {
                 template_id: template.id,
@@ -683,6 +789,15 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             { preserveScroll: true },
         );
         setEditingCostCode(null);
+    };
+
+    // Handle toggling overtime for a template
+    const handleToggleOvertime = (templateId: number, enabled: boolean) => {
+        router.put(
+            route('labour-forecast.update-template-label', { location: location.id, template: templateId }),
+            { overtime_enabled: enabled },
+            { preserveScroll: true },
+        );
     };
 
     // Allowance configuration handlers
@@ -1064,6 +1179,17 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                                             {template.cost_code_prefix ? `${template.cost_code_prefix}-01` : 'Not set'}
                                                         </button>
                                                     )}
+                                                </div>
+                                                {/* Overtime Toggle */}
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <span className="text-xs text-slate-500">Overtime:</span>
+                                                    <Switch
+                                                        checked={template.overtime_enabled}
+                                                        onCheckedChange={(checked) => handleToggleOvertime(template.id, checked)}
+                                                    />
+                                                    <span className={`text-xs ${template.overtime_enabled ? 'text-orange-600 dark:text-orange-400' : 'text-slate-400'}`}>
+                                                        {template.overtime_enabled ? 'Enabled' : 'Disabled'}
+                                                    </span>
                                                 </div>
                                             </div>
                                             {!editingLabel && !editingCostCode && (

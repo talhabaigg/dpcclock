@@ -12,6 +12,7 @@ class LabourForecastEntry extends Model
         'location_pay_rate_template_id',
         'week_ending',
         'headcount',
+        'overtime_hours',
         'hourly_rate',
         'weekly_cost',
         'cost_breakdown_snapshot',
@@ -19,7 +20,8 @@ class LabourForecastEntry extends Model
 
     protected $casts = [
         'week_ending' => 'date',
-        'headcount' => 'integer',
+        'headcount' => 'decimal:2',
+        'overtime_hours' => 'decimal:2',
         'hourly_rate' => 'decimal:2',
         'weekly_cost' => 'decimal:2',
         'cost_breakdown_snapshot' => 'array',
@@ -55,5 +57,29 @@ class LabourForecastEntry extends Model
     public function getCostBreakdown(): ?array
     {
         return $this->cost_breakdown_snapshot;
+    }
+
+    /**
+     * Get ordinary hours (headcount × 40)
+     */
+    public function getOrdinaryHours(): float
+    {
+        return (float) $this->headcount * 40;
+    }
+
+    /**
+     * Get total hours (ordinary + overtime)
+     */
+    public function getTotalHours(): float
+    {
+        return $this->getOrdinaryHours() + (float) ($this->overtime_hours ?? 0);
+    }
+
+    /**
+     * Get overtime hours
+     */
+    public function getOvertimeHours(): float
+    {
+        return (float) ($this->overtime_hours ?? 0);
     }
 }

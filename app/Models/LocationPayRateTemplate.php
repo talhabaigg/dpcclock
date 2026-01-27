@@ -18,12 +18,14 @@ class LocationPayRateTemplate extends Model
         'cost_code_prefix',
         'sort_order',
         'is_active',
+        'overtime_enabled',
     ];
 
     protected $casts = [
         'hourly_rate' => 'decimal:2',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
+        'overtime_enabled' => 'boolean',
     ];
 
     public function location(): BelongsTo

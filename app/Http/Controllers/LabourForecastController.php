@@ -133,6 +133,7 @@ class LabourForecastController extends Controller
                     'hourly_rate' => $config->hourly_rate,
                     'cost_code_prefix' => $config->cost_code_prefix,
                     'sort_order' => $config->sort_order,
+                    'overtime_enabled' => $config->overtime_enabled ?? false,
                     'cost_breakdown' => $costBreakdown,
                     'custom_allowances' => $config->customAllowances->map(fn ($a) => [
                         'id' => $a->id,
@@ -211,7 +212,10 @@ class LabourForecastController extends Controller
                         'weeks' => [],
                     ];
                 }
-                $savedData['entries'][$templateId]['weeks'][$entry->week_ending->format('Y-m-d')] = $entry->headcount;
+                $savedData['entries'][$templateId]['weeks'][$entry->week_ending->format('Y-m-d')] = [
+                    'headcount' => (float) $entry->headcount,
+                    'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
+                ];
             }
         }
 
@@ -265,7 +269,8 @@ class LabourForecastController extends Controller
             'entries.*.template_id' => 'required|exists:location_pay_rate_templates,id',
             'entries.*.weeks' => 'required|array',
             'entries.*.weeks.*.week_ending' => 'required|date',
-            'entries.*.weeks.*.headcount' => 'required|integer|min:0',
+            'entries.*.weeks.*.headcount' => 'required|numeric|min:0|max:100',
+            'entries.*.weeks.*.overtime_hours' => 'nullable|numeric|min:0|max:200',
         ]);
 
         $user = Auth::user();
@@ -303,16 +308,26 @@ class LabourForecastController extends Controller
 
                 if (!$templateConfig) continue;
 
-                // Calculate cost breakdown snapshot
-                $costBreakdown = $costCalculator->calculate($location, $templateConfig);
-
                 foreach ($entryData['weeks'] as $weekData) {
-                    if ($weekData['headcount'] > 0) {
+                    $headcount = (float) $weekData['headcount'];
+                    $overtimeHours = (float) ($weekData['overtime_hours'] ?? 0);
+
+                    // Only create entry if there's headcount or overtime
+                    if ($headcount > 0 || $overtimeHours > 0) {
+                        // Calculate cost breakdown with overtime support
+                        $costBreakdown = $costCalculator->calculateWithOvertime(
+                            $location,
+                            $templateConfig,
+                            $headcount,
+                            $overtimeHours
+                        );
+
                         LabourForecastEntry::create([
                             'labour_forecast_id' => $forecast->id,
                             'location_pay_rate_template_id' => $templateConfig->id,
                             'week_ending' => Carbon::parse($weekData['week_ending']),
-                            'headcount' => $weekData['headcount'],
+                            'headcount' => $headcount,
+                            'overtime_hours' => $overtimeHours,
                             'hourly_rate' => $costBreakdown['base_hourly_rate'],
                             'weekly_cost' => $costBreakdown['total_weekly_cost'],
                             'cost_breakdown_snapshot' => $costBreakdown,
@@ -513,7 +528,7 @@ class LabourForecastController extends Controller
     }
 
     /**
-     * Update a single template's label and/or cost code prefix
+     * Update a single template's label, cost code prefix, or overtime enabled status
      */
     public function updateTemplateLabel(Request $request, Location $location, LocationPayRateTemplate $template)
     {
@@ -524,6 +539,7 @@ class LabourForecastController extends Controller
         $request->validate([
             'label' => 'nullable|string|max:255',
             'cost_code_prefix' => 'nullable|string|max:10',
+            'overtime_enabled' => 'nullable|boolean',
         ]);
 
         $updateData = [];
@@ -534,6 +550,10 @@ class LabourForecastController extends Controller
 
         if ($request->has('cost_code_prefix')) {
             $updateData['cost_code_prefix'] = $request->cost_code_prefix;
+        }
+
+        if ($request->has('overtime_enabled')) {
+            $updateData['overtime_enabled'] = $request->boolean('overtime_enabled');
         }
 
         if (!empty($updateData)) {
