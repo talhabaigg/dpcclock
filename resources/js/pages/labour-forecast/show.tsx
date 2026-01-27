@@ -208,6 +208,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     const [editingLabel, setEditingLabel] = useState<{ id: number; label: string } | null>(null);
     const [editingCostCode, setEditingCostCode] = useState<{ id: number; costCodePrefix: string } | null>(null);
     const [newTemplateId, setNewTemplateId] = useState<string>('');
+    const [templateSearch, setTemplateSearch] = useState('');
 
     // Cost breakdown dialog state
     const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
@@ -653,6 +654,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         if (!newTemplateId) return;
         router.post(route('labour-forecast.add-template', { location: location.id }), { template_id: newTemplateId }, { preserveScroll: true });
         setNewTemplateId('');
+        setTemplateSearch('');
     };
 
     // Handle removing a template
@@ -766,11 +768,8 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         }
     };
 
-    // Get templates not yet added
-    const availableToAdd = useMemo(() => {
-        const addedIds = new Set(configuredTemplates.map((t) => t.template_id));
-        return availableTemplates.filter((t) => !addedIds.has(t.id));
-    }, [configuredTemplates, availableTemplates]);
+    // All templates available for selection (allows duplicates for different add-ons)
+    const availableToAdd = availableTemplates;
 
     // Format currency
     const formatCurrency = (value: number | null) => {
@@ -859,7 +858,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         <AppLayout breadcrumbs={breadcrumbs}>
             {/* Settings Dialog */}
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Settings className="h-5 w-5" />
@@ -881,29 +880,57 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         {/* Add new template */}
                         <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                             <h3 className="mb-3 text-sm font-medium">Add Template</h3>
-                            <div className="flex gap-2">
-                                <Select value={newTemplateId} onValueChange={setNewTemplateId}>
-                                    <SelectTrigger className="flex-1">
-                                        <SelectValue placeholder="Select a template..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableToAdd.length === 0 ? (
-                                            <SelectItem value="" disabled>
-                                                All templates added
-                                            </SelectItem>
-                                        ) : (
-                                            availableToAdd.map((template) => (
-                                                <SelectItem key={template.id} value={String(template.id)}>
-                                                    {template.name} {template.hourly_rate ? `(${formatCurrency(template.hourly_rate)}/hr)` : ''}
-                                                </SelectItem>
-                                            ))
+                            <div className="space-y-2">
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="Search templates..."
+                                        value={templateSearch}
+                                        onChange={(e) => {
+                                            setTemplateSearch(e.target.value);
+                                            setNewTemplateId('');
+                                        }}
+                                        className="flex-1"
+                                    />
+                                    <Button onClick={handleAddTemplate} disabled={!newTemplateId}>
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Add
+                                    </Button>
+                                </div>
+                                <div className="max-h-[200px] overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700">
+                                    {availableToAdd.filter((t) =>
+                                        t.name.toLowerCase().includes(templateSearch.toLowerCase())
+                                    ).length === 0 ? (
+                                        <div className="p-3 text-center text-sm text-slate-500">No templates found.</div>
+                                    ) : (
+                                        availableToAdd
+                                            .filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase()))
+                                                .map((template) => (
+                                                    <button
+                                                        key={template.id}
+                                                        type="button"
+                                                        className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                                                            newTemplateId === String(template.id) ? 'bg-slate-100 dark:bg-slate-800' : ''
+                                                        }`}
+                                                        onClick={() => {
+                                                            setNewTemplateId(String(template.id));
+                                                            setTemplateSearch(template.name);
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            className={`h-4 w-4 ${
+                                                                newTemplateId === String(template.id) ? 'opacity-100' : 'opacity-0'
+                                                            }`}
+                                                        />
+                                                        <span className="flex-1 text-left">{template.name}</span>
+                                                        {template.hourly_rate && (
+                                                            <span className="text-xs text-slate-500">
+                                                                {formatCurrency(template.hourly_rate)}/hr
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                ))
                                         )}
-                                    </SelectContent>
-                                </Select>
-                                <Button onClick={handleAddTemplate} disabled={!newTemplateId}>
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add
-                                </Button>
+                                    </div>
                             </div>
                         </div>
 

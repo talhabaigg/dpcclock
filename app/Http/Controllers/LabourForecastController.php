@@ -481,15 +481,6 @@ class LabourForecastController extends Controller
             'label' => 'nullable|string|max:255',
         ]);
 
-        // Check if template already exists for this location
-        $existing = LocationPayRateTemplate::where('location_id', $location->id)
-            ->where('pay_rate_template_id', $request->template_id)
-            ->first();
-
-        if ($existing) {
-            return redirect()->back()->with('error', 'This template is already added to this location.');
-        }
-
         // Get the max sort order
         $maxOrder = LocationPayRateTemplate::where('location_id', $location->id)->max('sort_order') ?? -1;
 
