@@ -38,6 +38,15 @@ interface CostCodes {
     workcover: string;
 }
 
+interface CustomAllowanceBreakdown {
+    type_id: number;
+    name: string;
+    code: string;
+    rate: number;
+    rate_type: 'hourly' | 'daily' | 'weekly';
+    weekly: number;
+}
+
 interface CostBreakdown {
     base_hourly_rate: number;
     hours_per_week: number;
@@ -46,6 +55,7 @@ interface CostBreakdown {
         fares_travel: { name: string | null; rate: number; type: string; weekly: number };
         site: { name: string | null; rate: number; type: string; weekly: number };
         multistorey: { name: string | null; rate: number; type: string; weekly: number };
+        custom?: CustomAllowanceBreakdown[];
         total: number;
     };
     gross_wages: number;
@@ -71,6 +81,16 @@ interface CostBreakdown {
     total_weekly_cost: number;
 }
 
+interface CustomAllowance {
+    id: number;
+    allowance_type_id: number;
+    name: string;
+    code: string;
+    rate: number;
+    rate_type: 'hourly' | 'daily' | 'weekly';
+    weekly_cost: number;
+}
+
 interface ConfiguredTemplate {
     id: number;
     template_id: number;
@@ -80,6 +100,7 @@ interface ConfiguredTemplate {
     cost_code_prefix: string | null;
     sort_order: number;
     cost_breakdown: CostBreakdown;
+    custom_allowances?: CustomAllowance[];
 }
 
 interface AvailableTemplate {
@@ -92,6 +113,14 @@ interface LocationWorktype {
     id: number;
     name: string;
     eh_worktype_id: number;
+}
+
+interface AllowanceType {
+    id: number;
+    name: string;
+    code: string;
+    description: string | null;
+    default_rate: number | null;
 }
 
 interface SavedForecast {
@@ -127,6 +156,7 @@ interface LabourForecastShowProps {
     configuredTemplates: ConfiguredTemplate[];
     availableTemplates: AvailableTemplate[];
     locationWorktypes: LocationWorktype[];
+    allowanceTypes: AllowanceType[];
     savedForecast: SavedForecast | null;
     permissions: {
         canSubmit: boolean;
@@ -146,7 +176,7 @@ interface RowData {
     [key: string]: string | number | boolean | undefined | null;
 }
 
-const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, configuredTemplates, availableTemplates, locationWorktypes, savedForecast, permissions, flash }: LabourForecastShowProps) => {
+const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, configuredTemplates, availableTemplates, locationWorktypes, allowanceTypes, savedForecast, permissions, flash }: LabourForecastShowProps) => {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Labour Forecast', href: '/labour-forecast' },
         { title: location.name, href: '#' },
@@ -182,6 +212,16 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     // Cost breakdown dialog state
     const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
     const [selectedTemplateForCost, setSelectedTemplateForCost] = useState<ConfiguredTemplate | null>(null);
+
+    // Allowance configuration dialog state
+    const [allowanceDialogOpen, setAllowanceDialogOpen] = useState(false);
+    const [selectedTemplateForAllowances, setSelectedTemplateForAllowances] = useState<ConfiguredTemplate | null>(null);
+    const [allowanceConfig, setAllowanceConfig] = useState<Array<{
+        allowance_type_id: number;
+        rate: number;
+        rate_type: 'hourly' | 'daily' | 'weekly';
+    }>>([]);
+    const [isSavingAllowances, setIsSavingAllowances] = useState(false);
 
     // Selected cell state for fill operations
     const [selectedCell, setSelectedCell] = useState<{
@@ -643,6 +683,89 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         setEditingCostCode(null);
     };
 
+    // Allowance configuration handlers
+    const openAllowanceDialog = (template: ConfiguredTemplate) => {
+        setSelectedTemplateForAllowances(template);
+        setAllowanceConfig(
+            (template.custom_allowances || []).map((a) => ({
+                allowance_type_id: a.allowance_type_id,
+                rate: a.rate,
+                rate_type: a.rate_type,
+            }))
+        );
+        setAllowanceDialogOpen(true);
+    };
+
+    const handleAddAllowance = (allowanceTypeId: number) => {
+        const allowanceType = allowanceTypes.find((t) => t.id === allowanceTypeId);
+        if (!allowanceType) return;
+        setAllowanceConfig((prev) => [
+            ...prev,
+            {
+                allowance_type_id: allowanceTypeId,
+                rate: allowanceType.default_rate || 0,
+                rate_type: 'hourly' as const,
+            },
+        ]);
+    };
+
+    const handleRemoveAllowance = (allowanceTypeId: number) => {
+        setAllowanceConfig((prev) => prev.filter((a) => a.allowance_type_id !== allowanceTypeId));
+    };
+
+    const handleUpdateAllowanceRate = (allowanceTypeId: number, rate: number) => {
+        setAllowanceConfig((prev) =>
+            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate } : a))
+        );
+    };
+
+    const handleUpdateAllowanceRateType = (allowanceTypeId: number, rate_type: 'hourly' | 'daily' | 'weekly') => {
+        setAllowanceConfig((prev) =>
+            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate_type } : a))
+        );
+    };
+
+    const handleSaveAllowances = () => {
+        if (!selectedTemplateForAllowances || isSavingAllowances) return;
+        setIsSavingAllowances(true);
+        router.put(
+            route('labour-forecast.update-template-allowances', {
+                location: location.id,
+                template: selectedTemplateForAllowances.id,
+            }),
+            { allowances: allowanceConfig },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsSavingAllowances(false);
+                    setAllowanceDialogOpen(false);
+                    setSelectedTemplateForAllowances(null);
+                },
+                onError: () => setIsSavingAllowances(false),
+            }
+        );
+    };
+
+    // Get allowances that can still be added
+    const availableAllowancesToAdd = useMemo(() => {
+        const configuredIds = allowanceConfig.map((a) => a.allowance_type_id);
+        return allowanceTypes.filter((t) => !configuredIds.includes(t.id));
+    }, [allowanceTypes, allowanceConfig]);
+
+    // Calculate weekly cost for an allowance based on rate type
+    const calculateAllowanceWeeklyCost = (rate: number, rateType: 'hourly' | 'daily' | 'weekly') => {
+        switch (rateType) {
+            case 'hourly':
+                return rate * 40;
+            case 'daily':
+                return rate * 5;
+            case 'weekly':
+                return rate;
+            default:
+                return 0;
+        }
+    };
+
     // Get templates not yet added
     const availableToAdd = useMemo(() => {
         const addedIds = new Set(configuredTemplates.map((t) => t.template_id));
@@ -869,6 +992,20 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </div>
+                                                {/* Custom Allowances Badge */}
+                                                {template.custom_allowances && template.custom_allowances.length > 0 && (
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {template.custom_allowances.map((allowance) => (
+                                                            <span
+                                                                key={allowance.id}
+                                                                className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                                                                title={`${formatCurrency(allowance.rate)}/${allowance.rate_type} = ${formatCurrency(allowance.weekly_cost)}/week`}
+                                                            >
+                                                                {allowance.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 {/* Cost Code Prefix */}
                                                 <div className="mt-2 flex items-center gap-2">
                                                     <span className="text-xs text-slate-500">Cost Code:</span>
@@ -915,6 +1052,15 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                                         title="View cost breakdown"
                                                     >
                                                         <Calculator className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-green-500 hover:text-green-700"
+                                                        onClick={() => openAllowanceDialog(template)}
+                                                        title="Configure allowances"
+                                                    >
+                                                        <Plus className="h-4 w-4" />
                                                     </Button>
                                                     <Button
                                                         size="sm"
@@ -1040,8 +1186,27 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                             <span className="font-medium">{formatCurrency(selectedTemplateForCost.cost_breakdown.allowances.multistorey.weekly)}</span>
                                         </div>
                                     )}
+                                    {/* Custom Allowances */}
+                                    {selectedTemplateForCost.cost_breakdown.allowances.custom && selectedTemplateForCost.cost_breakdown.allowances.custom.length > 0 && (
+                                        <>
+                                            <div className="border-t border-slate-200 pt-2 dark:border-slate-600">
+                                                <span className="text-xs font-medium text-green-600 dark:text-green-400">Custom Allowances</span>
+                                            </div>
+                                            {selectedTemplateForCost.cost_breakdown.allowances.custom.map((customAllowance) => (
+                                                <div key={customAllowance.type_id} className="flex justify-between">
+                                                    <span className="text-slate-600 dark:text-slate-400">
+                                                        {customAllowance.name}
+                                                        <span className="ml-1 text-xs text-slate-400">
+                                                            ({formatCurrency(customAllowance.rate)}/{customAllowance.rate_type === 'hourly' ? 'hr × 40' : customAllowance.rate_type === 'daily' ? 'day × 5' : 'week'})
+                                                        </span>
+                                                    </span>
+                                                    <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(customAllowance.weekly)}</span>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
                                     {selectedTemplateForCost.cost_breakdown.allowances.total === 0 && (
-                                        <p className="text-xs text-slate-500 italic">No allowances applied. Configure shift conditions in Employment Hero.</p>
+                                        <p className="text-xs text-slate-500 italic">No allowances applied. Configure shift conditions or add custom allowances.</p>
                                     )}
                                     <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
                                         <span className="font-medium text-slate-700 dark:text-slate-300">Total Allowances</span>
@@ -1180,6 +1345,204 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Allowance Configuration Dialog */}
+            <Dialog open={allowanceDialogOpen} onOpenChange={setAllowanceDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Plus className="h-5 w-5" />
+                            Configure Allowances - {selectedTemplateForAllowances?.label}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {/* Base template info */}
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-medium">{selectedTemplateForAllowances?.name}</h3>
+                                    <p className="text-sm text-slate-500">
+                                        Base Rate: {formatCurrency(selectedTemplateForAllowances?.hourly_rate ?? null)}/hr
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm text-slate-500">Base Weekly Cost</p>
+                                    <p className="text-lg font-semibold text-green-600">
+                                        {formatCurrency(selectedTemplateForAllowances?.cost_breakdown.base_weekly_wages ?? null)}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Add Allowance */}
+                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                            <h3 className="mb-3 text-sm font-medium">Add Allowance</h3>
+                            <div className="flex gap-2">
+                                <Select
+                                    value=""
+                                    onValueChange={(value) => handleAddAllowance(Number(value))}
+                                >
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select an allowance to add..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableAllowancesToAdd.length === 0 ? (
+                                            <SelectItem value="none" disabled>
+                                                All allowances added
+                                            </SelectItem>
+                                        ) : (
+                                            availableAllowancesToAdd.map((type) => (
+                                                <SelectItem key={type.id} value={String(type.id)}>
+                                                    {type.name}
+                                                    {type.default_rate && ` (${formatCurrency(type.default_rate)}/hr default)`}
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <p className="mt-2 text-xs text-slate-500">
+                                Select allowances to apply to this template for this job.
+                            </p>
+                        </div>
+
+                        {/* Configured Allowances */}
+                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                            <h3 className="mb-3 text-sm font-medium">Active Allowances</h3>
+                            {allowanceConfig.length === 0 ? (
+                                <p className="text-sm text-slate-500">
+                                    No allowances configured. Add allowances above to customize this template.
+                                </p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {allowanceConfig.map((config) => {
+                                        const allowanceType = allowanceTypes.find((t) => t.id === config.allowance_type_id);
+                                        if (!allowanceType) return null;
+
+                                        const weeklyCost = calculateAllowanceWeeklyCost(config.rate, config.rate_type);
+
+                                        return (
+                                            <div
+                                                key={config.allowance_type_id}
+                                                className="flex items-center gap-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800"
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="font-medium">{allowanceType.name}</div>
+                                                    {allowanceType.description && (
+                                                        <div className="text-xs text-slate-500">{allowanceType.description}</div>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-sm text-slate-500">$</span>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={config.rate}
+                                                            onChange={(e) =>
+                                                                handleUpdateAllowanceRate(
+                                                                    config.allowance_type_id,
+                                                                    parseFloat(e.target.value) || 0
+                                                                )
+                                                            }
+                                                            className="h-8 w-20 text-right"
+                                                        />
+                                                    </div>
+
+                                                    <Select
+                                                        value={config.rate_type}
+                                                        onValueChange={(value) =>
+                                                            handleUpdateAllowanceRateType(
+                                                                config.allowance_type_id,
+                                                                value as 'hourly' | 'daily' | 'weekly'
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="h-8 w-24">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="hourly">/hour</SelectItem>
+                                                            <SelectItem value="daily">/day</SelectItem>
+                                                            <SelectItem value="weekly">/week</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="rounded bg-green-100 px-2 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                                                {formatCurrency(weeklyCost)}/wk
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            Weekly cost: {formatCurrency(config.rate)} × {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="text-red-500 hover:text-red-700"
+                                                        onClick={() => handleRemoveAllowance(config.allowance_type_id)}
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Total Impact */}
+                        {allowanceConfig.length > 0 && (
+                            <div className="rounded-lg border-2 border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="font-medium">Total Custom Allowances</h3>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            {allowanceConfig.length} allowance{allowanceConfig.length !== 1 ? 's' : ''} configured
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                                            +{formatCurrency(
+                                                allowanceConfig.reduce((sum, config) => {
+                                                    return sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type);
+                                                }, 0)
+                                            )}
+                                        </p>
+                                        <p className="text-xs text-slate-500">per worker per week</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAllowanceDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSaveAllowances} disabled={isSavingAllowances}>
+                            {isSavingAllowances ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Save Allowances
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

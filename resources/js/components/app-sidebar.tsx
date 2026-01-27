@@ -180,6 +180,12 @@ const documents = [
                 icon: DollarSign,
                 permission: 'materials.view',
             },
+            {
+                name: 'Allowance Types',
+                url: '/allowance-types',
+                icon: DollarSign,
+                permission: 'materials.view',
+            },
         ],
     },
 ];

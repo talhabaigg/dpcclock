@@ -44,6 +44,7 @@ use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\AllowanceTypeController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -347,6 +348,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/cost-types/download', [CostTypeController::class, 'download'])->name('costtypes.download')
         ->middleware('permission:costtypes.export');
 
+    // Allowance Types
+    Route::get('/allowance-types', [AllowanceTypeController::class, 'index'])->name('allowance-types.index')
+        ->middleware('permission:materials.view');
+    Route::post('/allowance-types', [AllowanceTypeController::class, 'store'])->name('allowance-types.store')
+        ->middleware('permission:materials.view');
+    Route::put('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'update'])->name('allowance-types.update')
+        ->middleware('permission:materials.view');
+    Route::delete('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'destroy'])->name('allowance-types.destroy')
+        ->middleware('permission:materials.view');
+
     // Location Cost Codes
     Route::get('/location/{location}/cost-codes/sync', [LocationCostcodeController::class, 'sync'])->name('locationCostcodes.sync')
         ->middleware('permission:costcodes.edit');
@@ -446,6 +457,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/location/{location}/labour-forecast/templates/add', [LabourForecastController::class, 'addTemplate'])->name('labour-forecast.add-template');
     Route::delete('/location/{location}/labour-forecast/templates/{template}', [LabourForecastController::class, 'removeTemplate'])->name('labour-forecast.remove-template');
     Route::put('/location/{location}/labour-forecast/templates/{template}/label', [LabourForecastController::class, 'updateTemplateLabel'])->name('labour-forecast.update-template-label');
+    Route::put('/location/{location}/labour-forecast/templates/{template}/allowances', [LabourForecastController::class, 'updateTemplateAllowances'])->name('labour-forecast.update-template-allowances');
     // Labour Forecast - Save & Workflow
     Route::post('/location/{location}/labour-forecast/save', [LabourForecastController::class, 'save'])->name('labour-forecast.save');
     Route::post('/location/{location}/labour-forecast/copy-previous', [LabourForecastController::class, 'copyFromPreviousMonth'])->name('labour-forecast.copy-previous');

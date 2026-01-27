@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AllowanceType;
 use App\Models\Location;
 use App\Models\JobSummary;
 use App\Models\LabourForecast;
 use App\Models\LabourForecastEntry;
 use App\Models\LocationPayRateTemplate;
+use App\Models\LocationTemplateAllowance;
 use App\Models\PayRateTemplate;
 use App\Models\User;
 use App\Notifications\LabourForecastStatusNotification;
@@ -114,7 +116,10 @@ class LabourForecastController extends Controller
 
         // Get configured pay rate templates for this location
         $configuredTemplates = $location->labourForecastTemplates()
-            ->with('payRateTemplate.payCategories.payCategory')
+            ->with([
+                'payRateTemplate.payCategories.payCategory',
+                'customAllowances.allowanceType',
+            ])
             ->get()
             ->map(function ($config) use ($location, $costCalculator) {
                 // Calculate cost breakdown for this template
@@ -129,6 +134,15 @@ class LabourForecastController extends Controller
                     'cost_code_prefix' => $config->cost_code_prefix,
                     'sort_order' => $config->sort_order,
                     'cost_breakdown' => $costBreakdown,
+                    'custom_allowances' => $config->customAllowances->map(fn ($a) => [
+                        'id' => $a->id,
+                        'allowance_type_id' => $a->allowance_type_id,
+                        'name' => $a->allowanceType->name,
+                        'code' => $a->allowanceType->code,
+                        'rate' => (float) $a->rate,
+                        'rate_type' => $a->rate_type,
+                        'weekly_cost' => $a->getWeeklyCost(),
+                    ]),
                 ];
             });
 
@@ -201,6 +215,18 @@ class LabourForecastController extends Controller
             }
         }
 
+        // Get available allowance types
+        $allowanceTypes = AllowanceType::active()
+            ->ordered()
+            ->get()
+            ->map(fn ($type) => [
+                'id' => $type->id,
+                'name' => $type->name,
+                'code' => $type->code,
+                'description' => $type->description,
+                'default_rate' => $type->default_rate,
+            ]);
+
         // Get current user permissions for workflow buttons
         $user = Auth::user();
         $canSubmit = $user->hasRole('admin') || $user->hasRole('backoffice') || $user->can('forecast.submit');
@@ -218,6 +244,7 @@ class LabourForecastController extends Controller
             'configuredTemplates' => $configuredTemplates,
             'availableTemplates' => $availableTemplates,
             'locationWorktypes' => $locationWorktypes,
+            'allowanceTypes' => $allowanceTypes,
             'savedForecast' => $savedData,
             'permissions' => [
                 'canSubmit' => $canSubmit,
@@ -523,6 +550,52 @@ class LabourForecastController extends Controller
         }
 
         return redirect()->back()->with('success', 'Template updated successfully.');
+    }
+
+    /**
+     * Update custom allowances for a template configuration
+     */
+    public function updateTemplateAllowances(Request $request, Location $location, LocationPayRateTemplate $template)
+    {
+        if ($template->location_id !== $location->id) {
+            abort(403);
+        }
+
+        $request->validate([
+            'allowances' => 'array',
+            'allowances.*.allowance_type_id' => 'required|exists:allowance_types,id',
+            'allowances.*.rate' => 'required|numeric|min:0',
+            'allowances.*.rate_type' => 'required|in:hourly,daily,weekly',
+        ]);
+
+        DB::transaction(function () use ($template, $request) {
+            // Get IDs of allowances being updated
+            $allowanceIds = collect($request->allowances)
+                ->pluck('allowance_type_id')
+                ->toArray();
+
+            // Remove allowances not in the update list
+            $template->allCustomAllowances()
+                ->whereNotIn('allowance_type_id', $allowanceIds)
+                ->delete();
+
+            // Add or update allowances
+            foreach ($request->allowances as $allowanceData) {
+                LocationTemplateAllowance::updateOrCreate(
+                    [
+                        'location_pay_rate_template_id' => $template->id,
+                        'allowance_type_id' => $allowanceData['allowance_type_id'],
+                    ],
+                    [
+                        'rate' => $allowanceData['rate'],
+                        'rate_type' => $allowanceData['rate_type'],
+                        'is_active' => true,
+                    ]
+                );
+            }
+        });
+
+        return redirect()->back()->with('success', 'Template allowances updated successfully.');
     }
 
     /**

@@ -31,8 +31,11 @@ class LabourCostCalculator
      */
     public function calculate(Location $location, LocationPayRateTemplate $config): array
     {
-        // Load relationships
-        $config->load('payRateTemplate.payCategories.payCategory');
+        // Load relationships including custom allowances
+        $config->load([
+            'payRateTemplate.payCategories.payCategory',
+            'customAllowances.allowanceType',
+        ]);
         $location->load('worktypes');
 
         $template = $config->payRateTemplate;
@@ -46,11 +49,14 @@ class LabourCostCalculator
         // Get allowances based on location worktypes
         $allowances = $this->calculateAllowances($location, $template);
 
+        // Get custom allowances for this template config
+        $customAllowances = $this->calculateCustomAllowances($config);
+
         // Get cost code prefix for mapping
         $costCodePrefix = $config->cost_code_prefix;
 
         // Calculate breakdown
-        return $this->buildBreakdown($baseHourlyRate, $allowances, $costCodePrefix);
+        return $this->buildBreakdown($baseHourlyRate, $allowances, $customAllowances, $costCodePrefix);
     }
 
     /**
@@ -140,6 +146,27 @@ class LabourCostCalculator
         }
 
         return $allowances;
+    }
+
+    /**
+     * Calculate custom allowances from template configuration
+     */
+    private function calculateCustomAllowances(LocationPayRateTemplate $config): array
+    {
+        $customAllowances = [];
+
+        foreach ($config->customAllowances as $allowance) {
+            $customAllowances[] = [
+                'type_id' => $allowance->allowance_type_id,
+                'name' => $allowance->allowanceType->name,
+                'code' => $allowance->allowanceType->code,
+                'rate' => (float) $allowance->rate,
+                'rate_type' => $allowance->rate_type,
+                'weekly' => $allowance->getWeeklyCost(),
+            ];
+        }
+
+        return $customAllowances;
     }
 
     /**
@@ -254,15 +281,21 @@ class LabourCostCalculator
     /**
      * Build the complete cost breakdown
      */
-    private function buildBreakdown(float $baseHourlyRate, array $allowances, ?string $costCodePrefix = null): array
+    private function buildBreakdown(float $baseHourlyRate, array $allowances, array $customAllowances = [], ?string $costCodePrefix = null): array
     {
         // Base wages (rate × 40 hours)
         $baseWeeklyWages = $baseHourlyRate * self::HOURS_PER_WEEK;
 
-        // Total allowances
-        $totalAllowances = $allowances['fares_travel']['weekly']
+        // Total standard allowances (from worktypes)
+        $totalStandardAllowances = $allowances['fares_travel']['weekly']
                         + $allowances['site']['weekly']
                         + $allowances['multistorey']['weekly'];
+
+        // Total custom allowances
+        $totalCustomAllowances = array_sum(array_column($customAllowances, 'weekly'));
+
+        // Total all allowances
+        $totalAllowances = $totalStandardAllowances + $totalCustomAllowances;
 
         // Gross wages before markups
         $grossWages = $baseWeeklyWages + $totalAllowances;
@@ -316,6 +349,16 @@ class LabourCostCalculator
                     'type' => $allowances['multistorey']['type'],
                     'weekly' => round($allowances['multistorey']['weekly'], 2),
                 ],
+                'custom' => array_map(function ($a) {
+                    return [
+                        'type_id' => $a['type_id'],
+                        'name' => $a['name'],
+                        'code' => $a['code'],
+                        'rate' => round($a['rate'], 2),
+                        'rate_type' => $a['rate_type'],
+                        'weekly' => round($a['weekly'], 2),
+                    ];
+                }, $customAllowances),
                 'total' => round($totalAllowances, 2),
             ],
 
@@ -391,6 +434,6 @@ class LabourCostCalculator
             'fares_travel' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'daily'],
             'site' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'hourly'],
             'multistorey' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'hourly'],
-        ], $costCodePrefix);
+        ], [], $costCodePrefix);
     }
 }

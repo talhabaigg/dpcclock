@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LocationPayRateTemplate extends Model
 {
@@ -33,6 +34,25 @@ class LocationPayRateTemplate extends Model
     public function payRateTemplate(): BelongsTo
     {
         return $this->belongsTo(PayRateTemplate::class);
+    }
+
+    /**
+     * Get active custom allowances for this template configuration
+     */
+    public function customAllowances(): HasMany
+    {
+        return $this->hasMany(LocationTemplateAllowance::class)
+            ->where('is_active', true)
+            ->with('allowanceType');
+    }
+
+    /**
+     * Get all custom allowances (including inactive) for this template configuration
+     */
+    public function allCustomAllowances(): HasMany
+    {
+        return $this->hasMany(LocationTemplateAllowance::class)
+            ->with('allowanceType');
     }
 
     /**
