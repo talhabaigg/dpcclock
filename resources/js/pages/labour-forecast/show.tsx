@@ -729,17 +729,18 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         );
     }, [savedForecast?.id, location.id, isSubmitting]);
 
-    // Copy from previous month handler
+    // Copy from previous forecast handler - copies entire project period from last approved forecast
     const [isCopying, setIsCopying] = useState(false);
     const handleCopyFromPrevious = useCallback(() => {
         if (isCopying) return;
-        if (!confirm('This will copy the approved forecast from the previous month. Any unsaved changes will be lost. Continue?')) return;
+        if (!confirm('This will copy headcount data from the last approved forecast to all months from current month to project finish. Any unsaved changes will be lost. Continue?')) return;
         setIsCopying(true);
         router.post(
             route('labour-forecast.copy-previous', { location: location.id }) + `?month=${selectedMonth}`,
             {},
             {
                 preserveScroll: true,
+                preserveState: false, // Force full page refresh to load new data
                 onSuccess: () => setIsCopying(false),
                 onError: () => setIsCopying(false),
             },
@@ -1868,7 +1869,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                 size="sm"
                                 onClick={handleCopyFromPrevious}
                                 disabled={isCopying}
-                                title="Copy headcount from previous month's approved forecast"
+                                title="Copy headcount from last approved forecast for all project months"
                             >
                                 {isCopying ? (
                                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />

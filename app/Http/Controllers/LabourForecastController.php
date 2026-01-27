@@ -610,7 +610,11 @@ class LabourForecastController extends Controller
     }
 
     /**
-     * Copy forecast from previous month as starting point for current month
+     * Copy forecast from last approved forecast to current month onwards (entire project period)
+     * This copies headcount data for weeks from current month to project end.
+     * Matches entries by EXACT week_ending date to preserve the planned headcount curve.
+     * For example, if Jan's approved forecast has Feb week 1 = 8 headcount, Feb week 2 = 10 headcount,
+     * copying to February will use those exact values for those exact weeks.
      */
     public function copyFromPreviousMonth(Request $request, Location $location)
     {
@@ -618,75 +622,119 @@ class LabourForecastController extends Controller
             ? Carbon::parse($request->query('month'))->startOfMonth()
             : now()->startOfMonth();
 
-        $previousMonth = $targetMonth->copy()->subMonth()->startOfMonth();
-
-        // Find the most recent approved forecast for previous month
+        // Find the most recent approved forecast for this location (any month)
         $previousForecast = LabourForecast::where('location_id', $location->id)
-            ->where('forecast_month', $previousMonth)
             ->where('status', 'approved')
+            ->orderBy('forecast_month', 'desc')
             ->with('entries')
             ->first();
 
         if (!$previousForecast) {
-            return redirect()->back()->with('error', 'No approved forecast found for ' . $previousMonth->format('F Y') . '.');
+            return redirect()->back()->with('error', 'No approved forecast found for this location.');
         }
 
-        // Check if there's already a forecast for target month
+        // Get project end date from JobSummary
+        $jobSummary = JobSummary::where('job_number', $location->external_id)->first();
+        $projectEndDate = $jobSummary?->actual_end_date;
+
+        // Generate all weeks from target month to project end (defaults to 6 months if no end date)
+        $weeks = $this->generateWeeks($projectEndDate, $targetMonth);
+        $weekEndingDates = collect($weeks)->pluck('weekEnding')->toArray();
+
+        // Index ALL entries from the previous forecast by template_id + week_ending date
+        // This preserves the planned headcount curve by matching exact week dates
+        $entriesByTemplateAndWeek = [];
+        foreach ($previousForecast->entries as $entry) {
+            $templateId = $entry->location_pay_rate_template_id;
+            $weekEndingKey = $entry->week_ending->format('Y-m-d');
+
+            // Store entry indexed by template and week_ending for exact matching
+            if (!isset($entriesByTemplateAndWeek[$templateId])) {
+                $entriesByTemplateAndWeek[$templateId] = [];
+            }
+            $entriesByTemplateAndWeek[$templateId][$weekEndingKey] = $entry;
+        }
+
+        if (empty($entriesByTemplateAndWeek)) {
+            return redirect()->back()->with('error', 'No forecast entries found in the previous approved forecast.');
+        }
+
+        // Check if target month already has a non-draft forecast
         $existingForecast = LabourForecast::where('location_id', $location->id)
             ->where('forecast_month', $targetMonth)
+            ->where('status', '!=', 'draft')
             ->first();
 
-        if ($existingForecast && $existingForecast->status !== 'draft') {
-            return redirect()->back()->with('error', 'Cannot overwrite a submitted or approved forecast.');
+        if ($existingForecast) {
+            return redirect()->back()->with('error', 'Cannot overwrite submitted or approved forecast for ' . $targetMonth->format('F Y'));
         }
 
         $user = Auth::user();
         $costCalculator = new LabourCostCalculator();
         $location->load('worktypes');
 
-        DB::transaction(function () use ($location, $user, $targetMonth, $previousForecast, $costCalculator) {
-            // Create or get draft forecast for target month
-            $newForecast = LabourForecast::updateOrCreate(
-                [
-                    'location_id' => $location->id,
-                    'forecast_month' => $targetMonth,
-                ],
-                [
-                    'notes' => 'Copied from ' . $previousForecast->forecast_month->format('F Y'),
-                    'created_by' => $user->id,
-                    'status' => 'draft',
-                ]
-            );
+        // Get configured templates for this location
+        $configuredTemplates = LocationPayRateTemplate::where('location_id', $location->id)
+            ->where('is_active', true)
+            ->with('payRateTemplate.payCategories.payCategory')
+            ->get();
 
-            // Clear existing entries
+        // Create or get draft forecast for the target month
+        // All entries from target month to project end will be stored in this ONE forecast
+        $newForecast = LabourForecast::updateOrCreate(
+            [
+                'location_id' => $location->id,
+                'forecast_month' => $targetMonth,
+            ],
+            [
+                'notes' => 'Copied from ' . $previousForecast->forecast_month->format('F Y') . ' forecast',
+                'created_by' => $user->id,
+                'status' => 'draft',
+            ]
+        );
+
+        $entriesCreated = 0;
+
+        DB::transaction(function () use ($newForecast, $location, $weekEndingDates, $entriesByTemplateAndWeek, $costCalculator, $configuredTemplates, &$entriesCreated) {
+            // Clear existing entries for this forecast
             $newForecast->entries()->delete();
 
-            // Copy entries with shifted dates
-            foreach ($previousForecast->entries as $entry) {
-                // Shift week ending forward by the number of days between months
-                $newWeekEnding = $entry->week_ending->copy()->addMonth();
+            // Copy entries for each template and ALL weeks from target month to project end
+            // Match by EXACT week_ending date to preserve the planned headcount curve
+            foreach ($configuredTemplates as $templateConfig) {
+                $templateEntries = $entriesByTemplateAndWeek[$templateConfig->id] ?? [];
 
-                // Recalculate cost breakdown (rates may have changed)
-                $templateConfig = LocationPayRateTemplate::with('payRateTemplate.payCategories.payCategory')
-                    ->find($entry->location_pay_rate_template_id);
+                foreach ($weekEndingDates as $weekEnding) {
+                    // Look up the EXACT matching week_ending from the previous forecast
+                    $previousEntry = $templateEntries[$weekEnding] ?? null;
 
-                if (!$templateConfig) continue;
+                    // Only create entry if there was data for this exact week in the previous forecast
+                    if ($previousEntry && ($previousEntry->headcount > 0 || ($previousEntry->overtime_hours ?? 0) > 0)) {
+                        // Recalculate cost with overtime if applicable
+                        $costBreakdownWithOT = $costCalculator->calculateWithOvertime(
+                            $location,
+                            $templateConfig,
+                            $previousEntry->headcount,
+                            $previousEntry->overtime_hours ?? 0
+                        );
 
-                $costBreakdown = $costCalculator->calculate($location, $templateConfig);
-
-                LabourForecastEntry::create([
-                    'labour_forecast_id' => $newForecast->id,
-                    'location_pay_rate_template_id' => $entry->location_pay_rate_template_id,
-                    'week_ending' => $newWeekEnding,
-                    'headcount' => $entry->headcount,
-                    'hourly_rate' => $costBreakdown['base_hourly_rate'],
-                    'weekly_cost' => $costBreakdown['total_weekly_cost'],
-                    'cost_breakdown_snapshot' => $costBreakdown,
-                ]);
+                        LabourForecastEntry::create([
+                            'labour_forecast_id' => $newForecast->id,
+                            'location_pay_rate_template_id' => $templateConfig->id,
+                            'week_ending' => Carbon::parse($weekEnding),
+                            'headcount' => $previousEntry->headcount,
+                            'overtime_hours' => $previousEntry->overtime_hours ?? 0,
+                            'hourly_rate' => $costBreakdownWithOT['base_hourly_rate'],
+                            'weekly_cost' => $costBreakdownWithOT['total_weekly_cost'],
+                            'cost_breakdown_snapshot' => $costBreakdownWithOT,
+                        ]);
+                        $entriesCreated++;
+                    }
+                }
             }
         });
 
-        return redirect()->back()->with('success', 'Forecast copied from ' . $previousMonth->format('F Y') . '. Review and save to confirm.');
+        return redirect()->back()->with('success', "Forecast data copied from {$previousForecast->forecast_month->format('F Y')}. {$entriesCreated} entries created. Review and save to confirm.");
     }
 
     /**
