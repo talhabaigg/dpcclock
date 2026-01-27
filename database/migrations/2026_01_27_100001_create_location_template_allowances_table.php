@@ -17,11 +17,16 @@ return new class extends Migration
 
         Schema::create('location_template_allowances', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('location_pay_rate_template_id')
-                ->constrained('location_pay_rate_templates')
+            $table->unsignedBigInteger('location_pay_rate_template_id');
+            $table->unsignedBigInteger('allowance_type_id');
+
+            $table->foreign('location_pay_rate_template_id', 'loc_tpl_allow_template_fk')
+                ->references('id')
+                ->on('location_pay_rate_templates')
                 ->cascadeOnDelete();
-            $table->foreignId('allowance_type_id')
-                ->constrained('allowance_types')
+            $table->foreign('allowance_type_id', 'loc_tpl_allow_type_fk')
+                ->references('id')
+                ->on('allowance_types')
                 ->cascadeOnDelete();
             $table->decimal('rate', 10, 2);
             $table->enum('rate_type', ['hourly', 'daily', 'weekly'])->default('hourly');
