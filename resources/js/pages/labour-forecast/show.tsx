@@ -128,6 +128,7 @@ interface AllowanceType {
 interface WeekEntry {
     headcount: number;
     overtime_hours: number;
+    leave_hours: number;
 }
 
 interface SavedForecast {
@@ -181,7 +182,8 @@ interface RowData {
     isTotal?: boolean;
     isCostRow?: boolean;
     isOvertimeRow?: boolean;
-    parentTemplateId?: string; // For overtime rows, links to parent template
+    isLeaveRow?: boolean;
+    parentTemplateId?: string; // For overtime/leave rows, links to parent template
     [key: string]: string | number | boolean | undefined | null;
 }
 
@@ -303,6 +305,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         return savedWeekData.overtime_hours ?? 0;
     };
 
+    // Helper to extract leave hours from saved data
+    const getLeaveFromSaved = (savedWeekData: WeekEntry | number | undefined): number => {
+        if (savedWeekData === undefined) return 0;
+        if (typeof savedWeekData === 'number') return 0; // Old format has no leave
+        return savedWeekData.leave_hours ?? 0;
+    };
+
     // Initialize row data with work types (and saved data if available)
     // Creates both regular rows and overtime rows for each work type (if overtime enabled)
     const [rowData, setRowData] = useState<RowData[]>(() => {
@@ -339,6 +348,20 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 });
                 rows.push(otRow);
             }
+
+            // Always create leave row (for forecasting leave periods - oncosts only)
+            const leaveRow: RowData = {
+                id: `${wt.id}_leave`,
+                workType: `${wt.name} (Leave Hrs)`,
+                hourlyRate: null, // No wage rate - wages paid from accruals
+                isLeaveRow: true,
+                parentTemplateId: wt.id,
+            };
+            weeks.forEach((week) => {
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                leaveRow[week.key] = getLeaveFromSaved(savedWeekData);
+            });
+            rows.push(leaveRow);
         });
         return rows;
     });
@@ -385,6 +408,24 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         newRows.push(otRow);
                     }
                 }
+
+                // Always handle leave row
+                const existingLeaveRow = prevRows.find((r) => r.id === `${wt.id}_leave`);
+                if (existingLeaveRow) {
+                    newRows.push({ ...existingLeaveRow, workType: `${wt.name} (Leave Hrs)` });
+                } else {
+                    const leaveRow: RowData = {
+                        id: `${wt.id}_leave`,
+                        workType: `${wt.name} (Leave Hrs)`,
+                        hourlyRate: null,
+                        isLeaveRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        leaveRow[week.key] = 0;
+                    });
+                    newRows.push(leaveRow);
+                }
             });
             return newRows;
         });
@@ -392,10 +433,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
     // Calculate totals and cost rows
     const rowDataWithTotals = useMemo(() => {
-        // Get only headcount rows (not overtime rows)
-        const headcountRows = rowData.filter((r) => !r.isOvertimeRow);
+        // Get only headcount rows (not overtime or leave rows)
+        const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow);
 
-        // Total headcount row (excludes overtime rows)
+        // Total headcount row (excludes overtime and leave rows)
         const totalRow: RowData = {
             id: 'total',
             workType: 'Total Headcount',
@@ -412,12 +453,24 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             isTotal: true,
             isOvertimeRow: true,
         };
-        const overtimeRows = rowData.filter((r) => r.isOvertimeRow);
+        const overtimeRows = rowData.filter((r) => r.isOvertimeRow && !r.isTotal);
         weeks.forEach((week) => {
             totalOtRow[week.key] = overtimeRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
-        // Total weekly cost row (headcount × weekly cost + overtime calculation)
+        // Total leave hours row
+        const totalLeaveRow: RowData = {
+            id: 'total_leave',
+            workType: 'Total Leave Hours',
+            isTotal: true,
+            isLeaveRow: true,
+        };
+        const leaveRows = rowData.filter((r) => r.isLeaveRow && !r.isTotal);
+        weeks.forEach((week) => {
+            totalLeaveRow[week.key] = leaveRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
+
+        // Total weekly cost row (headcount × weekly cost + overtime + leave oncosts)
         // Note: This is a simplified calculation - actual cost comes from backend
         const costRow: RowData = {
             id: 'cost',
@@ -433,27 +486,40 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
                 const otHours = otRow ? Number(otRow[week.key]) || 0 : 0;
                 const baseHourlyRate = row.hourlyRate || 0;
+                // Find corresponding leave row
+                const leaveRow = rowData.find((r) => r.id === `${row.id}_leave`);
+                const leaveHours = leaveRow ? Number(leaveRow[week.key]) || 0 : 0;
 
-                // Estimate: base cost + overtime premium (simplified)
+                // Estimate: base cost + overtime premium + leave oncosts (simplified)
                 // Actual calculation happens on backend with full oncost logic
                 const baseCost = headcount * weeklyCost;
                 const otCost = otHours * baseHourlyRate * 2 * 1.14; // Rough estimate with markups
-                totalCost += baseCost + otCost;
+                // Leave: ~$15/hr oncosts estimate (super + BERT/BEWT/CIPQ)
+                const leaveOncosts = leaveHours * 15;
+                totalCost += baseCost + otCost + leaveOncosts;
             });
             costRow[week.key] = Math.round(totalCost * 100) / 100;
         });
 
-        // Only include overtime total row if there are overtime-enabled work types
+        // Build result with appropriate total rows
+        const result = [...rowData, totalRow];
         if (overtimeRows.length > 0) {
-            return [...rowData, totalRow, totalOtRow, costRow];
+            result.push(totalOtRow);
         }
-        return [...rowData, totalRow, costRow];
+        if (leaveRows.length > 0) {
+            result.push(totalLeaveRow);
+        }
+        result.push(costRow);
+        return result;
     }, [rowData, weeks]);
 
     // Row class for total and cost row styling (dark mode support)
     const getRowClass = useCallback((params: { data: RowData }) => {
         if (params.data?.isTotal && params.data?.isOvertimeRow) {
             return 'bg-orange-100 dark:bg-orange-900/30 font-semibold text-orange-700 dark:text-orange-300';
+        }
+        if (params.data?.isTotal && params.data?.isLeaveRow) {
+            return 'bg-purple-100 dark:bg-purple-900/30 font-semibold text-purple-700 dark:text-purple-300';
         }
         if (params.data?.isTotal) {
             return 'bg-gray-100 dark:bg-gray-700 font-semibold';
@@ -463,6 +529,9 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         }
         if (params.data?.isOvertimeRow) {
             return 'bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300';
+        }
+        if (params.data?.isLeaveRow) {
+            return 'bg-purple-50 dark:bg-purple-900/10 text-purple-700 dark:text-purple-300';
         }
         return '';
     }, []);
@@ -615,14 +684,16 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
         setIsSaving(true);
 
-        // Build entries structure: { configId: { weeks: [ { week_ending, headcount, overtime_hours } ] } }
+        // Build entries structure: { configId: { weeks: [ { week_ending, headcount, overtime_hours, leave_hours } ] } }
         const entries = configuredTemplates.map((template) => {
             const row = rowData.find((r) => r.id === `template_${template.template_id}`);
             const otRow = rowData.find((r) => r.id === `template_${template.template_id}_ot`);
+            const leaveRow = rowData.find((r) => r.id === `template_${template.template_id}_leave`);
             const weekData = weeks.map((week) => ({
                 week_ending: week.weekEnding,
                 headcount: row ? Number(row[week.key]) || 0 : 0,
                 overtime_hours: otRow ? Number(otRow[week.key]) || 0 : 0,
+                leave_hours: leaveRow ? Number(leaveRow[week.key]) || 0 : 0,
             }));
             return {
                 template_id: template.id,

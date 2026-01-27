@@ -44,19 +44,21 @@ class LabourCostCalculator
     }
 
     /**
-     * Calculate cost breakdown with support for decimal headcount and overtime
+     * Calculate cost breakdown with support for decimal headcount, overtime, and leave
      *
      * @param Location $location The location
      * @param LocationPayRateTemplate $config The pay rate template configuration
      * @param float $headcount Number of workers (can be decimal, e.g., 0.4 for 2 days)
      * @param float $overtimeHours Total overtime hours
+     * @param float $leaveHours Total leave hours (for oncosts only - wages paid from accruals)
      * @return array Cost breakdown
      */
     public function calculateWithOvertime(
         Location $location,
         LocationPayRateTemplate $config,
         float $headcount = 1.0,
-        float $overtimeHours = 0.0
+        float $overtimeHours = 0.0,
+        float $leaveHours = 0.0
     ): array {
         // Load relationships including custom allowances
         $config->load([
@@ -82,14 +84,15 @@ class LabourCostCalculator
         // Get cost code prefix for mapping
         $costCodePrefix = $config->cost_code_prefix;
 
-        // Calculate breakdown with headcount and overtime support
+        // Calculate breakdown with headcount, overtime, and leave support
         return $this->buildBreakdownWithOvertime(
             $baseHourlyRate,
             $allowances,
             $customAllowances,
             $costCodePrefix,
             $headcount,
-            $overtimeHours
+            $overtimeHours,
+            $leaveHours
         );
     }
 
@@ -427,8 +430,13 @@ class LabourCostCalculator
     }
 
     /**
-     * Build cost breakdown with overtime support
+     * Build cost breakdown with overtime and leave support
      * Uses oncosts from database and calculates based on hours
+     *
+     * Leave Hours Logic:
+     * - When workers are on leave, wages are paid from accruals (NOT job costed)
+     * - However, oncosts (super, BERT, BEWT, CIPQ, payroll tax, workcover) ARE still job costed
+     * - So for leave hours, we calculate oncosts only, no wages
      */
     private function buildBreakdownWithOvertime(
         float $baseHourlyRate,
@@ -436,11 +444,13 @@ class LabourCostCalculator
         array $customAllowances = [],
         ?string $costCodePrefix = null,
         float $headcount = 1.0,
-        float $overtimeHours = 0.0
+        float $overtimeHours = 0.0,
+        float $leaveHours = 0.0
     ): array {
         // Calculate hours
         $ordinaryHours = $headcount * self::HOURS_PER_WEEK;
-        $totalHours = $ordinaryHours + $overtimeHours;
+        $workedHours = $ordinaryHours + $overtimeHours;
+        $totalHours = $workedHours + $leaveHours; // Include leave for oncosts calculation
 
         // ==========================================
         // ORDINARY HOURS CALCULATION
@@ -520,7 +530,9 @@ class LabourCostCalculator
         }
 
         // ==========================================
-        // ONCOSTS (from database, only on ordinary hours)
+        // ONCOSTS (from database)
+        // For worked hours: calculate oncosts on ordinary + overtime
+        // For leave hours: only fixed oncosts apply (wages paid from accruals)
         // ==========================================
 
         $oncosts = $this->getOncosts();
@@ -528,7 +540,11 @@ class LabourCostCalculator
         $percentageOncostsTotal = 0;
         $oncostDetails = [];
 
-        // Calculate taxable base for percentage oncosts
+        // Leave oncosts (fixed oncosts only - percentage oncosts don't apply as no wages)
+        $leaveOncostsTotal = 0;
+        $leaveOncostDetails = [];
+
+        // Calculate taxable base for percentage oncosts (worked hours only)
         // For percentage oncosts, we need to add super first
         $superOncost = collect($oncosts)->firstWhere('code', 'SUPER');
         $superAmount = 0;
@@ -544,11 +560,11 @@ class LabourCostCalculator
 
             // Check if this oncost applies to overtime
             if ($oncost['applies_to_overtime'] && $overtimeHours > 0) {
-                $hours = $totalHours;
+                $hours = $workedHours;
             }
 
             if ($oncost['is_percentage']) {
-                // Percentage-based oncost (on taxable base)
+                // Percentage-based oncost (on taxable base) - only for worked hours
                 $amount = $taxableBase * (float) $oncost['percentage_rate'];
                 $percentageOncostsTotal += $amount;
             } else {
@@ -568,13 +584,36 @@ class LabourCostCalculator
             ];
         }
 
+        // Calculate leave oncosts (only fixed oncosts apply to leave hours)
+        // When workers are on leave, wages come from accruals, but oncosts are still job costed
+        if ($leaveHours > 0) {
+            foreach ($oncosts as $oncost) {
+                // Only fixed (hourly) oncosts apply to leave hours
+                // Percentage oncosts don't apply because there are no wages being paid
+                if (!$oncost['is_percentage']) {
+                    $leaveAmount = (float) $oncost['hourly_rate'] * $leaveHours;
+                    $leaveOncostsTotal += $leaveAmount;
+
+                    $leaveOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'hourly_rate' => round((float) $oncost['hourly_rate'], 4),
+                        'hours' => round($leaveHours, 2),
+                        'amount' => round($leaveAmount, 2),
+                    ];
+                }
+            }
+        }
+
         $totalOncosts = $fixedOncostsTotal + $percentageOncostsTotal;
+        $totalOncostsIncludingLeave = $totalOncosts + $leaveOncostsTotal;
 
         // ==========================================
         // TOTALS
         // ==========================================
 
-        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $totalOncosts;
+        // Total cost includes worked hours wages + oncosts + leave oncosts (no leave wages - those come from accruals)
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $totalOncostsIncludingLeave;
 
         // Build cost code mappings
         $costCodes = $this->buildCostCodeMappings($costCodePrefix);
@@ -584,6 +623,8 @@ class LabourCostCalculator
             'headcount' => round($headcount, 2),
             'ordinary_hours' => round($ordinaryHours, 2),
             'overtime_hours' => round($overtimeHours, 2),
+            'leave_hours' => round($leaveHours, 2),
+            'worked_hours' => round($workedHours, 2),
             'total_hours' => round($totalHours, 2),
 
             'ordinary' => [
@@ -629,11 +670,24 @@ class LabourCostCalculator
                 'marked_up' => round($overtimeMarkedUp, 2),
             ],
 
+            // Leave hours: wages paid from accruals (not job costed), but oncosts ARE job costed
+            'leave' => [
+                'hours' => round($leaveHours, 2),
+                'wages' => 0, // Wages come from accruals, not job costed
+                'oncosts' => [
+                    'items' => $leaveOncostDetails,
+                    'total' => round($leaveOncostsTotal, 2),
+                ],
+                'total_cost' => round($leaveOncostsTotal, 2), // Only oncosts for leave hours
+            ],
+
             'oncosts' => [
                 'items' => $oncostDetails,
                 'fixed_total' => round($fixedOncostsTotal, 2),
                 'percentage_total' => round($percentageOncostsTotal, 2),
-                'total' => round($totalOncosts, 2),
+                'worked_hours_total' => round($totalOncosts, 2),
+                'leave_hours_total' => round($leaveOncostsTotal, 2),
+                'total' => round($totalOncostsIncludingLeave, 2),
             ],
 
             'leave_markups' => [

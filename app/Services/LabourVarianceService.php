@@ -18,12 +18,32 @@ class LabourVarianceService
      *
      * @param Location $location The location to analyze
      * @param Carbon $targetMonth The month to get actuals for (e.g., January 2026)
+     * @param int|null $forecastId Optional specific forecast ID to compare against
      * @return array Variance data including forecast, actuals, and calculated variances
      */
-    public function getVarianceData(Location $location, Carbon $targetMonth): array
+    public function getVarianceData(Location $location, Carbon $targetMonth, ?int $forecastId = null): array
     {
-        // Find the most recent approved forecast BEFORE the target month
-        $baselineForecast = $this->getBaselineForecast($location, $targetMonth);
+        // Get the forecast to compare against
+        if ($forecastId) {
+            // Use specific forecast if provided
+            $baselineForecast = LabourForecast::where('id', $forecastId)
+                ->where('location_id', $location->id)
+                ->with(['approver', 'creator', 'entries.template.payRateTemplate'])
+                ->first();
+
+            if (!$baselineForecast) {
+                return [
+                    'success' => false,
+                    'error' => 'Forecast not found',
+                    'baseline_forecast' => null,
+                    'variances' => [],
+                    'summary' => null,
+                ];
+            }
+        } else {
+            // Find the most recent approved forecast BEFORE the target month (original behavior)
+            $baselineForecast = $this->getBaselineForecast($location, $targetMonth);
+        }
 
         if (!$baselineForecast) {
             return [
@@ -45,15 +65,20 @@ class LabourVarianceService
                 'baseline_forecast' => [
                     'id' => $baselineForecast->id,
                     'month' => $baselineForecast->forecast_month->format('F Y'),
+                    'status' => $baselineForecast->status,
                     'approved_at' => $baselineForecast->approved_at?->format('d M Y'),
+                    'created_by' => $baselineForecast->creator?->name,
                 ],
                 'variances' => [],
                 'summary' => null,
             ];
         }
 
-        // Get actual hours from Clock records
+        // Get actual hours from Clock records (worked hours only, excludes leave)
         $actualHours = $this->getActualHours($location, $targetMonth);
+
+        // Get leave hours from Clock records (leave hours where wages are from accrual but oncosts are job costed)
+        $leaveHours = $this->getLeaveHours($location, $targetMonth);
 
         // Get actual costs from JobCostDetail
         $actualCosts = $this->getActualCosts($location, $targetMonth);
@@ -68,7 +93,8 @@ class LabourVarianceService
         $locationIds = $this->getLocationIds($location);
 
         // Build variance data by week and template
-        $variances = $this->buildVarianceData($forecastEntries, $actualHours, $actualCosts);
+        // Pass leave hours to calculate adjusted oncosts (oncosts are job costed even for leave hours)
+        $variances = $this->buildVarianceData($forecastEntries, $actualHours, $actualCosts, $leaveHours);
 
         // Calculate summary totals
         $summary = $this->calculateSummary($variances);
@@ -79,8 +105,10 @@ class LabourVarianceService
             'baseline_forecast' => [
                 'id' => $baselineForecast->id,
                 'month' => $baselineForecast->forecast_month->format('F Y'),
+                'status' => $baselineForecast->status,
                 'approved_at' => $baselineForecast->approved_at?->format('d M Y'),
                 'approved_by' => $baselineForecast->approver?->name,
+                'created_by' => $baselineForecast->creator?->name,
             ],
             'target_month' => $targetMonth->format('F Y'),
             'variances' => $variances,
@@ -92,6 +120,10 @@ class LabourVarianceService
                 'cost_items_in_db' => $uniqueCostItems,
                 'actual_costs_by_week' => $actualCosts->map(fn($week) => $week->pluck('total_amount', 'cost_item'))->toArray(),
                 'actual_hours_by_week' => $actualHours->map(fn($week) => [
+                    'total_hours' => round((float) $week->total_hours, 2),
+                    'unique_employees' => $week->unique_employees,
+                ])->toArray(),
+                'leave_hours_by_week' => $leaveHours->map(fn($week) => [
                     'total_hours' => round((float) $week->total_hours, 2),
                     'unique_employees' => $week->unique_employees,
                 ])->toArray(),
@@ -109,7 +141,7 @@ class LabourVarianceService
             ->where('status', 'approved')
             ->where('forecast_month', '<', $targetMonth->copy()->startOfMonth())
             ->orderBy('forecast_month', 'desc')
-            ->with(['approver', 'entries.template.payRateTemplate'])
+            ->with(['approver', 'creator', 'entries.template.payRateTemplate'])
             ->first();
     }
 
@@ -145,7 +177,8 @@ class LabourVarianceService
     }
 
     /**
-     * Worktypes to exclude from actual hours (leave, RDO, public holidays)
+     * Worktypes to exclude from actual worked hours (leave, RDO, public holidays)
+     * These are non-productive hours where wages are paid from accruals, not job costed
      */
     private function getExcludedWorktypePatterns(): array
     {
@@ -155,6 +188,54 @@ class LabourVarianceService
             '%public holiday%',
             '%not worked%',
         ];
+    }
+
+    /**
+     * Worktypes that are leave (wages from accrual, but oncosts still job costed)
+     */
+    private function getLeaveWorktypePatterns(): array
+    {
+        return [
+            '%leave%',  // Annual leave, personal/carer's leave, etc.
+        ];
+    }
+
+    /**
+     * Get leave hours from Clock records, grouped by week ending
+     * These are hours where wages are paid from accruals (not job costed)
+     * but oncosts ARE still job costed to the project
+     */
+    private function getLeaveHours(Location $location, Carbon $targetMonth): Collection
+    {
+        $startOfMonth = $targetMonth->copy()->startOfMonth();
+        $endOfMonth = $targetMonth->copy()->endOfMonth();
+
+        // Get all location IDs (main + sublocations)
+        $locationIds = $this->getLocationIds($location);
+
+        // Get clock records for leave worktypes only
+        $query = Clock::join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+            ->whereIn('clocks.eh_location_id', $locationIds)
+            ->where('clocks.status', 'processed')
+            ->whereNotNull('clocks.clock_out')
+            ->whereBetween('clocks.clock_out', [$startOfMonth, $endOfMonth]);
+
+        // Only include leave worktypes
+        $query->where(function ($q) {
+            foreach ($this->getLeaveWorktypePatterns() as $pattern) {
+                $q->orWhere('worktypes.name', 'LIKE', $pattern);
+            }
+        });
+
+        return $query->select([
+                DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(8 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
+                DB::raw('SUM(clocks.hours_worked) as total_hours'),
+                DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
+                DB::raw('COUNT(*) as clock_count'),
+            ])
+            ->groupBy('week_ending')
+            ->get()
+            ->keyBy('week_ending');
     }
 
     /**
@@ -303,8 +384,17 @@ class LabourVarianceService
 
     /**
      * Build the variance data structure
+     *
+     * Leave Adjustment Logic:
+     * - When workers take leave (annual leave, personal/carer's leave):
+     *   - Wages are paid from accruals, NOT job costed
+     *   - Oncosts (super, BERT, BEWT, CIPQ, payroll tax, workcover) ARE still job costed
+     * - This means actual costs will show lower wages but same/higher oncosts when leave is taken
+     * - To provide accurate comparison:
+     *   - For wages: compare against expected wages for WORKED hours only
+     *   - For oncosts: compare against expected oncosts for TOTAL hours (worked + leave)
      */
-    private function buildVarianceData(Collection $forecastEntries, Collection $actualHours, Collection $actualCosts): array
+    private function buildVarianceData(Collection $forecastEntries, Collection $actualHours, Collection $actualCosts, Collection $leaveHours): array
     {
         $variances = [];
 
@@ -325,18 +415,30 @@ class LabourVarianceService
                     'headcount_variance_pct' => 0,
                     'forecast_hours' => 0,
                     'actual_hours' => 0,
+                    'forecast_leave_hours' => 0, // Forecasted leave hours (from forecast entries)
+                    'actual_leave_hours' => 0, // Actual leave hours (from clock records)
+                    'leave_hours' => 0, // Actual leave hours (for backward compatibility)
+                    'total_hours' => 0, // worked + leave
                     'hours_variance' => 0,
                     'hours_variance_pct' => 0,
                     'forecast_cost' => 0,
                     'actual_cost' => 0,
                     'cost_variance' => 0,
                     'cost_variance_pct' => 0,
+                    // Leave-adjusted metrics
+                    'adjusted_forecast_cost' => 0, // Expected cost accounting for leave (no wages, but oncosts)
+                    'adjusted_cost_variance' => 0,
+                    'adjusted_cost_variance_pct' => 0,
                 ],
             ];
 
             // Get actual hours for this week
             $weekActualHours = $actualHours->get($weekEnding);
+            $weekLeaveHours = $leaveHours->get($weekEnding);
             $weekActualCosts = $actualCosts->get($weekEnding) ?? collect();
+
+            // Calculate leave hours
+            $leaveHoursThisWeek = round((float) ($weekLeaveHours->total_hours ?? 0), 2);
 
             foreach ($weekEntries as $entry) {
                 $template = $entry->template;
@@ -393,11 +495,20 @@ class LabourVarianceService
                 $weekData['totals']['forecast_hours'] += $forecastHours;
                 $weekData['totals']['forecast_cost'] += $forecastCost;
                 $weekData['totals']['actual_cost'] += $actualCost;
+
+                // Accumulate forecasted leave hours from forecast entries
+                $weekData['totals']['forecast_leave_hours'] += (float) ($entry->leave_hours ?? 0);
             }
 
             // Set actual hours and headcount at week level (shared across templates)
             $weekData['totals']['actual_hours'] = round((float) ($weekActualHours->total_hours ?? 0), 2);
             $weekData['totals']['actual_headcount'] = $weekActualHours->unique_employees ?? 0;
+
+            // Set leave hours - both forecasted (from entries) and actual (from clock records)
+            $weekData['totals']['forecast_leave_hours'] = round($weekData['totals']['forecast_leave_hours'], 2);
+            $weekData['totals']['actual_leave_hours'] = $leaveHoursThisWeek;
+            $weekData['totals']['leave_hours'] = $leaveHoursThisWeek; // backward compatibility
+            $weekData['totals']['total_hours'] = $weekData['totals']['actual_hours'] + $leaveHoursThisWeek;
 
             // Calculate week-level headcount variance
             $weekData['totals']['headcount_variance'] = $weekData['totals']['actual_headcount'] - $weekData['totals']['forecast_headcount'];
@@ -405,7 +516,7 @@ class LabourVarianceService
                 ? round(($weekData['totals']['headcount_variance'] / $weekData['totals']['forecast_headcount']) * 100, 1)
                 : 0;
 
-            // Calculate week-level hours variance
+            // Calculate week-level hours variance (worked hours only, not including leave)
             $weekData['totals']['hours_variance'] = round($weekData['totals']['actual_hours'] - $weekData['totals']['forecast_hours'], 2);
             $weekData['totals']['hours_variance_pct'] = $weekData['totals']['forecast_hours'] > 0
                 ? round(($weekData['totals']['hours_variance'] / $weekData['totals']['forecast_hours']) * 100, 1)
@@ -425,30 +536,40 @@ class LabourVarianceService
 
     /**
      * Build cost code breakdown with forecast vs actual for each cost item
+     * Categorizes items as 'wages' or 'oncosts' for clear display
+     *
+     * Understanding leave impact:
+     * - When workers are on leave, wages are paid from accruals (NOT job costed)
+     * - But oncosts (super, BERT, BEWT, CIPQ, payroll tax, workcover) ARE still job costed
+     * - This means if actual wages < forecast but oncosts match, workers may have been on leave
      */
-    private function buildCostCodeBreakdown(array $costBreakdown, array $costCodes, Collection $weekCosts, int $headcount): array
+    private function buildCostCodeBreakdown(array $costBreakdown, array $costCodes, Collection $weekCosts, float $headcount): array
     {
         $breakdown = [];
 
-        // Wages
+        // Wages (marked up gross wages including leave loading)
+        // Note: Wages will be LOWER than forecast if workers were on leave
         if ($costCodes['wages'] ?? null) {
             $forecastAmount = ($costBreakdown['marked_up_wages'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['wages']);
             $breakdown[] = [
                 'label' => 'Wages',
+                'category' => 'wages',
                 'cost_code' => $costCodes['wages'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
                 'variance' => round($actualAmount - $forecastAmount, 2),
+                'note' => $actualAmount < $forecastAmount * 0.9 ? 'Lower wages may indicate leave (wages paid from accruals)' : null,
             ];
         }
 
-        // Super
+        // Super (oncost - still paid during leave)
         if ($costCodes['super'] ?? null) {
             $forecastAmount = ($costBreakdown['super'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['super']);
             $breakdown[] = [
                 'label' => 'Super',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['super'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
@@ -456,12 +577,13 @@ class LabourVarianceService
             ];
         }
 
-        // BERT
+        // BERT (oncost - still paid during leave)
         if ($costCodes['bert'] ?? null) {
             $forecastAmount = ($costBreakdown['on_costs']['bert'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['bert']);
             $breakdown[] = [
                 'label' => 'BERT',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['bert'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
@@ -469,12 +591,13 @@ class LabourVarianceService
             ];
         }
 
-        // BEWT
+        // BEWT (oncost - still paid during leave)
         if ($costCodes['bewt'] ?? null) {
             $forecastAmount = ($costBreakdown['on_costs']['bewt'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['bewt']);
             $breakdown[] = [
                 'label' => 'BEWT',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['bewt'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
@@ -482,12 +605,13 @@ class LabourVarianceService
             ];
         }
 
-        // CIPQ
+        // CIPQ (oncost - still paid during leave)
         if ($costCodes['cipq'] ?? null) {
             $forecastAmount = ($costBreakdown['on_costs']['cipq'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['cipq']);
             $breakdown[] = [
                 'label' => 'CIPQ',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['cipq'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
@@ -495,12 +619,13 @@ class LabourVarianceService
             ];
         }
 
-        // Payroll Tax
+        // Payroll Tax (oncost - still paid during leave)
         if ($costCodes['payroll_tax'] ?? null) {
             $forecastAmount = ($costBreakdown['on_costs']['payroll_tax'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['payroll_tax']);
             $breakdown[] = [
                 'label' => 'Payroll Tax',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['payroll_tax'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),
@@ -508,12 +633,13 @@ class LabourVarianceService
             ];
         }
 
-        // WorkCover
+        // WorkCover (oncost - still paid during leave)
         if ($costCodes['workcover'] ?? null) {
             $forecastAmount = ($costBreakdown['on_costs']['workcover'] ?? 0) * $headcount;
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['workcover']);
             $breakdown[] = [
                 'label' => 'WorkCover',
+                'category' => 'oncosts',
                 'cost_code' => $costCodes['workcover'],
                 'forecast' => round($forecastAmount, 2),
                 'actual' => round($actualAmount, 2),

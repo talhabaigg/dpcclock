@@ -13,6 +13,7 @@ class LabourForecastEntry extends Model
         'week_ending',
         'headcount',
         'overtime_hours',
+        'leave_hours',
         'hourly_rate',
         'weekly_cost',
         'cost_breakdown_snapshot',
@@ -22,6 +23,7 @@ class LabourForecastEntry extends Model
         'week_ending' => 'date',
         'headcount' => 'decimal:2',
         'overtime_hours' => 'decimal:2',
+        'leave_hours' => 'decimal:2',
         'hourly_rate' => 'decimal:2',
         'weekly_cost' => 'decimal:2',
         'cost_breakdown_snapshot' => 'array',
@@ -68,11 +70,19 @@ class LabourForecastEntry extends Model
     }
 
     /**
-     * Get total hours (ordinary + overtime)
+     * Get worked hours (ordinary + overtime, excludes leave)
+     */
+    public function getWorkedHours(): float
+    {
+        return $this->getOrdinaryHours() + (float) ($this->overtime_hours ?? 0);
+    }
+
+    /**
+     * Get total hours (ordinary + overtime + leave)
      */
     public function getTotalHours(): float
     {
-        return $this->getOrdinaryHours() + (float) ($this->overtime_hours ?? 0);
+        return $this->getWorkedHours() + (float) ($this->leave_hours ?? 0);
     }
 
     /**
@@ -81,5 +91,13 @@ class LabourForecastEntry extends Model
     public function getOvertimeHours(): float
     {
         return (float) ($this->overtime_hours ?? 0);
+    }
+
+    /**
+     * Get leave hours (for oncosts calculation only - wages paid from accruals)
+     */
+    public function getLeaveHours(): float
+    {
+        return (float) ($this->leave_hours ?? 0);
     }
 }

@@ -8,10 +8,12 @@ import { useMemo } from 'react';
 
 interface CostCodeBreakdownItem {
     label: string;
+    category: 'wages' | 'oncosts';
     cost_code: string;
     forecast: number;
     actual: number;
     variance: number;
+    note?: string | null;
 }
 
 interface TemplateVariance {
@@ -36,6 +38,10 @@ interface WeekTotals {
     headcount_variance_pct: number;
     forecast_hours: number;
     actual_hours: number;
+    forecast_leave_hours: number;
+    actual_leave_hours: number;
+    leave_hours: number; // backward compatibility (same as actual_leave_hours)
+    total_hours: number;
     hours_variance: number;
     hours_variance_pct: number;
     forecast_cost: number;
@@ -93,13 +99,29 @@ interface VarianceData {
     baseline_forecast: {
         id: number;
         month: string;
+        status: string;
         approved_at: string | null;
         approved_by?: string | null;
+        created_by?: string | null;
     } | null;
     target_month?: string;
     variances: WeekVariance[];
     summary: Summary | null;
     debug?: DebugInfo;
+}
+
+interface AvailableForecast {
+    id: number;
+    month: string;
+    month_label: string;
+    status: string;
+    created_by: string | null;
+    approved_at: string | null;
+}
+
+interface AvailableActualMonth {
+    value: string;
+    label: string;
 }
 
 interface LabourForecastVarianceProps {
@@ -109,11 +131,13 @@ interface LabourForecastVarianceProps {
         job_number: string;
     };
     targetMonth: string;
+    selectedForecastId: number | null;
     varianceData: VarianceData;
-    availableMonths: string[];
+    availableForecasts: AvailableForecast[];
+    availableActualMonths: AvailableActualMonth[];
 }
 
-const LabourForecastVariance = ({ location, targetMonth, varianceData, availableMonths }: LabourForecastVarianceProps) => {
+const LabourForecastVariance = ({ location, targetMonth, selectedForecastId, varianceData, availableForecasts, availableActualMonths }: LabourForecastVarianceProps) => {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Labour Forecast', href: '/labour-forecast' },
         { title: location.name, href: `/location/${location.id}/labour-forecast/show` },
@@ -147,7 +171,20 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
         return { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/30', icon: ArrowDown, label: 'Under' };
     };
 
-    // Month navigation
+    // Navigate to a specific actual month and/or forecast
+    const navigate = (newMonth?: string, newForecastId?: number | null) => {
+        const params: Record<string, string | number> = {};
+        if (newMonth) params.month = newMonth;
+        else params.month = targetMonth;
+        if (newForecastId !== undefined) {
+            if (newForecastId !== null) params.forecast_id = newForecastId;
+        } else if (selectedForecastId) {
+            params.forecast_id = selectedForecastId;
+        }
+        router.get(route('labour-forecast.variance', { location: location.id }), params, { preserveScroll: true });
+    };
+
+    // Month navigation (prev/next buttons)
     const navigateMonth = (direction: 'prev' | 'next') => {
         const [year, month] = targetMonth.split('-').map(Number);
         const date = new Date(year, month - 1, 1);
@@ -157,13 +194,25 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
             date.setMonth(date.getMonth() + 1);
         }
         const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        router.get(route('labour-forecast.variance', { location: location.id }), { month: newMonth }, { preserveScroll: true });
+        navigate(newMonth);
     };
 
     const formatMonthDisplay = (monthStr: string) => {
         const [year, month] = monthStr.split('-').map(Number);
         const date = new Date(year, month - 1, 1);
         return date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    };
+
+    // Get status badge color
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'approved':
+                return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case 'submitted':
+                return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+            default:
+                return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+        }
     };
 
     // Calculate overall status
@@ -179,23 +228,79 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="p-4 space-y-6">
                 {/* Header */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-xl font-semibold">{location.name}</h1>
-                        <p className="text-sm text-slate-500">Forecast vs Actuals Variance Report</p>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h1 className="text-xl font-semibold">{location.name}</h1>
+                            <p className="text-sm text-slate-500">Forecast vs Actuals Variance Report</p>
+                        </div>
                     </div>
 
-                    {/* Month Navigation */}
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('prev')}>
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <div className="min-w-[140px] text-center">
-                            <span className="font-medium">{formatMonthDisplay(targetMonth)}</span>
+                    {/* Selectors Row */}
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                        {/* Actuals Month Selector */}
+                        <div className="flex-1">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                Actuals Month
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => navigateMonth('prev')}>
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Select
+                                    value={targetMonth}
+                                    onValueChange={(value) => navigate(value)}
+                                >
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue>{formatMonthDisplay(targetMonth)}</SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableActualMonths.map((month) => (
+                                            <SelectItem key={month.value} value={month.value}>
+                                                {month.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => navigateMonth('next')}>
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('next')}>
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
+
+                        {/* Forecast Selector */}
+                        <div className="flex-1">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                Compare Against Forecast
+                            </label>
+                            <Select
+                                value={selectedForecastId?.toString() || 'auto'}
+                                onValueChange={(value) => navigate(undefined, value === 'auto' ? null : parseInt(value))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue>
+                                        {selectedForecastId
+                                            ? availableForecasts.find(f => f.id === selectedForecastId)?.month_label || 'Select forecast'
+                                            : 'Auto (latest approved before actuals month)'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="auto">
+                                        <span className="text-slate-500">Auto (latest approved before actuals month)</span>
+                                    </SelectItem>
+                                    {availableForecasts.map((forecast) => (
+                                        <SelectItem key={forecast.id} value={forecast.id.toString()}>
+                                            <div className="flex items-center gap-2">
+                                                <span>{forecast.month_label}</span>
+                                                <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusBadge(forecast.status)}`}>
+                                                    {forecast.status}
+                                                </span>
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
 
@@ -226,8 +331,16 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
                                 Comparing <span className="font-medium text-slate-900 dark:text-slate-100">{varianceData.target_month}</span> actuals
                                 against forecast from{' '}
                                 <span className="font-medium text-slate-900 dark:text-slate-100">{varianceData.baseline_forecast?.month}</span>
+                                {varianceData.baseline_forecast?.status && (
+                                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${getStatusBadge(varianceData.baseline_forecast.status)}`}>
+                                        {varianceData.baseline_forecast.status}
+                                    </span>
+                                )}
                                 {varianceData.baseline_forecast?.approved_by && (
                                     <span className="text-slate-500"> (approved by {varianceData.baseline_forecast.approved_by})</span>
+                                )}
+                                {varianceData.baseline_forecast?.status === 'draft' && varianceData.baseline_forecast?.created_by && (
+                                    <span className="text-slate-500"> (created by {varianceData.baseline_forecast.created_by})</span>
                                 )}
                             </p>
                         </div>
@@ -374,96 +487,208 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
                             </div>
                         </div>
 
-                        {/* Weekly Breakdown Table */}
+                        {/* Weekly Breakdown - Split into 4 clear sections */}
                         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
                             <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                                 <h2 className="font-semibold">Weekly Breakdown</h2>
                             </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-slate-50 dark:bg-slate-900">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Week Ending</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">F/cast HC</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actual HC</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">HC Var</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">F/cast Hrs</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actual Hrs</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Hrs Var</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">F/cast Cost</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actual Cost</th>
-                                            <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Cost Var</th>
-                                            <th className="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                                        {varianceData.variances.map((week) => {
-                                            const indicator = getVarianceIndicator(week.totals.cost_variance, week.totals.cost_variance_pct);
-                                            const headcountIndicator = getVarianceIndicator(week.totals.headcount_variance, week.totals.headcount_variance_pct);
-                                            const Icon = indicator.icon;
-                                            return (
-                                                <tr key={week.week_ending} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                                    <td className="px-4 py-3 font-medium">{week.week_ending_formatted}</td>
-                                                    <td className="px-4 py-3 text-right">{week.totals.forecast_headcount}</td>
-                                                    <td className="px-4 py-3 text-right">{week.totals.actual_headcount}</td>
-                                                    <td className={`px-4 py-3 text-right ${headcountIndicator.color}`}>
-                                                        {week.totals.headcount_variance > 0 ? '+' : ''}{week.totals.headcount_variance}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">{week.totals.forecast_hours.toLocaleString()}</td>
-                                                    <td className="px-4 py-3 text-right">{week.totals.actual_hours.toLocaleString()}</td>
-                                                    <td className={`px-4 py-3 text-right ${week.totals.hours_variance > 0 ? 'text-red-600 dark:text-red-400' : week.totals.hours_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                                                        {week.totals.hours_variance > 0 ? '+' : ''}{week.totals.hours_variance.toLocaleString()}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">{formatCurrency(week.totals.forecast_cost)}</td>
-                                                    <td className="px-4 py-3 text-right">{formatCurrency(week.totals.actual_cost)}</td>
-                                                    <td className={`px-4 py-3 text-right font-medium ${indicator.color}`}>
-                                                        {week.totals.cost_variance > 0 ? '+' : ''}{formatCurrency(week.totals.cost_variance)}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${indicator.bgColor} ${indicator.color}`}>
-                                                            <Icon className="h-3 w-3" />
-                                                            {week.totals.cost_variance_pct > 0 ? '+' : ''}{week.totals.cost_variance_pct}%
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                    <tfoot className="bg-slate-100 dark:bg-slate-900 font-semibold">
-                                        <tr>
-                                            <td className="px-4 py-3">Avg / Total</td>
-                                            <td className="px-4 py-3 text-right">{varianceData.summary.avg_forecast_headcount}</td>
-                                            <td className="px-4 py-3 text-right">{varianceData.summary.avg_actual_headcount}</td>
-                                            <td className={`px-4 py-3 text-right ${varianceData.summary.avg_headcount_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.avg_headcount_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                                                {varianceData.summary.avg_headcount_variance > 0 ? '+' : ''}{varianceData.summary.avg_headcount_variance}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">{varianceData.summary.total_forecast_hours.toLocaleString()}</td>
-                                            <td className="px-4 py-3 text-right">{varianceData.summary.total_actual_hours.toLocaleString()}</td>
-                                            <td className={`px-4 py-3 text-right ${varianceData.summary.total_hours_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.total_hours_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                                                {varianceData.summary.total_hours_variance > 0 ? '+' : ''}{varianceData.summary.total_hours_variance.toLocaleString()}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">{formatCurrency(varianceData.summary.total_forecast_cost)}</td>
-                                            <td className="px-4 py-3 text-right">{formatCurrency(varianceData.summary.total_actual_cost)}</td>
-                                            <td className={`px-4 py-3 text-right ${varianceData.summary.total_cost_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.total_cost_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                                                {varianceData.summary.total_cost_variance > 0 ? '+' : ''}{formatCurrency(varianceData.summary.total_cost_variance)}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getVarianceIndicator(varianceData.summary.total_cost_variance, varianceData.summary.total_cost_variance_pct).bgColor} ${getVarianceIndicator(varianceData.summary.total_cost_variance, varianceData.summary.total_cost_variance_pct).color}`}>
-                                                    {varianceData.summary.total_cost_variance_pct > 0 ? '+' : ''}{varianceData.summary.total_cost_variance_pct}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+                                {/* Section 1: Headcount Comparison */}
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200">Headcount</h3>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 dark:bg-slate-900">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Week</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">F/cast</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Actual</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Var</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {varianceData.variances.map((week) => {
+                                                const indicator = getVarianceIndicator(week.totals.headcount_variance, week.totals.headcount_variance_pct);
+                                                return (
+                                                    <tr key={week.week_ending} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                        <td className="px-3 py-2 text-xs font-medium">{week.week_ending_formatted}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{week.totals.forecast_headcount}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{week.totals.actual_headcount}</td>
+                                                        <td className={`px-3 py-2 text-right text-xs font-medium ${indicator.color}`}>
+                                                            {week.totals.headcount_variance > 0 ? '+' : ''}{week.totals.headcount_variance}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-slate-100 dark:bg-slate-900 font-semibold">
+                                            <tr>
+                                                <td className="px-3 py-2 text-xs">Avg</td>
+                                                <td className="px-3 py-2 text-right text-xs">{varianceData.summary.avg_forecast_headcount}</td>
+                                                <td className="px-3 py-2 text-right text-xs">{varianceData.summary.avg_actual_headcount}</td>
+                                                <td className={`px-3 py-2 text-right text-xs ${varianceData.summary.avg_headcount_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.avg_headcount_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                                    {varianceData.summary.avg_headcount_variance > 0 ? '+' : ''}{varianceData.summary.avg_headcount_variance}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                {/* Section 2: Worked Hours Comparison (excludes leave) */}
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Worked Hours</h3>
+                                        <p className="text-xs text-emerald-600 dark:text-emerald-400">Excludes leave</p>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 dark:bg-slate-900">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Week</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">F/cast</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Actual</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Var</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {varianceData.variances.map((week) => {
+                                                const hoursVar = week.totals.actual_hours - week.totals.forecast_hours;
+                                                return (
+                                                    <tr key={week.week_ending} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                        <td className="px-3 py-2 text-xs font-medium">{week.week_ending_formatted}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{week.totals.forecast_hours.toLocaleString()}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{week.totals.actual_hours.toLocaleString()}</td>
+                                                        <td className={`px-3 py-2 text-right text-xs font-medium ${hoursVar > 0 ? 'text-red-600 dark:text-red-400' : hoursVar < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                                            {hoursVar > 0 ? '+' : ''}{hoursVar.toLocaleString()}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-slate-100 dark:bg-slate-900 font-semibold">
+                                            <tr>
+                                                <td className="px-3 py-2 text-xs">Total</td>
+                                                <td className="px-3 py-2 text-right text-xs">{varianceData.summary.total_forecast_hours.toLocaleString()}</td>
+                                                <td className="px-3 py-2 text-right text-xs">{varianceData.summary.total_actual_hours.toLocaleString()}</td>
+                                                <td className={`px-3 py-2 text-right text-xs ${varianceData.summary.total_hours_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.total_hours_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                                    {varianceData.summary.total_hours_variance > 0 ? '+' : ''}{varianceData.summary.total_hours_variance.toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                {/* Section 3: Leave Hours Comparison */}
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <div className="bg-purple-50 dark:bg-purple-900/30 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-sm font-semibold text-purple-800 dark:text-purple-200">Leave Hours</h3>
+                                        <p className="text-xs text-purple-600 dark:text-purple-400">Oncosts job costed, wages from accruals</p>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 dark:bg-slate-900">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Week</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">F/cast</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Actual</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Var</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {varianceData.variances.map((week) => {
+                                                const leaveVar = (week.totals.actual_leave_hours || 0) - (week.totals.forecast_leave_hours || 0);
+                                                return (
+                                                    <tr key={week.week_ending} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                        <td className="px-3 py-2 text-xs font-medium">{week.week_ending_formatted}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">
+                                                            {(week.totals.forecast_leave_hours || 0) > 0 ? week.totals.forecast_leave_hours.toLocaleString() : '-'}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right text-xs">
+                                                            {(week.totals.actual_leave_hours || 0) > 0 ? week.totals.actual_leave_hours.toLocaleString() : '-'}
+                                                        </td>
+                                                        <td className={`px-3 py-2 text-right text-xs font-medium ${leaveVar !== 0 ? 'text-purple-600 dark:text-purple-400' : ''}`}>
+                                                            {leaveVar !== 0 ? (leaveVar > 0 ? '+' : '') + leaveVar.toLocaleString() : '-'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-slate-100 dark:bg-slate-900 font-semibold">
+                                            {(() => {
+                                                const totalForecastLeave = varianceData.variances.reduce((sum, w) => sum + (w.totals.forecast_leave_hours || 0), 0);
+                                                const totalActualLeave = varianceData.variances.reduce((sum, w) => sum + (w.totals.actual_leave_hours || 0), 0);
+                                                const totalLeaveVar = totalActualLeave - totalForecastLeave;
+                                                return (
+                                                    <tr>
+                                                        <td className="px-3 py-2 text-xs">Total</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{totalForecastLeave > 0 ? totalForecastLeave.toLocaleString() : '-'}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{totalActualLeave > 0 ? totalActualLeave.toLocaleString() : '-'}</td>
+                                                        <td className={`px-3 py-2 text-right text-xs ${totalLeaveVar !== 0 ? 'text-purple-600 dark:text-purple-400' : ''}`}>
+                                                            {totalLeaveVar !== 0 ? (totalLeaveVar > 0 ? '+' : '') + totalLeaveVar.toLocaleString() : '-'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })()}
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                {/* Section 4: Cost Comparison */}
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <div className="bg-amber-50 dark:bg-amber-900/30 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Cost</h3>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 dark:bg-slate-900">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Week</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">F/cast</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Actual</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">Var</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {varianceData.variances.map((week) => {
+                                                const indicator = getVarianceIndicator(week.totals.cost_variance, week.totals.cost_variance_pct);
+                                                return (
+                                                    <tr key={week.week_ending} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                        <td className="px-3 py-2 text-xs font-medium">{week.week_ending_formatted}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{formatCurrency(week.totals.forecast_cost)}</td>
+                                                        <td className="px-3 py-2 text-right text-xs">{formatCurrency(week.totals.actual_cost)}</td>
+                                                        <td className={`px-3 py-2 text-right text-xs font-medium ${indicator.color}`}>
+                                                            {week.totals.cost_variance > 0 ? '+' : ''}{formatCurrency(week.totals.cost_variance)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-slate-100 dark:bg-slate-900 font-semibold">
+                                            <tr>
+                                                <td className="px-3 py-2 text-xs">Total</td>
+                                                <td className="px-3 py-2 text-right text-xs">{formatCurrency(varianceData.summary.total_forecast_cost)}</td>
+                                                <td className="px-3 py-2 text-right text-xs">{formatCurrency(varianceData.summary.total_actual_cost)}</td>
+                                                <td className={`px-3 py-2 text-right text-xs ${varianceData.summary.total_cost_variance > 0 ? 'text-red-600 dark:text-red-400' : varianceData.summary.total_cost_variance < 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                                    {varianceData.summary.total_cost_variance > 0 ? '+' : ''}{formatCurrency(varianceData.summary.total_cost_variance)}
+                                                    <span className="ml-1 text-[10px] opacity-75">({varianceData.summary.total_cost_variance_pct > 0 ? '+' : ''}{varianceData.summary.total_cost_variance_pct}%)</span>
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Cost Code Breakdown */}
+                        {/* Cost Code Breakdown - Wages vs Oncosts */}
                         {varianceData.variances.length > 0 && (
                             <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
                                 <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-                                    <h2 className="font-semibold">Cost Code Breakdown</h2>
-                                    <p className="text-xs text-slate-500 mt-1">Forecast vs Actual by cost code - helps identify productivity issues (e.g., oncosts still paid during sick leave)</p>
+                                    <h2 className="font-semibold">Cost Breakdown: Wages vs Oncosts</h2>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 mr-2">Wages</span>
+                                        Not job costed during leave (paid from accruals)
+                                        <span className="inline-block px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 mx-2">Oncosts</span>
+                                        Always job costed (even during leave)
+                                    </p>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
@@ -472,6 +697,7 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
                                                 <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Week</th>
                                                 <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Template</th>
                                                 <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Cost Item</th>
+                                                <th className="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">Type</th>
                                                 <th className="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">Code</th>
                                                 <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Forecast</th>
                                                 <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actual</th>
@@ -482,18 +708,40 @@ const LabourForecastVariance = ({ location, targetMonth, varianceData, available
                                             {varianceData.variances.flatMap((week) =>
                                                 week.templates.flatMap((template, tIdx) =>
                                                     (template.cost_code_breakdown || []).map((item, idx) => (
-                                                        <tr key={`${week.week_ending}-${template.template_id}-${item.cost_code}`} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                        <tr
+                                                            key={`${week.week_ending}-${template.template_id}-${item.cost_code}`}
+                                                            className={`hover:bg-slate-50 dark:hover:bg-slate-900/50 ${item.category === 'wages' ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}
+                                                        >
                                                             {tIdx === 0 && idx === 0 && (
-                                                                <td className="px-4 py-2 font-medium" rowSpan={week.templates.reduce((sum, t) => sum + (t.cost_code_breakdown?.length || 0), 0)}>
-                                                                    {week.week_ending_formatted}
+                                                                <td className="px-4 py-2 font-medium align-top" rowSpan={week.templates.reduce((sum, t) => sum + (t.cost_code_breakdown?.length || 0), 0)}>
+                                                                    <div>{week.week_ending_formatted}</div>
+                                                                    {((week.totals.forecast_leave_hours || 0) > 0 || (week.totals.actual_leave_hours || 0) > 0) && (
+                                                                        <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                                                            F: {week.totals.forecast_leave_hours || 0}h / A: {week.totals.actual_leave_hours || 0}h leave
+                                                                        </div>
+                                                                    )}
                                                                 </td>
                                                             )}
                                                             {idx === 0 && (
-                                                                <td className="px-4 py-2" rowSpan={template.cost_code_breakdown?.length || 1}>
+                                                                <td className="px-4 py-2 align-top" rowSpan={template.cost_code_breakdown?.length || 1}>
                                                                     {template.template_name}
                                                                 </td>
                                                             )}
-                                                            <td className="px-4 py-2">{item.label}</td>
+                                                            <td className="px-4 py-2">
+                                                                <div>{item.label}</div>
+                                                                {item.note && (
+                                                                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{item.note}</div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-2 text-center">
+                                                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                                                    item.category === 'wages'
+                                                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                        : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                                                }`}>
+                                                                    {item.category === 'wages' ? 'Wages' : 'Oncost'}
+                                                                </span>
+                                                            </td>
                                                             <td className="px-4 py-2 text-center">
                                                                 <code className="text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                                                                     {item.cost_code}

@@ -215,6 +215,7 @@ class LabourForecastController extends Controller
                 $savedData['entries'][$templateId]['weeks'][$entry->week_ending->format('Y-m-d')] = [
                     'headcount' => (float) $entry->headcount,
                     'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
+                    'leave_hours' => (float) ($entry->leave_hours ?? 0),
                 ];
             }
         }
@@ -271,6 +272,7 @@ class LabourForecastController extends Controller
             'entries.*.weeks.*.week_ending' => 'required|date',
             'entries.*.weeks.*.headcount' => 'required|numeric|min:0|max:100',
             'entries.*.weeks.*.overtime_hours' => 'nullable|numeric|min:0|max:200',
+            'entries.*.weeks.*.leave_hours' => 'nullable|numeric|min:0|max:200',
         ]);
 
         $user = Auth::user();
@@ -311,15 +313,17 @@ class LabourForecastController extends Controller
                 foreach ($entryData['weeks'] as $weekData) {
                     $headcount = (float) $weekData['headcount'];
                     $overtimeHours = (float) ($weekData['overtime_hours'] ?? 0);
+                    $leaveHours = (float) ($weekData['leave_hours'] ?? 0);
 
-                    // Only create entry if there's headcount or overtime
-                    if ($headcount > 0 || $overtimeHours > 0) {
-                        // Calculate cost breakdown with overtime support
+                    // Only create entry if there's headcount, overtime, or leave hours
+                    if ($headcount > 0 || $overtimeHours > 0 || $leaveHours > 0) {
+                        // Calculate cost breakdown with overtime and leave support
                         $costBreakdown = $costCalculator->calculateWithOvertime(
                             $location,
                             $templateConfig,
                             $headcount,
-                            $overtimeHours
+                            $overtimeHours,
+                            $leaveHours
                         );
 
                         LabourForecastEntry::create([
@@ -328,6 +332,7 @@ class LabourForecastController extends Controller
                             'week_ending' => Carbon::parse($weekData['week_ending']),
                             'headcount' => $headcount,
                             'overtime_hours' => $overtimeHours,
+                            'leave_hours' => $leaveHours,
                             'hourly_rate' => $costBreakdown['base_hourly_rate'],
                             'weekly_cost' => $costBreakdown['total_weekly_cost'],
                             'cost_breakdown_snapshot' => $costBreakdown,
@@ -709,13 +714,14 @@ class LabourForecastController extends Controller
                     $previousEntry = $templateEntries[$weekEnding] ?? null;
 
                     // Only create entry if there was data for this exact week in the previous forecast
-                    if ($previousEntry && ($previousEntry->headcount > 0 || ($previousEntry->overtime_hours ?? 0) > 0)) {
-                        // Recalculate cost with overtime if applicable
+                    if ($previousEntry && ($previousEntry->headcount > 0 || ($previousEntry->overtime_hours ?? 0) > 0 || ($previousEntry->leave_hours ?? 0) > 0)) {
+                        // Recalculate cost with overtime and leave if applicable
                         $costBreakdownWithOT = $costCalculator->calculateWithOvertime(
                             $location,
                             $templateConfig,
                             $previousEntry->headcount,
-                            $previousEntry->overtime_hours ?? 0
+                            $previousEntry->overtime_hours ?? 0,
+                            $previousEntry->leave_hours ?? 0
                         );
 
                         LabourForecastEntry::create([
@@ -724,6 +730,7 @@ class LabourForecastController extends Controller
                             'week_ending' => Carbon::parse($weekEnding),
                             'headcount' => $previousEntry->headcount,
                             'overtime_hours' => $previousEntry->overtime_hours ?? 0,
+                            'leave_hours' => $previousEntry->leave_hours ?? 0,
                             'hourly_rate' => $costBreakdownWithOT['base_hourly_rate'],
                             'weekly_cost' => $costBreakdownWithOT['total_weekly_cost'],
                             'cost_breakdown_snapshot' => $costBreakdownWithOT,
@@ -780,23 +787,53 @@ class LabourForecastController extends Controller
      */
     public function variance(Request $request, Location $location)
     {
-        // Determine which month to analyze (default to current month)
+        // Determine which month to analyze actuals for (default to current month)
         $targetMonth = $request->query('month')
             ? Carbon::parse($request->query('month'))->startOfMonth()
             : now()->startOfMonth();
 
+        // Get forecast ID to compare against (optional - if not provided, uses latest approved before target month)
+        $forecastId = $request->query('forecast_id') ? (int) $request->query('forecast_id') : null;
+
         // Get variance data
         $varianceService = new LabourVarianceService();
-        $varianceData = $varianceService->getVarianceData($location, $targetMonth);
+        $varianceData = $varianceService->getVarianceData($location, $targetMonth, $forecastId);
 
-        // Get available months for navigation (months with approved forecasts)
-        $availableMonths = LabourForecast::where('location_id', $location->id)
-            ->where('status', 'approved')
+        // Get all forecasts for this location (for the forecast selector)
+        // Include draft, submitted, and approved - user can compare against any
+        $availableForecasts = LabourForecast::where('location_id', $location->id)
             ->orderBy('forecast_month', 'desc')
-            ->pluck('forecast_month')
-            ->map(fn ($month) => $month->format('Y-m'))
-            ->unique()
-            ->values();
+            ->with('creator')
+            ->get()
+            ->map(fn ($forecast) => [
+                'id' => $forecast->id,
+                'month' => $forecast->forecast_month->format('Y-m'),
+                'month_label' => $forecast->forecast_month->format('F Y'),
+                'status' => $forecast->status,
+                'created_by' => $forecast->creator?->name,
+                'approved_at' => $forecast->approved_at?->format('d M Y'),
+            ]);
+
+        // Get unique months that have actuals data (for the actuals month selector)
+        // This includes any month from first forecast to current month
+        $firstForecast = LabourForecast::where('location_id', $location->id)
+            ->orderBy('forecast_month', 'asc')
+            ->first();
+
+        $availableActualMonths = [];
+        if ($firstForecast) {
+            $startMonth = $firstForecast->forecast_month->copy()->startOfMonth();
+            $endMonth = now()->startOfMonth();
+            $currentMonth = $startMonth->copy();
+
+            while ($currentMonth <= $endMonth) {
+                $availableActualMonths[] = [
+                    'value' => $currentMonth->format('Y-m'),
+                    'label' => $currentMonth->format('F Y'),
+                ];
+                $currentMonth->addMonth();
+            }
+        }
 
         return Inertia::render('labour-forecast/variance', [
             'location' => [
@@ -805,8 +842,10 @@ class LabourForecastController extends Controller
                 'job_number' => $location->external_id,
             ],
             'targetMonth' => $targetMonth->format('Y-m'),
+            'selectedForecastId' => $forecastId,
             'varianceData' => $varianceData,
-            'availableMonths' => $availableMonths,
+            'availableForecasts' => $availableForecasts,
+            'availableActualMonths' => array_reverse($availableActualMonths), // Most recent first
         ]);
     }
 }
