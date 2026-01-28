@@ -9,6 +9,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { BarChart3, Building2, DollarSign, MapPin, TrendingUp, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { buildLabourForecastColumnDefs } from './column-builders';
+import { CostBreakdownDialog } from './CostBreakdownDialog';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -38,6 +39,10 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+
+    // Cost breakdown dialog state
+    const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState<{ id: number; name: string } | null>(null);
 
     // Calculate summary stats focused on operational metrics
     const stats = useMemo(() => {
@@ -83,6 +88,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
         }).format(value);
+    };
+
+    const handleCostClick = (locationId: number, locationName: string) => {
+        setSelectedLocation({ id: locationId, name: locationName });
+        setCostBreakdownOpen(true);
     };
 
     return (
@@ -255,7 +265,7 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                                 }
                             >
                                 <AgGridReact
-                                    columnDefs={buildLabourForecastColumnDefs()}
+                                    columnDefs={buildLabourForecastColumnDefs(handleCostClick)}
                                     rowData={filteredLocations}
                                     defaultColDef={{
                                         resizable: true,
@@ -270,6 +280,17 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                         )}
                     </CardContent>
                 </Card>
+
+                {/* Cost Breakdown Dialog */}
+                {selectedLocation && (
+                    <CostBreakdownDialog
+                        open={costBreakdownOpen}
+                        onOpenChange={setCostBreakdownOpen}
+                        locationId={selectedLocation.id}
+                        locationName={selectedLocation.name}
+                        weekEnding={currentWeekEnding}
+                    />
+                )}
             </div>
         </AppLayout>
     );

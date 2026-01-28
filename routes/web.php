@@ -464,6 +464,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/labour-forecast', [LabourForecastController::class, 'index'])->name('labour-forecast.index');
     Route::get('/location/{location}/labour-forecast/show', [LabourForecastController::class, 'show'])->name('labour-forecast.show');
     Route::get('/location/{location}/labour-forecast/variance', [LabourForecastController::class, 'variance'])->name('labour-forecast.variance');
+    Route::get('/location/{location}/labour-forecast/cost-breakdown', [LabourForecastController::class, 'getCostBreakdown'])->name('labour-forecast.cost-breakdown');
+    Route::post('/location/{location}/labour-forecast/calculate-weekly-cost', [LabourForecastController::class, 'calculateWeeklyCost'])->name('labour-forecast.calculate-weekly-cost');
     Route::post('/location/{location}/labour-forecast/templates', [LabourForecastController::class, 'updateTemplates'])->name('labour-forecast.update-templates');
     Route::post('/location/{location}/labour-forecast/templates/add', [LabourForecastController::class, 'addTemplate'])->name('labour-forecast.add-template');
     Route::delete('/location/{location}/labour-forecast/templates/{template}', [LabourForecastController::class, 'removeTemplate'])->name('labour-forecast.remove-template');

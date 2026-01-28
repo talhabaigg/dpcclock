@@ -500,6 +500,10 @@ class LabourCostCalculator
         $overtimeTotalAllowances = 0;
         $overtimeGross = 0;
         $overtimeMarkedUp = 0;
+        $overtimeSiteAllowance = 0;
+        $overtimeMultistorey = 0;
+        $overtimeAccrualsBase = 0;
+        $overtimeWithAnnualLeave = 0;
 
         if ($overtimeHours > 0) {
             // Base wages for overtime (2x rate)
@@ -525,8 +529,15 @@ class LabourCostCalculator
             $overtimeGross = $overtimeBaseWages + $overtimeTotalAllowances;
 
             // Apply leave markups to overtime
-            $overtimeWithAnnualLeave = $overtimeGross * (1 + self::ANNUAL_LEAVE_ACCRUAL);
-            $overtimeMarkedUp = $overtimeWithAnnualLeave * (1 + self::LEAVE_LOADING);
+            // IMPORTANT: Accruals are based on base rate (NOT doubled) + allowances
+            // Even though wages are paid at 2x, accruals are calculated on the base rate
+            $overtimeAccrualsBase = ($overtimeHours * $baseHourlyRate) + $overtimeTotalAllowances;
+            $overtimeAnnualLeaveAmount = $overtimeAccrualsBase * self::ANNUAL_LEAVE_ACCRUAL;
+            $overtimeWithAnnualLeave = $overtimeAccrualsBase + $overtimeAnnualLeaveAmount;
+            $overtimeLeaveLoadingAmount = $overtimeWithAnnualLeave * self::LEAVE_LOADING;
+
+            // Total marked up = wages (2x) + allowances + accruals
+            $overtimeMarkedUp = $overtimeGross + $overtimeAnnualLeaveAmount + $overtimeLeaveLoadingAmount;
         }
 
         // ==========================================
@@ -546,13 +557,15 @@ class LabourCostCalculator
 
         // Calculate taxable base for percentage oncosts (worked hours only)
         // For percentage oncosts, we need to add super first
+        // Super is typically only on ordinary hours (OTE), not overtime
         $superOncost = collect($oncosts)->firstWhere('code', 'SUPER');
         $superAmount = 0;
         if ($superOncost && !$superOncost['is_percentage']) {
             $superAmount = (float) $superOncost['hourly_rate'] * $ordinaryHours;
         }
 
-        $taxableBase = $ordinaryMarkedUp + $superAmount;
+        // Taxable base includes both ordinary and overtime marked up amounts + super
+        $taxableBase = $ordinaryMarkedUp + $overtimeMarkedUp + $superAmount;
 
         foreach ($oncosts as $oncost) {
             $amount = 0;
@@ -584,15 +597,38 @@ class LabourCostCalculator
             ];
         }
 
-        // Calculate leave oncosts (only fixed oncosts apply to leave hours)
-        // When workers are on leave, wages come from accruals, but oncosts are still job costed
+        // ==========================================
+        // LEAVE HOURS CALCULATION
+        // When workers are on leave:
+        // - Wages are paid from accruals (NOT job costed)
+        // - Leave markups (annual leave accrual + leave loading) ARE job costed to 03-01
+        // - Fixed oncosts (BERT, BEWT, CIPQ) ARE job costed, prorated by DAYS
+        // - Percentage oncosts (Payroll Tax, WorkCover) ARE job costed on the gross wages
+        // ==========================================
+
+        $leaveGrossWages = 0;
+        $leaveMarkupsTotal = 0;
+        $leaveFixedOncosts = 0;
+        $leavePercentageOncosts = 0;
+
         if ($leaveHours > 0) {
+            // Calculate gross wages that would be paid from accruals (not job costed)
+            // This is ONLY: leave hours × base hourly rate (NO allowances)
+            // Allowances are NOT paid when on leave - only the base rate is paid from accruals
+            $leaveGrossWages = $leaveHours * $baseHourlyRate;
+
+            // Apply leave markups (these ARE job costed to 03-01)
+            $leaveAnnualLeaveAmount = $leaveGrossWages * self::ANNUAL_LEAVE_ACCRUAL;
+            // Leave loading is calculated on gross wages only (not compounded with annual leave)
+            $leaveLoadingAmount = $leaveGrossWages * self::LEAVE_LOADING;
+            $leaveMarkupsTotal = $leaveAnnualLeaveAmount + $leaveLoadingAmount;
+
+            // Calculate fixed oncosts prorated by HOURS
+            // Each fixed oncost has an hourly rate
             foreach ($oncosts as $oncost) {
-                // Only fixed (hourly) oncosts apply to leave hours
-                // Percentage oncosts don't apply because there are no wages being paid
                 if (!$oncost['is_percentage']) {
                     $leaveAmount = (float) $oncost['hourly_rate'] * $leaveHours;
-                    $leaveOncostsTotal += $leaveAmount;
+                    $leaveFixedOncosts += $leaveAmount;
 
                     $leaveOncostDetails[] = [
                         'code' => $oncost['code'],
@@ -603,6 +639,25 @@ class LabourCostCalculator
                     ];
                 }
             }
+
+            // Calculate percentage oncosts on the gross wages paid from accruals
+            // Base for percentage oncosts is the gross wages (no super added for leave)
+            foreach ($oncosts as $oncost) {
+                if ($oncost['is_percentage']) {
+                    $leaveAmount = $leaveGrossWages * (float) $oncost['percentage_rate'];
+                    $leavePercentageOncosts += $leaveAmount;
+
+                    $leaveOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
+                        'base' => round($leaveGrossWages, 2),
+                        'amount' => round($leaveAmount, 2),
+                    ];
+                }
+            }
+
+            $leaveOncostsTotal = $leaveFixedOncosts + $leavePercentageOncosts;
         }
 
         $totalOncosts = $fixedOncostsTotal + $percentageOncostsTotal;
@@ -612,8 +667,8 @@ class LabourCostCalculator
         // TOTALS
         // ==========================================
 
-        // Total cost includes worked hours wages + oncosts + leave oncosts (no leave wages - those come from accruals)
-        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $totalOncostsIncludingLeave;
+        // Total cost includes worked hours wages + leave markups + oncosts + leave oncosts (no leave wages - those come from accruals)
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsTotal + $totalOncostsIncludingLeave;
 
         // Build cost code mappings
         $costCodes = $this->buildCostCodeMappings($costCodePrefix);
@@ -663,22 +718,48 @@ class LabourCostCalculator
                 'base_wages' => round($overtimeBaseWages, 2),
                 'multiplier' => self::OVERTIME_MULTIPLIER,
                 'effective_rate' => round($baseHourlyRate * self::OVERTIME_MULTIPLIER, 2),
-                'allowances_total' => round($overtimeTotalAllowances, 2),
+                'allowances' => [
+                    'site' => [
+                        'name' => $allowances['site']['name'],
+                        'rate' => round($allowances['site']['rate'], 2),
+                        'type' => 'hourly',
+                        'hours' => round($overtimeHours, 2),
+                        'amount' => round($overtimeSiteAllowance, 2),
+                    ],
+                    'multistorey' => [
+                        'name' => $allowances['multistorey']['name'],
+                        'rate' => round($allowances['multistorey']['rate'], 2),
+                        'type' => 'hourly',
+                        'hours' => round($overtimeHours, 2),
+                        'amount' => round($overtimeMultistorey, 2),
+                    ],
+                    'custom' => $customAllowanceDetails,
+                    'total' => round($overtimeTotalAllowances, 2),
+                ],
                 'gross' => round($overtimeGross, 2),
-                'annual_leave_markup' => round($overtimeGross * self::ANNUAL_LEAVE_ACCRUAL, 2),
-                'leave_loading_markup' => round(($overtimeGross * (1 + self::ANNUAL_LEAVE_ACCRUAL)) * self::LEAVE_LOADING, 2),
+                'accruals_base' => round($overtimeAccrualsBase ?? 0, 2), // Base rate (not doubled) + allowances
+                'annual_leave_markup' => round(($overtimeAccrualsBase ?? 0) * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                'leave_loading_markup' => round(($overtimeWithAnnualLeave ?? 0) * self::LEAVE_LOADING, 2),
                 'marked_up' => round($overtimeMarkedUp, 2),
             ],
 
-            // Leave hours: wages paid from accruals (not job costed), but oncosts ARE job costed
+            // Leave hours: wages paid from accruals (not job costed), but leave markups and oncosts ARE job costed
             'leave' => [
                 'hours' => round($leaveHours, 2),
-                'wages' => 0, // Wages come from accruals, not job costed
+                'days' => round($leaveHours / 8, 2),
+                'gross_wages' => round($leaveGrossWages, 2), // Paid from accruals, NOT job costed
+                'leave_markups' => [
+                    'annual_leave_accrual' => round($leaveGrossWages * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                    'leave_loading' => round($leaveGrossWages * self::LEAVE_LOADING, 2),
+                    'total' => round($leaveMarkupsTotal, 2), // This IS job costed to 03-01
+                ],
                 'oncosts' => [
                     'items' => $leaveOncostDetails,
+                    'fixed_total' => round($leaveFixedOncosts, 2),
+                    'percentage_total' => round($leavePercentageOncosts, 2),
                     'total' => round($leaveOncostsTotal, 2),
                 ],
-                'total_cost' => round($leaveOncostsTotal, 2), // Only oncosts for leave hours
+                'total_cost' => round($leaveMarkupsTotal + $leaveOncostsTotal, 2), // Leave markups + oncosts
             ],
 
             'oncosts' => [

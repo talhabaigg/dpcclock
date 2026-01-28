@@ -11,10 +11,12 @@ import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { BarChart3, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, DollarSign, Expand, Info, Loader2, MessageSquare, Pencil, Plus, Save, Send, Settings, Trash2, TrendingUp, Users, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { buildLabourForecastShowColumnDefs } from './column-builders';
 import { type ChartDataPoint, LabourForecastChart } from './LabourForecastChart';
 import type { Week } from './types';
+import { CostBreakdownDialog } from './CostBreakdownDialog';
+import axios from 'axios';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -179,6 +181,7 @@ interface RowData {
     hourlyRate?: number | null;
     weeklyCost?: number;
     hoursPerWeek?: number;
+    configId?: number; // Location pay rate template ID
     isTotal?: boolean;
     isCostRow?: boolean;
     isOvertimeRow?: boolean;
@@ -221,9 +224,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     const [newTemplateId, setNewTemplateId] = useState<string>('');
     const [templateSearch, setTemplateSearch] = useState('');
 
-    // Cost breakdown dialog state
+    // Cost breakdown dialog state (for template)
     const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
     const [selectedTemplateForCost, setSelectedTemplateForCost] = useState<ConfiguredTemplate | null>(null);
+
+    // Week-specific cost breakdown dialog state
+    const [weekCostBreakdownOpen, setWeekCostBreakdownOpen] = useState(false);
+    const [selectedWeekForCost, setSelectedWeekForCost] = useState<string | null>(null);
 
     // Allowance configuration dialog state
     const [allowanceDialogOpen, setAllowanceDialogOpen] = useState(false);
@@ -243,6 +250,11 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         weekIndex: number;
         workType: string;
     } | null>(null);
+
+    // Weekly cost state (calculated from backend)
+    const [weeklyCosts, setWeeklyCosts] = useState<{ [weekKey: string]: number }>({});
+    const [isCalculatingCosts, setIsCalculatingCosts] = useState(false);
+    const costCalculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Time range state with localStorage persistence
     const [timeRange, setTimeRange] = useState<TimeRange>(() => {
@@ -270,6 +282,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             weeklyCost: template.cost_breakdown.total_weekly_cost,
             hoursPerWeek: template.cost_breakdown.hours_per_week,
             overtimeEnabled: template.overtime_enabled ?? false,
+            costBreakdown: template.cost_breakdown,
         }));
     }, [configuredTemplates]);
 
@@ -324,6 +337,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 hourlyRate: wt.hourlyRate,
                 weeklyCost: wt.weeklyCost,
                 hoursPerWeek: wt.hoursPerWeek,
+                configId: wt.configId,
             };
             // Initialize week columns - use saved data if available
             const savedEntry = savedForecast?.entries?.[wt.configId];
@@ -374,7 +388,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 // Regular row
                 const existingRow = prevRows.find((r) => r.id === wt.id);
                 if (existingRow) {
-                    newRows.push({ ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek });
+                    newRows.push({ ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek, configId: wt.configId });
                 } else {
                     const row: RowData = {
                         id: wt.id,
@@ -382,6 +396,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         hourlyRate: wt.hourlyRate,
                         weeklyCost: wt.weeklyCost,
                         hoursPerWeek: wt.hoursPerWeek,
+                        configId: wt.configId,
                     };
                     weeks.forEach((week) => {
                         row[week.key] = 0;
@@ -431,6 +446,68 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         });
     }, [workTypes, weeks]);
 
+    // Calculate costs from backend when rowData changes (debounced)
+    useEffect(() => {
+        // Clear any existing timeout
+        if (costCalculationTimeoutRef.current) {
+            clearTimeout(costCalculationTimeoutRef.current);
+        }
+
+        // Debounce the cost calculation (500ms)
+        costCalculationTimeoutRef.current = setTimeout(async () => {
+            // Calculate costs for each week
+            const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow);
+            const newCosts: { [weekKey: string]: number } = {};
+
+            for (const week of weeks) {
+                // Build template data for this week
+                const templates = headcountRows
+                    .map((row) => {
+                        const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
+                        const leaveRow = rowData.find((r) => r.id === `${row.id}_leave`);
+
+                        return {
+                            template_id: row.configId,
+                            headcount: Number(row[week.key]) || 0,
+                            overtime_hours: otRow ? Number(otRow[week.key]) || 0 : 0,
+                            leave_hours: leaveRow ? Number(leaveRow[week.key]) || 0 : 0,
+                        };
+                    })
+                    .filter(t => t.template_id !== undefined && (t.headcount > 0 || t.overtime_hours > 0 || t.leave_hours > 0));
+
+                // Skip if no data for this week
+                if (templates.length === 0) {
+                    newCosts[week.key] = 0;
+                    continue;
+                }
+
+                try {
+                    setIsCalculatingCosts(true);
+                    const response = await axios.post(`/location/${location.id}/labour-forecast/calculate-weekly-cost`, {
+                        templates,
+                    });
+                    newCosts[week.key] = response.data.total_cost;
+                } catch (error: any) {
+                    console.error('Failed to calculate cost for week', week.key);
+                    console.error('Templates sent:', templates);
+                    console.error('Error response:', error.response?.data);
+                    console.error('Full error:', error);
+                    // Fallback to 0 or keep previous value
+                    newCosts[week.key] = weeklyCosts[week.key] || 0;
+                }
+            }
+
+            setWeeklyCosts(newCosts);
+            setIsCalculatingCosts(false);
+        }, 500);
+
+        return () => {
+            if (costCalculationTimeoutRef.current) {
+                clearTimeout(costCalculationTimeoutRef.current);
+            }
+        };
+    }, [rowData, weeks, location.id]);
+
     // Calculate totals and cost rows
     const rowDataWithTotals = useMemo(() => {
         // Get only headcount rows (not overtime or leave rows)
@@ -470,35 +547,15 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             totalLeaveRow[week.key] = leaveRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
-        // Total weekly cost row (headcount × weekly cost + overtime + leave oncosts)
-        // Note: This is a simplified calculation - actual cost comes from backend
+        // Total weekly cost row - uses backend-calculated costs
         const costRow: RowData = {
             id: 'cost',
             workType: 'Total Weekly Cost',
             isCostRow: true,
         };
         weeks.forEach((week) => {
-            let totalCost = 0;
-            headcountRows.forEach((row) => {
-                const headcount = Number(row[week.key]) || 0;
-                const weeklyCost = row.weeklyCost || 0;
-                // Find corresponding overtime row
-                const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
-                const otHours = otRow ? Number(otRow[week.key]) || 0 : 0;
-                const baseHourlyRate = row.hourlyRate || 0;
-                // Find corresponding leave row
-                const leaveRow = rowData.find((r) => r.id === `${row.id}_leave`);
-                const leaveHours = leaveRow ? Number(leaveRow[week.key]) || 0 : 0;
-
-                // Estimate: base cost + overtime premium + leave oncosts (simplified)
-                // Actual calculation happens on backend with full oncost logic
-                const baseCost = headcount * weeklyCost;
-                const otCost = otHours * baseHourlyRate * 2 * 1.14; // Rough estimate with markups
-                // Leave: ~$15/hr oncosts estimate (super + BERT/BEWT/CIPQ)
-                const leaveOncosts = leaveHours * 15;
-                totalCost += baseCost + otCost + leaveOncosts;
-            });
-            costRow[week.key] = Math.round(totalCost * 100) / 100;
+            // Use backend-calculated cost if available, otherwise 0
+            costRow[week.key] = weeklyCosts[week.key] || 0;
         });
 
         // Build result with appropriate total rows
@@ -511,7 +568,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         }
         result.push(costRow);
         return result;
-    }, [rowData, weeks]);
+    }, [rowData, weeks, weeklyCosts]);
 
     // Row class for total and cost row styling (dark mode support)
     const getRowClass = useCallback((params: { data: RowData }) => {
@@ -547,6 +604,17 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     // Handle cell click to track selected cell for fill operations
     const onCellClicked = useCallback(
         (event: CellClickedEvent) => {
+            // Check if clicking on cost row cell in a week column
+            if (event.data?.isCostRow && event.colDef.field?.startsWith('week_')) {
+                const weekIndex = weeks.findIndex((w) => w.key === event.colDef.field);
+                if (weekIndex !== -1) {
+                    const week = weeks[weekIndex];
+                    setSelectedWeekForCost(week.weekEnding);
+                    setWeekCostBreakdownOpen(true);
+                }
+                return;
+            }
+
             // Only track week cells that are editable
             if (!event.colDef.field?.startsWith('week_')) {
                 setSelectedCell(null);
@@ -2277,6 +2345,17 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                             />
                         </div>
                     </>
+                )}
+
+                {/* Week-specific Cost Breakdown Dialog */}
+                {selectedWeekForCost && (
+                    <CostBreakdownDialog
+                        open={weekCostBreakdownOpen}
+                        onOpenChange={setWeekCostBreakdownOpen}
+                        locationId={location.id}
+                        locationName={location.name}
+                        weekEnding={selectedWeekForCost}
+                    />
                 )}
             </div>
         </AppLayout>

@@ -68,7 +68,12 @@ class LabourForecastController extends Controller
                     });
                     foreach ($currentWeekEntries as $entry) {
                         $currentWeekHeadcount += $entry->headcount;
-                        $currentWeekCost += $entry->headcount * ($entry->weekly_cost ?? 0);
+                        // If headcount > 0, multiply by headcount (normal case)
+                        // If headcount = 0 but OT/leave hours exist, use weekly_cost as-is (special case)
+                        $entryCost = $entry->headcount > 0
+                            ? $entry->headcount * ($entry->weekly_cost ?? 0)
+                            : ($entry->weekly_cost ?? 0);
+                        $currentWeekCost += $entryCost;
                     }
                 }
 
@@ -846,6 +851,166 @@ class LabourForecastController extends Controller
             'varianceData' => $varianceData,
             'availableForecasts' => $availableForecasts,
             'availableActualMonths' => array_reverse($availableActualMonths), // Most recent first
+        ]);
+    }
+
+    /**
+     * Get detailed cost breakdown for a location and specific week
+     */
+    public function getCostBreakdown(Request $request, Location $location)
+    {
+        // Get week ending from query param or default to current week
+        $weekEndingParam = $request->query('week_ending');
+        if ($weekEndingParam) {
+            $weekEnding = Carbon::parse($weekEndingParam);
+        } else {
+            // Calculate current week ending (next Sunday)
+            $weekEnding = now()->copy();
+            if ($weekEnding->dayOfWeek !== 0) { // 0 = Sunday
+                $weekEnding = $weekEnding->next('Sunday');
+            }
+        }
+
+        // Get the month that contains this week for forecast lookup
+        $forecastMonth = $weekEnding->copy()->startOfMonth();
+
+        // Try to find forecast for the month containing this week
+        $forecast = LabourForecast::where('location_id', $location->id)
+            ->where('forecast_month', $forecastMonth)
+            ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+            ->first();
+
+        // If no forecast for that month, try to find ANY forecast that has this week
+        if (!$forecast) {
+            $forecast = LabourForecast::where('location_id', $location->id)
+                ->whereHas('entries', function ($query) use ($weekEnding) {
+                    $query->where('week_ending', $weekEnding->format('Y-m-d'));
+                })
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->first();
+        }
+
+        if (!$forecast) {
+            return response()->json([
+                'error' => 'No forecast found for this week',
+                'location' => $location->name,
+                'week_ending' => $weekEnding->format('Y-m-d'),
+            ], 404);
+        }
+
+        // Get all entries for the specified week (across all templates)
+        $weekEntries = $forecast->entries->filter(function ($entry) use ($weekEnding) {
+            return $entry->week_ending->format('Y-m-d') === $weekEnding->format('Y-m-d');
+        });
+
+        if ($weekEntries->isEmpty()) {
+            // Get all week endings that DO have data for debugging
+            $availableWeeks = $forecast->entries->pluck('week_ending')->map(fn($w) => $w->format('Y-m-d'))->unique()->values();
+
+            return response()->json([
+                'error' => 'No forecast entries found for this week',
+                'location' => $location->name,
+                'week_ending' => $weekEnding->format('Y-m-d'),
+                'forecast_month' => $forecast->forecast_month->format('Y-m'),
+                'available_weeks' => $availableWeeks,
+                'hint' => 'This forecast has entries for the weeks listed in available_weeks, but not for the requested week.',
+            ], 404);
+        }
+
+        // Build response with all templates and their cost breakdowns
+        $templates = [];
+        $totalCost = 0;
+        $totalHeadcount = 0;
+
+        foreach ($weekEntries as $entry) {
+            $templateConfig = $entry->template;
+            if (!$templateConfig) continue;
+
+            $costBreakdown = $entry->cost_breakdown_snapshot ?? [];
+
+            // Calculate actual cost for this entry
+            // If headcount > 0, multiply by headcount (normal case)
+            // If headcount = 0 but OT/leave hours exist, use weekly_cost as-is (special case)
+            $entryCost = $entry->headcount > 0
+                ? $entry->headcount * $entry->weekly_cost
+                : $entry->weekly_cost;
+
+            $templates[] = [
+                'id' => $templateConfig->id,
+                'label' => $templateConfig->custom_label ?: $templateConfig->payRateTemplate?->name ?? 'Unknown',
+                'headcount' => (float) $entry->headcount,
+                'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
+                'leave_hours' => (float) ($entry->leave_hours ?? 0),
+                'hourly_rate' => (float) $entry->hourly_rate,
+                'weekly_cost' => (float) $entry->weekly_cost,
+                'cost_breakdown' => $costBreakdown,
+            ];
+
+            $totalCost += $entryCost;
+            $totalHeadcount += $entry->headcount;
+        }
+
+        return response()->json([
+            'location' => [
+                'id' => $location->id,
+                'name' => $location->name,
+                'job_number' => $location->external_id,
+            ],
+            'week_ending' => $weekEnding->format('d M Y'),
+            'week_ending_date' => $weekEnding->format('Y-m-d'),
+            'total_headcount' => $totalHeadcount,
+            'total_cost' => $totalCost,
+            'templates' => $templates,
+        ]);
+    }
+
+    /**
+     * Calculate real-time cost for a specific week based on current grid values
+     * This is used while editing before saving to show accurate costs
+     */
+    public function calculateWeeklyCost(Request $request, Location $location)
+    {
+        $request->validate([
+            'templates' => 'required|array',
+            'templates.*.template_id' => 'required|integer',
+            'templates.*.headcount' => 'required|numeric|min:0',
+            'templates.*.overtime_hours' => 'nullable|numeric|min:0',
+            'templates.*.leave_hours' => 'nullable|numeric|min:0',
+        ]);
+
+        $calculator = new LabourCostCalculator();
+        $totalCost = 0;
+
+        foreach ($request->templates as $templateData) {
+            // Find the template configuration
+            $templateConfig = LocationPayRateTemplate::where('location_id', $location->id)
+                ->where('id', $templateData['template_id'])
+                ->first();
+
+            if (!$templateConfig) {
+                continue;
+            }
+
+            // Calculate cost for this template with current values
+            $headcount = (float) $templateData['headcount'];
+            $overtimeHours = (float) ($templateData['overtime_hours'] ?? 0);
+            $leaveHours = (float) ($templateData['leave_hours'] ?? 0);
+
+            $breakdown = $calculator->calculateWithOvertime(
+                $location,
+                $templateConfig,
+                $headcount,
+                $overtimeHours,
+                $leaveHours
+            );
+
+            // The breakdown already calculated total cost for the given headcount, OT, and leave
+            $templateCost = $breakdown['total_weekly_cost'];
+            $totalCost += $templateCost;
+        }
+
+        return response()->json([
+            'total_cost' => round($totalCost, 2),
         ]);
     }
 }

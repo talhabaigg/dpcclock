@@ -39,7 +39,7 @@ const StatusBadge = ({ status }: { status: string | null }) => {
     return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>{label}</span>;
 };
 
-export const buildLabourForecastColumnDefs = (): ColDef[] => {
+export const buildLabourForecastColumnDefs = (onCostClick?: (locationId: number, locationName: string) => void): ColDef[] => {
     return [
         {
             headerName: 'Job Name',
@@ -99,12 +99,29 @@ export const buildLabourForecastColumnDefs = (): ColDef[] => {
             width: 130,
             filter: true,
             sortable: true,
-            cellClass: 'text-right font-medium text-green-700 dark:text-green-400',
+            cellClass: 'text-right font-medium',
             headerClass: 'ag-right-aligned-header',
-            valueFormatter: (params) => {
+            cellRenderer: (params: ValueGetterParams) => {
                 const value = params.value;
+                const locationId = params.data?.id;
+                const locationName = params.data?.name;
+
                 if (!value) return '-';
-                return formatCurrency(value);
+
+                return (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onCostClick && locationId && locationName) {
+                                onCostClick(locationId, locationName);
+                            }
+                        }}
+                        className="cursor-pointer font-medium text-green-700 hover:text-green-800 hover:underline dark:text-green-400 dark:hover:text-green-300"
+                        title="Click to view cost breakdown"
+                    >
+                        {formatCurrency(value)}
+                    </button>
+                );
             },
         },
         {
@@ -172,7 +189,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
             cellClass: (params) => {
                 if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold text-center';
-                if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300';
+                if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
                 if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
                 return 'text-center';
             },
