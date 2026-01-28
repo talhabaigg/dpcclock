@@ -86,6 +86,69 @@ interface CostBreakdown {
         };
         total_cost: number; // Leave markups + oncosts
     };
+    rdo?: {
+        hours: number;
+        days: number;
+        gross_wages: number; // Paid from balance, NOT job costed
+        allowances: {
+            fares_travel: { name: string | null; rate: number; type: string; days: number; amount: number };
+            custom: Array<{
+                name: string;
+                code: string;
+                rate: number;
+                rate_type: string;
+                amount: number;
+            }>;
+            total: number;
+        };
+        accruals: {
+            base: number;
+            annual_leave_accrual: number;
+            leave_loading: number;
+            total: number; // Job costed to 03-01
+        };
+        oncosts: {
+            items: Array<{
+                code: string;
+                name: string;
+                hourly_rate?: number;
+                percentage_rate?: number;
+                hours?: number;
+                base?: number;
+                amount: number;
+            }>;
+            fixed_total: number;
+            percentage_total: number;
+            total: number;
+        };
+        total_cost: number; // Accruals + oncosts only (wages NOT included)
+    };
+    public_holiday_not_worked?: {
+        hours: number;
+        days: number;
+        gross_wages: number; // Job costed
+        accruals: {
+            annual_leave_accrual: number;
+            leave_loading: number;
+            total: number;
+        };
+        marked_up: number;
+        oncosts: {
+            items: Array<{
+                code: string;
+                name: string;
+                hourly_rate?: number;
+                percentage_rate?: number;
+                hours?: number;
+                base?: number;
+                amount: number;
+            }>;
+            fixed_total: number;
+            percentage_total: number;
+            total: number;
+        };
+        total_cost: number; // Wages + accruals + oncosts
+    };
     oncosts: {
         items: Array<{
             code: string;
@@ -109,6 +172,8 @@ interface Template {
     headcount: number;
     overtime_hours: number;
     leave_hours: number;
+    rdo_hours: number;
+    public_holiday_not_worked_hours: number;
     hourly_rate: number;
     weekly_cost: number;
     cost_breakdown: CostBreakdown;
@@ -175,11 +240,13 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
             // NOTE: The cost_breakdown_snapshot is already calculated FOR the specific headcount
             // (not per head), so we use the values directly without multiplying by headcount
 
-            // 03-01: Wages (Ordinary + Overtime + Leave Markups)
+            // 03-01: Wages (Ordinary + Overtime + Leave Markups + RDO Accruals + PH Marked Up)
             const wagesTotal =
                 (breakdown.ordinary?.marked_up || 0) +
                 (breakdown.overtime?.marked_up || 0) +
-                (breakdown.leave?.leave_markups?.total || 0);
+                (breakdown.leave?.leave_markups?.total || 0) +
+                (breakdown.rdo?.accruals?.total || 0) + // RDO accruals only (wages NOT costed)
+                (breakdown.public_holiday_not_worked?.marked_up || 0); // PH wages + accruals
 
             if (!totals['03-01']) {
                 totals['03-01'] = { name: 'Wages', amount: 0 };
@@ -198,6 +265,28 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
             // Oncosts from leave hours (if any)
             if (breakdown.leave?.oncosts?.items) {
                 breakdown.leave.oncosts.items.forEach((oncost) => {
+                    const code = oncost.code.replace(/_/g, '-');
+                    if (!totals[code]) {
+                        totals[code] = { name: oncost.name, amount: 0 };
+                    }
+                    totals[code].amount += oncost.amount;
+                });
+            }
+
+            // Oncosts from RDO hours (if any)
+            if (breakdown.rdo?.oncosts?.items) {
+                breakdown.rdo.oncosts.items.forEach((oncost) => {
+                    const code = oncost.code.replace(/_/g, '-');
+                    if (!totals[code]) {
+                        totals[code] = { name: oncost.name, amount: 0 };
+                    }
+                    totals[code].amount += oncost.amount;
+                });
+            }
+
+            // Oncosts from Public Holiday hours (if any)
+            if (breakdown.public_holiday_not_worked?.oncosts?.items) {
+                breakdown.public_holiday_not_worked.oncosts.items.forEach((oncost) => {
                     const code = oncost.code.replace(/_/g, '-');
                     if (!totals[code]) {
                         totals[code] = { name: oncost.name, amount: 0 };
@@ -545,6 +634,196 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 <span className="font-bold">Total Job Costed (Leave)</span>
                                                 <span className="font-bold text-blue-600 dark:text-blue-400">
                                                     {formatCurrency(template.cost_breakdown.leave.total_cost)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* RDO Hours Breakdown */}
+                                {template.rdo_hours > 0 && template.cost_breakdown.rdo && template.cost_breakdown.rdo.total_cost > 0 && (
+                                    <div className="space-y-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+                                        <h4 className="font-semibold text-sm text-purple-700 dark:text-purple-400">
+                                            RDO Hours ({template.rdo_hours.toFixed(1)} hrs / {template.cost_breakdown.rdo.days.toFixed(1)} days)
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground italic">
+                                            Wages paid from balance (NOT job costed). Allowances and accruals ARE job costed.
+                                        </p>
+
+                                        <div className="space-y-1 text-sm">
+                                            {/* Gross Wages - NOT job costed */}
+                                            <div className="flex justify-between rounded bg-slate-100 p-2 dark:bg-slate-800/50">
+                                                <span className="text-muted-foreground">Gross Wages (from balance, NOT job costed)</span>
+                                                <span className="font-medium line-through decoration-red-500">
+                                                    {formatCurrency(template.cost_breakdown.rdo.gross_wages)}
+                                                </span>
+                                            </div>
+
+                                            {/* RDO Allowances - Job costed */}
+                                            {template.cost_breakdown.rdo.allowances.total > 0 && (
+                                                <>
+                                                    <div className="mt-2 text-xs font-semibold text-purple-700 dark:text-purple-400">
+                                                        Allowances (job costed):
+                                                    </div>
+                                                    {template.cost_breakdown.rdo.allowances.fares_travel.name && template.cost_breakdown.rdo.allowances.fares_travel.amount > 0 && (
+                                                        <div className="flex justify-between pl-4">
+                                                            <span className="text-muted-foreground">
+                                                                {template.cost_breakdown.rdo.allowances.fares_travel.name} ({formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.rate)}/day × {template.cost_breakdown.rdo.allowances.fares_travel.days} days)
+                                                            </span>
+                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.amount)}</span>
+                                                        </div>
+                                                    )}
+                                                    {template.cost_breakdown.rdo.allowances.custom?.map((allowance, idx) => (
+                                                        allowance.amount > 0 && (
+                                                            <div key={idx} className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
+                                                                </span>
+                                                                <span className="font-medium">{formatCurrency(allowance.amount)}</span>
+                                                            </div>
+                                                        )
+                                                    ))}
+                                                    <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                        <span className="font-semibold">Allowances Subtotal</span>
+                                                        <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                                            {formatCurrency(template.cost_breakdown.rdo.allowances.total)}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {/* RDO Accruals - Job costed to 03-01 */}
+                                            <div className="mt-2 text-xs font-semibold text-purple-700 dark:text-purple-400">
+                                                Accruals (job costed to 03-01, NOT compounded):
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">
+                                                    Base for accruals (wages + allowances)
+                                                </span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.base)}</span>
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.annual_leave_accrual)}</span>
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Leave Loading (4.61%)</span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.leave_loading)}</span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                <span className="font-semibold">Accruals Subtotal</span>
+                                                <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                                    {formatCurrency(template.cost_breakdown.rdo.accruals.total)}
+                                                </span>
+                                            </div>
+
+                                            {/* RDO Oncosts - Job costed */}
+                                            <div className="mt-2 text-xs font-semibold text-purple-700 dark:text-purple-400">
+                                                Oncosts (job costed):
+                                            </div>
+                                            {template.cost_breakdown.rdo.oncosts.items.map((oncost, idx) => (
+                                                <div key={idx} className="flex justify-between pl-4">
+                                                    <span className="text-muted-foreground">
+                                                        {oncost.name}
+                                                        {oncost.hourly_rate !== undefined && oncost.hours !== undefined
+                                                            ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
+                                                            : oncost.percentage_rate !== undefined && oncost.base !== undefined
+                                                            ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                            : ''}
+                                                    </span>
+                                                    <span className="font-medium">{formatCurrency(oncost.amount)}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                <span className="font-semibold">Oncosts Subtotal</span>
+                                                <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                                    {formatCurrency(template.cost_breakdown.rdo.oncosts.total)}
+                                                </span>
+                                            </div>
+
+                                            {/* Total - Accruals + oncosts only (wages NOT included) */}
+                                            <div className="flex justify-between border-t-2 border-border pt-2 mt-2">
+                                                <span className="font-bold">Total Job Costed (RDO)</span>
+                                                <span className="font-bold text-purple-600 dark:text-purple-400">
+                                                    {formatCurrency(template.cost_breakdown.rdo.total_cost)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Public Holiday Not Worked Breakdown */}
+                                {template.public_holiday_not_worked_hours > 0 && template.cost_breakdown.public_holiday_not_worked && template.cost_breakdown.public_holiday_not_worked.total_cost > 0 && (
+                                    <div className="space-y-3 rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+                                        <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">
+                                            Public Holiday Not Worked ({template.public_holiday_not_worked_hours.toFixed(1)} hrs / {template.cost_breakdown.public_holiday_not_worked.days.toFixed(1)} days)
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground italic">
+                                            All costs job costed at ordinary rate. No allowances applied.
+                                        </p>
+
+                                        <div className="space-y-1 text-sm">
+                                            {/* Gross Wages - Job costed */}
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Gross Wages (job costed)</span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.gross_wages)}</span>
+                                            </div>
+
+                                            {/* PH Accruals - Job costed to 03-01 */}
+                                            <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                                                Accruals (job costed to 03-01):
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.annual_leave_accrual)}</span>
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Leave Loading (4.61%)</span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.leave_loading)}</span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                <span className="font-semibold">Accruals Subtotal</span>
+                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.total)}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex justify-between border-t border-border pt-1">
+                                                <span className="font-semibold">Marked Up (Wages + Accruals)</span>
+                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.marked_up)}
+                                                </span>
+                                            </div>
+
+                                            {/* PH Oncosts - Job costed */}
+                                            <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                                                Oncosts (job costed):
+                                            </div>
+                                            {template.cost_breakdown.public_holiday_not_worked.oncosts.items.map((oncost, idx) => (
+                                                <div key={idx} className="flex justify-between pl-4">
+                                                    <span className="text-muted-foreground">
+                                                        {oncost.name}
+                                                        {oncost.hourly_rate !== undefined && oncost.hours !== undefined
+                                                            ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
+                                                            : oncost.percentage_rate !== undefined && oncost.base !== undefined
+                                                            ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                            : ''}
+                                                    </span>
+                                                    <span className="font-medium">{formatCurrency(oncost.amount)}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                <span className="font-semibold">Oncosts Subtotal</span>
+                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.oncosts.total)}
+                                                </span>
+                                            </div>
+
+                                            {/* Total - All costs job costed */}
+                                            <div className="flex justify-between border-t-2 border-border pt-2 mt-2">
+                                                <span className="font-bold">Total Job Costed (Public Holiday)</span>
+                                                <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.total_cost)}
                                                 </span>
                                             </div>
                                         </div>

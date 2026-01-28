@@ -44,13 +44,15 @@ class LabourCostCalculator
     }
 
     /**
-     * Calculate cost breakdown with support for decimal headcount, overtime, and leave
+     * Calculate cost breakdown with support for decimal headcount, overtime, leave, RDO, and public holidays
      *
      * @param Location $location The location
      * @param LocationPayRateTemplate $config The pay rate template configuration
      * @param float $headcount Number of workers (can be decimal, e.g., 0.4 for 2 days)
      * @param float $overtimeHours Total overtime hours
      * @param float $leaveHours Total leave hours (for oncosts only - wages paid from accruals)
+     * @param float $rdoHours RDO hours (wages NOT costed, accruals and oncosts ARE costed)
+     * @param float $publicHolidayNotWorkedHours Public Holiday hours (all costed, no allowances)
      * @return array Cost breakdown
      */
     public function calculateWithOvertime(
@@ -58,7 +60,9 @@ class LabourCostCalculator
         LocationPayRateTemplate $config,
         float $headcount = 1.0,
         float $overtimeHours = 0.0,
-        float $leaveHours = 0.0
+        float $leaveHours = 0.0,
+        float $rdoHours = 0.0,
+        float $publicHolidayNotWorkedHours = 0.0
     ): array {
         // Load relationships including custom allowances
         $config->load([
@@ -84,7 +88,7 @@ class LabourCostCalculator
         // Get cost code prefix for mapping
         $costCodePrefix = $config->cost_code_prefix;
 
-        // Calculate breakdown with headcount, overtime, and leave support
+        // Calculate breakdown with headcount, overtime, leave, RDO, and PH support
         return $this->buildBreakdownWithOvertime(
             $baseHourlyRate,
             $allowances,
@@ -92,7 +96,10 @@ class LabourCostCalculator
             $costCodePrefix,
             $headcount,
             $overtimeHours,
-            $leaveHours
+            $leaveHours,
+            $rdoHours,
+            $publicHolidayNotWorkedHours,
+            $config
         );
     }
 
@@ -204,6 +211,47 @@ class LabourCostCalculator
         }
 
         return $customAllowances;
+    }
+
+    /**
+     * Filter allowances for RDO hours
+     * Only returns allowances that should be paid during RDO
+     * - Standard allowances: Configurable via template flags (rdo_fares_travel, rdo_site_allowance, rdo_multistorey_allowance)
+     * - Custom allowances: Only those with paid_to_rdo = true
+     */
+    private function calculateRdoAllowances(LocationPayRateTemplate $config, array $standardAllowances): array
+    {
+        // Include standard allowances based on configuration flags
+        $rdoStandardAllowances = [
+            'fares_travel' => $config->rdo_fares_travel
+                ? $standardAllowances['fares_travel']
+                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'daily'],
+            'site' => $config->rdo_site_allowance
+                ? $standardAllowances['site']
+                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+            'multistorey' => $config->rdo_multistorey_allowance
+                ? $standardAllowances['multistorey']
+                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+        ];
+
+        // Filter custom allowances where paid_to_rdo = true
+        $rdoCustomAllowances = [];
+        foreach ($config->customAllowances as $allowance) {
+            if ($allowance->paid_to_rdo) {
+                $rdoCustomAllowances[] = [
+                    'type_id' => $allowance->allowance_type_id,
+                    'name' => $allowance->allowanceType->name,
+                    'code' => $allowance->allowanceType->code,
+                    'rate' => (float) $allowance->rate,
+                    'rate_type' => $allowance->rate_type,
+                ];
+            }
+        }
+
+        return [
+            'standard' => $rdoStandardAllowances,
+            'custom' => $rdoCustomAllowances,
+        ];
     }
 
     /**
@@ -430,13 +478,24 @@ class LabourCostCalculator
     }
 
     /**
-     * Build cost breakdown with overtime and leave support
+     * Build cost breakdown with overtime, leave, RDO, and public holiday support
      * Uses oncosts from database and calculates based on hours
      *
      * Leave Hours Logic:
      * - When workers are on leave, wages are paid from accruals (NOT job costed)
      * - However, oncosts (super, BERT, BEWT, CIPQ, payroll tax, workcover) ARE still job costed
      * - So for leave hours, we calculate oncosts only, no wages
+     *
+     * RDO Hours Logic:
+     * - Base wages paid from balance (NOT job costed)
+     * - Filtered allowances (where paid_to_rdo = true) ARE applied
+     * - Accruals (9.28% + 4.61%) calculated separately (NOT compounded) - ARE job costed
+     * - Oncosts calculated on accruals - ARE job costed
+     *
+     * Public Holiday Not Worked Logic:
+     * - All costs job costed at ordinary rate
+     * - NO allowances applied
+     * - Accruals apply (9.28% + 4.61%)
      */
     private function buildBreakdownWithOvertime(
         float $baseHourlyRate,
@@ -445,7 +504,10 @@ class LabourCostCalculator
         ?string $costCodePrefix = null,
         float $headcount = 1.0,
         float $overtimeHours = 0.0,
-        float $leaveHours = 0.0
+        float $leaveHours = 0.0,
+        float $rdoHours = 0.0,
+        float $publicHolidayNotWorkedHours = 0.0,
+        ?LocationPayRateTemplate $config = null
     ): array {
         // Calculate hours
         $ordinaryHours = $headcount * self::HOURS_PER_WEEK;
@@ -660,15 +722,177 @@ class LabourCostCalculator
             $leaveOncostsTotal = $leaveFixedOncosts + $leavePercentageOncosts;
         }
 
+        // ==========================================
+        // RDO HOURS CALCULATION
+        // RDO treatment:
+        // - Base wages: Paid from balance (NOT job costed to 03-01)
+        // - Allowances (filtered by paid_to_rdo): ARE included in accrual base
+        // - Accruals (9.28% + 4.61%): Calculated separately (NOT compounded), job costed to 03-01
+        // - Oncosts: Calculated based on accruals, will be job costed
+        // ==========================================
+
+        $rdoGrossWages = 0;
+        $rdoAllowancesTotal = 0;
+        $rdoAccrualsTotal = 0;
+        $rdoOncostsTotal = 0;
+        $rdoFaresTravel = 0;
+        $rdoCustomAllowances = 0;
+        $rdoCustomAllowanceDetails = [];
+
+        if ($rdoHours > 0) {
+            // Base wages for RDO hours (NOT job costed - paid from balance)
+            $rdoGrossWages = $rdoHours * $baseHourlyRate;
+
+            // Get RDO-specific allowances (filtered)
+            $rdoAllowanceData = $this->calculateRdoAllowances($config, $allowances);
+
+            // Calculate fares/travel allowance for RDO (daily rate)
+            $rdoDays = ceil($rdoHours / 8);
+            $rdoFaresTravel = $rdoAllowanceData['standard']['fares_travel']['rate'] * $rdoDays;
+
+            // Calculate custom allowances for RDO hours (only those with paid_to_rdo = true)
+            foreach ($rdoAllowanceData['custom'] as $allowance) {
+                $amount = match($allowance['rate_type']) {
+                    'hourly' => $allowance['rate'] * $rdoHours,
+                    'daily' => $allowance['rate'] * $rdoDays,
+                    'weekly' => $allowance['rate'], // Full weekly for RDO
+                    default => 0
+                };
+                $rdoCustomAllowances += $amount;
+                $rdoCustomAllowanceDetails[] = [
+                    'type_id' => $allowance['type_id'],
+                    'name' => $allowance['name'],
+                    'code' => $allowance['code'],
+                    'rate' => round($allowance['rate'], 2),
+                    'rate_type' => $allowance['rate_type'],
+                    'amount' => round($amount, 2),
+                ];
+            }
+
+            $rdoAllowancesTotal = $rdoFaresTravel + $rdoCustomAllowances;
+
+            // Calculate accruals base (wages + allowances - although wages not costed, accruals ARE)
+            $rdoAccrualsBase = $rdoGrossWages + $rdoAllowancesTotal;
+
+            // Calculate accruals separately (NOT compounded)
+            $rdoAnnualLeaveAmount = $rdoAccrualsBase * self::ANNUAL_LEAVE_ACCRUAL;  // 9.28%
+            $rdoLeaveLoadingAmount = $rdoAccrualsBase * self::LEAVE_LOADING;        // 4.61%
+            $rdoAccrualsTotal = $rdoAnnualLeaveAmount + $rdoLeaveLoadingAmount;
+
+            // Calculate oncosts on the accruals (fixed oncosts prorated by hours)
+            $rdoFixedOncosts = 0;
+            $rdoPercentageOncosts = 0;
+            $rdoOncostDetails = [];
+
+            foreach ($oncosts as $oncost) {
+                if (!$oncost['is_percentage']) {
+                    // Fixed oncost: hourly rate × RDO hours
+                    $amount = (float) $oncost['hourly_rate'] * $rdoHours;
+                    $rdoFixedOncosts += $amount;
+
+                    $rdoOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'hourly_rate' => round((float) $oncost['hourly_rate'], 4),
+                        'hours' => round($rdoHours, 2),
+                        'amount' => round($amount, 2),
+                    ];
+                } else {
+                    // Percentage oncost on the accruals total
+                    $amount = $rdoAccrualsTotal * (float) $oncost['percentage_rate'];
+                    $rdoPercentageOncosts += $amount;
+
+                    $rdoOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
+                        'base' => round($rdoAccrualsTotal, 2),
+                        'amount' => round($amount, 2),
+                    ];
+                }
+            }
+
+            $rdoOncostsTotal = $rdoFixedOncosts + $rdoPercentageOncosts;
+        }
+
+        // ==========================================
+        // PUBLIC HOLIDAY NOT WORKED CALCULATION
+        // Public Holiday treatment:
+        // - Costed to job at ordinary rate
+        // - NO allowances applied
+        // - Accruals calculated (9.28% + 4.61%)
+        // - All oncosts calculated as ordinary rate
+        // ==========================================
+
+        $phGrossWages = 0;
+        $phAccrualsTotal = 0;
+        $phMarkedUp = 0;
+        $phOncostsTotal = 0;
+
+        if ($publicHolidayNotWorkedHours > 0) {
+            // Base wages for public holiday (costed to job)
+            $phGrossWages = $publicHolidayNotWorkedHours * $baseHourlyRate;
+
+            // NO ALLOWANCES for public holiday
+
+            // Apply leave markups to public holiday wages (calculated separately, not compounded)
+            $phAnnualLeaveAmount = $phGrossWages * self::ANNUAL_LEAVE_ACCRUAL;  // 9.28%
+            $phLeaveLoadingAmount = $phGrossWages * self::LEAVE_LOADING;        // 4.61%
+            $phAccrualsTotal = $phAnnualLeaveAmount + $phLeaveLoadingAmount;
+            $phMarkedUp = $phGrossWages + $phAccrualsTotal;
+
+            // Calculate oncosts (all as ordinary - fixed oncosts prorated by hours)
+            $phFixedOncosts = 0;
+            $phPercentageOncosts = 0;
+            $phOncostDetails = [];
+
+            foreach ($oncosts as $oncost) {
+                if (!$oncost['is_percentage']) {
+                    $amount = (float) $oncost['hourly_rate'] * $publicHolidayNotWorkedHours;
+                    $phFixedOncosts += $amount;
+
+                    $phOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'hourly_rate' => round((float) $oncost['hourly_rate'], 4),
+                        'hours' => round($publicHolidayNotWorkedHours, 2),
+                        'amount' => round($amount, 2),
+                    ];
+                } else {
+                    // Percentage oncost on marked up wages
+                    $amount = $phMarkedUp * (float) $oncost['percentage_rate'];
+                    $phPercentageOncosts += $amount;
+
+                    $phOncostDetails[] = [
+                        'code' => $oncost['code'],
+                        'name' => $oncost['name'],
+                        'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
+                        'base' => round($phMarkedUp, 2),
+                        'amount' => round($amount, 2),
+                    ];
+                }
+            }
+
+            $phOncostsTotal = $phFixedOncosts + $phPercentageOncosts;
+        }
+
         $totalOncosts = $fixedOncostsTotal + $percentageOncostsTotal;
-        $totalOncostsIncludingLeave = $totalOncosts + $leaveOncostsTotal;
+        $totalOncostsIncludingLeave = $totalOncosts + $leaveOncostsTotal + $rdoOncostsTotal + $phOncostsTotal;
 
         // ==========================================
         // TOTALS
         // ==========================================
 
-        // Total cost includes worked hours wages + leave markups + oncosts + leave oncosts (no leave wages - those come from accruals)
-        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsTotal + $totalOncostsIncludingLeave;
+        // Total cost includes:
+        // - Worked hours wages (ordinary + overtime marked up)
+        // - Leave markups (accruals only, not wages)
+        // - RDO accruals and oncosts (wages NOT included - paid from balance)
+        // - Public Holiday wages, accruals, and oncosts (all included)
+        // - All oncosts (worked + leave + RDO + PH)
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsTotal
+            + $rdoAccrualsTotal  // RDO accruals only (wages NOT costed)
+            + $phMarkedUp        // PH wages + accruals
+            + $totalOncostsIncludingLeave;
 
         // Build cost code mappings
         $costCodes = $this->buildCostCodeMappings($costCodePrefix);
@@ -760,6 +984,57 @@ class LabourCostCalculator
                     'total' => round($leaveOncostsTotal, 2),
                 ],
                 'total_cost' => round($leaveMarkupsTotal + $leaveOncostsTotal, 2), // Leave markups + oncosts
+            ],
+
+            // RDO hours: wages paid from balance (NOT job costed), allowances and accruals ARE job costed
+            'rdo' => [
+                'hours' => round($rdoHours, 2),
+                'days' => round($rdoHours / 8, 2),
+                'gross_wages' => round($rdoGrossWages, 2), // Paid from balance, NOT job costed
+                'allowances' => [
+                    'fares_travel' => [
+                        'name' => $allowances['fares_travel']['name'],
+                        'rate' => round($allowances['fares_travel']['rate'], 2),
+                        'type' => 'daily',
+                        'days' => round($rdoHours > 0 ? ceil($rdoHours / 8) : 0, 0),
+                        'amount' => round($rdoFaresTravel, 2),
+                    ],
+                    'custom' => $rdoCustomAllowanceDetails,
+                    'total' => round($rdoAllowancesTotal, 2),
+                ],
+                'accruals' => [
+                    'base' => round($rdoGrossWages + $rdoAllowancesTotal, 2),
+                    'annual_leave_accrual' => round(($rdoGrossWages + $rdoAllowancesTotal) * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                    'leave_loading' => round(($rdoGrossWages + $rdoAllowancesTotal) * self::LEAVE_LOADING, 2),
+                    'total' => round($rdoAccrualsTotal, 2), // Job costed to 03-01
+                ],
+                'oncosts' => [
+                    'items' => $rdoOncostDetails ?? [],
+                    'fixed_total' => round($rdoFixedOncosts ?? 0, 2),
+                    'percentage_total' => round($rdoPercentageOncosts ?? 0, 2),
+                    'total' => round($rdoOncostsTotal, 2),
+                ],
+                'total_cost' => round($rdoAccrualsTotal + $rdoOncostsTotal, 2), // Accruals + oncosts only (wages NOT included)
+            ],
+
+            // Public Holiday Not Worked: all costs job costed at ordinary rate, no allowances
+            'public_holiday_not_worked' => [
+                'hours' => round($publicHolidayNotWorkedHours, 2),
+                'days' => round($publicHolidayNotWorkedHours / 8, 2),
+                'gross_wages' => round($phGrossWages, 2), // Job costed
+                'accruals' => [
+                    'annual_leave_accrual' => round($phGrossWages * self::ANNUAL_LEAVE_ACCRUAL, 2),
+                    'leave_loading' => round($phGrossWages * self::LEAVE_LOADING, 2),
+                    'total' => round($phAccrualsTotal, 2),
+                ],
+                'marked_up' => round($phMarkedUp, 2),
+                'oncosts' => [
+                    'items' => $phOncostDetails ?? [],
+                    'fixed_total' => round($phFixedOncosts ?? 0, 2),
+                    'percentage_total' => round($phPercentageOncosts ?? 0, 2),
+                    'total' => round($phOncostsTotal, 2),
+                ],
+                'total_cost' => round($phMarkedUp + $phOncostsTotal, 2), // Wages + accruals + oncosts
             ],
 
             'oncosts' => [

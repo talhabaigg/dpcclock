@@ -447,7 +447,10 @@ class LabourVarianceService
 
                 // Calculate forecast values
                 $forecastHours = $entry->headcount * ($costBreakdown['hours_per_week'] ?? 40);
-                $forecastCost = $entry->headcount * $entry->weekly_cost;
+
+                // Always use total_weekly_cost from snapshot - it includes all work types
+                // (ordinary, overtime, leave, RDO, PH) calculated correctly
+                $forecastCost = $costBreakdown['total_weekly_cost'] ?? 0;
 
                 \Log::info('[DEBUG-ISSUE] buildVarianceData: processing entry', [
                     'week_ending' => $weekEnding,
@@ -575,38 +578,73 @@ class LabourVarianceService
         // Check if this is a leave-only entry (headcount = 0, leave_hours > 0)
         $isLeaveOnly = $headcount == 0 && ($costBreakdown['leave_hours'] ?? 0) > 0;
 
-        \Log::info('[DEBUG-ISSUE] buildCostCodeBreakdown: entering', [
+        \Log::info('[DEBUG-ISSUE] ===== ENTERING buildCostCodeBreakdown =====', [
             'headcount' => $headcount,
             'leave_hours' => $costBreakdown['leave_hours'] ?? 0,
+            'rdo_hours' => $costBreakdown['rdo_hours'] ?? 0,
+            'ph_hours' => $costBreakdown['public_holiday_not_worked']['hours'] ?? 0,
             'is_leave_only' => $isLeaveOnly,
             'marked_up_wages_from_breakdown' => $costBreakdown['marked_up_wages'] ?? null,
             'total_weekly_cost_from_breakdown' => $costBreakdown['total_weekly_cost'] ?? null,
+            'ordinary_marked_up' => $costBreakdown['ordinary']['marked_up'] ?? null,
+            'overtime_marked_up' => $costBreakdown['overtime']['marked_up'] ?? null,
             'leave_markups_total' => $costBreakdown['leave']['leave_markups']['total'] ?? null,
-            'leave_oncosts_total' => $costBreakdown['leave']['oncosts']['total'] ?? null,
+            'rdo_accruals_total' => $costBreakdown['rdo']['accruals']['total'] ?? null,
+            'ph_marked_up' => $costBreakdown['public_holiday_not_worked']['marked_up'] ?? null,
             'cost_codes' => $costCodes,
+            'wages_cost_code' => $costCodes['wages'] ?? 'NOT SET',
         ]);
 
         // Wages (marked up gross wages including leave loading)
         // For leave-only entries, wages go to the same cost code but represent leave markups (not actual wages)
         if ($costCodes['wages'] ?? null) {
             if ($isLeaveOnly) {
-                // For leave-only, the "wages" cost code gets the leave markups (annual leave accrual + leave loading)
-                $forecastAmount = $costBreakdown['leave']['leave_markups']['total'] ?? 0;
+                // For leave-only (headcount = 0), the "wages" cost code 03-01 still includes:
+                // 1. Leave markups (annual leave accrual + leave loading)
+                // 2. RDO accruals (even though wages NOT costed, accruals ARE)
+                // 3. Public Holiday marked up (wages + accruals)
+                $leaveMarkups = $costBreakdown['leave']['leave_markups']['total'] ?? 0;
+                $rdoAccruals = $costBreakdown['rdo']['accruals']['total'] ?? 0;
+                $phMarkedUp = $costBreakdown['public_holiday_not_worked']['marked_up'] ?? 0;
+
+                $forecastAmount = $leaveMarkups + $rdoAccruals + $phMarkedUp;
             } else {
-                // For worked hours, use marked up wages
-                $forecastAmount = $costBreakdown['marked_up_wages'] ?? 0;
+                // For worked hours, wages cost code 03-01 includes:
+                // 1. Ordinary marked up wages
+                // 2. Overtime marked up wages
+                // 3. Leave markups (accruals only, NOT wages)
+                // 4. RDO accruals (NOT wages - wages paid from balance)
+                // 5. Public Holiday marked up (wages + accruals)
+                $ordinaryMarkedUp = $costBreakdown['ordinary']['marked_up'] ?? 0;
+                $overtimeMarkedUp = $costBreakdown['overtime']['marked_up'] ?? 0;
+                $leaveMarkups = $costBreakdown['leave']['leave_markups']['total'] ?? 0;
+                $rdoAccruals = $costBreakdown['rdo']['accruals']['total'] ?? 0;
+                $phMarkedUp = $costBreakdown['public_holiday_not_worked']['marked_up'] ?? 0;
+
+                $forecastAmount = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkups + $rdoAccruals + $phMarkedUp;
+
+                \Log::info('[DEBUG-ISSUE] WAGES CALCULATION - cost code 03-01', [
+                    'cost_code' => $costCodes['wages'],
+                    'ordinary_marked_up' => $ordinaryMarkedUp,
+                    'overtime_marked_up' => $overtimeMarkedUp,
+                    'leave_markups' => $leaveMarkups,
+                    'rdo_accruals' => $rdoAccruals,
+                    'ph_marked_up' => $phMarkedUp,
+                    'TOTAL_WAGES_03_01' => $forecastAmount,
+                    'old_marked_up_wages_value' => $costBreakdown['marked_up_wages'] ?? 0,
+                    'DIFFERENCE' => $forecastAmount - ($costBreakdown['marked_up_wages'] ?? 0),
+                ]);
             }
 
             $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['wages']);
 
-            \Log::info('[DEBUG-ISSUE] buildCostCodeBreakdown: calculating wages', [
+            \Log::info('[DEBUG-ISSUE] buildCostCodeBreakdown: final wages calculation', [
                 'is_leave_only' => $isLeaveOnly,
-                'source_field' => $isLeaveOnly ? 'leave.leave_markups.total' : 'marked_up_wages',
                 'calculated_forecast' => $forecastAmount,
                 'actual' => $actualAmount,
             ]);
 
-            $breakdown[] = [
+            $breakdownItem = [
                 'label' => $isLeaveOnly ? 'Leave Markups' : 'Wages',
                 'category' => 'wages',
                 'cost_code' => $costCodes['wages'],
@@ -615,19 +653,58 @@ class LabourVarianceService
                 'variance' => round($actualAmount - $forecastAmount, 2),
                 'note' => $isLeaveOnly ? 'Leave markups (annual leave accrual + leave loading)' : ($actualAmount < $forecastAmount * 0.9 ? 'Lower wages may indicate leave (wages paid from accruals)' : null),
             ];
-        }
 
-        // For leave-only entries, get oncosts from the leave.oncosts section
-        // The leave.oncosts.items array contains the breakdown by oncost code
-        if ($isLeaveOnly && isset($costBreakdown['leave']['oncosts']['items'])) {
-            $leaveOncostItems = $costBreakdown['leave']['oncosts']['items'];
-
-            \Log::info('[DEBUG-ISSUE] buildCostCodeBreakdown: processing leave oncosts', [
-                'leave_oncost_items' => $leaveOncostItems,
+            \Log::info('[DEBUG-ISSUE] BREAKDOWN ITEM CREATED for 03-01', [
+                'breakdown_item' => $breakdownItem,
             ]);
 
-            // Map the leave oncost items to the expected cost codes
-            foreach ($leaveOncostItems as $item) {
+            $breakdown[] = $breakdownItem;
+        }
+
+        // For leave-only entries, get oncosts from leave, RDO, and PH sections
+        // These arrays contain the breakdown by oncost code
+        if ($isLeaveOnly) {
+            // Collect all oncost items from leave, RDO, and PH
+            $allOncostItems = [];
+
+            // Add leave oncosts
+            if (isset($costBreakdown['leave']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['leave']['oncosts']['items']);
+            }
+
+            // Add RDO oncosts
+            if (isset($costBreakdown['rdo']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['rdo']['oncosts']['items']);
+            }
+
+            // Add Public Holiday oncosts
+            if (isset($costBreakdown['public_holiday_not_worked']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['public_holiday_not_worked']['oncosts']['items']);
+            }
+
+            \Log::info('[DEBUG-ISSUE] buildCostCodeBreakdown: processing oncosts for leave-only entry', [
+                'leave_oncost_items' => $costBreakdown['leave']['oncosts']['items'] ?? [],
+                'rdo_oncost_items' => $costBreakdown['rdo']['oncosts']['items'] ?? [],
+                'ph_oncost_items' => $costBreakdown['public_holiday_not_worked']['oncosts']['items'] ?? [],
+                'total_oncost_items' => count($allOncostItems),
+            ]);
+
+            // Group oncosts by code and sum amounts (in case same code appears in multiple sections)
+            $groupedOncosts = [];
+            foreach ($allOncostItems as $item) {
+                $code = $item['code'];
+                if (!isset($groupedOncosts[$code])) {
+                    $groupedOncosts[$code] = [
+                        'code' => $code,
+                        'name' => $item['name'],
+                        'amount' => 0,
+                    ];
+                }
+                $groupedOncosts[$code]['amount'] += $item['amount'] ?? 0;
+            }
+
+            // Create breakdown items from grouped oncosts
+            foreach ($groupedOncosts as $item) {
                 $costCode = null;
                 $label = $item['name'];
 
@@ -660,7 +737,7 @@ class LabourVarianceService
                 }
 
                 if ($costCode) {
-                    $forecastAmount = $item['amount'] ?? 0;
+                    $forecastAmount = $item['amount'];
                     $actualAmount = $this->getActualForCostCode($weekCosts, $costCode);
 
                     $breakdown[] = [
@@ -674,92 +751,91 @@ class LabourVarianceService
                 }
             }
         } else {
-            // For worked hours, use the regular on_costs structure
+            // For worked hours, collect oncosts from all sections (worked, leave, RDO, PH)
+            $allOncostItems = [];
 
-            // Super (oncost - still paid during leave)
-            if ($costCodes['super'] ?? null) {
-                $forecastAmount = $costBreakdown['super'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['super']);
-                $breakdown[] = [
-                    'label' => 'Super',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['super'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Add worked hours oncosts
+            if (isset($costBreakdown['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['oncosts']['items']);
             }
 
-            // BERT (oncost - still paid during leave)
-            if ($costCodes['bert'] ?? null) {
-                $forecastAmount = $costBreakdown['on_costs']['bert'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['bert']);
-                $breakdown[] = [
-                    'label' => 'BERT',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['bert'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Add leave oncosts
+            if (isset($costBreakdown['leave']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['leave']['oncosts']['items']);
             }
 
-            // BEWT (oncost - still paid during leave)
-            if ($costCodes['bewt'] ?? null) {
-                $forecastAmount = $costBreakdown['on_costs']['bewt'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['bewt']);
-                $breakdown[] = [
-                    'label' => 'BEWT',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['bewt'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Add RDO oncosts
+            if (isset($costBreakdown['rdo']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['rdo']['oncosts']['items']);
             }
 
-            // CIPQ (oncost - still paid during leave)
-            if ($costCodes['cipq'] ?? null) {
-                $forecastAmount = $costBreakdown['on_costs']['cipq'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['cipq']);
-                $breakdown[] = [
-                    'label' => 'CIPQ',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['cipq'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Add Public Holiday oncosts
+            if (isset($costBreakdown['public_holiday_not_worked']['oncosts']['items'])) {
+                $allOncostItems = array_merge($allOncostItems, $costBreakdown['public_holiday_not_worked']['oncosts']['items']);
             }
 
-            // Payroll Tax (oncost - still paid during leave)
-            if ($costCodes['payroll_tax'] ?? null) {
-                $forecastAmount = $costBreakdown['on_costs']['payroll_tax'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['payroll_tax']);
-                $breakdown[] = [
-                    'label' => 'Payroll Tax',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['payroll_tax'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Group oncosts by code and sum amounts
+            $groupedOncosts = [];
+            foreach ($allOncostItems as $item) {
+                $code = $item['code'];
+                if (!isset($groupedOncosts[$code])) {
+                    $groupedOncosts[$code] = [
+                        'code' => $code,
+                        'name' => $item['name'],
+                        'amount' => 0,
+                    ];
+                }
+                $groupedOncosts[$code]['amount'] += $item['amount'] ?? 0;
             }
 
-            // WorkCover (oncost - still paid during leave)
-            if ($costCodes['workcover'] ?? null) {
-                $forecastAmount = $costBreakdown['on_costs']['workcover'] ?? 0;
-                $actualAmount = $this->getActualForCostCode($weekCosts, $costCodes['workcover']);
-                $breakdown[] = [
-                    'label' => 'WorkCover',
-                    'category' => 'oncosts',
-                    'cost_code' => $costCodes['workcover'],
-                    'forecast' => round($forecastAmount, 2),
-                    'actual' => round($actualAmount, 2),
-                    'variance' => round($actualAmount - $forecastAmount, 2),
-                ];
+            // Create breakdown items from grouped oncosts (using same logic as leave-only)
+            foreach ($groupedOncosts as $item) {
+                $costCode = null;
+                $label = $item['name'];
+
+                switch ($item['code']) {
+                    case 'SUPER':
+                        $costCode = $costCodes['super'] ?? null;
+                        $label = 'Super';
+                        break;
+                    case 'BERT':
+                        $costCode = $costCodes['bert'] ?? null;
+                        $label = 'BERT';
+                        break;
+                    case 'BEWT':
+                        $costCode = $costCodes['bewt'] ?? null;
+                        $label = 'BEWT';
+                        break;
+                    case 'CIPQ':
+                        $costCode = $costCodes['cipq'] ?? null;
+                        $label = 'CIPQ';
+                        break;
+                    case 'PAYROLL_TAX':
+                        $costCode = $costCodes['payroll_tax'] ?? null;
+                        $label = 'Payroll Tax';
+                        break;
+                    case 'WORKCOVER':
+                        $costCode = $costCodes['workcover'] ?? null;
+                        $label = 'WorkCover';
+                        break;
+                }
+
+                if ($costCode) {
+                    $forecastAmount = $item['amount'];
+                    $actualAmount = $this->getActualForCostCode($weekCosts, $costCode);
+
+                    $breakdown[] = [
+                        'label' => $label,
+                        'category' => 'oncosts',
+                        'cost_code' => $costCode,
+                        'forecast' => round($forecastAmount, 2),
+                        'actual' => round($actualAmount, 2),
+                        'variance' => round($actualAmount - $forecastAmount, 2),
+                    ];
+                }
             }
         }
+
 
         return $breakdown;
     }

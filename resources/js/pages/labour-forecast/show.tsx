@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -91,6 +92,7 @@ interface CustomAllowance {
     code: string;
     rate: number;
     rate_type: 'hourly' | 'daily' | 'weekly';
+    paid_to_rdo: boolean;
     weekly_cost: number;
 }
 
@@ -103,6 +105,9 @@ interface ConfiguredTemplate {
     cost_code_prefix: string | null;
     sort_order: number;
     overtime_enabled: boolean;
+    rdo_fares_travel: boolean;
+    rdo_site_allowance: boolean;
+    rdo_multistorey_allowance: boolean;
     cost_breakdown: CostBreakdown;
     custom_allowances?: CustomAllowance[];
 }
@@ -131,6 +136,8 @@ interface WeekEntry {
     headcount: number;
     overtime_hours: number;
     leave_hours: number;
+    rdo_hours: number;
+    public_holiday_not_worked_hours: number;
 }
 
 interface SavedForecast {
@@ -186,7 +193,9 @@ interface RowData {
     isCostRow?: boolean;
     isOvertimeRow?: boolean;
     isLeaveRow?: boolean;
-    parentTemplateId?: string; // For overtime/leave rows, links to parent template
+    isRdoRow?: boolean;
+    isPublicHolidayRow?: boolean;
+    parentTemplateId?: string; // For overtime/leave/RDO/PH rows, links to parent template
     [key: string]: string | number | boolean | undefined | null;
 }
 
@@ -239,7 +248,11 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         allowance_type_id: number;
         rate: number;
         rate_type: 'hourly' | 'daily' | 'weekly';
+        paid_to_rdo: boolean;
     }>>([]);
+    const [rdoFaresTravel, setRdoFaresTravel] = useState(true);
+    const [rdoSiteAllowance, setRdoSiteAllowance] = useState(false);
+    const [rdoMultistoreyAllowance, setRdoMultistoreyAllowance] = useState(false);
     const [isSavingAllowances, setIsSavingAllowances] = useState(false);
 
     // Selected cell state for fill operations
@@ -325,6 +338,20 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         return savedWeekData.leave_hours ?? 0;
     };
 
+    // Helper to extract RDO hours from saved data
+    const getRdoFromSaved = (savedWeekData: WeekEntry | number | undefined): number => {
+        if (savedWeekData === undefined) return 0;
+        if (typeof savedWeekData === 'number') return 0; // Old format has no RDO
+        return savedWeekData.rdo_hours ?? 0;
+    };
+
+    // Helper to extract Public Holiday Not Worked hours from saved data
+    const getPublicHolidayFromSaved = (savedWeekData: WeekEntry | number | undefined): number => {
+        if (savedWeekData === undefined) return 0;
+        if (typeof savedWeekData === 'number') return 0; // Old format has no PH
+        return savedWeekData.public_holiday_not_worked_hours ?? 0;
+    };
+
     // Initialize row data with work types (and saved data if available)
     // Creates both regular rows and overtime rows for each work type (if overtime enabled)
     const [rowData, setRowData] = useState<RowData[]>(() => {
@@ -376,6 +403,34 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 leaveRow[week.key] = getLeaveFromSaved(savedWeekData);
             });
             rows.push(leaveRow);
+
+            // Always create RDO row (wages paid from balance, accruals and oncosts ARE job costed)
+            const rdoRow: RowData = {
+                id: `${wt.id}_rdo`,
+                workType: `${wt.name} (RDO Hrs)`,
+                hourlyRate: null, // No wage rate shown - wages paid from balance
+                isRdoRow: true,
+                parentTemplateId: wt.id,
+            };
+            weeks.forEach((week) => {
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                rdoRow[week.key] = getRdoFromSaved(savedWeekData);
+            });
+            rows.push(rdoRow);
+
+            // Always create Public Holiday Not Worked row (all costs job costed)
+            const phRow: RowData = {
+                id: `${wt.id}_ph`,
+                workType: `${wt.name} (PH Not Worked Hrs)`,
+                hourlyRate: wt.hourlyRate, // Same as ordinary rate
+                isPublicHolidayRow: true,
+                parentTemplateId: wt.id,
+            };
+            weeks.forEach((week) => {
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                phRow[week.key] = getPublicHolidayFromSaved(savedWeekData);
+            });
+            rows.push(phRow);
         });
         return rows;
     });
@@ -441,6 +496,42 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                     });
                     newRows.push(leaveRow);
                 }
+
+                // Always handle RDO row
+                const existingRdoRow = prevRows.find((r) => r.id === `${wt.id}_rdo`);
+                if (existingRdoRow) {
+                    newRows.push({ ...existingRdoRow, workType: `${wt.name} (RDO Hrs)` });
+                } else {
+                    const rdoRow: RowData = {
+                        id: `${wt.id}_rdo`,
+                        workType: `${wt.name} (RDO Hrs)`,
+                        hourlyRate: null,
+                        isRdoRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        rdoRow[week.key] = 0;
+                    });
+                    newRows.push(rdoRow);
+                }
+
+                // Always handle Public Holiday Not Worked row
+                const existingPhRow = prevRows.find((r) => r.id === `${wt.id}_ph`);
+                if (existingPhRow) {
+                    newRows.push({ ...existingPhRow, workType: `${wt.name} (PH Not Worked Hrs)`, hourlyRate: wt.hourlyRate });
+                } else {
+                    const phRow: RowData = {
+                        id: `${wt.id}_ph`,
+                        workType: `${wt.name} (PH Not Worked Hrs)`,
+                        hourlyRate: wt.hourlyRate,
+                        isPublicHolidayRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        phRow[week.key] = 0;
+                    });
+                    newRows.push(phRow);
+                }
             });
             return newRows;
         });
@@ -456,7 +547,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         // Debounce the cost calculation (500ms)
         costCalculationTimeoutRef.current = setTimeout(async () => {
             // Calculate costs for each week
-            const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow);
+            const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
             const newCosts: { [weekKey: string]: number } = {};
 
             for (const week of weeks) {
@@ -465,15 +556,19 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                     .map((row) => {
                         const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
                         const leaveRow = rowData.find((r) => r.id === `${row.id}_leave`);
+                        const rdoRow = rowData.find((r) => r.id === `${row.id}_rdo`);
+                        const phRow = rowData.find((r) => r.id === `${row.id}_ph`);
 
                         return {
                             template_id: row.configId,
                             headcount: Number(row[week.key]) || 0,
                             overtime_hours: otRow ? Number(otRow[week.key]) || 0 : 0,
                             leave_hours: leaveRow ? Number(leaveRow[week.key]) || 0 : 0,
+                            rdo_hours: rdoRow ? Number(rdoRow[week.key]) || 0 : 0,
+                            public_holiday_not_worked_hours: phRow ? Number(phRow[week.key]) || 0 : 0,
                         };
                     })
-                    .filter(t => t.template_id !== undefined && (t.headcount > 0 || t.overtime_hours > 0 || t.leave_hours > 0));
+                    .filter(t => t.template_id !== undefined && (t.headcount > 0 || t.overtime_hours > 0 || t.leave_hours > 0 || t.rdo_hours > 0 || t.public_holiday_not_worked_hours > 0));
 
                 // Skip if no data for this week
                 if (templates.length === 0) {
@@ -752,16 +847,20 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
         setIsSaving(true);
 
-        // Build entries structure: { configId: { weeks: [ { week_ending, headcount, overtime_hours, leave_hours } ] } }
+        // Build entries structure: { configId: { weeks: [ { week_ending, headcount, overtime_hours, leave_hours, rdo_hours, public_holiday_not_worked_hours } ] } }
         const entries = configuredTemplates.map((template) => {
             const row = rowData.find((r) => r.id === `template_${template.template_id}`);
             const otRow = rowData.find((r) => r.id === `template_${template.template_id}_ot`);
             const leaveRow = rowData.find((r) => r.id === `template_${template.template_id}_leave`);
+            const rdoRow = rowData.find((r) => r.id === `template_${template.template_id}_rdo`);
+            const phRow = rowData.find((r) => r.id === `template_${template.template_id}_ph`);
             const weekData = weeks.map((week) => ({
                 week_ending: week.weekEnding,
                 headcount: row ? Number(row[week.key]) || 0 : 0,
                 overtime_hours: otRow ? Number(otRow[week.key]) || 0 : 0,
                 leave_hours: leaveRow ? Number(leaveRow[week.key]) || 0 : 0,
+                rdo_hours: rdoRow ? Number(rdoRow[week.key]) || 0 : 0,
+                public_holiday_not_worked_hours: phRow ? Number(phRow[week.key]) || 0 : 0,
             }));
             return {
                 template_id: template.id,
@@ -948,8 +1047,12 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 allowance_type_id: a.allowance_type_id,
                 rate: a.rate,
                 rate_type: a.rate_type,
+                paid_to_rdo: a.paid_to_rdo,
             }))
         );
+        setRdoFaresTravel(template.rdo_fares_travel ?? true);
+        setRdoSiteAllowance(template.rdo_site_allowance ?? false);
+        setRdoMultistoreyAllowance(template.rdo_multistorey_allowance ?? false);
         setAllowanceDialogOpen(true);
     };
 
@@ -962,6 +1065,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 allowance_type_id: allowanceTypeId,
                 rate: allowanceType.default_rate || 0,
                 rate_type: 'hourly' as const,
+                paid_to_rdo: false,
             },
         ]);
     };
@@ -982,6 +1086,12 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         );
     };
 
+    const handleUpdateAllowancePaidToRdo = (allowanceTypeId: number, paid_to_rdo: boolean) => {
+        setAllowanceConfig((prev) =>
+            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, paid_to_rdo } : a))
+        );
+    };
+
     const handleSaveAllowances = () => {
         if (!selectedTemplateForAllowances || isSavingAllowances) return;
         setIsSavingAllowances(true);
@@ -990,7 +1100,12 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 location: location.id,
                 template: selectedTemplateForAllowances.id,
             }),
-            { allowances: allowanceConfig },
+            {
+                allowances: allowanceConfig,
+                rdo_fares_travel: rdoFaresTravel,
+                rdo_site_allowance: rdoSiteAllowance,
+                rdo_multistorey_allowance: rdoMultistoreyAllowance,
+            },
             {
                 preserveScroll: true,
                 onSuccess: () => {
@@ -1702,6 +1817,63 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                             </p>
                         </div>
 
+                        {/* RDO Standard Allowances Configuration */}
+                        <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-900/20">
+                            <h3 className="mb-3 text-sm font-medium text-purple-700 dark:text-purple-400">
+                                RDO (Rostered Days Off) Allowances
+                            </h3>
+                            <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
+                                Configure which standard allowances are paid during RDO hours. Custom allowances can be configured individually below.
+                            </p>
+
+                            <div className="space-y-2">
+                                {/* Fares/Travel Allowance */}
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="rdo-fares-travel"
+                                        checked={rdoFaresTravel}
+                                        onCheckedChange={(checked) => setRdoFaresTravel(checked as boolean)}
+                                    />
+                                    <label
+                                        htmlFor="rdo-fares-travel"
+                                        className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                                    >
+                                        Pay Fares/Travel allowance during RDO
+                                    </label>
+                                </div>
+
+                                {/* Site Allowance */}
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="rdo-site"
+                                        checked={rdoSiteAllowance}
+                                        onCheckedChange={(checked) => setRdoSiteAllowance(checked as boolean)}
+                                    />
+                                    <label
+                                        htmlFor="rdo-site"
+                                        className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                                    >
+                                        Pay Site allowance during RDO
+                                    </label>
+                                </div>
+
+                                {/* Multistorey Allowance */}
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="rdo-multistorey"
+                                        checked={rdoMultistoreyAllowance}
+                                        onCheckedChange={(checked) => setRdoMultistoreyAllowance(checked as boolean)}
+                                    />
+                                    <label
+                                        htmlFor="rdo-multistorey"
+                                        className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                                    >
+                                        Pay Multistorey allowance during RDO
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Configured Allowances */}
                         <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                             <h3 className="mb-3 text-sm font-medium">Active Allowances</h3>
@@ -1720,71 +1892,104 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                         return (
                                             <div
                                                 key={config.allowance_type_id}
-                                                className="flex items-center gap-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800"
+                                                className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800"
                                             >
-                                                <div className="flex-1">
-                                                    <div className="font-medium">{allowanceType.name}</div>
-                                                    {allowanceType.description && (
-                                                        <div className="text-xs text-slate-500">{allowanceType.description}</div>
-                                                    )}
-                                                </div>
-
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-sm text-slate-500">$</span>
-                                                        <Input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            value={config.rate}
-                                                            onChange={(e) =>
-                                                                handleUpdateAllowanceRate(
-                                                                    config.allowance_type_id,
-                                                                    parseFloat(e.target.value) || 0
-                                                                )
-                                                            }
-                                                            className="h-8 w-20 text-right"
-                                                        />
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex-1">
+                                                        <div className="font-medium">{allowanceType.name}</div>
+                                                        {allowanceType.description && (
+                                                            <div className="text-xs text-slate-500">{allowanceType.description}</div>
+                                                        )}
                                                     </div>
 
-                                                    <Select
-                                                        value={config.rate_type}
-                                                        onValueChange={(value) =>
-                                                            handleUpdateAllowanceRateType(
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-sm text-slate-500">$</span>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={config.rate}
+                                                                onChange={(e) =>
+                                                                    handleUpdateAllowanceRate(
+                                                                        config.allowance_type_id,
+                                                                        parseFloat(e.target.value) || 0
+                                                                    )
+                                                                }
+                                                                className="h-8 w-20 text-right"
+                                                            />
+                                                        </div>
+
+                                                        <Select
+                                                            value={config.rate_type}
+                                                            onValueChange={(value) =>
+                                                                handleUpdateAllowanceRateType(
+                                                                    config.allowance_type_id,
+                                                                    value as 'hourly' | 'daily' | 'weekly'
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="h-8 w-24">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="hourly">/hour</SelectItem>
+                                                                <SelectItem value="daily">/day</SelectItem>
+                                                                <SelectItem value="weekly">/week</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <div className="rounded bg-green-100 px-2 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                                                    {formatCurrency(weeklyCost)}/wk
+                                                                </div>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                Weekly cost: {formatCurrency(config.rate)} × {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
+                                                            </TooltipContent>
+                                                        </Tooltip>
+
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-red-500 hover:text-red-700"
+                                                            onClick={() => handleRemoveAllowance(config.allowance_type_id)}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {/* RDO Option */}
+                                                <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+                                                    <Checkbox
+                                                        id={`rdo-${config.allowance_type_id}`}
+                                                        checked={config.paid_to_rdo}
+                                                        onCheckedChange={(checked) =>
+                                                            handleUpdateAllowancePaidToRdo(
                                                                 config.allowance_type_id,
-                                                                value as 'hourly' | 'daily' | 'weekly'
+                                                                checked as boolean
                                                             )
                                                         }
+                                                    />
+                                                    <label
+                                                        htmlFor={`rdo-${config.allowance_type_id}`}
+                                                        className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
                                                     >
-                                                        <SelectTrigger className="h-8 w-24">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="hourly">/hour</SelectItem>
-                                                            <SelectItem value="daily">/day</SelectItem>
-                                                            <SelectItem value="weekly">/week</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-
+                                                        Pay this allowance during RDO hours
+                                                    </label>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="rounded bg-green-100 px-2 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                                                {formatCurrency(weeklyCost)}/wk
-                                                            </div>
+                                                            <Info className="h-4 w-4 text-slate-400" />
                                                         </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            Weekly cost: {formatCurrency(config.rate)} × {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
+                                                        <TooltipContent className="max-w-xs">
+                                                            <p className="text-xs">
+                                                                When enabled, this allowance will be included when calculating costs for RDO (Rostered Days Off) hours.
+                                                                Fares/Travel allowances are always paid during RDO.
+                                                            </p>
                                                         </TooltipContent>
                                                     </Tooltip>
-
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="text-red-500 hover:text-red-700"
-                                                        onClick={() => handleRemoveAllowance(config.allowance_type_id)}
-                                                    >
-                                                        <X className="h-4 w-4" />
-                                                    </Button>
                                                 </div>
                                             </div>
                                         );

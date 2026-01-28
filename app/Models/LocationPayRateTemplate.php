@@ -19,6 +19,9 @@ class LocationPayRateTemplate extends Model
         'sort_order',
         'is_active',
         'overtime_enabled',
+        'rdo_fares_travel',
+        'rdo_site_allowance',
+        'rdo_multistorey_allowance',
     ];
 
     protected $casts = [
@@ -26,6 +29,9 @@ class LocationPayRateTemplate extends Model
         'sort_order' => 'integer',
         'is_active' => 'boolean',
         'overtime_enabled' => 'boolean',
+        'rdo_fares_travel' => 'boolean',
+        'rdo_site_allowance' => 'boolean',
+        'rdo_multistorey_allowance' => 'boolean',
     ];
 
     public function location(): BelongsTo

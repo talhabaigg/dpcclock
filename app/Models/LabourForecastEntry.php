@@ -14,6 +14,8 @@ class LabourForecastEntry extends Model
         'headcount',
         'overtime_hours',
         'leave_hours',
+        'rdo_hours',
+        'public_holiday_not_worked_hours',
         'hourly_rate',
         'weekly_cost',
         'cost_breakdown_snapshot',
@@ -24,6 +26,8 @@ class LabourForecastEntry extends Model
         'headcount' => 'decimal:2',
         'overtime_hours' => 'decimal:2',
         'leave_hours' => 'decimal:2',
+        'rdo_hours' => 'decimal:2',
+        'public_holiday_not_worked_hours' => 'decimal:2',
         'hourly_rate' => 'decimal:2',
         'weekly_cost' => 'decimal:2',
         'cost_breakdown_snapshot' => 'array',
@@ -99,5 +103,21 @@ class LabourForecastEntry extends Model
     public function getLeaveHours(): float
     {
         return (float) ($this->leave_hours ?? 0);
+    }
+
+    /**
+     * Get RDO hours (wages paid from balance, but accruals and oncosts ARE job costed)
+     */
+    public function getRdoHours(): float
+    {
+        return (float) ($this->rdo_hours ?? 0);
+    }
+
+    /**
+     * Get Public Holiday Not Worked hours (all costs job costed at ordinary rate)
+     */
+    public function getPublicHolidayNotWorkedHours(): float
+    {
+        return (float) ($this->public_holiday_not_worked_hours ?? 0);
     }
 }

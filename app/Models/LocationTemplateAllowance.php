@@ -13,11 +13,13 @@ class LocationTemplateAllowance extends Model
         'rate',
         'rate_type',
         'is_active',
+        'paid_to_rdo',
     ];
 
     protected $casts = [
         'rate' => 'decimal:2',
         'is_active' => 'boolean',
+        'paid_to_rdo' => 'boolean',
     ];
 
     public function locationPayRateTemplate(): BelongsTo
@@ -54,5 +56,13 @@ class LocationTemplateAllowance extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to get allowances paid during RDO
+     */
+    public function scopePaidToRdo($query)
+    {
+        return $query->where('paid_to_rdo', true);
     }
 }

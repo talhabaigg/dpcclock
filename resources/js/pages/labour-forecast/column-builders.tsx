@@ -173,6 +173,9 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 if (params.data?.isTotal) return 'font-bold';
                 if (params.data?.isCostRow) return 'font-bold text-green-700 dark:text-green-300';
                 if (params.data?.isOvertimeRow) return 'text-orange-600 dark:text-orange-400 italic';
+                if (params.data?.isLeaveRow) return 'text-blue-600 dark:text-blue-400 italic';
+                if (params.data?.isRdoRow) return 'text-purple-600 dark:text-purple-400 italic';
+                if (params.data?.isPublicHolidayRow) return 'text-indigo-600 dark:text-indigo-400 italic';
                 return '';
             },
         },
@@ -191,6 +194,9 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 if (params.data?.isTotal) return 'font-bold text-center';
                 if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
                 if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
+                if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 italic';
+                if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400 italic';
+                if (params.data?.isPublicHolidayRow) return 'text-center text-indigo-600 dark:text-indigo-400 italic';
                 return 'text-center';
             },
             valueParser: (params) => {

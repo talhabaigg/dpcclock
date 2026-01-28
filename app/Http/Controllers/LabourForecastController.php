@@ -139,6 +139,9 @@ class LabourForecastController extends Controller
                     'cost_code_prefix' => $config->cost_code_prefix,
                     'sort_order' => $config->sort_order,
                     'overtime_enabled' => $config->overtime_enabled ?? false,
+                    'rdo_fares_travel' => $config->rdo_fares_travel ?? true,
+                    'rdo_site_allowance' => $config->rdo_site_allowance ?? false,
+                    'rdo_multistorey_allowance' => $config->rdo_multistorey_allowance ?? false,
                     'cost_breakdown' => $costBreakdown,
                     'custom_allowances' => $config->customAllowances->map(fn ($a) => [
                         'id' => $a->id,
@@ -147,6 +150,7 @@ class LabourForecastController extends Controller
                         'code' => $a->allowanceType->code,
                         'rate' => (float) $a->rate,
                         'rate_type' => $a->rate_type,
+                        'paid_to_rdo' => (bool) $a->paid_to_rdo,
                         'weekly_cost' => $a->getWeeklyCost(),
                     ]),
                 ];
@@ -221,6 +225,8 @@ class LabourForecastController extends Controller
                     'headcount' => (float) $entry->headcount,
                     'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
                     'leave_hours' => (float) ($entry->leave_hours ?? 0),
+                    'rdo_hours' => (float) ($entry->rdo_hours ?? 0),
+                    'public_holiday_not_worked_hours' => (float) ($entry->public_holiday_not_worked_hours ?? 0),
                 ];
             }
         }
@@ -278,6 +284,8 @@ class LabourForecastController extends Controller
             'entries.*.weeks.*.headcount' => 'required|numeric|min:0|max:100',
             'entries.*.weeks.*.overtime_hours' => 'nullable|numeric|min:0|max:200',
             'entries.*.weeks.*.leave_hours' => 'nullable|numeric|min:0|max:200',
+            'entries.*.weeks.*.rdo_hours' => 'nullable|numeric|min:0|max:200',
+            'entries.*.weeks.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0|max:200',
         ]);
 
         $user = Auth::user();
@@ -319,16 +327,20 @@ class LabourForecastController extends Controller
                     $headcount = (float) $weekData['headcount'];
                     $overtimeHours = (float) ($weekData['overtime_hours'] ?? 0);
                     $leaveHours = (float) ($weekData['leave_hours'] ?? 0);
+                    $rdoHours = (float) ($weekData['rdo_hours'] ?? 0);
+                    $publicHolidayHours = (float) ($weekData['public_holiday_not_worked_hours'] ?? 0);
 
-                    // Only create entry if there's headcount, overtime, or leave hours
-                    if ($headcount > 0 || $overtimeHours > 0 || $leaveHours > 0) {
-                        // Calculate cost breakdown with overtime and leave support
+                    // Only create entry if there's headcount, overtime, leave, RDO, or PH hours
+                    if ($headcount > 0 || $overtimeHours > 0 || $leaveHours > 0 || $rdoHours > 0 || $publicHolidayHours > 0) {
+                        // Calculate cost breakdown with overtime, leave, RDO, and PH support
                         $costBreakdown = $costCalculator->calculateWithOvertime(
                             $location,
                             $templateConfig,
                             $headcount,
                             $overtimeHours,
-                            $leaveHours
+                            $leaveHours,
+                            $rdoHours,
+                            $publicHolidayHours
                         );
 
                         LabourForecastEntry::create([
@@ -338,6 +350,8 @@ class LabourForecastController extends Controller
                             'headcount' => $headcount,
                             'overtime_hours' => $overtimeHours,
                             'leave_hours' => $leaveHours,
+                            'rdo_hours' => $rdoHours,
+                            'public_holiday_not_worked_hours' => $publicHolidayHours,
                             'hourly_rate' => $costBreakdown['base_hourly_rate'],
                             'weekly_cost' => $costBreakdown['total_weekly_cost'],
                             'cost_breakdown_snapshot' => $costBreakdown,
@@ -587,9 +601,20 @@ class LabourForecastController extends Controller
             'allowances.*.allowance_type_id' => 'required|exists:allowance_types,id',
             'allowances.*.rate' => 'required|numeric|min:0',
             'allowances.*.rate_type' => 'required|in:hourly,daily,weekly',
+            'allowances.*.paid_to_rdo' => 'nullable|boolean',
+            'rdo_fares_travel' => 'nullable|boolean',
+            'rdo_site_allowance' => 'nullable|boolean',
+            'rdo_multistorey_allowance' => 'nullable|boolean',
         ]);
 
         DB::transaction(function () use ($template, $request) {
+            // Update RDO standard allowance flags
+            $template->update([
+                'rdo_fares_travel' => $request->input('rdo_fares_travel', true),
+                'rdo_site_allowance' => $request->input('rdo_site_allowance', false),
+                'rdo_multistorey_allowance' => $request->input('rdo_multistorey_allowance', false),
+            ]);
+
             // Get IDs of allowances being updated
             $allowanceIds = collect($request->allowances)
                 ->pluck('allowance_type_id')
@@ -611,6 +636,7 @@ class LabourForecastController extends Controller
                         'rate' => $allowanceData['rate'],
                         'rate_type' => $allowanceData['rate_type'],
                         'is_active' => true,
+                        'paid_to_rdo' => $allowanceData['paid_to_rdo'] ?? false,
                     ]
                 );
             }
@@ -941,6 +967,8 @@ class LabourForecastController extends Controller
                 'headcount' => (float) $entry->headcount,
                 'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
                 'leave_hours' => (float) ($entry->leave_hours ?? 0),
+                'rdo_hours' => (float) ($entry->rdo_hours ?? 0),
+                'public_holiday_not_worked_hours' => (float) ($entry->public_holiday_not_worked_hours ?? 0),
                 'hourly_rate' => (float) $entry->hourly_rate,
                 'weekly_cost' => (float) $entry->weekly_cost,
                 'cost_breakdown' => $costBreakdown,
@@ -976,6 +1004,8 @@ class LabourForecastController extends Controller
             'templates.*.headcount' => 'required|numeric|min:0',
             'templates.*.overtime_hours' => 'nullable|numeric|min:0',
             'templates.*.leave_hours' => 'nullable|numeric|min:0',
+            'templates.*.rdo_hours' => 'nullable|numeric|min:0',
+            'templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
         ]);
 
         $calculator = new LabourCostCalculator();
@@ -995,13 +1025,17 @@ class LabourForecastController extends Controller
             $headcount = (float) $templateData['headcount'];
             $overtimeHours = (float) ($templateData['overtime_hours'] ?? 0);
             $leaveHours = (float) ($templateData['leave_hours'] ?? 0);
+            $rdoHours = (float) ($templateData['rdo_hours'] ?? 0);
+            $publicHolidayHours = (float) ($templateData['public_holiday_not_worked_hours'] ?? 0);
 
             $breakdown = $calculator->calculateWithOvertime(
                 $location,
                 $templateConfig,
                 $headcount,
                 $overtimeHours,
-                $leaveHours
+                $leaveHours,
+                $rdoHours,
+                $publicHolidayHours
             );
 
             // The breakdown already calculated total cost for the given headcount, OT, and leave
