@@ -163,6 +163,58 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
         }).format(value);
     };
 
+    // Calculate totals by cost code across all templates
+    const calculateCostCodeTotals = () => {
+        if (!data) return [];
+
+        const totals: { [code: string]: { name: string; amount: number } } = {};
+
+        data.templates.forEach((template) => {
+            const breakdown = template.cost_breakdown;
+
+            // NOTE: The cost_breakdown_snapshot is already calculated FOR the specific headcount
+            // (not per head), so we use the values directly without multiplying by headcount
+
+            // 03-01: Wages (Ordinary + Overtime + Leave Markups)
+            const wagesTotal =
+                (breakdown.ordinary?.marked_up || 0) +
+                (breakdown.overtime?.marked_up || 0) +
+                (breakdown.leave?.leave_markups?.total || 0);
+
+            if (!totals['03-01']) {
+                totals['03-01'] = { name: 'Wages', amount: 0 };
+            }
+            totals['03-01'].amount += wagesTotal;
+
+            // Oncosts from worked hours (already calculated for the headcount)
+            breakdown.oncosts?.items?.forEach((oncost) => {
+                const code = oncost.code.replace(/_/g, '-');
+                if (!totals[code]) {
+                    totals[code] = { name: oncost.name, amount: 0 };
+                }
+                totals[code].amount += oncost.amount;
+            });
+
+            // Oncosts from leave hours (if any)
+            if (breakdown.leave?.oncosts?.items) {
+                breakdown.leave.oncosts.items.forEach((oncost) => {
+                    const code = oncost.code.replace(/_/g, '-');
+                    if (!totals[code]) {
+                        totals[code] = { name: oncost.name, amount: 0 };
+                    }
+                    totals[code].amount += oncost.amount;
+                });
+            }
+        });
+
+        // Convert to array and sort by code
+        return Object.entries(totals)
+            .map(([code, data]) => ({ code, ...data }))
+            .sort((a, b) => a.code.localeCompare(b.code));
+    };
+
+    const costCodeTotals = data ? calculateCostCodeTotals() : [];
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -207,6 +259,36 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 <p className="text-lg font-semibold">{data.week_ending}</p>
                             </div>
                         </div>
+
+                        {/* Total by Cost Code Summary */}
+                        {costCodeTotals.length > 0 && (
+                            <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+                                <h3 className="text-lg font-bold mb-3 text-primary">Total by Cost Code</h3>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    Summary of all costs grouped by GL account code across all work types
+                                </p>
+                                <div className="space-y-2">
+                                    {costCodeTotals.map((item) => (
+                                        <div
+                                            key={item.code}
+                                            className="flex justify-between items-center rounded-lg bg-background p-3 border border-border"
+                                        >
+                                            <div>
+                                                <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
+                                                <span className="ml-3 text-muted-foreground">{item.name}</span>
+                                            </div>
+                                            <span className="text-lg font-bold">{formatCurrency(item.amount)}</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between items-center rounded-lg bg-green-50 dark:bg-green-900/20 p-4 border-2 border-green-200 dark:border-green-800 mt-4">
+                                        <span className="text-lg font-bold">Grand Total</span>
+                                        <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                            {formatCurrency(costCodeTotals.reduce((sum, item) => sum + item.amount, 0))}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Each Template Breakdown */}
                         {data.templates.map((template) => (
