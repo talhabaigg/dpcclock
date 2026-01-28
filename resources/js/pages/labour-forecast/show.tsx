@@ -14,7 +14,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { BarChart3, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, DollarSign, Expand, Info, Loader2, MessageSquare, Pencil, Plus, Save, Send, Settings, Trash2, TrendingUp, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { buildLabourForecastShowColumnDefs } from './column-builders';
-import { type ChartDataPoint, LabourForecastChart } from './LabourForecastChart';
+import { type ChartDataPoint, type WorkTypeDataset, LabourForecastChart } from './LabourForecastChart';
 import type { Week } from './types';
 import { CostBreakdownDialog } from './CostBreakdownDialog';
 import axios from 'axios';
@@ -868,12 +868,38 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         });
     }, [weeks, rowData, selectedCategory]);
 
+    // Build datasets for all work types (for multi-line chart)
+    const chartDatasets = useMemo<WorkTypeDataset[]>(() => {
+        return workTypes.map((wt) => {
+            const row = rowData.find((r) => r.id === wt.id);
+            return {
+                id: wt.id,
+                name: wt.name,
+                data: weeks.map((week) => ({
+                    weekKey: week.key,
+                    weekLabel: week.label,
+                    value: row ? Number(row[week.key]) || 0 : 0,
+                })),
+            };
+        });
+    }, [weeks, rowData, workTypes]);
+
     // Filter chart data for inline chart based on time range
     const inlineChartData = useMemo<ChartDataPoint[]>(() => {
         const rangeOption = TIME_RANGE_OPTIONS.find((r) => r.id === timeRange);
         if (!rangeOption?.weeks) return chartData; // 'all' - no filtering
         return chartData.slice(0, rangeOption.weeks);
     }, [chartData, timeRange]);
+
+    // Filter datasets for inline chart based on time range
+    const inlineChartDatasets = useMemo<WorkTypeDataset[]>(() => {
+        const rangeOption = TIME_RANGE_OPTIONS.find((r) => r.id === timeRange);
+        if (!rangeOption?.weeks) return chartDatasets; // 'all' - no filtering
+        return chartDatasets.map((ds) => ({
+            ...ds,
+            data: ds.data.slice(0, rangeOption.weeks),
+        }));
+    }, [chartDatasets, timeRange]);
 
     // Calculate grand total cost (sum of all weeks' costs)
     const grandTotalCost = useMemo(() => {
@@ -2201,7 +2227,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                     </DialogHeader>
 
                     <div className="min-h-0 flex-1 bg-white px-3 py-3 sm:px-5 sm:py-4 dark:bg-slate-900">
-                        <LabourForecastChart data={chartData} editable={selectedCategory !== 'all'} onEdit={handleChartEdit} />
+                        <LabourForecastChart
+                            data={chartData}
+                            datasets={selectedCategory === 'all' ? chartDatasets : undefined}
+                            editable={selectedCategory !== 'all'}
+                            onEdit={handleChartEdit}
+                            selectedWorkType={selectedCategory}
+                        />
                     </div>
 
                     <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
@@ -2478,7 +2510,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
                         {/* Inline Chart */}
                         <div className="h-[220px] max-w-96 min-w-96 bg-white p-2 sm:h-[280px] sm:min-w-full sm:p-3 dark:bg-slate-900">
-                            <LabourForecastChart data={inlineChartData} editable={selectedCategory !== 'all'} onEdit={handleChartEdit} />
+                            <LabourForecastChart
+                                data={inlineChartData}
+                                datasets={selectedCategory === 'all' ? inlineChartDatasets : undefined}
+                                editable={selectedCategory !== 'all'}
+                                onEdit={handleChartEdit}
+                                selectedWorkType={selectedCategory}
+                            />
                         </div>
 
                         {/* Chart Footer Tip */}

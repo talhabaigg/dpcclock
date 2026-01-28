@@ -26,10 +26,18 @@ export interface ChartDataPoint {
     value: number;
 }
 
+export interface WorkTypeDataset {
+    id: string;
+    name: string;
+    data: ChartDataPoint[];
+}
+
 interface LabourForecastChartProps {
     data: ChartDataPoint[];
+    datasets?: WorkTypeDataset[];
     editable: boolean;
-    onEdit: (weekKey: string, value: number) => void;
+    onEdit: (weekKey: string, value: number, workTypeId?: string) => void;
+    selectedWorkType?: string; // 'all' or specific work type id
 }
 
 interface EditBox {
@@ -39,7 +47,30 @@ interface EditBox {
     value: string;
 }
 
-export function LabourForecastChart({ data, editable, onEdit }: LabourForecastChartProps) {
+// Color palette for multiple work types
+const WORK_TYPE_COLORS = [
+    { line: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' },   // Indigo
+    { line: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' },   // Amber
+    { line: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' },   // Emerald
+    { line: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' },    // Red
+    { line: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' },   // Violet
+    { line: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' },    // Cyan
+    { line: '#f97316', bg: 'rgba(249, 115, 22, 0.2)' },   // Orange
+    { line: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },   // Pink
+];
+
+const WORK_TYPE_COLORS_DARK = [
+    { line: '#818cf8', bg: 'rgba(129, 140, 248, 0.3)' },  // Indigo
+    { line: '#fbbf24', bg: 'rgba(251, 191, 36, 0.3)' },   // Amber
+    { line: '#34d399', bg: 'rgba(52, 211, 153, 0.3)' },   // Emerald
+    { line: '#f87171', bg: 'rgba(248, 113, 113, 0.3)' },  // Red
+    { line: '#a78bfa', bg: 'rgba(167, 139, 250, 0.3)' },  // Violet
+    { line: '#22d3ee', bg: 'rgba(34, 211, 238, 0.3)' },   // Cyan
+    { line: '#fb923c', bg: 'rgba(251, 146, 60, 0.3)' },   // Orange
+    { line: '#f472b6', bg: 'rgba(244, 114, 182, 0.3)' },  // Pink
+];
+
+export function LabourForecastChart({ data, datasets, editable, onEdit, selectedWorkType = 'all' }: LabourForecastChartProps) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [editBox, setEditBox] = useState<EditBox | null>(null);
     const [editBoxDirty, setEditBoxDirty] = useState(false);
@@ -169,8 +200,41 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
         [COLORS],
     );
 
-    const chartData = useMemo(
-        () => ({
+    const chartData = useMemo(() => {
+        const colorPalette = isDark ? WORK_TYPE_COLORS_DARK : WORK_TYPE_COLORS;
+
+        // Use datasets if provided (multiple work types), otherwise fall back to single data
+        if (datasets && datasets.length > 0) {
+            // Get labels from first dataset
+            const labels = datasets[0].data.map((d) => d.weekLabel);
+
+            return {
+                labels,
+                datasets: datasets.map((wt, idx) => {
+                    const colors = colorPalette[idx % colorPalette.length];
+                    return {
+                        label: wt.name,
+                        data: wt.data.map((d) => d.value),
+                        spanGaps: true,
+                        borderWidth: 2.5,
+                        borderColor: colors.line,
+                        tension: 0.4,
+                        fill: false, // No fill for multi-line chart
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        pointHitRadius: 14,
+                        pointBackgroundColor: colors.line,
+                        pointBorderColor: isDark ? '#1f2937' : '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverBorderWidth: 2.5,
+                        pointStyle: 'circle' as const,
+                    };
+                }),
+            };
+        }
+
+        // Single dataset (legacy support or 'all' view)
+        return {
             labels: data.map((d) => d.weekLabel),
             datasets: [
                 {
@@ -197,12 +261,13 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                     pointBorderColor: isDark ? '#1f2937' : '#ffffff',
                     pointBorderWidth: 2.5,
                     pointHoverBorderWidth: 3,
-                    pointStyle: 'circle',
+                    pointStyle: 'circle' as const,
                 },
             ],
-        }),
-        [data, COLORS, isDark],
-    );
+        };
+    }, [data, datasets, COLORS, isDark]);
+
+    const hasMultipleDatasets = datasets && datasets.length > 0;
 
     const options = useMemo<ChartOptions<'line'>>(
         () => ({
@@ -210,9 +275,10 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
             maintainAspectRatio: false,
             layout: {
                 padding: {
-                    top: 35,
+                    top: hasMultipleDatasets ? 10 : 35,
                     right: 10,
                     left: 10,
+                    bottom: hasMultipleDatasets ? 5 : 0,
                 },
             },
             animation: {
@@ -224,7 +290,21 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                 intersect: false,
             },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: hasMultipleDatasets,
+                    position: 'top' as const,
+                    align: 'start' as const,
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 15,
+                        font: {
+                            size: 11,
+                            family: "'Inter', system-ui, sans-serif",
+                        },
+                        color: COLORS.textColor,
+                    },
+                },
                 tooltip: {
                     enabled: true,
                     backgroundColor: COLORS.tooltipBg,
@@ -251,11 +331,13 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                         label: (ctx) => {
                             const v = ctx.parsed.y;
                             if (v == null) return '';
-                            return `Headcount: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                            const label = ctx.dataset.label || 'Headcount';
+                            return `${label}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
                         },
                     },
                 },
-                dragData: editable
+                // Disable drag editing for multi-dataset view
+                dragData: editable && !hasMultipleDatasets
                     ? {
                           round: 0,
                           showTooltip: true,
@@ -279,7 +361,8 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                       }
                     : false,
             },
-            onClick: (_evt: any, elements: any[], chart: any) => {
+            // Disable click editing for multi-dataset view
+            onClick: !hasMultipleDatasets ? (_evt: any, elements: any[], chart: any) => {
                 if (!editable) return;
                 if (!elements?.length) return;
 
@@ -318,7 +401,7 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                     index: idx,
                     value: nextInput,
                 });
-            },
+            } : undefined,
             scales: {
                 x: {
                     grid: {
@@ -357,7 +440,7 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                 },
             },
         }),
-        [data, editable, onEdit, COLORS, getEditBoxInput],
+        [data, editable, onEdit, COLORS, getEditBoxInput, hasMultipleDatasets],
     );
 
     return (
@@ -368,7 +451,7 @@ export function LabourForecastChart({ data, editable, onEdit }: LabourForecastCh
                 if (editBox) closeEditBox();
             }}
         >
-            <Line key={`chart-${isDark}-${editable}`} data={chartData} options={options} plugins={[dataLabelPlugin]} />
+            <Line key={`chart-${isDark}-${editable}-${hasMultipleDatasets}`} data={chartData} options={options} plugins={hasMultipleDatasets ? [] : [dataLabelPlugin]} />
 
             {editBox && (
                 <div
