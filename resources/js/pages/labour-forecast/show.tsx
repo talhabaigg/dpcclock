@@ -196,6 +196,7 @@ interface RowData {
     isRdoRow?: boolean;
     isPublicHolidayRow?: boolean;
     parentTemplateId?: string; // For overtime/leave/RDO/PH rows, links to parent template
+    isChildRow?: boolean; // True for OT/Leave/RDO/PH rows (children of parent work type)
     [key: string]: string | number | boolean | undefined | null;
 }
 
@@ -220,6 +221,28 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     // Summary comments state
     const [summaryExpanded, setSummaryExpanded] = useState(false);
     const [notes, setNotes] = useState(savedForecast?.notes || '');
+
+    // Expanded parent rows state (tracks which parent work types have children visible)
+    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+
+    // Toggle expanded state for a parent row
+    const toggleParentExpanded = useCallback((parentId: string) => {
+        setExpandedParents((prev) => {
+            const next = new Set(prev);
+            if (next.has(parentId)) {
+                next.delete(parentId);
+            } else {
+                next.add(parentId);
+            }
+            return next;
+        });
+    }, []);
+
+    // Check if a parent row has child rows
+    const hasChildRows = useCallback((parentId: string) => {
+        // All parent work types have child rows (Leave, RDO, PH, and possibly OT)
+        return true;
+    }, []);
 
     // Sync notes when savedForecast changes
     useEffect(() => {
@@ -353,11 +376,11 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     };
 
     // Initialize row data with work types (and saved data if available)
-    // Creates both regular rows and overtime rows for each work type (if overtime enabled)
+    // Creates both regular rows and child rows (OT/Leave/RDO/PH) for each work type
     const [rowData, setRowData] = useState<RowData[]>(() => {
         const rows: RowData[] = [];
         workTypes.forEach((wt) => {
-            // Regular headcount row
+            // Regular headcount row (parent)
             const row: RowData = {
                 id: wt.id,
                 workType: wt.name,
@@ -378,9 +401,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             if (wt.overtimeEnabled) {
                 const otRow: RowData = {
                     id: `${wt.id}_ot`,
-                    workType: `${wt.name} (OT Hrs)`,
+                    workType: 'OT Hours',
                     hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
                     isOvertimeRow: true,
+                    isChildRow: true,
                     parentTemplateId: wt.id,
                 };
                 weeks.forEach((week) => {
@@ -393,9 +417,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             // Always create leave row (for forecasting leave periods - oncosts only)
             const leaveRow: RowData = {
                 id: `${wt.id}_leave`,
-                workType: `${wt.name} (Leave Hrs)`,
+                workType: 'Leave Hours',
                 hourlyRate: null, // No wage rate - wages paid from accruals
                 isLeaveRow: true,
+                isChildRow: true,
                 parentTemplateId: wt.id,
             };
             weeks.forEach((week) => {
@@ -407,9 +432,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             // Always create RDO row (wages paid from balance, accruals and oncosts ARE job costed)
             const rdoRow: RowData = {
                 id: `${wt.id}_rdo`,
-                workType: `${wt.name} (RDO Hrs)`,
+                workType: 'RDO Hours',
                 hourlyRate: null, // No wage rate shown - wages paid from balance
                 isRdoRow: true,
+                isChildRow: true,
                 parentTemplateId: wt.id,
             };
             weeks.forEach((week) => {
@@ -421,9 +447,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             // Always create Public Holiday Not Worked row (all costs job costed)
             const phRow: RowData = {
                 id: `${wt.id}_ph`,
-                workType: `${wt.name} (PH Not Worked Hrs)`,
+                workType: 'PH Not Worked Hours',
                 hourlyRate: wt.hourlyRate, // Same as ordinary rate
                 isPublicHolidayRow: true,
+                isChildRow: true,
                 parentTemplateId: wt.id,
             };
             weeks.forEach((week) => {
@@ -440,7 +467,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         setRowData((prevRows) => {
             const newRows: RowData[] = [];
             workTypes.forEach((wt) => {
-                // Regular row
+                // Regular row (parent)
                 const existingRow = prevRows.find((r) => r.id === wt.id);
                 if (existingRow) {
                     newRows.push({ ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek, configId: wt.configId });
@@ -463,13 +490,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 if (wt.overtimeEnabled) {
                     const existingOtRow = prevRows.find((r) => r.id === `${wt.id}_ot`);
                     if (existingOtRow) {
-                        newRows.push({ ...existingOtRow, workType: `${wt.name} (OT Hrs)`, hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null });
+                        newRows.push({ ...existingOtRow, workType: 'OT Hours', hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null, isChildRow: true });
                     } else {
                         const otRow: RowData = {
                             id: `${wt.id}_ot`,
-                            workType: `${wt.name} (OT Hrs)`,
+                            workType: 'OT Hours',
                             hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
                             isOvertimeRow: true,
+                            isChildRow: true,
                             parentTemplateId: wt.id,
                         };
                         weeks.forEach((week) => {
@@ -482,13 +510,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 // Always handle leave row
                 const existingLeaveRow = prevRows.find((r) => r.id === `${wt.id}_leave`);
                 if (existingLeaveRow) {
-                    newRows.push({ ...existingLeaveRow, workType: `${wt.name} (Leave Hrs)` });
+                    newRows.push({ ...existingLeaveRow, workType: 'Leave Hours', isChildRow: true });
                 } else {
                     const leaveRow: RowData = {
                         id: `${wt.id}_leave`,
-                        workType: `${wt.name} (Leave Hrs)`,
+                        workType: 'Leave Hours',
                         hourlyRate: null,
                         isLeaveRow: true,
+                        isChildRow: true,
                         parentTemplateId: wt.id,
                     };
                     weeks.forEach((week) => {
@@ -500,13 +529,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 // Always handle RDO row
                 const existingRdoRow = prevRows.find((r) => r.id === `${wt.id}_rdo`);
                 if (existingRdoRow) {
-                    newRows.push({ ...existingRdoRow, workType: `${wt.name} (RDO Hrs)` });
+                    newRows.push({ ...existingRdoRow, workType: 'RDO Hours', isChildRow: true });
                 } else {
                     const rdoRow: RowData = {
                         id: `${wt.id}_rdo`,
-                        workType: `${wt.name} (RDO Hrs)`,
+                        workType: 'RDO Hours',
                         hourlyRate: null,
                         isRdoRow: true,
+                        isChildRow: true,
                         parentTemplateId: wt.id,
                     };
                     weeks.forEach((week) => {
@@ -518,13 +548,14 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                 // Always handle Public Holiday Not Worked row
                 const existingPhRow = prevRows.find((r) => r.id === `${wt.id}_ph`);
                 if (existingPhRow) {
-                    newRows.push({ ...existingPhRow, workType: `${wt.name} (PH Not Worked Hrs)`, hourlyRate: wt.hourlyRate });
+                    newRows.push({ ...existingPhRow, workType: 'PH Not Worked Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
                 } else {
                     const phRow: RowData = {
                         id: `${wt.id}_ph`,
-                        workType: `${wt.name} (PH Not Worked Hrs)`,
+                        workType: 'PH Not Worked Hours',
                         hourlyRate: wt.hourlyRate,
                         isPublicHolidayRow: true,
+                        isChildRow: true,
                         parentTemplateId: wt.id,
                     };
                     weeks.forEach((week) => {
@@ -606,40 +637,72 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
     // Calculate totals and cost rows
     const rowDataWithTotals = useMemo(() => {
         // Get only headcount rows (not overtime or leave rows)
-        const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow);
+        const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
 
-        // Total headcount row (excludes overtime and leave rows)
+        // Total headcount row (parent - excludes overtime, leave, RDO, PH rows)
         const totalRow: RowData = {
             id: 'total',
-            workType: 'Total Headcount',
+            workType: 'Total',
             isTotal: true,
         };
         weeks.forEach((week) => {
             totalRow[week.key] = headcountRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
-        // Total overtime hours row
+        // Total overtime hours row (child of Total)
         const totalOtRow: RowData = {
             id: 'total_ot',
-            workType: 'Total OT Hours',
+            workType: 'OT Hours',
             isTotal: true,
             isOvertimeRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
         };
         const overtimeRows = rowData.filter((r) => r.isOvertimeRow && !r.isTotal);
         weeks.forEach((week) => {
             totalOtRow[week.key] = overtimeRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
-        // Total leave hours row
+        // Total leave hours row (child of Total)
         const totalLeaveRow: RowData = {
             id: 'total_leave',
-            workType: 'Total Leave Hours',
+            workType: 'Leave Hours',
             isTotal: true,
             isLeaveRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
         };
         const leaveRows = rowData.filter((r) => r.isLeaveRow && !r.isTotal);
         weeks.forEach((week) => {
             totalLeaveRow[week.key] = leaveRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
+
+        // Total RDO hours row (child of Total)
+        const totalRdoRow: RowData = {
+            id: 'total_rdo',
+            workType: 'RDO Hours',
+            isTotal: true,
+            isRdoRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        const rdoRows = rowData.filter((r) => r.isRdoRow && !r.isTotal);
+        weeks.forEach((week) => {
+            totalRdoRow[week.key] = rdoRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
+
+        // Total Public Holiday Not Worked hours row (child of Total)
+        const totalPhRow: RowData = {
+            id: 'total_ph',
+            workType: 'PH Not Worked Hours',
+            isTotal: true,
+            isPublicHolidayRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        const phRows = rowData.filter((r) => r.isPublicHolidayRow && !r.isTotal);
+        weeks.forEach((week) => {
+            totalPhRow[week.key] = phRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
         // Total weekly cost row - uses backend-calculated costs
@@ -653,7 +716,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             costRow[week.key] = weeklyCosts[week.key] || 0;
         });
 
-        // Build result with appropriate total rows
+        // Build result with total row followed by its children, then cost row
         const result = [...rowData, totalRow];
         if (overtimeRows.length > 0) {
             result.push(totalOtRow);
@@ -661,9 +724,23 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         if (leaveRows.length > 0) {
             result.push(totalLeaveRow);
         }
+        if (rdoRows.length > 0) {
+            result.push(totalRdoRow);
+        }
+        if (phRows.length > 0) {
+            result.push(totalPhRow);
+        }
         result.push(costRow);
-        return result;
-    }, [rowData, weeks, weeklyCosts]);
+
+        // Filter out child rows whose parent is not expanded
+        return result.filter((row) => {
+            // Always show non-child rows (parents, totals parent, cost row)
+            if (!row.isChildRow) return true;
+            // Show child row only if its parent is expanded
+            if (row.parentTemplateId && expandedParents.has(row.parentTemplateId)) return true;
+            return false;
+        });
+    }, [rowData, weeks, weeklyCosts, expandedParents]);
 
     // Row class for total and cost row styling (dark mode support)
     const getRowClass = useCallback((params: { data: RowData }) => {
@@ -671,7 +748,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             return 'bg-orange-100 dark:bg-orange-900/30 font-semibold text-orange-700 dark:text-orange-300';
         }
         if (params.data?.isTotal && params.data?.isLeaveRow) {
+            return 'bg-blue-100 dark:bg-blue-900/30 font-semibold text-blue-700 dark:text-blue-300';
+        }
+        if (params.data?.isTotal && params.data?.isRdoRow) {
             return 'bg-purple-100 dark:bg-purple-900/30 font-semibold text-purple-700 dark:text-purple-300';
+        }
+        if (params.data?.isTotal && params.data?.isPublicHolidayRow) {
+            return 'bg-indigo-100 dark:bg-indigo-900/30 font-semibold text-indigo-700 dark:text-indigo-300';
         }
         if (params.data?.isTotal) {
             return 'bg-gray-100 dark:bg-gray-700 font-semibold';
@@ -683,7 +766,13 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
             return 'bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300';
         }
         if (params.data?.isLeaveRow) {
+            return 'bg-blue-50 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300';
+        }
+        if (params.data?.isRdoRow) {
             return 'bg-purple-50 dark:bg-purple-900/10 text-purple-700 dark:text-purple-300';
+        }
+        if (params.data?.isPublicHolidayRow) {
+            return 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300';
         }
         return '';
     }, []);
@@ -2534,7 +2623,11 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         <div className="ag-theme-alpine dark:ag-theme-alpine-dark" style={{ height: 350, width: '100%' }}>
                             <AgGridReact
                                 rowData={rowDataWithTotals}
-                                columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth)}
+                                columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth, {
+                                    expandedParents,
+                                    onToggleExpand: toggleParentExpanded,
+                                    hasChildren: hasChildRows,
+                                })}
                                 onCellValueChanged={onCellValueChanged}
                                 onCellClicked={onCellClicked}
                                 defaultColDef={{
