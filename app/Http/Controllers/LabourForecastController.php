@@ -68,12 +68,9 @@ class LabourForecastController extends Controller
                     });
                     foreach ($currentWeekEntries as $entry) {
                         $currentWeekHeadcount += $entry->headcount;
-                        // If headcount > 0, multiply by headcount (normal case)
-                        // If headcount = 0 but OT/leave hours exist, use weekly_cost as-is (special case)
-                        $entryCost = $entry->headcount > 0
-                            ? $entry->headcount * ($entry->weekly_cost ?? 0)
-                            : ($entry->weekly_cost ?? 0);
-                        $currentWeekCost += $entryCost;
+                        // Use weekly_cost directly - it's already calculated for the full headcount
+                        // with all components (ordinary, OT, leave, RDO, PH) from cost_breakdown_snapshot
+                        $currentWeekCost += ($entry->weekly_cost ?? 0);
                     }
                 }
 
@@ -216,8 +213,6 @@ class LabourForecastController extends Controller
                 if (!isset($savedData['entries'][$templateId])) {
                     $savedData['entries'][$templateId] = [
                         'hourly_rate' => $entry->hourly_rate,
-                        'weekly_cost' => $entry->weekly_cost,
-                        'cost_breakdown' => $entry->cost_breakdown_snapshot,
                         'weeks' => [],
                     ];
                 }
@@ -227,6 +222,8 @@ class LabourForecastController extends Controller
                     'leave_hours' => (float) ($entry->leave_hours ?? 0),
                     'rdo_hours' => (float) ($entry->rdo_hours ?? 0),
                     'public_holiday_not_worked_hours' => (float) ($entry->public_holiday_not_worked_hours ?? 0),
+                    'weekly_cost' => (float) $entry->weekly_cost, // Include actual weekly cost for this specific week
+                    'cost_breakdown_snapshot' => $entry->cost_breakdown_snapshot, // Include snapshot for this week
                 ];
             }
         }

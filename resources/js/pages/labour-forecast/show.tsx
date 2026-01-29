@@ -138,6 +138,8 @@ interface WeekEntry {
     leave_hours: number;
     rdo_hours: number;
     public_holiday_not_worked_hours: number;
+    weekly_cost?: number; // Actual calculated cost for this specific week
+    cost_breakdown_snapshot?: any; // Cost breakdown snapshot for this week
 }
 
 interface SavedForecast {
@@ -901,17 +903,38 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         }));
     }, [chartDatasets, timeRange]);
 
-    // Calculate grand total cost (sum of all weeks' costs)
-    const grandTotalCost = useMemo(() => {
-        return weeks.reduce((total, week) => {
-            const weekCost = rowData.reduce((sum, row) => {
-                const headcount = Number(row[week.key]) || 0;
-                const weeklyCost = row.weeklyCost || 0;
-                return sum + headcount * weeklyCost;
+    // Calculate grand total cost (sum of all weeks' costs) and count weeks with actual cost
+    // Uses actual saved weekly_cost if available (includes OT/leave/RDO/PH calculations)
+    // Falls back to headcount × template baseline cost for unsaved entries
+    const { grandTotalCost, weeksWithCost } = useMemo(() => {
+        let totalCost = 0;
+        let weeksWithActualCost = 0;
+
+        weeks.forEach((week) => {
+            const weekCost = configuredTemplates.reduce((sum, template) => {
+                const savedEntry = savedForecast?.entries?.[template.id];
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+
+                // If we have saved data with actual weekly_cost, use that (includes OT/leave/RDO/PH)
+                if (savedWeekData?.weekly_cost !== undefined) {
+                    return sum + savedWeekData.weekly_cost;
+                }
+
+                // Otherwise, calculate from current grid values (headcount × baseline cost)
+                const row = rowData.find((r) => r.id === `template_${template.template_id}`);
+                const headcount = row ? Number(row[week.key]) || 0 : 0;
+                const baselineCost = template.cost_breakdown.total_weekly_cost || 0;
+                return sum + headcount * baselineCost;
             }, 0);
-            return total + weekCost;
-        }, 0);
-    }, [rowData, weeks]);
+
+            totalCost += weekCost;
+            if (weekCost > 0) {
+                weeksWithActualCost++;
+            }
+        });
+
+        return { grandTotalCost: totalCost, weeksWithCost: weeksWithActualCost };
+    }, [rowData, weeks, configuredTemplates, savedForecast]);
 
     // Calculate total headcount across all weeks
     const grandTotalHeadcount = useMemo(() => {
@@ -2547,7 +2570,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                         <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Avg Cost/Week</p>
                             <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                                {grandTotalHeadcount > 0 ? formatCurrency(grandTotalCost / weeks.length) : '-'}
+                                {weeksWithCost > 0 ? formatCurrency(grandTotalCost / weeksWithCost) : '-'}
                             </p>
                         </div>
                     </div>
