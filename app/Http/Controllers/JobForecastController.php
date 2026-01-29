@@ -963,6 +963,11 @@ class JobForecastController extends Controller
         // Aggregate weekly entries into monthly costs by cost code
         $monthlyCosts = [];
 
+        \Log::info('[POPULATE-DEBUG] Starting to process labour forecast entries', [
+            'forecast_id' => $labourForecast->id,
+            'total_entries' => $labourForecast->entries->count(),
+        ]);
+
         foreach ($labourForecast->entries as $entry) {
             // Get month from week_ending (e.g., "2025-11" from "2025-11-09")
             $month = $entry->week_ending->format('Y-m');
@@ -970,56 +975,180 @@ class JobForecastController extends Controller
             // Get cost breakdown from snapshot
             $breakdown = $entry->cost_breakdown_snapshot;
             if (!$breakdown) {
+                \Log::warning('[POPULATE-DEBUG] Entry missing cost_breakdown_snapshot', [
+                    'entry_id' => $entry->id,
+                    'week_ending' => $month,
+                ]);
                 continue;
             }
 
             $headcount = $entry->headcount;
-            if ($headcount <= 0) {
+            $overtimeHours = $entry->overtime_hours ?? 0;
+            $leaveHours = $entry->leave_hours ?? 0;
+            $rdoHours = $entry->rdo_hours ?? 0;
+            $publicHolidayHours = $entry->public_holiday_not_worked_hours ?? 0;
+
+            \Log::info('[POPULATE-DEBUG] Processing entry', [
+                'entry_id' => $entry->id,
+                'week_ending' => $entry->week_ending->format('Y-m-d'),
+                'month' => $month,
+                'headcount' => $headcount,
+                'overtime_hours' => $overtimeHours,
+                'leave_hours' => $leaveHours,
+                'rdo_hours' => $rdoHours,
+                'ph_hours' => $publicHolidayHours,
+                'weekly_cost_from_entry' => $entry->weekly_cost,
+            ]);
+
+            // Include entries with ANY activity (headcount OR hours)
+            if ($headcount <= 0 && $overtimeHours <= 0 && $leaveHours <= 0 && $rdoHours <= 0 && $publicHolidayHours <= 0) {
+                \Log::info('[POPULATE-DEBUG] Skipping entry with no headcount or hours');
                 continue;
             }
 
-            // Get cost code prefix from the current template configuration (not snapshot)
-            // This ensures we always use the latest prefix setting
-            $template = $entry->template;
-            $prefix = $template?->cost_code_prefix;
+            // Get cost codes from snapshot (already calculated when forecast was created)
+            // This is exactly how LabourVarianceService does it
+            $costCodes = $breakdown['cost_codes'] ?? [];
 
-            // Skip if no prefix configured
-            if (empty($prefix)) {
+            // Skip if no cost codes in snapshot (no prefix was configured when forecast was created)
+            if (empty($costCodes) || empty($costCodes['wages'])) {
                 continue;
             }
-
-            // Calculate cost codes dynamically based on current prefix
-            // On-cost prefix is wages prefix + 1 (e.g., 01 -> 02, 03 -> 04)
-            $prefixNum = intval($prefix);
-            $onCostPrefix = str_pad($prefixNum + 1, 2, '0', STR_PAD_LEFT);
 
             // Initialize month if not exists
             if (!isset($monthlyCosts[$month])) {
                 $monthlyCosts[$month] = [];
             }
 
-            // Wages go to {prefix}-01 (e.g., 01-01, 03-01)
-            $wagesCode = "{$prefix}-01";
-            $monthlyCosts[$month][$wagesCode] =
-                ($monthlyCosts[$month][$wagesCode] ?? 0) +
-                (($breakdown['marked_up_wages'] ?? 0) * $headcount);
+            // Read cost breakdown components from snapshot exactly like LabourVarianceService does
+            // IMPORTANT: The snapshot is already calculated for the entry's headcount, so don't multiply again
 
-            // On-costs go to {prefix+1}-XX series (e.g., if wages is 01-01, on-costs go to 02-XX)
+            \Log::info('[POPULATE-DEBUG] Snapshot total_weekly_cost', [
+                'total_weekly_cost' => $breakdown['total_weekly_cost'] ?? null,
+                'ordinary_marked_up' => $breakdown['ordinary']['marked_up'] ?? null,
+                'overtime_marked_up' => $breakdown['overtime']['marked_up'] ?? null,
+                'leave_total_cost' => $breakdown['leave']['total_cost'] ?? null,
+                'rdo_total_cost' => $breakdown['rdo']['total_cost'] ?? null,
+                'ph_total_cost' => $breakdown['public_holiday_not_worked']['total_cost'] ?? null,
+            ]);
+
+            // Collect oncosts from all sections and group by code
+            $allOncostItems = [];
+            $oncostSources = [];
+
+            // Add worked hours oncosts
+            if (isset($breakdown['oncosts']['items'])) {
+                $workedOncosts = $breakdown['oncosts']['items'];
+                $allOncostItems = array_merge($allOncostItems, $workedOncosts);
+                $oncostSources['worked'] = count($workedOncosts);
+            }
+
+            // Add leave oncosts
+            if (isset($breakdown['leave']['oncosts']['items'])) {
+                $leaveOncosts = $breakdown['leave']['oncosts']['items'];
+                $allOncostItems = array_merge($allOncostItems, $leaveOncosts);
+                $oncostSources['leave'] = count($leaveOncosts);
+            }
+
+            // Add RDO oncosts
+            if (isset($breakdown['rdo']['oncosts']['items'])) {
+                $rdoOncosts = $breakdown['rdo']['oncosts']['items'];
+                $allOncostItems = array_merge($allOncostItems, $rdoOncosts);
+                $oncostSources['rdo'] = count($rdoOncosts);
+            }
+
+            // Add Public Holiday oncosts
+            if (isset($breakdown['public_holiday_not_worked']['oncosts']['items'])) {
+                $phOncosts = $breakdown['public_holiday_not_worked']['oncosts']['items'];
+                $allOncostItems = array_merge($allOncostItems, $phOncosts);
+                $oncostSources['ph'] = count($phOncosts);
+            }
+
+            // Group oncosts by code and sum amounts
+            $groupedOncosts = [];
+            foreach ($allOncostItems as $item) {
+                $code = $item['code'];
+                if (!isset($groupedOncosts[$code])) {
+                    $groupedOncosts[$code] = 0;
+                }
+                $groupedOncosts[$code] += $item['amount'] ?? 0;
+            }
+
+            // Calculate total oncosts
+            $totalOncosts = array_sum($groupedOncosts);
+
+            \Log::info('[POPULATE-DEBUG] Collected oncosts', [
+                'oncost_sources' => $oncostSources,
+                'total_oncost_items' => count($allOncostItems),
+                'grouped_oncosts' => $groupedOncosts,
+                'total_oncosts_sum' => $totalOncosts,
+            ]);
+
+            // Use total_weekly_cost from snapshot as the source of truth
+            // Wages = total_weekly_cost - total_oncosts
+            $totalWeeklyCost = $breakdown['total_weekly_cost'] ?? 0;
+            $totalWages = $totalWeeklyCost - $totalOncosts;
+
+            \Log::info('[POPULATE-DEBUG] Calculated wages', [
+                'total_weekly_cost' => $totalWeeklyCost,
+                'total_oncosts' => $totalOncosts,
+                'calculated_wages' => $totalWages,
+            ]);
+
+            // Wages go to the cost code from snapshot (e.g., 01-01, 03-01, etc.)
+            $wagesCode = $costCodes['wages'];
+            $previousWages = $monthlyCosts[$month][$wagesCode] ?? 0;
+            $monthlyCosts[$month][$wagesCode] = $previousWages + $totalWages;
+
+            \Log::info('[POPULATE-DEBUG] Adding wages to month', [
+                'month' => $month,
+                'wages_code' => $wagesCode,
+                'previous_amount' => $previousWages,
+                'adding_amount' => $totalWages,
+                'new_total' => $monthlyCosts[$month][$wagesCode],
+            ]);
+
+            // Map oncost codes to cost codes from snapshot
             $onCostMappings = [
-                ['code' => "{$onCostPrefix}-01", 'value' => $breakdown['super'] ?? 0],
-                ['code' => "{$onCostPrefix}-05", 'value' => $breakdown['on_costs']['bert'] ?? 0],
-                ['code' => "{$onCostPrefix}-10", 'value' => $breakdown['on_costs']['bewt'] ?? 0],
-                ['code' => "{$onCostPrefix}-15", 'value' => $breakdown['on_costs']['cipq'] ?? 0],
-                ['code' => "{$onCostPrefix}-20", 'value' => $breakdown['on_costs']['payroll_tax'] ?? 0],
-                ['code' => "{$onCostPrefix}-25", 'value' => $breakdown['on_costs']['workcover'] ?? 0],
+                ['cost_code' => $costCodes['super'] ?? null, 'oncost_code' => 'SUPER'],
+                ['cost_code' => $costCodes['bert'] ?? null, 'oncost_code' => 'BERT'],
+                ['cost_code' => $costCodes['bewt'] ?? null, 'oncost_code' => 'BEWT'],
+                ['cost_code' => $costCodes['cipq'] ?? null, 'oncost_code' => 'CIPQ'],
+                ['cost_code' => $costCodes['payroll_tax'] ?? null, 'oncost_code' => 'PAYROLL_TAX'],
+                ['cost_code' => $costCodes['workcover'] ?? null, 'oncost_code' => 'WORKCOVER'],
             ];
 
+            $oncostsAdded = [];
             foreach ($onCostMappings as $mapping) {
-                $code = $mapping['code'];
-                $value = $mapping['value'] * $headcount;
-                $monthlyCosts[$month][$code] = ($monthlyCosts[$month][$code] ?? 0) + $value;
+                $costCode = $mapping['cost_code'];
+                if (!$costCode) continue; // Skip if cost code not set
+
+                $oncostCode = $mapping['oncost_code'];
+                $value = $groupedOncosts[$oncostCode] ?? 0;
+                $previousAmount = $monthlyCosts[$month][$costCode] ?? 0;
+                $monthlyCosts[$month][$costCode] = $previousAmount + $value;
+
+                $oncostsAdded[$costCode] = [
+                    'oncost_type' => $oncostCode,
+                    'previous' => $previousAmount,
+                    'adding' => $value,
+                    'new_total' => $monthlyCosts[$month][$costCode],
+                ];
             }
+
+            \Log::info('[POPULATE-DEBUG] Added oncosts to month', [
+                'month' => $month,
+                'oncosts' => $oncostsAdded,
+            ]);
         }
+
+        \Log::info('[POPULATE-DEBUG] Finished processing entries, monthly costs summary', [
+            'months' => array_keys($monthlyCosts),
+            'cost_codes_per_month' => array_map('array_keys', $monthlyCosts),
+            'totals_per_month' => array_map(function($costs) {
+                return array_sum($costs);
+            }, $monthlyCosts),
+        ]);
 
         // Transform to job forecast format: array of { cost_item, months: { YYYY-MM: amount } }
         $forecastData = [];
