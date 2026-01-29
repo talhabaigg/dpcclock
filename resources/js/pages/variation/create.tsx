@@ -1,22 +1,17 @@
-import { DatePickerDemo } from '@/components/date-picker';
 import LoadingDialog from '@/components/loading-dialog';
-import { SearchSelect } from '@/components/search-select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
-import { format } from 'date-fns';
-import { Package, Plus, Save, Users } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useState, useRef } from 'react';
+import { Plus, Trash2, Zap, Wrench, Package } from 'lucide-react';
 import { CostCode } from '../purchasing/types';
-import VariationLineTable from './partials/variationLineTable';
+import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
+import VariationHeaderGrid, { VariationHeaderGridRef } from './partials/variationHeader/VariationHeaderGrid';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -49,6 +44,8 @@ const CostTypes = [
 ];
 
 const VariationCreate = ({ locations, costCodes, variation }: { locations: Location[]; costCodes: CostCode[]; variation?: any }) => {
+    const gridRef = useRef<VariationLineGridRef>(null);
+    const headerGridRef = useRef<VariationHeaderGridRef>(null);
     const { data, setData, post, errors } = useForm({
         location_id: variation ? String(variation.location_id) : '',
         type: variation ? variation.type : 'dayworks',
@@ -58,60 +55,58 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         date: variation ? variation.co_date : new Date().toISOString().split('T')[0],
         line_items: variation
             ? variation.line_items.map((item: any) => ({
-                  line_number: item.line_number,
-                  cost_item: item.cost_item,
-                  cost_type: item.cost_type,
-                  description: item.description,
-                  qty: item.qty,
-                  unit_cost: item.unit_cost,
-                  total_cost: item.total_cost,
-                  revenue: item.revenue,
-              }))
+                line_number: item.line_number,
+                cost_item: item.cost_item,
+                cost_type: item.cost_type,
+                description: item.description,
+                qty: item.qty,
+                unit_cost: item.unit_cost,
+                total_cost: item.total_cost,
+                revenue: item.revenue,
+            }))
             : [
-                  {
-                      line_number: 1,
-                      cost_item: '',
-                      cost_type: '',
-                      description: '',
-                      qty: 1,
-                      unit_cost: 0,
-                      total_cost: 0,
-                      revenue: 0,
-                  },
-              ],
+                {
+                    line_number: 1,
+                    cost_item: '',
+                    cost_type: '',
+                    description: '',
+                    qty: 1,
+                    unit_cost: 0,
+                    total_cost: 0,
+                    revenue: 0,
+                },
+            ],
     });
 
+    const [selectedCount, setSelectedCount] = useState(0);
+
     const addRow = () => {
-        setData('line_items', [
-            ...data.line_items,
-            {
-                line_number: data.line_items.length + 1,
-                cost_item: '',
-                cost_type: '',
-                description: '',
-                qty: 1,
-                unit_cost: 0,
-                total_cost: 0,
-                revenue: 0,
-            },
-        ]);
+        if (gridRef.current) {
+            gridRef.current.addRow();
+        }
     };
 
-    const deleteRow = (index: number) => {
-        if (data.line_items.length <= 1) {
-            toast.error('Cannot delete', {
-                description: 'At least one line item is required.',
-            });
-            return;
+    const deleteSelectedRows = () => {
+        if (gridRef.current) {
+            gridRef.current.deleteSelectedRows();
+            setSelectedCount(0);
         }
-        const newItems = data.line_items
-            .filter((_, i) => i !== index)
-            .map((item, i) => ({
-                ...item,
-                line_number: i + 1,
-            }));
-        setData('line_items', newItems);
-        toast.success('Line item deleted');
+    };
+
+    const handleLineItemsChange = (lineItems: any[]) => {
+        setData('line_items', lineItems);
+    };
+
+    const handleSelectionChange = (count: number) => {
+        setSelectedCount(count);
+    };
+
+    const handleHeaderDataChange = (headerData: any) => {
+        setData('location_id', headerData.location_id);
+        setData('type', headerData.type);
+        setData('co_number', headerData.co_number);
+        setData('date', headerData.date);
+        setData('description', headerData.description);
     };
 
     const handleSubmit = (e?: React.FormEvent) => {
@@ -124,6 +119,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
     };
 
     const [open, setOpen] = useState(false);
+    const [quickGenOpen, setQuickGenOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
     const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
     const waste_ratio = costData.find((code) => code.pivot?.waste_ratio)?.pivot.waste_ratio || 0;
@@ -136,18 +132,16 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
     const generatePrelimLabour = () => {
         if (!genAmount || !data.location_id) {
-            toast.error('Missing required fields', {
-                description: 'Please select a location and enter an amount.',
-            });
+            alert('Please select a location and enter an amount.');
             return;
         }
         setOpen(true);
+        setQuickGenOpen(false);
         setTimeout(() => {
             setOpen(false);
         }, 3000);
 
         const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
-
         const onCostData = costData.map((code) => ({
             cost_item: code.code,
             cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
@@ -175,25 +169,20 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
         setData('line_items', [...data.line_items, ...newLines]);
         setGenAmount('');
-        toast.success(`${newLines.length} labour lines added`, {
-            description: `Based on $${parseFloat(genAmount).toLocaleString()}`,
-        });
     };
 
     const generatePrelimMaterial = () => {
         if (!genAmount || !data.location_id) {
-            toast.error('Missing required fields', {
-                description: 'Please select a location and enter an amount.',
-            });
+            alert('Please select a location and enter an amount.');
             return;
         }
         setOpen(true);
+        setQuickGenOpen(false);
         setTimeout(() => {
             setOpen(false);
         }, 3000);
 
         const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
-
         const onCostData = costData.map((code) => ({
             cost_item: code.code,
             cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
@@ -221,327 +210,190 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
         setData('line_items', [...data.line_items, ...newLines]);
         setGenAmount('');
-        toast.success(`${newLines.length} material lines added`, {
-            description: `Based on $${parseFloat(genAmount).toLocaleString()}`,
-        });
     };
-
-    // Calculate totals
-    const totals = useMemo(() => {
-        const totalCost = data.line_items.reduce((sum, item) => sum + (parseFloat(String(item.total_cost)) || 0), 0);
-        const totalRevenue = data.line_items.reduce((sum, item) => sum + (parseFloat(String(item.revenue)) || 0), 0);
-        const margin = totalRevenue - totalCost;
-        const marginPercent = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
-        return { totalCost, totalRevenue, margin, marginPercent };
-    }, [data.line_items]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <LoadingDialog open={open} setOpen={setOpen} />
-
-            <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                {/* Page Header */}
-                <div className="mb-8">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                                {variation ? 'Edit Variation' : 'Create Variation'}
-                            </h1>
-                            <p className="text-muted-foreground mt-1.5 text-sm sm:text-base">
-                                {variation ? `Editing CO #${variation.co_number}` : 'Add a new variation with cost line items'}
-                            </p>
-                        </div>
-                        <Button
-                            onClick={handleSubmit}
-                            size="lg"
-                            className="hidden sm:flex w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-200"
-                        >
-                            <Save className="mr-2 h-4 w-4" />
-                            {variation ? 'Update Variation' : 'Save Variation'}
-                        </Button>
-                    </div>
-                </div>
+            <div className="w-full px-4 py-2 sm:px-6 sm:py-4 lg:px-8 overflow-x-hidden">
+                <LoadingDialog open={open} setOpen={setOpen} />
 
                 {/* Error Alert */}
                 {Object.keys(errors).length > 0 && (
-                    <Alert variant="destructive" className="mb-6 border-l-4 border-l-destructive shadow-sm">
-                        <AlertTitle className="font-semibold">Please fix the following errors:</AlertTitle>
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertTitle>There were some errors with your submission:</AlertTitle>
                         <AlertDescription>
-                            <ul className="list-disc pl-4 mt-2 space-y-1">
+                            <ul className="list-disc pl-4">
                                 {Object.entries(errors).map(([field, message]) => (
-                                    <li key={field} className="text-sm">
-                                        {message as string}
-                                    </li>
+                                    <li key={field}>{message as string}</li>
                                 ))}
                             </ul>
                         </AlertDescription>
                     </Alert>
                 )}
 
-                {/* Responsive Layout */}
-                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                    {/* Primary Content Area */}
-                    <div className="space-y-6 order-2 lg:order-1">
-                        {/* Variation Details Card */}
-                        <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
-                            <CardHeader className="bg-gradient-to-r from-muted/50 to-transparent border-b">
-                                <CardTitle className="text-lg">Variation Details</CardTitle>
-                                <CardDescription>Enter the basic information for this variation</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-5 pt-6 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="location" className="text-sm font-medium">
-                                        Location <span className="text-destructive">*</span>
-                                    </Label>
-                                    <SearchSelect
-                                        selectedOption={data.location_id}
-                                        onValueChange={(value) => setData('location_id', value)}
-                                        options={locations.map((location) => ({
-                                            value: String(location.id),
-                                            label: location.name,
-                                        }))}
-                                        optionName="Location"
-                                    />
-                                </div>
+                {/* Header Grid */}
+                <div className="space-y-3 mb-6">
+                    <h3 className="text-lg font-semibold">Variation Details</h3>
+                    <Card className="p-0 overflow-hidden shadow-sm border">
+                        <VariationHeaderGrid
+                            ref={headerGridRef}
+                            headerData={{
+                                location_id: data.location_id,
+                                type: data.type,
+                                co_number: data.co_number,
+                                date: data.date,
+                                description: data.description,
+                            }}
+                            locations={locations}
+                            onDataChange={handleHeaderDataChange}
+                        />
+                    </Card>
+                </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="type" className="text-sm font-medium">
-                                        Type <span className="text-destructive">*</span>
-                                    </Label>
-                                    <Select value={data.type} onValueChange={(value) => setData('type', value)}>
-                                        <SelectTrigger id="type" className="h-10">
-                                            <SelectValue placeholder="Select type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {['dayworks', 'variations'].map((type) => (
-                                                <SelectItem key={type} value={type}>
-                                                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                {/* Line Items Grid */}
+                <div className="space-y-3 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold">Line Items</h3>
+                            <span className="text-sm text-muted-foreground">
+                                {selectedCount > 0
+                                    ? `${selectedCount} selected`
+                                    : `${data.line_items.length} total`}
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Zap className="h-3 w-3" />
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="co_number" className="text-sm font-medium">
-                                        CO Number
-                                    </Label>
-                                    <Input
-                                        id="co_number"
-                                        value={data.co_number}
-                                        onChange={(e) => setData('co_number', e.target.value)}
-                                        placeholder="e.g., CO-001"
-                                        className="h-10"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="date" className="text-sm font-medium">
-                                        Date
-                                    </Label>
-                                    <DatePickerDemo
-                                        value={data.date ? new Date(data.date) : undefined}
-                                        onChange={(date) => setData('date', date ? format(date, 'yyyy-MM-dd') : '')}
-                                    />
-                                </div>
-
-                                <div className="space-y-2 sm:col-span-2">
-                                    <Label htmlFor="description" className="text-sm font-medium">
-                                        Description
-                                    </Label>
-                                    <Input
-                                        id="description"
-                                        value={data.description}
-                                        onChange={(e) => setData('description', e.target.value)}
-                                        placeholder="Enter a description for this variation"
-                                        className="h-10"
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Line Items Card */}
-                        <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
-                            <CardHeader className="bg-gradient-to-r from-muted/50 to-transparent border-b">
-                                <div>
-                                    <CardTitle className="text-lg">Line Items</CardTitle>
-                                    <CardDescription>Add cost and revenue line items</CardDescription>
-                                </div>
-                                <CardAction>
-                                    <Button onClick={addRow} size="sm" className="shadow-sm">
-                                        <Plus className="mr-1.5 h-4 w-4" />
-                                        Add Row
                                     </Button>
-                                </CardAction>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <VariationLineTable
-                                    data={data}
-                                    costCodes={costData}
-                                    CostTypes={CostTypes}
-                                    setData={setData}
-                                    onDeleteRow={deleteRow}
-                                />
-                            </CardContent>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-lg">
+                                    <DialogHeader className="space-y-3">
+                                        <div className="mx-auto w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
+                                            <Zap className="h-6 w-6 text-primary-foreground" />
+                                        </div>
+                                        <DialogTitle className="text-center text-xl">
+                                            Quick Generate
+                                        </DialogTitle>
+                                        <DialogDescription className="text-center">
+                                            Automatically populate line items based on your base amount
+                                        </DialogDescription>
+                                    </DialogHeader>
 
-                            {/* Enhanced Footer */}
-                            <CardFooter className="border-t bg-gradient-to-r from-muted/30 via-muted/50 to-muted/30 p-0">
-                                <div className="w-full grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
-                                    <div className="p-4 text-center sm:text-right">
-                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                                            Total Cost
-                                        </p>
-                                        <p className="text-xl sm:text-2xl font-bold tabular-nums">
-                                            $
-                                            {totals.totalCost.toLocaleString(undefined, {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            })}
-                                        </p>
+                                    <div className="space-y-6 py-6">
+                                        {/* Amount Input Section */}
+                                        <div className="space-y-3">
+                                            <label htmlFor="amount" className="text-sm font-semibold flex items-center gap-2">
+                                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                                                Enter Base Amount
+                                            </label>
+                                            <Input
+                                                id="amount"
+                                                type="number"
+                                                value={genAmount}
+                                                onChange={(e) => setGenAmount(e.target.value)}
+                                                placeholder="0.00"
+                                                className="h-12 text-lg font-medium text-center border-2 focus-visible:border-primary"
+                                            />
+                                        </div>
+
+                                        {/* Divider */}
+                                        <div className="relative">
+                                            <div className="absolute inset-0 flex items-center">
+                                                <div className="w-full border-t border-muted"></div>
+                                            </div>
+                                            <div className="relative flex justify-center text-xs uppercase">
+                                                <span className="bg-background px-2 text-muted-foreground font-medium">Choose Type</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Generation Options */}
+                                        <div className="space-y-3">
+                                            <label className="text-sm font-semibold flex items-center gap-2">
+                                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                                                Select Generation Type
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    onClick={generatePrelimLabour}
+                                                    className="group relative overflow-hidden rounded-lg border-2 border-muted hover:border-primary transition-all duration-200 p-4 text-left bg-gradient-to-br from-blue-50/50 to-background dark:from-blue-950/20 dark:to-background"
+                                                >
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                <Wrench className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-sm">Labour</div>
+                                                            <div className="text-xs text-muted-foreground">Generate labour costs</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                                                </button>
+
+                                                <button
+                                                    onClick={generatePrelimMaterial}
+                                                    className="group relative overflow-hidden rounded-lg border-2 border-muted hover:border-primary transition-all duration-200 p-4 text-left bg-gradient-to-br from-purple-50/50 to-background dark:from-purple-950/20 dark:to-background"
+                                                >
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                <Package className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-sm">Material</div>
+                                                            <div className="text-xs text-muted-foreground">Generate material costs</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="p-4 text-center sm:text-right">
-                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                                            Total Revenue
-                                        </p>
-                                        <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-500 tabular-nums">
-                                            $
-                                            {totals.totalRevenue.toLocaleString(undefined, {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            })}
-                                        </p>
-                                    </div>
-                                    <div
-                                        className={`p-4 text-center sm:text-right ${totals.margin >= 0 ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}
-                                    >
-                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Margin</p>
-                                        <p
-                                            className={`text-xl sm:text-2xl font-bold tabular-nums ${totals.margin < 0 ? 'text-red-600 dark:text-red-500' : 'text-green-600 dark:text-green-500'}`}
-                                        >
-                                            $
-                                            {totals.margin.toLocaleString(undefined, {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            })}
-                                        </p>
-                                        <p className={`text-sm font-medium ${totals.margin < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                            {totals.marginPercent.toFixed(1)}%
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardFooter>
-                        </Card>
+                                </DialogContent>
+                            </Dialog>
+                            <Button onClick={addRow} size="sm" variant="outline">
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add
+                            </Button>
+                            <Button
+                                onClick={deleteSelectedRows}
+                                size="sm"
+                                variant="outline"
+                                disabled={selectedCount === 0}
+                                className="text-destructive hover:text-destructive"
+                            >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete {selectedCount > 0 && `(${selectedCount})`}
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Sidebar */}
-                    <aside className="space-y-4 order-1 lg:order-2">
-                        {/* Quick Generate Card */}
-                        <Card className="shadow-md overflow-hidden lg:sticky lg:top-4">
-                            <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                    Quick Generate
-                                </CardTitle>
-                                <CardDescription>Auto-generate line items from a base amount</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="genAmount" className="text-sm font-medium">
-                                        Base Amount
-                                    </Label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
-                                            $
-                                        </span>
-                                        <Input
-                                            id="genAmount"
-                                            type="number"
-                                            value={genAmount}
-                                            onChange={(e) => setGenAmount(e.target.value)}
-                                            placeholder="0.00"
-                                            className="pl-7 h-11 text-lg font-medium"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Button
-                                        onClick={generatePrelimLabour}
-                                        variant="outline"
-                                        className="h-11 border-2 hover:border-primary hover:bg-primary/5 transition-all"
-                                        disabled={!genAmount || !data.location_id}
-                                    >
-                                        <Users className="mr-2 h-4 w-4" />
-                                        Labour
-                                    </Button>
-                                    <Button
-                                        onClick={generatePrelimMaterial}
-                                        variant="outline"
-                                        className="h-11 border-2 hover:border-primary hover:bg-primary/5 transition-all"
-                                        disabled={!genAmount || !data.location_id}
-                                    >
-                                        <Package className="mr-2 h-4 w-4" />
-                                        Material
-                                    </Button>
-                                </div>
-                                {!data.location_id && (
-                                    <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/20 rounded-md px-3 py-2">
-                                        Select a location first to enable generation
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* Summary Card */}
-                        <Card className="shadow-md overflow-hidden">
-                            <CardHeader className="pb-3 bg-gradient-to-r from-muted/50 to-transparent">
-                                <CardTitle className="text-base">Summary</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-0">
-                                <div className="flex justify-between items-center py-3 border-b">
-                                    <span className="text-sm text-muted-foreground">Line Items</span>
-                                    <Badge variant="secondary" className="font-semibold">
-                                        {data.line_items.length}
-                                    </Badge>
-                                </div>
-                                <div className="flex justify-between items-center py-3 border-b">
-                                    <span className="text-sm text-muted-foreground">Location</span>
-                                    <span className="text-sm font-medium truncate max-w-[150px] text-right">
-                                        {locations.find((l) => String(l.id) === data.location_id)?.name || (
-                                            <span className="text-amber-600 italic">Not selected</span>
-                                        )}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center py-3 border-b">
-                                    <span className="text-sm text-muted-foreground">Type</span>
-                                    <Badge variant="outline" className="capitalize">
-                                        {data.type}
-                                    </Badge>
-                                </div>
-                                <div className="flex justify-between items-center py-3">
-                                    <span className="text-sm text-muted-foreground">Date</span>
-                                    <span className="text-sm font-medium">
-                                        {data.date || <span className="text-muted-foreground italic">Not set</span>}
-                                    </span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </aside>
+                    <Card className="p-0 overflow-hidden shadow-sm border">
+                        <VariationLineGrid
+                            ref={gridRef}
+                            lineItems={data.line_items}
+                            costCodes={costData}
+                            costTypes={CostTypes}
+                            onDataChange={handleLineItemsChange}
+                            onSelectionChange={handleSelectionChange}
+                        />
+                    </Card>
                 </div>
 
-                {/* Mobile Sticky Footer */}
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t shadow-lg sm:hidden z-50">
-                    <Button
-                        onClick={handleSubmit}
-                        size="lg"
-                        className="w-full h-12 text-base font-semibold shadow-lg"
-                    >
-                        <Save className="mr-2 h-5 w-5" />
-                        {variation ? 'Update Variation' : 'Save Variation'}
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
+                    <Button variant="outline" onClick={() => window.history.back()} className="w-full sm:w-auto">
+                        Cancel
+                    </Button>
+                    <Button onClick={handleSubmit} size="lg" className="w-full sm:w-auto">
+                        {variation?.id ? 'Update Variation' : 'Create Variation'}
                     </Button>
                 </div>
-
-                {/* Spacer for mobile sticky footer */}
-                <div className="h-20 sm:hidden" />
             </div>
         </AppLayout>
     );
