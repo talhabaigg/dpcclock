@@ -570,7 +570,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
         });
     }, [workTypes, weeks]);
 
-    // Calculate costs from backend when rowData changes (debounced)
+    // Calculate costs from backend when rowData changes (debounced) - using batch endpoint
     useEffect(() => {
         // Clear any existing timeout
         if (costCalculationTimeoutRef.current) {
@@ -579,12 +579,10 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
 
         // Debounce the cost calculation (500ms)
         costCalculationTimeoutRef.current = setTimeout(async () => {
-            // Calculate costs for each week
             const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
-            const newCosts: { [weekKey: string]: number } = {};
 
-            for (const week of weeks) {
-                // Build template data for this week
+            // Build batch request with all weeks
+            const weeksData = weeks.map((week) => {
                 const templates = headcountRows
                     .map((row) => {
                         const otRow = rowData.find((r) => r.id === `${row.id}_ot`);
@@ -603,30 +601,46 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                     })
                     .filter(t => t.template_id !== undefined && (t.headcount > 0 || t.overtime_hours > 0 || t.leave_hours > 0 || t.rdo_hours > 0 || t.public_holiday_not_worked_hours > 0));
 
-                // Skip if no data for this week
-                if (templates.length === 0) {
-                    newCosts[week.key] = 0;
-                    continue;
-                }
+                return {
+                    week_key: week.key,
+                    templates,
+                };
+            });
 
-                try {
-                    setIsCalculatingCosts(true);
-                    const response = await axios.post(`/location/${location.id}/labour-forecast/calculate-weekly-cost`, {
-                        templates,
-                    });
-                    newCosts[week.key] = response.data.total_cost;
-                } catch (error: any) {
-                    console.error('Failed to calculate cost for week', week.key);
-                    console.error('Templates sent:', templates);
-                    console.error('Error response:', error.response?.data);
-                    console.error('Full error:', error);
-                    // Fallback to 0 or keep previous value
-                    newCosts[week.key] = weeklyCosts[week.key] || 0;
+            // Filter out weeks with no template data
+            const weeksWithData = weeksData.filter(w => w.templates.length > 0);
+
+            // Initialize costs for weeks with no data
+            const newCosts: { [weekKey: string]: number } = {};
+            weeksData.forEach(w => {
+                if (w.templates.length === 0) {
+                    newCosts[w.week_key] = 0;
                 }
+            });
+
+            // Skip API call if no weeks have data
+            if (weeksWithData.length === 0) {
+                setWeeklyCosts(newCosts);
+                return;
             }
 
-            setWeeklyCosts(newCosts);
-            setIsCalculatingCosts(false);
+            try {
+                setIsCalculatingCosts(true);
+                const response = await axios.post(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, {
+                    weeks: weeksWithData,
+                });
+
+                // Merge API results with zero-cost weeks
+                setWeeklyCosts({ ...newCosts, ...response.data.costs });
+            } catch (error: any) {
+                console.error('Failed to calculate costs batch');
+                console.error('Error response:', error.response?.data);
+                console.error('Full error:', error);
+                // Keep previous values on error
+                setWeeklyCosts(prev => ({ ...prev, ...newCosts }));
+            } finally {
+                setIsCalculatingCosts(false);
+            }
         }, 500);
 
         return () => {
@@ -2688,6 +2702,7 @@ const LabourForecastShow = ({ location, projectEndDate, selectedMonth, weeks, co
                                     expandedParents,
                                     onToggleExpand: toggleParentExpanded,
                                     hasChildren: hasChildRows,
+                                    isCalculatingCosts,
                                 })}
                                 onCellValueChanged={onCellValueChanged}
                                 onCellClicked={onCellClicked}

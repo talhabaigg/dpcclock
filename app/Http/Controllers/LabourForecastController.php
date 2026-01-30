@@ -1044,4 +1044,68 @@ class LabourForecastController extends Controller
             'total_cost' => round($totalCost, 2),
         ]);
     }
+
+    /**
+     * Calculate costs for multiple weeks in a single batch request
+     * This avoids N+1 API calls when loading the page
+     */
+    public function calculateWeeklyCostsBatch(Request $request, Location $location)
+    {
+        $request->validate([
+            'weeks' => 'required|array',
+            'weeks.*.week_key' => 'required|string',
+            'weeks.*.templates' => 'required|array',
+            'weeks.*.templates.*.template_id' => 'required|integer',
+            'weeks.*.templates.*.headcount' => 'required|numeric|min:0',
+            'weeks.*.templates.*.overtime_hours' => 'nullable|numeric|min:0',
+            'weeks.*.templates.*.leave_hours' => 'nullable|numeric|min:0',
+            'weeks.*.templates.*.rdo_hours' => 'nullable|numeric|min:0',
+            'weeks.*.templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
+        ]);
+
+        $calculator = new LabourCostCalculator();
+        $results = [];
+
+        // Pre-fetch all template configs for this location to avoid N+1 queries
+        $templateConfigs = LocationPayRateTemplate::where('location_id', $location->id)
+            ->get()
+            ->keyBy('id');
+
+        foreach ($request->weeks as $weekData) {
+            $weekKey = $weekData['week_key'];
+            $totalCost = 0;
+
+            foreach ($weekData['templates'] as $templateData) {
+                $templateConfig = $templateConfigs->get($templateData['template_id']);
+
+                if (!$templateConfig) {
+                    continue;
+                }
+
+                $headcount = (float) $templateData['headcount'];
+                $overtimeHours = (float) ($templateData['overtime_hours'] ?? 0);
+                $leaveHours = (float) ($templateData['leave_hours'] ?? 0);
+                $rdoHours = (float) ($templateData['rdo_hours'] ?? 0);
+                $publicHolidayHours = (float) ($templateData['public_holiday_not_worked_hours'] ?? 0);
+
+                $breakdown = $calculator->calculateWithOvertime(
+                    $location,
+                    $templateConfig,
+                    $headcount,
+                    $overtimeHours,
+                    $leaveHours,
+                    $rdoHours,
+                    $publicHolidayHours
+                );
+
+                $totalCost += $breakdown['total_weekly_cost'];
+            }
+
+            $results[$weekKey] = round($totalCost, 2);
+        }
+
+        return response()->json([
+            'costs' => $results,
+        ]);
+    }
 }

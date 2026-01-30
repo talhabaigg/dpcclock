@@ -1,4 +1,4 @@
-import type { ColDef, IHeaderParams, ValueGetterParams } from 'ag-grid-community';
+import type { ColDef, IHeaderParams, ValueGetterParams, ICellRendererParams } from 'ag-grid-community';
 import type { Week } from './types';
 const WeekHeader = (props: IHeaderParams) => {
     return (
@@ -165,6 +165,7 @@ interface ExpandCollapseProps {
     expandedParents: Set<string>;
     onToggleExpand: (parentId: string) => void;
     hasChildren: (parentId: string) => boolean;
+    isCalculatingCosts?: boolean;
 }
 
 export const buildLabourForecastShowColumnDefs = (
@@ -172,6 +173,7 @@ export const buildLabourForecastShowColumnDefs = (
     selectedMonth?: string,
     expandCollapseProps?: ExpandCollapseProps
 ): ColDef[] => {
+    const isCalculatingCosts = expandCollapseProps?.isCalculatingCosts ?? false;
     const cols: ColDef[] = [
         {
             headerName: 'Work Type',
@@ -290,14 +292,23 @@ export const buildLabourForecastShowColumnDefs = (
                 // For headcount, allow 1 decimal place
                 return Math.max(0, Math.round(val * 10) / 10);
             },
-            valueFormatter: (params) => {
+            cellRenderer: (params: ICellRendererParams) => {
+                // Show skeleton for cost row when calculating
+                if (params.data?.isCostRow && isCalculatingCosts) {
+                    return (
+                        <div className="flex h-full items-center justify-center">
+                            <div className="h-4 w-14 animate-pulse rounded bg-green-200 dark:bg-green-800" />
+                        </div>
+                    );
+                }
+                // For cost row, show formatted currency
                 if (params.data?.isCostRow) {
                     return formatCurrency(params.value || 0);
                 }
+                // For other rows, use default formatting
                 if (params.data?.isOvertimeRow) {
                     return params.value || 0;
                 }
-                // Show decimal only if needed
                 const val = params.value || 0;
                 return val % 1 === 0 ? val.toString() : val.toFixed(1);
             },
@@ -337,7 +348,7 @@ export const buildLabourForecastShowColumnDefs = (
         valueGetter: (params) => {
             if (!params.data) return 0;
 
-            // For cost row, sum the weekly costs
+            // For cost row, sum the weekly costs for the selected month
             if (params.data.isCostRow) {
                 let total = 0;
                 currentMonthWeeks.forEach((week) => {
@@ -364,7 +375,15 @@ export const buildLabourForecastShowColumnDefs = (
             });
             return totalHours;
         },
-        valueFormatter: (params) => {
+        cellRenderer: (params: ICellRendererParams) => {
+            // Show skeleton for cost row when calculating
+            if (params.data?.isCostRow && isCalculatingCosts) {
+                return (
+                    <div className="flex h-full items-center justify-center">
+                        <div className="h-4 w-16 animate-pulse rounded bg-green-200 dark:bg-green-800" />
+                    </div>
+                );
+            }
             if (params.data?.isCostRow) {
                 return formatCurrency(params.value || 0);
             }
