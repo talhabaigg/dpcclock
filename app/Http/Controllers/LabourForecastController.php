@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AllowanceType;
+use App\Models\JobCostDetail;
+use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use App\Models\JobSummary;
 use App\Models\LabourForecast;
@@ -1106,6 +1108,137 @@ class LabourForecastController extends Controller
 
         return response()->json([
             'costs' => $results,
+        ]);
+    }
+
+    /**
+     * Get labour budget summary for a location
+     * Returns EAC, cost to date, forecast, and remaining for labour cost items (01-08 prefix)
+     */
+    public function getBudgetSummary(Request $request, Location $location)
+    {
+        $jobNumber = $location->external_id;
+
+        // Labour cost code prefixes (01-08)
+        $labourPrefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
+
+        // Mapping of wages prefix to oncosts prefix
+        $oncostsMappings = [
+            '01' => '51',
+            '02' => '52',
+            '03' => '53',
+            '04' => '54',
+            '05' => '55',
+            '06' => '56',
+            '07' => '57',
+            '08' => '58',
+        ];
+
+        // Labels for cost code series
+        $seriesLabels = [
+            '01' => 'Site Labour',
+            '02' => 'Staff Labour',
+            '03' => 'Supervision',
+            '04' => 'Subcontract Labour',
+            '05' => 'Labour Type 5',
+            '06' => 'Labour Type 6',
+            '07' => 'Labour Type 7',
+            '08' => 'Labour Type 8',
+        ];
+
+        $series = [];
+        $totalEac = 0;
+        $totalClaimed = 0;
+        $totalForecast = 0;
+
+        // Get forecast entries to calculate forecast amounts by cost code prefix
+        $forecastByPrefix = [];
+
+        // Get the latest approved or current forecast
+        $forecast = LabourForecast::where('location_id', $location->id)
+            ->orderBy('forecast_month', 'desc')
+            ->with(['entries.template'])
+            ->first();
+
+        if ($forecast) {
+            foreach ($forecast->entries as $entry) {
+                $prefix = $entry->template?->cost_code_prefix;
+                if ($prefix && in_array($prefix, $labourPrefixes)) {
+                    if (!isset($forecastByPrefix[$prefix])) {
+                        $forecastByPrefix[$prefix] = 0;
+                    }
+                    $forecastByPrefix[$prefix] += $entry->weekly_cost ?? 0;
+                }
+            }
+        }
+
+        foreach ($labourPrefixes as $prefix) {
+            // Get EAC for wages (e.g., 01-xxxx) and oncosts (e.g., 51-xxxx)
+            $wagesPrefix = $prefix;
+            $oncostsPrefix = $oncostsMappings[$prefix];
+
+            // Get EAC - sum of estimate_at_completion for wages and oncosts
+            $wagesEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
+                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->sum('estimate_at_completion');
+
+            $oncostsEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
+                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->sum('estimate_at_completion');
+
+            $eac = $wagesEac + $oncostsEac;
+
+            // Get cost to date (claimed) from JobCostDetail
+            $wagesClaimed = JobCostDetail::where('job_number', $jobNumber)
+                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->sum('amount');
+
+            $oncostsClaimed = JobCostDetail::where('job_number', $jobNumber)
+                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->sum('amount');
+
+            $claimed = $wagesClaimed + $oncostsClaimed;
+
+            // Get forecast for this prefix
+            $forecastAmount = $forecastByPrefix[$prefix] ?? 0;
+
+            // Calculate remaining
+            $remaining = $eac - $claimed;
+
+            // Only include series that have EAC or claimed data
+            if ($eac > 0 || $claimed > 0) {
+                // Find primary wages cost code for display
+                $wagesCode = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
+                    ->where('cost_item', 'like', $wagesPrefix . '-%')
+                    ->first()?->cost_item ?? ($wagesPrefix . '-xxxx');
+
+                $series[] = [
+                    'prefix' => $prefix,
+                    'wagesCode' => $wagesCode,
+                    'oncostsSeries' => $oncostsPrefix,
+                    'label' => $seriesLabels[$prefix] ?? "Labour $prefix",
+                    'eac' => round($eac, 2),
+                    'claimed' => round($claimed, 2),
+                    'forecast' => round($forecastAmount, 2),
+                    'remaining' => round($remaining, 2),
+                ];
+
+                $totalEac += $eac;
+                $totalClaimed += $claimed;
+                $totalForecast += $forecastAmount;
+            }
+        }
+
+        $totalRemaining = $totalEac - $totalClaimed;
+
+        return response()->json([
+            'series' => $series,
+            'totals' => [
+                'eac' => round($totalEac, 2),
+                'claimed' => round($totalClaimed, 2),
+                'forecast' => round($totalForecast, 2),
+                'remaining' => round($totalRemaining, 2),
+            ],
         ]);
     }
 }

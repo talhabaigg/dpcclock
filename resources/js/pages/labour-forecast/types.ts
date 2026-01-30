@@ -317,3 +317,44 @@ export interface SelectedCell {
     weekIndex: number;
     workType: string;
 }
+
+// ============================================================================
+// BUDGET DATA
+// ============================================================================
+
+/**
+ * Budget data for a single cost code series (e.g., 01 - Wages)
+ */
+export interface BudgetByCostSeries {
+    /** Cost code prefix (e.g., "01", "02") */
+    prefix: string;
+    /** Wages cost code (e.g., "01-1234") */
+    wagesCode: string;
+    /** Oncosts series prefix (e.g., "51" for 01 wages) */
+    oncostsSeries: string;
+    /** Display label (e.g., "Site Labour") */
+    label: string;
+    /** Budget - Estimate at Completion from Job Report */
+    eac: number;
+    /** Spent - Cost to date (claimed amount) */
+    claimed: number;
+    /** Forecast - Calculated from labour forecast entries */
+    forecast: number;
+    /** Remaining = EAC - Claimed - Forecast */
+    remaining: number;
+}
+
+/**
+ * Summary of budget data across all labour cost series (01-08)
+ */
+export interface BudgetSummary {
+    /** Budget data by cost code series */
+    series: BudgetByCostSeries[];
+    /** Totals across all series */
+    totals: {
+        eac: number;
+        claimed: number;
+        forecast: number;
+        remaining: number;
+    };
+}

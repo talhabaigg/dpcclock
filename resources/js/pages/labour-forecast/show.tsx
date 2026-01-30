@@ -59,6 +59,7 @@ import {
     TIME_RANGE_OPTIONS,
 } from './partials';
 import type {
+    BudgetSummary,
     CategoryOption,
     ConfiguredTemplate,
     CostBreakdown,
@@ -138,6 +139,12 @@ const LabourForecastShow = ({
     const [weeklyCosts, setWeeklyCosts] = useState<{ [weekKey: string]: number }>({});
     const [isCalculatingCosts, setIsCalculatingCosts] = useState(false);
     const costCalculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // ========================================================================
+    // STATE: Budget
+    // ========================================================================
+    const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
+    const [isBudgetLoading, setIsBudgetLoading] = useState(false);
 
     // ========================================================================
     // DERIVED DATA: Work Types
@@ -371,6 +378,26 @@ const LabourForecastShow = ({
     }, [rowData, weeks, location.id]);
 
     // ========================================================================
+    // EFFECT: Fetch budget data
+    // ========================================================================
+    useEffect(() => {
+        const fetchBudgetData = async () => {
+            setIsBudgetLoading(true);
+            try {
+                const response = await axios.get(`/location/${location.id}/labour-forecast/budget-summary`);
+                setBudgetData(response.data);
+            } catch (error) {
+                console.error('Failed to fetch budget data', error);
+                setBudgetData(null);
+            } finally {
+                setIsBudgetLoading(false);
+            }
+        };
+
+        fetchBudgetData();
+    }, [location.id]);
+
+    // ========================================================================
     // DERIVED DATA: Row data with totals and cost row
     // ========================================================================
     const rowDataWithTotals = useMemo(() => {
@@ -486,6 +513,22 @@ const LabourForecastShow = ({
             return total + rowData.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         }, 0);
     }, [rowData, weeks]);
+
+    // ========================================================================
+    // DERIVED DATA: Remaining to forecast calculation
+    // ========================================================================
+    const remainingToForecast = useMemo(() => {
+        if (!budgetData?.totals) return null;
+
+        const remainingBudget = budgetData.totals.remaining; // EAC - cost_to_date
+        const forecastTotal = grandTotalCost; // Current forecast total
+
+        return {
+            remainingBudget,
+            forecastTotal,
+            remainingToForecast: remainingBudget - forecastTotal,
+        };
+    }, [budgetData, grandTotalCost]);
 
     // ========================================================================
     // HANDLERS: Grid
@@ -745,6 +788,8 @@ const LabourForecastShow = ({
                                 grandTotalCost={grandTotalCost}
                                 weeksCount={weeks.length}
                                 weeksWithCost={weeksWithCost}
+                                remainingToForecast={remainingToForecast}
+                                isBudgetLoading={isBudgetLoading}
                             />
                         )}
 
