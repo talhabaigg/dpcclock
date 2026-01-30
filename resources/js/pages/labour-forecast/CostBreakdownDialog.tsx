@@ -1,7 +1,10 @@
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, DollarSign } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import axios from 'axios';
+import { DollarSign, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface CostBreakdownDialogProps {
     open: boolean;
@@ -212,6 +215,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
             const response = await axios.get(url);
             console.log('Cost breakdown response:', response.data);
             setData(response.data);
+            console.log(response.data);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to fetch cost breakdown');
         } finally {
@@ -228,98 +232,197 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
         }).format(value);
     };
 
-    // Calculate totals by cost code across all templates
-    const calculateCostCodeTotals = () => {
-        if (!data) return [];
+    // Get the wages prefix from a template's label or oncost codes
+    const getTemplatePrefix = (template: Template): string => {
+        const label = template.label.toLowerCase();
 
-        const totals: { [code: string]: { name: string; amount: number } } = {};
+        // Determine prefix from template label
+        if (label.includes('foreman')) return '03';
+        if (label.includes('leading hand')) return '05';
+        if (label.includes('labourer')) return '07';
+
+        // Try to get prefix from oncost codes (if they have numeric format like "02-01")
+        const breakdown = template.cost_breakdown;
+        const oncostCode =
+            breakdown.oncosts?.items?.[0]?.code ||
+            breakdown.leave?.oncosts?.items?.[0]?.code ||
+            breakdown.rdo?.oncosts?.items?.[0]?.code ||
+            breakdown.public_holiday_not_worked?.oncosts?.items?.[0]?.code;
+
+        if (oncostCode) {
+            const normalizedCode = oncostCode.replace(/_/g, '-');
+            const oncostSeries = parseInt(normalizedCode.split('-')[0]);
+            if (!isNaN(oncostSeries) && oncostSeries > 0) {
+                const wagesPrefix = String(oncostSeries - 1).padStart(2, '0');
+                return wagesPrefix;
+            }
+        }
+
+        return '01'; // Default to Direct
+    };
+
+    // Get a label for a prefix (e.g., "01" -> "Direct", "03" -> "Foreman")
+    const getPrefixLabel = (prefix: string): string => {
+        const prefixNum = parseInt(prefix);
+        if (prefixNum === 1) return 'Direct';
+        if (prefixNum === 3) return 'Foreman';
+        if (prefixNum === 5) return 'Leading Hand';
+        if (prefixNum === 7) return 'Labourer';
+        return `Series ${prefix}`;
+    };
+
+    // Convert text oncost codes to numeric suffix and label
+    // e.g., "SUPER" -> { suffix: "01", label: "Super" }
+    const getOncostCodeInfo = (code: string): { suffix: string; label: string } => {
+        const upperCode = code.toUpperCase().replace(/_/g, '-').replace(/-/g, '');
+
+        // Map text codes to suffix numbers and labels
+        if (upperCode === 'SUPER' || upperCode === 'SUPERANNUATION') return { suffix: '01', label: 'Super' };
+        if (upperCode === 'BERT') return { suffix: '05', label: 'BERT' };
+        if (upperCode === 'BEWT') return { suffix: '10', label: 'BEWT' };
+        if (upperCode === 'CIPQ') return { suffix: '15', label: 'CIPQ' };
+        if (upperCode === 'PAYROLLTAX' || upperCode === 'PAYROLL TAX') return { suffix: '20', label: 'Payroll Tax' };
+        if (upperCode === 'WORKCOVER') return { suffix: '25', label: 'WorkCover' };
+
+        // If already numeric format like "02-01", extract suffix
+        const parts = code.replace(/_/g, '-').split('-');
+        if (parts.length === 2) {
+            const suffixNum = parseInt(parts[1]);
+            if (!isNaN(suffixNum)) {
+                if (suffixNum === 1) return { suffix: '01', label: 'Super' };
+                if (suffixNum === 5) return { suffix: '05', label: 'BERT' };
+                if (suffixNum === 10) return { suffix: '10', label: 'BEWT' };
+                if (suffixNum === 15) return { suffix: '15', label: 'CIPQ' };
+                if (suffixNum === 20) return { suffix: '20', label: 'Payroll Tax' };
+                if (suffixNum === 25) return { suffix: '25', label: 'WorkCover' };
+            }
+        }
+
+        return { suffix: '00', label: code };
+    };
+
+    // Format oncost code with series and label (e.g., "SUPER" with series "02" -> "02-01 (Super)")
+    const formatOncostCodeWithSeries = (code: string, oncostSeries: string): string => {
+        const info = getOncostCodeInfo(code);
+        return `${oncostSeries}-${info.suffix} (${info.label})`;
+    };
+
+    // Calculate per-head weekly cost from breakdown components
+    const calculatePerHeadCost = (breakdown: CostBreakdown): number => {
+        return (
+            (breakdown.ordinary?.marked_up || 0) +
+            (breakdown.overtime?.marked_up || 0) +
+            (breakdown.leave?.total_cost || 0) +
+            (breakdown.rdo?.total_cost || 0) +
+            (breakdown.public_holiday_not_worked?.total_cost || 0) +
+            (breakdown.oncosts?.worked_hours_total || 0)
+        );
+    };
+
+    // Group templates by their cost code prefix
+    const getTemplatesByPrefix = (): Record<string, Template[]> => {
+        if (!data) return {};
+        return data.templates.reduce(
+            (acc, template) => {
+                const prefix = getTemplatePrefix(template);
+                if (!acc[prefix]) acc[prefix] = [];
+                acc[prefix].push(template);
+                return acc;
+            },
+            {} as Record<string, Template[]>,
+        );
+    };
+
+    // Calculate totals by cost code grouped by prefix
+    const calculateCostCodeTotalsByPrefix = () => {
+        if (!data) return {};
+
+        const prefixTotals: Record<
+            string,
+            {
+                wagesCode: string;
+                wagesAmount: number;
+                oncostsSeries: string;
+                oncosts: { code: string; name: string; amount: number }[];
+                oncostsTotal: number;
+                total: number;
+            }
+        > = {};
 
         data.templates.forEach((template) => {
             const breakdown = template.cost_breakdown;
+            const prefix = getTemplatePrefix(template);
+            const oncostSeries = String(parseInt(prefix) + 1).padStart(2, '0');
+            const wagesCode = `${prefix}-01`;
 
-            // NOTE: The cost_breakdown_snapshot is already calculated FOR the specific headcount
-            // (not per head), so we use the values directly without multiplying by headcount
+            if (!prefixTotals[prefix]) {
+                prefixTotals[prefix] = {
+                    wagesCode,
+                    wagesAmount: 0,
+                    oncostsSeries: oncostSeries,
+                    oncosts: [],
+                    oncostsTotal: 0,
+                    total: 0,
+                };
+            }
 
-            // 03-01: Wages (Ordinary + Overtime + Leave Markups + RDO Accruals + PH Marked Up)
+            // Wages (Ordinary + Overtime + Leave Markups + RDO Accruals + PH Marked Up)
             const wagesTotal =
                 (breakdown.ordinary?.marked_up || 0) +
                 (breakdown.overtime?.marked_up || 0) +
                 (breakdown.leave?.leave_markups?.total || 0) +
-                (breakdown.rdo?.accruals?.total || 0) + // RDO accruals only (wages NOT costed)
-                (breakdown.public_holiday_not_worked?.marked_up || 0); // PH wages + accruals
+                (breakdown.rdo?.accruals?.total || 0) +
+                (breakdown.public_holiday_not_worked?.marked_up || 0);
+            prefixTotals[prefix].wagesAmount += wagesTotal;
 
-            if (!totals['03-01']) {
-                totals['03-01'] = { name: 'Wages', amount: 0 };
-            }
-            totals['03-01'].amount += wagesTotal;
-
-            // Oncosts from worked hours (already calculated for the headcount)
-            breakdown.oncosts?.items?.forEach((oncost) => {
-                const code = oncost.code.replace(/_/g, '-');
-                if (!totals[code]) {
-                    totals[code] = { name: oncost.name, amount: 0 };
-                }
-                totals[code].amount += oncost.amount;
-            });
-
-            // Oncosts from leave hours (if any)
-            if (breakdown.leave?.oncosts?.items) {
-                breakdown.leave.oncosts.items.forEach((oncost) => {
+            // Helper to add oncosts
+            const addOncosts = (items: Array<{ code: string; name: string; amount: number }> | undefined) => {
+                items?.forEach((oncost) => {
                     const code = oncost.code.replace(/_/g, '-');
-                    if (!totals[code]) {
-                        totals[code] = { name: oncost.name, amount: 0 };
+                    const existing = prefixTotals[prefix].oncosts.find((o) => o.code === code);
+                    if (existing) {
+                        existing.amount += oncost.amount;
+                    } else {
+                        prefixTotals[prefix].oncosts.push({ code, name: oncost.name, amount: oncost.amount });
                     }
-                    totals[code].amount += oncost.amount;
+                    prefixTotals[prefix].oncostsTotal += oncost.amount;
                 });
-            }
+            };
 
-            // Oncosts from RDO hours (if any)
-            if (breakdown.rdo?.oncosts?.items) {
-                breakdown.rdo.oncosts.items.forEach((oncost) => {
-                    const code = oncost.code.replace(/_/g, '-');
-                    if (!totals[code]) {
-                        totals[code] = { name: oncost.name, amount: 0 };
-                    }
-                    totals[code].amount += oncost.amount;
-                });
-            }
-
-            // Oncosts from Public Holiday hours (if any)
-            if (breakdown.public_holiday_not_worked?.oncosts?.items) {
-                breakdown.public_holiday_not_worked.oncosts.items.forEach((oncost) => {
-                    const code = oncost.code.replace(/_/g, '-');
-                    if (!totals[code]) {
-                        totals[code] = { name: oncost.name, amount: 0 };
-                    }
-                    totals[code].amount += oncost.amount;
-                });
-            }
+            // Oncosts from all sources
+            addOncosts(breakdown.oncosts?.items);
+            addOncosts(breakdown.leave?.oncosts?.items);
+            addOncosts(breakdown.rdo?.oncosts?.items);
+            addOncosts(breakdown.public_holiday_not_worked?.oncosts?.items);
         });
 
-        // Convert to array and sort by code
-        return Object.entries(totals)
-            .map(([code, data]) => ({ code, ...data }))
-            .sort((a, b) => a.code.localeCompare(b.code));
+        // Calculate totals and sort oncosts
+        Object.values(prefixTotals).forEach((group) => {
+            group.total = group.wagesAmount + group.oncostsTotal;
+            group.oncosts.sort((a, b) => a.code.localeCompare(b.code));
+        });
+
+        return prefixTotals;
     };
 
-    const costCodeTotals = data ? calculateCostCodeTotals() : [];
+    const templatesByPrefix = data ? getTemplatesByPrefix() : {};
+    const costCodeTotalsByPrefix = data ? calculateCostCodeTotalsByPrefix() : {};
+    const sortedPrefixes = Object.keys(templatesByPrefix).sort();
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-primary" />
+                        <DollarSign className="text-primary h-5 w-5" />
                         Cost Breakdown - {locationName}
                     </DialogTitle>
-                    <DialogDescription>
-                        {data ? `Week ending ${data.week_ending}` : 'Detailed cost breakdown for current week'}
-                    </DialogDescription>
+                    <DialogDescription>{data ? `Week ending ${data.week_ending}` : 'Detailed cost breakdown for current week'}</DialogDescription>
                 </DialogHeader>
 
                 {loading && (
                     <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <Loader2 className="text-primary h-8 w-8 animate-spin" />
                     </div>
                 )}
 
@@ -334,66 +437,155 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                         {/* Summary */}
                         <div className="grid grid-cols-3 gap-4 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/50">
                             <div>
-                                <p className="text-xs text-muted-foreground">Total Headcount</p>
+                                <p className="text-muted-foreground text-xs">Total Headcount</p>
                                 <p className="text-lg font-semibold">{data.total_headcount.toFixed(1)}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-muted-foreground">Total Cost</p>
+                                <p className="text-muted-foreground text-xs">Total Cost</p>
                                 <p className="text-lg font-semibold text-green-600 dark:text-green-400">
-                                    {formatCurrency(data.total_cost)}
+                                    {formatCurrency(data.templates.reduce((sum, t) => sum + t.weekly_cost, 0))}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-xs text-muted-foreground">Week Ending</p>
+                                <p className="text-muted-foreground text-xs">Week Ending</p>
                                 <p className="text-lg font-semibold">{data.week_ending}</p>
                             </div>
                         </div>
 
-                        {/* Total by Cost Code Summary */}
-                        {costCodeTotals.length > 0 && (
-                            <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
-                                <h3 className="text-lg font-bold mb-3 text-primary">Total by Cost Code</h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    Summary of all costs grouped by GL account code across all work types
-                                </p>
-                                <div className="space-y-2">
-                                    {costCodeTotals.map((item) => (
-                                        <div
-                                            key={item.code}
-                                            className="flex justify-between items-center rounded-lg bg-background p-3 border border-border"
-                                        >
-                                            <div>
-                                                <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
-                                                <span className="ml-3 text-muted-foreground">{item.name}</span>
-                                            </div>
-                                            <span className="text-lg font-bold">{formatCurrency(item.amount)}</span>
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-between items-center rounded-lg bg-green-50 dark:bg-green-900/20 p-4 border-2 border-green-200 dark:border-green-800 mt-4">
-                                        <span className="text-lg font-bold">Grand Total</span>
-                                        <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                            {formatCurrency(costCodeTotals.reduce((sum, item) => sum + item.amount, 0))}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        {/* Tabbed Content */}
+                        <Tabs defaultValue="all" className="w-full">
+                            <TabsList className="mb-4 flex flex-wrap h-auto gap-1">
+                                <TabsTrigger value="all">All</TabsTrigger>
+                                {sortedPrefixes.map((prefix) => {
+                                    const label = getPrefixLabel(prefix);
+                                    return (
+                                        <TabsTrigger key={prefix} value={prefix}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span>{prefix}-01</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    {label} Wages
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TabsTrigger>
+                                    );
+                                })}
+                            </TabsList>
 
-                        {/* Each Template Breakdown */}
-                        {data.templates.map((template) => (
-                            <div key={template.id} className="space-y-4 rounded-lg border border-border p-4">
+                            {/* All Tab - Summary by Cost Code */}
+                            <TabsContent value="all">
+                                {Object.keys(costCodeTotalsByPrefix).length > 0 && (
+                                    <div className="space-y-4">
+                                        {sortedPrefixes.map((prefix) => {
+                                            const group = costCodeTotalsByPrefix[prefix];
+                                            if (!group) return null;
+                                            const label = getPrefixLabel(prefix);
+                                            return (
+                                                <div key={prefix} className="border-border rounded-lg border p-4">
+                                                    <h4 className="text-primary mb-3 font-semibold">
+                                                        {label} (Series {prefix}/{group.oncostsSeries})
+                                                    </h4>
+                                                    <div className="space-y-2">
+                                                        {/* Wages */}
+                                                        <div className="bg-background border-border flex items-center justify-between rounded-lg border p-3">
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <span className="text-primary font-mono text-sm font-semibold cursor-help">
+                                                                        {label} Wages
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>{group.wagesCode}</TooltipContent>
+                                                            </Tooltip>
+                                                            <span className="text-lg font-bold">{formatCurrency(group.wagesAmount)}</span>
+                                                        </div>
+                                                        {/* Oncosts - Accordion */}
+                                                        <Accordion type="single" collapsible className="bg-background border-border rounded-lg border">
+                                                            <AccordionItem value="oncosts" className="border-0">
+                                                                <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                                                                    <div className="flex flex-1 items-center justify-between pr-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <span className="text-primary font-mono text-sm font-semibold cursor-help">
+                                                                                        Oncosts
+                                                                                    </span>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>{group.oncostsSeries} series</TooltipContent>
+                                                                            </Tooltip>
+                                                                            <span className="text-muted-foreground text-xs">
+                                                                                ({group.wagesAmount > 0 ? ((group.oncostsTotal / group.wagesAmount) * 100).toFixed(1) : 0}% of wages)
+                                                                            </span>
+                                                                        </div>
+                                                                        <span className="text-lg font-bold">
+                                                                            {formatCurrency(group.oncostsTotal)}
+                                                                        </span>
+                                                                    </div>
+                                                                </AccordionTrigger>
+                                                                <AccordionContent className="px-3 pb-3">
+                                                                    <div className="space-y-1 border-t pt-2">
+                                                                        {group.oncosts.map((oncost) => {
+                                                                            const oncostInfo = getOncostCodeInfo(oncost.code);
+                                                                            const formattedCode = `${group.oncostsSeries}-${oncostInfo.suffix}`;
+                                                                            return (
+                                                                                <div
+                                                                                    key={oncost.code}
+                                                                                    className="text-muted-foreground flex justify-between text-sm"
+                                                                                >
+                                                                                    <Tooltip>
+                                                                                        <TooltipTrigger asChild>
+                                                                                            <span className="font-mono cursor-help">{formattedCode}</span>
+                                                                                        </TooltipTrigger>
+                                                                                        <TooltipContent>{oncostInfo.label}</TooltipContent>
+                                                                                    </Tooltip>
+                                                                                    <span>{formatCurrency(oncost.amount)}</span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </AccordionContent>
+                                                            </AccordionItem>
+                                                        </Accordion>
+                                                        {/* Group Total */}
+                                                        <div className="flex items-center justify-between rounded-lg bg-slate-100 p-3 dark:bg-slate-800/50">
+                                                            <span className="font-semibold">Subtotal ({label})</span>
+                                                            <span className="text-lg font-bold">{formatCurrency(group.total)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {/* Grand Total */}
+                                        <div className="flex items-center justify-between rounded-lg border-2 border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                                            <span className="text-lg font-bold">Grand Total</span>
+                                            <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                                {formatCurrency(
+                                                    Object.values(costCodeTotalsByPrefix).reduce((sum, g) => sum + g.total, 0),
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            {/* Prefix Tabs - Full Breakdown */}
+                            {sortedPrefixes.map((prefix) => (
+                                <TabsContent key={prefix} value={prefix}>
+                                    <div className="space-y-6">
+                                        {templatesByPrefix[prefix]?.map((template) => (
+                            <div key={template.id} className="border-border space-y-4 rounded-lg border p-4">
                                 {/* Template Header */}
-                                <div className="flex items-center justify-between border-b border-border pb-3">
+                                <div className="border-border flex items-center justify-between border-b pb-3">
                                     <div>
                                         <h3 className="text-lg font-semibold">{template.label}</h3>
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-muted-foreground text-sm">
                                             Headcount: {template.headcount.toFixed(1)} | Hourly Rate: {formatCurrency(template.hourly_rate)}
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-muted-foreground">Weekly Cost per Head</p>
+                                        <p className="text-muted-foreground text-xs">Weekly Cost per Head</p>
                                         <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                                            {formatCurrency(template.weekly_cost)}
+                                            {formatCurrency(template.headcount > 0 ? template.weekly_cost / template.headcount : template.weekly_cost)}
                                         </p>
                                     </div>
                                 </div>
@@ -401,7 +593,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 {/* Hours Summary */}
                                 <div className="grid grid-cols-4 gap-3 rounded bg-slate-50 p-3 text-sm dark:bg-slate-800/30">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">Ordinary Hours</p>
+                                        <p className="text-muted-foreground text-xs">Ordinary Hours</p>
                                         <p className="font-semibold">{template.cost_breakdown.ordinary_hours.toFixed(1)} hrs</p>
                                     </div>
                                     {template.overtime_hours > 0 && (
@@ -415,149 +607,191 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                     {template.leave_hours > 0 && (
                                         <div>
                                             <p className="text-xs text-blue-600 dark:text-blue-400">Leave Hours</p>
-                                            <p className="font-semibold text-blue-600 dark:text-blue-400">
-                                                {template.leave_hours.toFixed(1)} hrs
-                                            </p>
+                                            <p className="font-semibold text-blue-600 dark:text-blue-400">{template.leave_hours.toFixed(1)} hrs</p>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Ordinary Hours Breakdown */}
                                 <div className="space-y-2">
-                                    <h4 className="font-semibold text-sm">Ordinary Hours</h4>
-                                    <div className="space-y-1 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Base Wages ({template.cost_breakdown.ordinary_hours.toFixed(1)} hrs × {formatCurrency(template.cost_breakdown.base_hourly_rate)})</span>
-                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.base_wages)}</span>
-                                        </div>
+                                    <h4 className="text-sm font-semibold">Ordinary Hours</h4>
+                                    {template.cost_breakdown.ordinary_hours === 0 ? (
+                                        <p className="text-muted-foreground text-sm italic">No regular hours</p>
+                                    ) : (
+                                        <div className="space-y-1 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Base Wages ({template.cost_breakdown.ordinary_hours.toFixed(1)} hrs ×{' '}
+                                                    {formatCurrency(template.cost_breakdown.base_hourly_rate)})
+                                                </span>
+                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.base_wages)}</span>
+                                            </div>
 
-                                        {/* Allowances */}
-                                        {template.cost_breakdown.ordinary.allowances.total > 0 && (
-                                            <>
-                                                <div className="mt-2 text-xs font-semibold text-muted-foreground">Allowances:</div>
-                                                {template.cost_breakdown.ordinary.allowances.fares_travel.name && template.cost_breakdown.ordinary.allowances.fares_travel.amount > 0 && (
-                                                    <div className="flex justify-between pl-4">
-                                                        <span className="text-muted-foreground">
-                                                            {template.cost_breakdown.ordinary.allowances.fares_travel.name} ({formatCurrency(template.cost_breakdown.ordinary.allowances.fares_travel.rate)}/day)
+                                            {/* Allowances */}
+                                            {template.cost_breakdown.ordinary.allowances.total > 0 && (
+                                                <>
+                                                    <div className="text-muted-foreground mt-2 text-xs font-semibold">Allowances:</div>
+                                                    {template.cost_breakdown.ordinary.allowances.fares_travel.name &&
+                                                        template.cost_breakdown.ordinary.allowances.fares_travel.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {template.cost_breakdown.ordinary.allowances.fares_travel.name} (
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.fares_travel.rate)}/day)
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.fares_travel.amount)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    {template.cost_breakdown.ordinary.allowances.site.name &&
+                                                        template.cost_breakdown.ordinary.allowances.site.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {template.cost_breakdown.ordinary.allowances.site.name} (
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.site.rate)}/hr)
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.site.amount)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    {template.cost_breakdown.ordinary.allowances.multistorey.name &&
+                                                        template.cost_breakdown.ordinary.allowances.multistorey.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {template.cost_breakdown.ordinary.allowances.multistorey.name} (
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.multistorey.rate)}/hr)
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.ordinary.allowances.multistorey.amount)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    {template.cost_breakdown.ordinary.allowances.custom
+                                                        ?.filter((allowance) => allowance.ordinary_amount > 0)
+                                                        .map((allowance, idx) => (
+                                                            <div key={idx} className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
+                                                                </span>
+                                                                <span className="font-medium">{formatCurrency(allowance.ordinary_amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                    <div className="border-border flex justify-between border-t pt-1">
+                                                        <span className="text-muted-foreground">Total Allowances</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(template.cost_breakdown.ordinary.allowances.total)}
                                                         </span>
-                                                        <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.allowances.fares_travel.amount)}</span>
                                                     </div>
-                                                )}
-                                                {template.cost_breakdown.ordinary.allowances.site.name && template.cost_breakdown.ordinary.allowances.site.amount > 0 && (
-                                                    <div className="flex justify-between pl-4">
-                                                        <span className="text-muted-foreground">
-                                                            {template.cost_breakdown.ordinary.allowances.site.name} ({formatCurrency(template.cost_breakdown.ordinary.allowances.site.rate)}/hr)
-                                                        </span>
-                                                        <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.allowances.site.amount)}</span>
-                                                    </div>
-                                                )}
-                                                {template.cost_breakdown.ordinary.allowances.multistorey.name && template.cost_breakdown.ordinary.allowances.multistorey.amount > 0 && (
-                                                    <div className="flex justify-between pl-4">
-                                                        <span className="text-muted-foreground">
-                                                            {template.cost_breakdown.ordinary.allowances.multistorey.name} ({formatCurrency(template.cost_breakdown.ordinary.allowances.multistorey.rate)}/hr)
-                                                        </span>
-                                                        <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.allowances.multistorey.amount)}</span>
-                                                    </div>
-                                                )}
-                                                {template.cost_breakdown.ordinary.allowances.custom?.map((allowance, idx) => (
-                                                    allowance.ordinary_amount > 0 && (
-                                                        <div key={idx} className="flex justify-between pl-4">
-                                                            <span className="text-muted-foreground">
-                                                                {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
-                                                            </span>
-                                                            <span className="font-medium">{formatCurrency(allowance.ordinary_amount)}</span>
-                                                        </div>
-                                                    )
-                                                ))}
-                                                <div className="flex justify-between border-t border-border pt-1">
-                                                    <span className="text-muted-foreground">Total Allowances</span>
-                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.allowances.total)}</span>
-                                                </div>
-                                            </>
-                                        )}
+                                                </>
+                                            )}
 
-                                        <div className="flex justify-between border-t border-border pt-1">
-                                            <span className="font-medium">Gross Wages</span>
-                                            <span className="font-semibold">{formatCurrency(template.cost_breakdown.ordinary.gross)}</span>
-                                        </div>
+                                            <div className="border-border flex justify-between border-t pt-1">
+                                                <span className="font-medium">Gross Wages</span>
+                                                <span className="font-semibold">{formatCurrency(template.cost_breakdown.ordinary.gross)}</span>
+                                            </div>
 
-                                        <div className="flex justify-between pl-4">
-                                            <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.annual_leave_markup)}</span>
-                                        </div>
-                                        <div className="flex justify-between pl-4">
-                                            <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.ordinary.leave_loading_markup)}</span>
-                                        </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.ordinary.annual_leave_markup)}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between pl-4">
+                                                <span className="text-muted-foreground">Leave Loading (4.61%)</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.ordinary.leave_loading_markup)}
+                                                </span>
+                                            </div>
 
-                                        <div className="flex justify-between border-t border-border pt-1">
-                                            <span className="font-semibold">Ordinary Total (Marked Up)</span>
-                                            <span className="font-bold text-green-600 dark:text-green-400">
-                                                {formatCurrency(template.cost_breakdown.ordinary.marked_up)}
-                                            </span>
+                                            <div className="border-border flex justify-between border-t pt-1">
+                                                <span className="font-semibold">Ordinary Total (Marked Up)</span>
+                                                <span className="font-bold text-green-600 dark:text-green-400">
+                                                    {formatCurrency(template.cost_breakdown.ordinary.marked_up)}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {/* Overtime Breakdown */}
                                 {template.overtime_hours > 0 && template.cost_breakdown.overtime && (
                                     <div className="space-y-2 rounded-lg bg-orange-50 p-3 dark:bg-orange-900/20">
-                                        <h4 className="font-semibold text-sm text-orange-700 dark:text-orange-400">Overtime ({template.overtime_hours.toFixed(1)} hrs)</h4>
+                                        <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">
+                                            Overtime ({template.overtime_hours.toFixed(1)} hrs)
+                                        </h4>
                                         <div className="space-y-1 text-sm">
                                             <div className="flex justify-between">
                                                 <span className="text-muted-foreground">
-                                                    Base Wages ({template.overtime_hours.toFixed(1)} hrs × {formatCurrency(template.cost_breakdown.overtime.effective_rate)} @ 2x)
+                                                    Base Wages ({template.overtime_hours.toFixed(1)} hrs ×{' '}
+                                                    {formatCurrency(template.cost_breakdown.overtime.effective_rate)} @ 2x)
                                                 </span>
                                                 <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.base_wages)}</span>
                                             </div>
                                             {template.cost_breakdown.overtime.allowances.total > 0 && (
                                                 <>
-                                                    <div className="mt-2 text-xs font-semibold text-muted-foreground">Allowances (OT hours):</div>
-                                                    {template.cost_breakdown.overtime.allowances.site.name && template.cost_breakdown.overtime.allowances.site.amount > 0 && (
-                                                        <div className="flex justify-between pl-4">
-                                                            <span className="text-muted-foreground">
-                                                                {template.cost_breakdown.overtime.allowances.site.name} ({formatCurrency(template.cost_breakdown.overtime.allowances.site.rate)}/hr × {template.cost_breakdown.overtime.allowances.site.hours} hrs)
-                                                            </span>
-                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.allowances.site.amount)}</span>
-                                                        </div>
-                                                    )}
-                                                    {template.cost_breakdown.overtime.allowances.multistorey.name && template.cost_breakdown.overtime.allowances.multistorey.amount > 0 && (
-                                                        <div className="flex justify-between pl-4">
-                                                            <span className="text-muted-foreground">
-                                                                {template.cost_breakdown.overtime.allowances.multistorey.name} ({formatCurrency(template.cost_breakdown.overtime.allowances.multistorey.rate)}/hr × {template.cost_breakdown.overtime.allowances.multistorey.hours} hrs)
-                                                            </span>
-                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.allowances.multistorey.amount)}</span>
-                                                        </div>
-                                                    )}
-                                                    {template.cost_breakdown.overtime.allowances.custom?.map((allowance, idx) => (
-                                                        allowance.overtime_amount && allowance.overtime_amount > 0 && (
+                                                    <div className="text-muted-foreground mt-2 text-xs font-semibold">Allowances (OT hours):</div>
+                                                    {template.cost_breakdown.overtime.allowances.site.name &&
+                                                        template.cost_breakdown.overtime.allowances.site.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {template.cost_breakdown.overtime.allowances.site.name} (
+                                                                    {formatCurrency(template.cost_breakdown.overtime.allowances.site.rate)}/hr ×{' '}
+                                                                    {template.cost_breakdown.overtime.allowances.site.hours} hrs)
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.overtime.allowances.site.amount)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    {template.cost_breakdown.overtime.allowances.multistorey.name &&
+                                                        template.cost_breakdown.overtime.allowances.multistorey.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
+                                                                <span className="text-muted-foreground">
+                                                                    {template.cost_breakdown.overtime.allowances.multistorey.name} (
+                                                                    {formatCurrency(template.cost_breakdown.overtime.allowances.multistorey.rate)}/hr
+                                                                    × {template.cost_breakdown.overtime.allowances.multistorey.hours} hrs)
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.overtime.allowances.multistorey.amount)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    {template.cost_breakdown.overtime.allowances.custom
+                                                        ?.filter((allowance) => allowance.overtime_amount && allowance.overtime_amount > 0)
+                                                        .map((allowance, idx) => (
                                                             <div key={idx} className="flex justify-between pl-4">
                                                                 <span className="text-muted-foreground">
                                                                     {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
                                                                 </span>
-                                                                <span className="font-medium">{formatCurrency(allowance.overtime_amount)}</span>
+                                                                <span className="font-medium">{formatCurrency(allowance.overtime_amount!)}</span>
                                                             </div>
-                                                        )
-                                                    ))}
-                                                    <div className="flex justify-between border-t border-border pt-1">
+                                                        ))}
+                                                    <div className="border-border flex justify-between border-t pt-1">
                                                         <span className="text-muted-foreground">Total Allowances</span>
-                                                        <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.allowances.total)}</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(template.cost_breakdown.overtime.allowances.total)}
+                                                        </span>
                                                     </div>
                                                 </>
                                             )}
-                                            <div className="flex justify-between border-t border-border pt-1">
+                                            <div className="border-border flex justify-between border-t pt-1">
                                                 <span className="font-medium">Gross Overtime</span>
                                                 <span className="font-semibold">{formatCurrency(template.cost_breakdown.overtime.gross)}</span>
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.annual_leave_markup)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.overtime.annual_leave_markup)}
+                                                </span>
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.overtime.leave_loading_markup)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.overtime.leave_loading_markup)}
+                                                </span>
                                             </div>
-                                            <div className="flex justify-between border-t border-border pt-1">
+                                            <div className="border-border flex justify-between border-t pt-1">
                                                 <span className="font-semibold">Overtime Total (Marked Up)</span>
                                                 <span className="font-bold text-orange-600 dark:text-orange-400">
                                                     {formatCurrency(template.cost_breakdown.overtime.marked_up)}
@@ -568,14 +802,18 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 )}
 
                                 {/* Leave Hours Breakdown */}
-                                {template.leave_hours > 0 && template.cost_breakdown.leave && template.cost_breakdown.leave.total_cost > 0 && (
-                                    <div className="space-y-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-                                        <h4 className="font-semibold text-sm text-blue-700 dark:text-blue-400">
-                                            Leave Hours ({template.leave_hours.toFixed(1)} hrs / {template.cost_breakdown.leave.days.toFixed(1)} days)
-                                        </h4>
-                                        <p className="text-xs text-muted-foreground italic">
-                                            Wages paid from accruals (NOT job costed). Leave markups and oncosts ARE job costed.
-                                        </p>
+                                <div className="space-y-2">
+                                    <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Leave Hours</h4>
+                                    {!(template.leave_hours > 0 && template.cost_breakdown.leave && template.cost_breakdown.leave.total_cost > 0) ? (
+                                        <p className="text-muted-foreground text-sm italic">None</p>
+                                    ) : (
+                                        <div className="space-y-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+                                            <p className="text-muted-foreground text-xs">
+                                                {template.leave_hours.toFixed(1)} hrs / {template.cost_breakdown.leave.days.toFixed(1)} days
+                                            </p>
+                                            <p className="text-muted-foreground text-xs italic">
+                                                Wages paid from accruals (NOT job costed). Leave markups and oncosts ARE job costed.
+                                            </p>
 
                                         <div className="space-y-1 text-sm">
                                             {/* Gross Wages - NOT job costed */}
@@ -592,13 +830,17 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.leave.leave_markups.annual_leave_accrual)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.leave.leave_markups.annual_leave_accrual)}
+                                                </span>
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.leave.leave_markups.leave_loading)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.leave.leave_markups.leave_loading)}
+                                                </span>
                                             </div>
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                            <div className="border-border flex justify-between border-t pt-1 pl-4">
                                                 <span className="font-semibold">Leave Markups Subtotal</span>
                                                 <span className="font-semibold text-blue-600 dark:text-blue-400">
                                                     {formatCurrency(template.cost_breakdown.leave.leave_markups.total)}
@@ -606,9 +848,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                             </div>
 
                                             {/* Leave Oncosts - Job costed */}
-                                            <div className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
-                                                Oncosts (job costed):
-                                            </div>
+                                            <div className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-400">Oncosts (job costed):</div>
                                             {template.cost_breakdown.leave.oncosts.items.map((oncost, idx) => (
                                                 <div key={idx} className="flex justify-between pl-4">
                                                     <span className="text-muted-foreground">
@@ -616,13 +856,13 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                         {oncost.hourly_rate !== undefined && oncost.hours !== undefined
                                                             ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
                                                             : oncost.percentage_rate !== undefined && oncost.base !== undefined
-                                                            ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
-                                                            : ''}
+                                                              ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                              : ''}
                                                     </span>
                                                     <span className="font-medium">{formatCurrency(oncost.amount)}</span>
                                                 </div>
                                             ))}
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                            <div className="border-border flex justify-between border-t pt-1 pl-4">
                                                 <span className="font-semibold">Oncosts Subtotal</span>
                                                 <span className="font-semibold text-blue-600 dark:text-blue-400">
                                                     {formatCurrency(template.cost_breakdown.leave.oncosts.total)}
@@ -630,7 +870,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                             </div>
 
                                             {/* Total - Leave markups + oncosts */}
-                                            <div className="flex justify-between border-t-2 border-border pt-2 mt-2">
+                                            <div className="border-border mt-2 flex justify-between border-t-2 pt-2">
                                                 <span className="font-bold">Total Job Costed (Leave)</span>
                                                 <span className="font-bold text-blue-600 dark:text-blue-400">
                                                     {formatCurrency(template.cost_breakdown.leave.total_cost)}
@@ -639,18 +879,23 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                         </div>
                                     </div>
                                 )}
+                                </div>
 
                                 {/* RDO Hours Breakdown */}
-                                {template.rdo_hours > 0 && template.cost_breakdown.rdo && template.cost_breakdown.rdo.total_cost > 0 && (
-                                    <div className="space-y-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-                                        <h4 className="font-semibold text-sm text-purple-700 dark:text-purple-400">
-                                            RDO Hours ({template.rdo_hours.toFixed(1)} hrs / {template.cost_breakdown.rdo.days.toFixed(1)} days)
-                                        </h4>
-                                        <p className="text-xs text-muted-foreground italic">
-                                            Wages paid from balance (NOT job costed). Allowances and accruals ARE job costed.
-                                        </p>
+                                <div className="space-y-2">
+                                    <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-400">RDO Hours</h4>
+                                    {!(template.rdo_hours > 0 && template.cost_breakdown.rdo && template.cost_breakdown.rdo.total_cost > 0) ? (
+                                        <p className="text-muted-foreground text-sm italic">None</p>
+                                    ) : (
+                                        <div className="space-y-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+                                            <p className="text-muted-foreground text-xs">
+                                                {template.rdo_hours.toFixed(1)} hrs / {template.cost_breakdown.rdo.days.toFixed(1)} days
+                                            </p>
+                                            <p className="text-muted-foreground text-xs italic">
+                                                Wages paid from balance (NOT job costed). Allowances and accruals ARE job costed.
+                                            </p>
 
-                                        <div className="space-y-1 text-sm">
+                                            <div className="space-y-1 text-sm">
                                             {/* Gross Wages - NOT job costed */}
                                             <div className="flex justify-between rounded bg-slate-100 p-2 dark:bg-slate-800/50">
                                                 <span className="text-muted-foreground">Gross Wages (from balance, NOT job costed)</span>
@@ -665,25 +910,31 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                     <div className="mt-2 text-xs font-semibold text-purple-700 dark:text-purple-400">
                                                         Allowances (job costed):
                                                     </div>
-                                                    {template.cost_breakdown.rdo.allowances.fares_travel.name && template.cost_breakdown.rdo.allowances.fares_travel.amount > 0 && (
-                                                        <div className="flex justify-between pl-4">
-                                                            <span className="text-muted-foreground">
-                                                                {template.cost_breakdown.rdo.allowances.fares_travel.name} ({formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.rate)}/day × {template.cost_breakdown.rdo.allowances.fares_travel.days} days)
-                                                            </span>
-                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.amount)}</span>
-                                                        </div>
-                                                    )}
-                                                    {template.cost_breakdown.rdo.allowances.custom?.map((allowance, idx) => (
-                                                        allowance.amount > 0 && (
-                                                            <div key={idx} className="flex justify-between pl-4">
+                                                    {template.cost_breakdown.rdo.allowances.fares_travel.name &&
+                                                        template.cost_breakdown.rdo.allowances.fares_travel.amount > 0 && (
+                                                            <div className="flex justify-between pl-4">
                                                                 <span className="text-muted-foreground">
-                                                                    {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
+                                                                    {template.cost_breakdown.rdo.allowances.fares_travel.name} (
+                                                                    {formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.rate)}/day ×{' '}
+                                                                    {template.cost_breakdown.rdo.allowances.fares_travel.days} days)
                                                                 </span>
-                                                                <span className="font-medium">{formatCurrency(allowance.amount)}</span>
+                                                                <span className="font-medium">
+                                                                    {formatCurrency(template.cost_breakdown.rdo.allowances.fares_travel.amount)}
+                                                                </span>
                                                             </div>
-                                                        )
-                                                    ))}
-                                                    <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                                        )}
+                                                    {template.cost_breakdown.rdo.allowances.custom?.map(
+                                                        (allowance, idx) =>
+                                                            allowance.amount > 0 && (
+                                                                <div key={idx} className="flex justify-between pl-4">
+                                                                    <span className="text-muted-foreground">
+                                                                        {allowance.name} ({formatCurrency(allowance.rate)}/{allowance.rate_type})
+                                                                    </span>
+                                                                    <span className="font-medium">{formatCurrency(allowance.amount)}</span>
+                                                                </div>
+                                                            ),
+                                                    )}
+                                                    <div className="border-border flex justify-between border-t pt-1 pl-4">
                                                         <span className="font-semibold">Allowances Subtotal</span>
                                                         <span className="font-semibold text-purple-600 dark:text-purple-400">
                                                             {formatCurrency(template.cost_breakdown.rdo.allowances.total)}
@@ -697,20 +948,22 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 Accruals (job costed to 03-01, NOT compounded):
                                             </div>
                                             <div className="flex justify-between pl-4">
-                                                <span className="text-muted-foreground">
-                                                    Base for accruals (wages + allowances)
-                                                </span>
+                                                <span className="text-muted-foreground">Base for accruals (wages + allowances)</span>
                                                 <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.base)}</span>
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.annual_leave_accrual)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.rdo.accruals.annual_leave_accrual)}
+                                                </span>
                                             </div>
                                             <div className="flex justify-between pl-4">
                                                 <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.rdo.accruals.leave_loading)}</span>
+                                                <span className="font-medium">
+                                                    {formatCurrency(template.cost_breakdown.rdo.accruals.leave_loading)}
+                                                </span>
                                             </div>
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                            <div className="border-border flex justify-between border-t pt-1 pl-4">
                                                 <span className="font-semibold">Accruals Subtotal</span>
                                                 <span className="font-semibold text-purple-600 dark:text-purple-400">
                                                     {formatCurrency(template.cost_breakdown.rdo.accruals.total)}
@@ -728,13 +981,13 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                         {oncost.hourly_rate !== undefined && oncost.hours !== undefined
                                                             ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
                                                             : oncost.percentage_rate !== undefined && oncost.base !== undefined
-                                                            ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
-                                                            : ''}
+                                                              ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                              : ''}
                                                     </span>
                                                     <span className="font-medium">{formatCurrency(oncost.amount)}</span>
                                                 </div>
                                             ))}
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
+                                            <div className="border-border flex justify-between border-t pt-1 pl-4">
                                                 <span className="font-semibold">Oncosts Subtotal</span>
                                                 <span className="font-semibold text-purple-600 dark:text-purple-400">
                                                     {formatCurrency(template.cost_breakdown.rdo.oncosts.total)}
@@ -742,110 +995,125 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                             </div>
 
                                             {/* Total - Accruals + oncosts only (wages NOT included) */}
-                                            <div className="flex justify-between border-t-2 border-border pt-2 mt-2">
+                                            <div className="border-border mt-2 flex justify-between border-t-2 pt-2">
                                                 <span className="font-bold">Total Job Costed (RDO)</span>
                                                 <span className="font-bold text-purple-600 dark:text-purple-400">
                                                     {formatCurrency(template.cost_breakdown.rdo.total_cost)}
                                                 </span>
                                             </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
                                 {/* Public Holiday Not Worked Breakdown */}
-                                {template.public_holiday_not_worked_hours > 0 && template.cost_breakdown.public_holiday_not_worked && template.cost_breakdown.public_holiday_not_worked.total_cost > 0 && (
-                                    <div className="space-y-3 rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
-                                        <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">
-                                            Public Holiday Not Worked ({template.public_holiday_not_worked_hours.toFixed(1)} hrs / {template.cost_breakdown.public_holiday_not_worked.days.toFixed(1)} days)
-                                        </h4>
-                                        <p className="text-xs text-muted-foreground italic">
-                                            All costs job costed at ordinary rate. No allowances applied.
-                                        </p>
+                                {template.public_holiday_not_worked_hours > 0 &&
+                                    template.cost_breakdown.public_holiday_not_worked &&
+                                    template.cost_breakdown.public_holiday_not_worked.total_cost > 0 && (
+                                        <div className="space-y-3 rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+                                            <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">
+                                                Public Holiday Not Worked ({template.public_holiday_not_worked_hours.toFixed(1)} hrs /{' '}
+                                                {template.cost_breakdown.public_holiday_not_worked.days.toFixed(1)} days)
+                                            </h4>
+                                            <p className="text-muted-foreground text-xs italic">
+                                                All costs job costed at ordinary rate. No allowances applied.
+                                            </p>
 
-                                        <div className="space-y-1 text-sm">
-                                            {/* Gross Wages - Job costed */}
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Gross Wages (job costed)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.gross_wages)}</span>
-                                            </div>
-
-                                            {/* PH Accruals - Job costed to 03-01 */}
-                                            <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
-                                                Accruals (job costed to 03-01):
-                                            </div>
-                                            <div className="flex justify-between pl-4">
-                                                <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.annual_leave_accrual)}</span>
-                                            </div>
-                                            <div className="flex justify-between pl-4">
-                                                <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.leave_loading)}</span>
-                                            </div>
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
-                                                <span className="font-semibold">Accruals Subtotal</span>
-                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.total)}
-                                                </span>
-                                            </div>
-
-                                            <div className="flex justify-between border-t border-border pt-1">
-                                                <span className="font-semibold">Marked Up (Wages + Accruals)</span>
-                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.marked_up)}
-                                                </span>
-                                            </div>
-
-                                            {/* PH Oncosts - Job costed */}
-                                            <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
-                                                Oncosts (job costed):
-                                            </div>
-                                            {template.cost_breakdown.public_holiday_not_worked.oncosts.items.map((oncost, idx) => (
-                                                <div key={idx} className="flex justify-between pl-4">
-                                                    <span className="text-muted-foreground">
-                                                        {oncost.name}
-                                                        {oncost.hourly_rate !== undefined && oncost.hours !== undefined
-                                                            ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
-                                                            : oncost.percentage_rate !== undefined && oncost.base !== undefined
-                                                            ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
-                                                            : ''}
+                                            <div className="space-y-1 text-sm">
+                                                {/* Gross Wages - Job costed */}
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Gross Wages (job costed)</span>
+                                                    <span className="font-medium">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.gross_wages)}
                                                     </span>
-                                                    <span className="font-medium">{formatCurrency(oncost.amount)}</span>
                                                 </div>
-                                            ))}
-                                            <div className="flex justify-between border-t border-border pt-1 pl-4">
-                                                <span className="font-semibold">Oncosts Subtotal</span>
-                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.oncosts.total)}
-                                                </span>
-                                            </div>
 
-                                            {/* Total - All costs job costed */}
-                                            <div className="flex justify-between border-t-2 border-border pt-2 mt-2">
-                                                <span className="font-bold">Total Job Costed (Public Holiday)</span>
-                                                <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                                    {formatCurrency(template.cost_breakdown.public_holiday_not_worked.total_cost)}
-                                                </span>
+                                                {/* PH Accruals - Job costed to 03-01 */}
+                                                <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                                                    Accruals (job costed to 03-01):
+                                                </div>
+                                                <div className="flex justify-between pl-4">
+                                                    <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
+                                                    <span className="font-medium">
+                                                        {formatCurrency(
+                                                            template.cost_breakdown.public_holiday_not_worked.accruals.annual_leave_accrual,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between pl-4">
+                                                    <span className="text-muted-foreground">Leave Loading (4.61%)</span>
+                                                    <span className="font-medium">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.leave_loading)}
+                                                    </span>
+                                                </div>
+                                                <div className="border-border flex justify-between border-t pt-1 pl-4">
+                                                    <span className="font-semibold">Accruals Subtotal</span>
+                                                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.accruals.total)}
+                                                    </span>
+                                                </div>
+
+                                                <div className="border-border flex justify-between border-t pt-1">
+                                                    <span className="font-semibold">Marked Up (Wages + Accruals)</span>
+                                                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.marked_up)}
+                                                    </span>
+                                                </div>
+
+                                                {/* PH Oncosts - Job costed */}
+                                                <div className="mt-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                                                    Oncosts (job costed):
+                                                </div>
+                                                {template.cost_breakdown.public_holiday_not_worked.oncosts.items.map((oncost, idx) => (
+                                                    <div key={idx} className="flex justify-between pl-4">
+                                                        <span className="text-muted-foreground">
+                                                            {oncost.name}
+                                                            {oncost.hourly_rate !== undefined && oncost.hours !== undefined
+                                                                ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
+                                                                : oncost.percentage_rate !== undefined && oncost.base !== undefined
+                                                                  ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                                  : ''}
+                                                        </span>
+                                                        <span className="font-medium">{formatCurrency(oncost.amount)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="border-border flex justify-between border-t pt-1 pl-4">
+                                                    <span className="font-semibold">Oncosts Subtotal</span>
+                                                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.oncosts.total)}
+                                                    </span>
+                                                </div>
+
+                                                {/* Total - All costs job costed */}
+                                                <div className="border-border mt-2 flex justify-between border-t-2 pt-2">
+                                                    <span className="font-bold">Total Job Costed (Public Holiday)</span>
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                                        {formatCurrency(template.cost_breakdown.public_holiday_not_worked.total_cost)}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {/* Oncosts Breakdown */}
                                 <div className="space-y-2">
-                                    <h4 className="font-semibold text-sm">Oncosts (Worked Hours)</h4>
+                                    <h4 className="text-sm font-semibold">Oncosts (Worked Hours)</h4>
                                     <div className="space-y-1 text-sm">
                                         {template.cost_breakdown.oncosts.items.map((oncost, idx) => (
                                             <div key={idx} className="flex justify-between">
                                                 <span className="text-muted-foreground">
-                                                    {oncost.name}
-                                                    {oncost.is_percentage
-                                                        ? ` (${oncost.percentage_rate}%)`
-                                                        : ` (${formatCurrency(oncost.hourly_rate || 0)}/hr × ${oncost.hours_applied.toFixed(1)} hrs)`}
+                                                    <span className="font-mono text-xs">{formatOncostCodeWithSeries(oncost.code, String(parseInt(getTemplatePrefix(template)) + 1).padStart(2, '0'))}</span>
+                                                    <span className="ml-2">{oncost.name}</span>
+                                                    <span className="ml-1 text-xs">
+                                                        {oncost.is_percentage
+                                                            ? `(${oncost.percentage_rate}%)`
+                                                            : `(${formatCurrency(oncost.hourly_rate || 0)}/hr × ${oncost.hours_applied.toFixed(1)} hrs)`}
+                                                    </span>
                                                 </span>
                                                 <span className="font-medium">{formatCurrency(oncost.amount)}</span>
                                             </div>
                                         ))}
-                                        <div className="flex justify-between border-t border-border pt-1">
+                                        <div className="border-border flex justify-between border-t pt-1">
                                             <span className="font-semibold">Total Oncosts</span>
                                             <span className="font-bold">{formatCurrency(template.cost_breakdown.oncosts.worked_hours_total)}</span>
                                         </div>
@@ -856,23 +1124,27 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 <div className="mt-4 flex justify-between rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
                                     <span className="text-lg font-bold">Total Weekly Cost (Per Head)</span>
                                     <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                                        {formatCurrency(template.cost_breakdown.total_weekly_cost)}
+                                        {formatCurrency(template.headcount > 0 ? calculatePerHeadCost(template.cost_breakdown) / template.headcount : calculatePerHeadCost(template.cost_breakdown))}
                                     </span>
                                 </div>
 
                                 {/* Total for headcount */}
                                 {template.headcount > 0 && (
-                                    <div className="flex justify-between text-sm text-muted-foreground">
+                                    <div className="text-muted-foreground flex justify-between text-sm">
                                         <span>Total for {template.headcount.toFixed(1)} headcount:</span>
                                         <span className="font-semibold">
-                                            {formatCurrency(template.cost_breakdown.total_weekly_cost * template.headcount)}
+                                            {formatCurrency(calculatePerHeadCost(template.cost_breakdown))}
                                         </span>
                                     </div>
                                 )}
-                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </TabsContent>
                         ))}
-                    </div>
-                )}
+                    </Tabs>
+                </div>
+            )}
             </DialogContent>
         </Dialog>
     );
