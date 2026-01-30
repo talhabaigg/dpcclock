@@ -102,7 +102,9 @@ export default function TurnoverForecastIndex({
 }: TurnoverForecastProps) {
     const revenueGridRef = useRef<AgGridReact>(null);
     const costGridRef = useRef<AgGridReact>(null);
-    const [gridsReady, setGridsReady] = useState({ revenue: false, cost: false });
+    const profitGridRef = useRef<AgGridReact>(null);
+    const targetGridRef = useRef<AgGridReact>(null);
+    const [gridsReady, setGridsReady] = useState({ revenue: false, cost: false, profit: false, target: false });
 
     // Load excluded jobs from local storage
     const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(() => {
@@ -116,7 +118,7 @@ export default function TurnoverForecastIndex({
 
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<'both' | 'revenue' | 'cost'>('both');
+    const [viewMode, setViewMode] = useState<'all' | 'revenue' | 'cost' | 'profit' | 'targets'>('all');
     const [gridHeights, setGridHeights] = useState(() => {
         try {
             const stored = localStorage.getItem(GRID_HEIGHTS_KEY);
@@ -124,16 +126,18 @@ export default function TurnoverForecastIndex({
             return {
                 revenue: typeof parsed?.revenue === 'number' ? parsed.revenue : 150,
                 cost: typeof parsed?.cost === 'number' ? parsed.cost : 150,
+                profit: typeof parsed?.profit === 'number' ? parsed.profit : 150,
+                target: typeof parsed?.target === 'number' ? parsed.target : 150,
             };
         } catch {
-            return { revenue: 150, cost: 150 };
+            return { revenue: 150, cost: 150, profit: 150, target: 150 };
         }
     });
 
     const MIN_GRID_HEIGHT = 120;
     const MAX_GRID_HEIGHT = 600;
 
-    const handleGridResizeStart = (grid: 'revenue' | 'cost') => (e: React.MouseEvent) => {
+    const handleGridResizeStart = (grid: 'revenue' | 'cost' | 'profit' | 'target') => (e: React.MouseEvent) => {
         e.preventDefault();
         const startY = e.clientY;
         const startHeight = gridHeights[grid];
@@ -154,8 +158,18 @@ export default function TurnoverForecastIndex({
     };
 
     // Column state persistence handlers
-    const saveColumnState = useCallback((gridType: 'revenue' | 'target') => {
-        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+    const getGridRef = useCallback((gridType: 'revenue' | 'cost' | 'profit' | 'target') => {
+        const gridRefMap = {
+            revenue: revenueGridRef,
+            cost: costGridRef,
+            profit: profitGridRef,
+            target: targetGridRef,
+        };
+        return gridRefMap[gridType];
+    }, []);
+
+    const saveColumnState = useCallback((gridType: 'revenue' | 'cost' | 'profit' | 'target') => {
+        const gridRef = getGridRef(gridType);
         const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
         try {
             const state = gridRef.current?.api?.getColumnState();
@@ -165,28 +179,22 @@ export default function TurnoverForecastIndex({
         } catch {
             // Ignore storage errors
         }
-    }, []);
+    }, [getGridRef]);
 
-    const restoreColumnState = useCallback((gridType: 'revenue' | 'target') => {
-        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+    const restoreColumnState = useCallback((gridType: 'revenue' | 'cost' | 'profit' | 'target') => {
+        const gridRef = getGridRef(gridType);
         const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
         try {
             localStorage.removeItem(key);
-            // Temporarily disable aligned grids to prevent syncing reset to the other grid
             gridRef.current?.api?.setGridOption('alignedGrids', []);
             gridRef.current?.api?.resetColumnState();
-            // Re-enable aligned grids
-            if (revenueGridRef.current?.api && costGridRef.current?.api) {
-                revenueGridRef.current.api.setGridOption('alignedGrids', [costGridRef.current.api]);
-                costGridRef.current.api.setGridOption('alignedGrids', [revenueGridRef.current.api]);
-            }
         } catch {
             // Ignore storage errors
         }
-    }, []);
+    }, [getGridRef]);
 
-    const applyStoredColumnState = useCallback((gridType: 'revenue' | 'target') => {
-        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+    const applyStoredColumnState = useCallback((gridType: 'revenue' | 'cost' | 'profit' | 'target') => {
+        const gridRef = getGridRef(gridType);
         const key = `${GRID_COLUMN_STATE_KEY}-${gridType}`;
         try {
             const stored = localStorage.getItem(key);
@@ -197,7 +205,7 @@ export default function TurnoverForecastIndex({
         } catch {
             // Ignore storage errors
         }
-    }, []);
+    }, [getGridRef]);
 
     // Financial Year filter - generate available FYs based on data
     const availableFYs = useMemo(() => {
@@ -255,12 +263,20 @@ export default function TurnoverForecastIndex({
         localStorage.setItem(GRID_HEIGHTS_KEY, JSON.stringify(gridHeights));
     }, [gridHeights]);
 
-    // Sync grid alignment when both grids are ready
+    // Sync grid alignment when all grids are ready
     useEffect(() => {
-        if (gridsReady.revenue && gridsReady.cost) {
-            if (revenueGridRef.current?.api && costGridRef.current?.api) {
-                revenueGridRef.current.api.setGridOption('alignedGrids', [costGridRef.current.api]);
-                costGridRef.current.api.setGridOption('alignedGrids', [revenueGridRef.current.api]);
+        if (gridsReady.revenue && gridsReady.cost && gridsReady.profit && gridsReady.target) {
+            const revenueApi = revenueGridRef.current?.api;
+            const costApi = costGridRef.current?.api;
+            const profitApi = profitGridRef.current?.api;
+            const targetApi = targetGridRef.current?.api;
+
+            if (revenueApi && costApi && profitApi && targetApi) {
+                // Each grid needs to reference all OTHER grids for alignment
+                revenueApi.setGridOption('alignedGrids', [costApi, profitApi, targetApi]);
+                costApi.setGridOption('alignedGrids', [revenueApi, profitApi, targetApi]);
+                profitApi.setGridOption('alignedGrids', [revenueApi, costApi, targetApi]);
+                targetApi.setGridOption('alignedGrids', [revenueApi, costApi, profitApi]);
             }
         }
     }, [gridsReady]);
@@ -344,13 +360,13 @@ export default function TurnoverForecastIndex({
         return [totalRow, labourRow];
     }, [filteredData, filteredMonths]);
 
-    // Calculate cost total row data (computed for future use)
-    void useMemo(() => {
+    // Calculate cost total row data
+    const costTotalRowData = useMemo(() => {
         const totalRow: any = {
             id: 'cost-total-row',
-            type: 'Total',
-
-            job_number: '',
+            type: '',
+            job_name: '',
+            job_number: 'Total',
             cost_to_date: 0,
             cost_contract_fy: 0,
             budget: 0,
@@ -384,31 +400,33 @@ export default function TurnoverForecastIndex({
         return [totalRow];
     }, [filteredData, filteredMonths]);
 
-    // Calculate profit pinned row data (computed for future use)
-    void useMemo(() => {
-        const profitRow: any = {
-            id: 'profit-row',
-            type: 'Profit',
-            // job_name: 'PROFIT',
-            job_number: '',
-            claimed_to_date: 0,
-            revenue_contract_fy: 0,
-            total_contract_value: 0,
-            remaining_revenue_value_fy: 0,
-            remaining_order_book: 0,
-            cost_to_date: 0,
-            cost_contract_fy: 0,
-            budget: 0,
-            remaining_cost_value_fy: 0,
-            remaining_budget: 0,
+    // Calculate profit row data for profit grid
+    const profitRowData = useMemo(() => {
+        // Create totals row
+        const totalRow: any = {
+            id: 'profit-total-row',
+            type: '',
+            job_name: '',
+            job_number: 'Total Profit',
+            profit_to_date: 0,
+            profit_contract_fy: 0,
+            profit_total: 0,
         };
 
-        // Calculate profit for each month
-        filteredMonths.forEach((month) => {
-            let totalRevenue = 0;
-            let totalCost = 0;
+        // Calculate profit for each job
+        const jobProfitRows = filteredData.map((row) => {
+            const profitRow: any = {
+                id: row.id,
+                type: row.type,
+                job_name: row.job_name,
+                job_number: row.job_number,
+                profit_to_date: (row.claimed_to_date || 0) - (row.cost_to_date || 0),
+                profit_contract_fy: (row.revenue_contract_fy || 0) - (row.cost_contract_fy || 0),
+                profit_total: (row.total_contract_value || 0) - (row.budget || 0),
+            };
 
-            filteredData.forEach((row) => {
+            // Calculate profit for each month
+            filteredMonths.forEach((month) => {
                 const actualRevenue = Number(row.revenue_actuals?.[month]) || 0;
                 const forecastRevenue = Number(row.revenue_forecast?.[month]) || 0;
                 const revenue = actualRevenue || forecastRevenue;
@@ -417,29 +435,28 @@ export default function TurnoverForecastIndex({
                 const forecastCost = Number(row.cost_forecast?.[month]) || 0;
                 const cost = actualCost || forecastCost;
 
-                totalRevenue += revenue;
-                totalCost += cost;
+                profitRow[`month_${month}`] = revenue - cost;
             });
 
-            profitRow[`month_${month}`] = totalRevenue - totalCost;
+            return profitRow;
         });
 
-        // Calculate summary fields
-        filteredData.forEach((row) => {
-            profitRow.claimed_to_date += row.claimed_to_date || 0;
-            profitRow.cost_to_date += row.cost_to_date || 0;
-            profitRow.revenue_contract_fy += row.revenue_contract_fy || 0;
-            profitRow.cost_contract_fy += row.cost_contract_fy || 0;
-            profitRow.total_contract_value += row.total_contract_value || 0;
-            profitRow.budget += row.budget || 0;
+        // Calculate totals
+        filteredMonths.forEach((month) => {
+            let totalProfit = 0;
+            jobProfitRows.forEach((row) => {
+                totalProfit += row[`month_${month}`] || 0;
+            });
+            totalRow[`month_${month}`] = totalProfit;
         });
 
-        // Profit summaries
-        profitRow.profit_to_date = profitRow.claimed_to_date - profitRow.cost_to_date;
-        profitRow.profit_contract_fy = profitRow.revenue_contract_fy - profitRow.cost_contract_fy;
-        profitRow.profit_total = profitRow.total_contract_value - profitRow.budget;
+        jobProfitRows.forEach((row) => {
+            totalRow.profit_to_date += row.profit_to_date || 0;
+            totalRow.profit_contract_fy += row.profit_contract_fy || 0;
+            totalRow.profit_total += row.profit_total || 0;
+        });
 
-        return [profitRow];
+        return { rows: jobProfitRows, totalRow: [totalRow] };
     }, [filteredData, filteredMonths]);
 
     const targetRowData = useMemo(() => {
@@ -960,8 +977,8 @@ export default function TurnoverForecastIndex({
         return [...targetPinnedCols, ...targetSummaryCols, ...monthlyCols];
     }, [filteredMonths, fyLabel, revenueColumnDefs]);
 
-    // Build cost column definitions (same structure as revenue, computed for future use)
-    void useMemo<ColDef[]>(() => {
+    // Build cost column definitions
+    const costColumnDefs = useMemo<ColDef[]>(() => {
         const summaryCols: ColDef[] = [
             ...staticCols,
             {
@@ -970,7 +987,7 @@ export default function TurnoverForecastIndex({
                 width: 250,
                 cellRenderer: (params) => {
                     const rowData = params.data as TurnoverRow;
-                    if (params.data?.type === 'Total' || params.data?.type === 'Profit') {
+                    if (params.data?.job_number === 'Total' || params.data?.type === 'Profit') {
                         return '';
                     }
                     const claimedToDate = rowData.cost_to_date || 0;
@@ -994,8 +1011,8 @@ export default function TurnoverForecastIndex({
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     return 'text-right';
                 },
@@ -1009,8 +1026,8 @@ export default function TurnoverForecastIndex({
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     return 'text-right font-semibold';
                 },
@@ -1024,8 +1041,8 @@ export default function TurnoverForecastIndex({
                 },
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     return 'text-right';
                 },
@@ -1037,8 +1054,8 @@ export default function TurnoverForecastIndex({
                 valueFormatter: (params) => formatCurrency(params.value),
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     return 'text-right';
                 },
@@ -1050,8 +1067,8 @@ export default function TurnoverForecastIndex({
                 valueFormatter: (params) => formatCurrency(params.value),
                 type: 'numericColumn',
                 cellClass: (params) => {
-                    if (params.data?.type === 'Total') {
-                        return 'text-right font-bold bg-gray-100';
+                    if (params.data?.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
                     return 'text-right';
                 },
@@ -1069,9 +1086,8 @@ export default function TurnoverForecastIndex({
                 cellClass: (params) => {
                     const rowData = params.data as any;
 
-                    if (rowData.type === 'Total') {
-                        const classes = ['text-right', 'font-bold', 'bg-gray-100'];
-                        return classes.join(' ');
+                    if (rowData.job_number === 'Total') {
+                        return 'text-right font-bold bg-gray-100 dark:bg-gray-800';
                     }
 
                     const hasActual = rowData.cost_actuals && rowData.cost_actuals[month];
@@ -1079,18 +1095,18 @@ export default function TurnoverForecastIndex({
 
                     const classes = ['text-right'];
                     if (hasActual) {
-                        classes.push('bg-yellow-50 font-medium');
+                        classes.push('bg-yellow-50 dark:bg-yellow-950/30 font-medium');
                     } else if (hasForecast) {
-                        classes.push('bg-blue-50 italic');
+                        classes.push('bg-blue-50 dark:bg-blue-950/30 italic');
                     }
                     return classes.join(' ');
                 },
-                headerClass: isActualColumn ? 'bg-yellow-50 font-semibold' : 'bg-blue-100',
+                headerClass: isActualColumn ? 'bg-yellow-50 dark:bg-yellow-950/30 font-semibold' : 'bg-blue-100 dark:bg-blue-950/30',
                 valueGetter: (params) => {
                     const rowData = params.data as any;
 
-                    // For profit or total row, use the pre-calculated value
-                    if (rowData.type === 'Profit' || rowData.type === 'Total') {
+                    // For total row, use the pre-calculated value
+                    if (rowData.job_number === 'Total') {
                         return rowData[`month_${month}`] || 0;
                     }
 
@@ -1108,6 +1124,145 @@ export default function TurnoverForecastIndex({
         return [...summaryCols, ...monthlyCols];
     }, [filteredMonths, lastActualMonth, staticCols, fyLabel]);
 
+    // Build profit column definitions
+    const profitColumnDefs = useMemo<ColDef[]>(() => {
+        const baseCols: ColDef[] = [
+            {
+                headerName: 'Type',
+                field: 'type',
+                width: 100,
+                pinned: 'left',
+                cellClass: (params) => {
+                    if (params.data?.job_number === 'Total Profit') {
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
+                    }
+                    return 'font-medium';
+                },
+            },
+            {
+                headerName: 'Job Name',
+                field: 'job_name',
+                width: 120,
+                pinned: 'left',
+                cellClass: (params) => {
+                    if (params.data?.job_number === 'Total Profit') {
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
+                    }
+                    return 'font-medium';
+                },
+            },
+            {
+                headerName: 'Job Number',
+                field: 'job_number',
+                width: 120,
+                pinned: 'left',
+                cellClass: (params) => {
+                    if (params.data?.job_number === 'Total Profit') {
+                        return 'font-bold bg-gray-100 dark:bg-gray-800';
+                    }
+                    return 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer';
+                },
+                onCellClicked: (params: any) => {
+                    const rowData = params.data;
+                    if (rowData.job_number !== 'Total Profit' && rowData.job_number) {
+                        if (rowData.type === 'forecast_project') {
+                            window.location.href = `/forecast-projects/${rowData.id}`;
+                        } else {
+                            window.location.href = `/location/${rowData.id}/job-forecast`;
+                        }
+                    }
+                },
+            },
+            {
+                headerName: 'Profit to Date',
+                field: 'profit_to_date',
+                width: 150,
+                valueFormatter: (params) => formatCurrency(params.value),
+                type: 'numericColumn',
+                cellClass: (params) => {
+                    const baseClass = params.data?.job_number === 'Total Profit'
+                        ? 'text-right font-bold bg-gray-100 dark:bg-gray-800'
+                        : 'text-right';
+                    if (params.value < 0) {
+                        return `${baseClass} text-red-600 dark:text-red-400`;
+                    }
+                    return `${baseClass} text-green-600 dark:text-green-400`;
+                },
+            },
+            {
+                headerName: `Profit ${fyLabel}`,
+                field: 'profit_contract_fy',
+                width: 150,
+                valueFormatter: (params) => formatCurrency(params.value),
+                type: 'numericColumn',
+                cellClass: (params) => {
+                    const baseClass = params.data?.job_number === 'Total Profit'
+                        ? 'text-right font-bold bg-gray-100 dark:bg-gray-800'
+                        : 'text-right font-semibold';
+                    if (params.value < 0) {
+                        return `${baseClass} text-red-600 dark:text-red-400`;
+                    }
+                    return `${baseClass} text-green-600 dark:text-green-400`;
+                },
+            },
+            {
+                headerName: 'Total Profit',
+                field: 'profit_total',
+                width: 150,
+                valueFormatter: (params) => formatCurrency(params.value),
+                type: 'numericColumn',
+                cellClass: (params) => {
+                    const baseClass = params.data?.job_number === 'Total Profit'
+                        ? 'text-right font-bold bg-gray-100 dark:bg-gray-800'
+                        : 'text-right';
+                    if (params.value < 0) {
+                        return `${baseClass} text-red-600 dark:text-red-400`;
+                    }
+                    return `${baseClass} text-green-600 dark:text-green-400`;
+                },
+            },
+        ];
+
+        const monthlyCols: ColDef[] = filteredMonths.map((month) => {
+            const isActualColumn = lastActualMonth && month <= lastActualMonth;
+
+            return {
+                headerName: formatMonthHeader(month),
+                field: `month_${month}`,
+                width: 120,
+                type: 'numericColumn',
+                cellClass: (params) => {
+                    const rowData = params.data as any;
+
+                    if (rowData.job_number === 'Total Profit') {
+                        const baseClass = 'text-right font-bold bg-gray-100 dark:bg-gray-800';
+                        if (params.value < 0) {
+                            return `${baseClass} text-red-600 dark:text-red-400`;
+                        }
+                        return `${baseClass} text-green-600 dark:text-green-400`;
+                    }
+
+                    const classes = ['text-right'];
+                    if (isActualColumn) {
+                        classes.push('bg-green-50 dark:bg-emerald-950/30 font-medium');
+                    } else {
+                        classes.push('bg-blue-50 dark:bg-blue-950/30 italic');
+                    }
+                    if (params.value < 0) {
+                        classes.push('text-red-600 dark:text-red-400');
+                    } else {
+                        classes.push('text-green-600 dark:text-green-400');
+                    }
+                    return classes.join(' ');
+                },
+                headerClass: isActualColumn ? 'bg-green-50 dark:bg-emerald-950/30 font-semibold' : 'bg-blue-100 dark:bg-blue-950/30',
+                valueFormatter: (params) => formatCurrency(params.value),
+            };
+        });
+
+        return [...baseCols, ...monthlyCols];
+    }, [filteredMonths, lastActualMonth, fyLabel]);
+
     const defaultColDef = useMemo<ColDef>(
         () => ({
             sortable: true,
@@ -1117,8 +1272,14 @@ export default function TurnoverForecastIndex({
         [],
     );
 
-    const handleExportCSV = (gridType: 'revenue' | 'target') => {
-        const gridRef = gridType === 'revenue' ? revenueGridRef : costGridRef;
+    const handleExportCSV = (gridType: 'revenue' | 'cost' | 'profit' | 'target') => {
+        const gridRefMap = {
+            revenue: revenueGridRef,
+            cost: costGridRef,
+            profit: profitGridRef,
+            target: targetGridRef,
+        };
+        const gridRef = gridRefMap[gridType];
         gridRef.current?.api?.exportDataAsCsv({
             fileName: `turnover-forecast-${gridType}-${new Date().toISOString().split('T')[0]}.csv`,
         });
@@ -1204,11 +1365,11 @@ export default function TurnoverForecastIndex({
                             <div className="flex gap-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 p-1">
                                 <Button
                                     size="sm"
-                                    variant={viewMode === 'both' ? 'default' : 'ghost'}
-                                    onClick={() => setViewMode('both')}
+                                    variant={viewMode === 'all' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('all')}
                                     className="h-8 flex-1 sm:flex-none"
                                 >
-                                    Both
+                                    All
                                 </Button>
                                 <Button
                                     size="sm"
@@ -1222,6 +1383,22 @@ export default function TurnoverForecastIndex({
                                     size="sm"
                                     variant={viewMode === 'cost' ? 'default' : 'ghost'}
                                     onClick={() => setViewMode('cost')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Cost
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'profit' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('profit')}
+                                    className="h-8 flex-1 sm:flex-none"
+                                >
+                                    Profit
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'targets' ? 'default' : 'ghost'}
+                                    onClick={() => setViewMode('targets')}
                                     className="h-8 flex-1 sm:flex-none"
                                 >
                                     Targets
@@ -1382,7 +1559,7 @@ export default function TurnoverForecastIndex({
                 {/* Aligned Grids Container */}
                 <div className="space-y-4">
                     {/* Revenue Grid */}
-                    {(viewMode === 'both' || viewMode === 'revenue') && (
+                    {(viewMode === 'all' || viewMode === 'revenue') && (
                         <div>
                             <div className="mb-2 flex items-center justify-between">
                                 <h2 className="text-sm font-semibold">Revenue</h2>
@@ -1442,8 +1619,118 @@ export default function TurnoverForecastIndex({
                         </div>
                     )}
 
+                    {/* Cost Grid */}
+                    {(viewMode === 'all' || viewMode === 'cost') && (
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h2 className="text-sm font-semibold">Cost</h2>
+                                <div className="flex gap-1">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => restoreColumnState('cost')} variant="outline" size="icon">
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Reset column layout</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => handleExportCSV('cost')} variant="outline" size="icon">
+                                                <Download className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.cost}px` }}>
+                                <AgGridReact
+                                    ref={costGridRef}
+                                    rowData={filteredData}
+                                    columnDefs={costColumnDefs}
+                                    defaultColDef={defaultColDef}
+                                    theme={shadcnTheme}
+                                    enableCellTextSelection={true}
+                                    ensureDomOrder={true}
+                                    getRowId={getRowId}
+                                    pinnedBottomRowData={costTotalRowData}
+                                    onGridReady={() => {
+                                        setGridsReady((prev) => ({ ...prev, cost: true }));
+                                        applyStoredColumnState('cost');
+                                    }}
+                                    onColumnMoved={() => saveColumnState('cost')}
+                                    onColumnResized={() => saveColumnState('cost')}
+                                    onColumnVisible={() => saveColumnState('cost')}
+                                    onColumnPinned={() => saveColumnState('cost')}
+                                />
+                            </div>
+                            <div
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                                onMouseDown={handleGridResizeStart('cost')}
+                                title="Drag to resize grid"
+                            >
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Profit Grid */}
+                    {(viewMode === 'all' || viewMode === 'profit') && (
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h2 className="text-sm font-semibold">Profit</h2>
+                                <div className="flex gap-1">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => restoreColumnState('profit')} variant="outline" size="icon">
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Reset column layout</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={() => handleExportCSV('profit')} variant="outline" size="icon">
+                                                <Download className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">Export as CSV</TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.profit}px` }}>
+                                <AgGridReact
+                                    ref={profitGridRef}
+                                    rowData={profitRowData.rows}
+                                    columnDefs={profitColumnDefs}
+                                    defaultColDef={defaultColDef}
+                                    theme={shadcnTheme}
+                                    enableCellTextSelection={true}
+                                    ensureDomOrder={true}
+                                    getRowId={getRowId}
+                                    pinnedBottomRowData={profitRowData.totalRow}
+                                    onGridReady={() => {
+                                        setGridsReady((prev) => ({ ...prev, profit: true }));
+                                        applyStoredColumnState('profit');
+                                    }}
+                                    onColumnMoved={() => saveColumnState('profit')}
+                                    onColumnResized={() => saveColumnState('profit')}
+                                    onColumnVisible={() => saveColumnState('profit')}
+                                    onColumnPinned={() => saveColumnState('profit')}
+                                />
+                            </div>
+                            <div
+                                className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                                onMouseDown={handleGridResizeStart('profit')}
+                                title="Drag to resize grid"
+                            >
+                                <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Revenue Targets Grid */}
-                    {(viewMode === 'both' || viewMode === 'cost') && (
+                    {(viewMode === 'all' || viewMode === 'targets') && (
                         <div>
                             <div className="mb-2 flex items-center justify-between">
                                 <h2 className="text-sm font-semibold">Revenue Targets</h2>
@@ -1466,9 +1753,9 @@ export default function TurnoverForecastIndex({
                                     </Tooltip>
                                 </div>
                             </div>
-                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.cost}px` }}>
+                            <div className="rounded-md border bg-white dark:bg-gray-900" style={{ height: `${gridHeights.target}px` }}>
                                 <AgGridReact
-                                    ref={costGridRef}
+                                    ref={targetGridRef}
                                     rowData={targetRowData}
                                     columnDefs={targetColumnDefsMemo}
                                     defaultColDef={defaultColDef}
@@ -1477,7 +1764,7 @@ export default function TurnoverForecastIndex({
                                     ensureDomOrder={true}
                                     getRowId={getRowId}
                                     onGridReady={() => {
-                                        setGridsReady((prev) => ({ ...prev, cost: true }));
+                                        setGridsReady((prev) => ({ ...prev, target: true }));
                                         applyStoredColumnState('target');
                                     }}
                                     onColumnMoved={() => saveColumnState('target')}
@@ -1488,7 +1775,7 @@ export default function TurnoverForecastIndex({
                             </div>
                             <div
                                 className="group relative mt-1 flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                                onMouseDown={handleGridResizeStart('cost')}
+                                onMouseDown={handleGridResizeStart('target')}
                                 title="Drag to resize grid"
                             >
                                 <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
