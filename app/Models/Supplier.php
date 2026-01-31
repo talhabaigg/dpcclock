@@ -21,4 +21,9 @@ class Supplier extends Model
     {
         return $this->hasMany(CostCode::class);
     }
+
+    public function requisitions()
+    {
+        return $this->hasMany(Requisition::class, 'supplier_number', 'id');
+    }
 }

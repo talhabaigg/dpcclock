@@ -14,3 +14,8 @@ Broadcast::channel('kiosk.{kiosk_id}', function ($user, $kiosk_id) {
 Broadcast::channel('drawing-sets.{projectId}', function () {
     return true;
 });
+
+// Public channel for Premier sync progress updates (no auth required)
+Broadcast::channel('premier-sync', function () {
+    return true;
+});

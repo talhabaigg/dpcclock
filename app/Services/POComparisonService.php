@@ -17,7 +17,7 @@ class POComparisonService
      * Compare local requisition with Premier PO
      * Returns structured comparison data
      */
-    public function compare(Requisition $requisition): array
+    public function compare(Requisition $requisition, bool $skipDebugCalls = true): array
     {
         if (!$requisition->premier_po_id) {
             throw new \Exception('Requisition has not been synced with Premier');
@@ -37,8 +37,12 @@ class POComparisonService
             'source' => 'local',
         ])->toArray();
 
-        // Fetch Premier lines
-        $premierLines = $this->premierService->getPurchaseOrderLines($requisition->premier_po_id);
+        // Fetch Premier lines (uses cached data if available, skip API fallback for report performance)
+        $premierLines = $this->premierService->getPurchaseOrderLines(
+            $requisition->premier_po_id,
+            forceRefresh: false,
+            cacheOnly: $skipDebugCalls // When skipping debug calls (reports), also skip API fallback
+        );
         $premierLines = $this->normalizePremierLines($premierLines);
 
         // Fetch invoices and invoice lines by PO number
@@ -108,6 +112,29 @@ class POComparisonService
             ];
         }
 
+        // Build debug data - skip API calls if requested (for report performance)
+        $debug = [
+            'local_count' => count($localLines),
+            'premier_count' => count($premierLines),
+            'invoice_lines_count' => count($invoiceLines),
+            'local_sample' => array_values(array_slice($localLines, 0, 2)),
+            'premier_sample' => array_values(array_slice($premierLines, 0, 2)),
+            'invoice_lines_sample' => array_values(array_slice($invoiceLines, 0, 5)),
+            'expected_po_id' => $requisition->premier_po_id,
+            'invoice_query' => [
+                'method' => 'po_number_lookup',
+                'po_number' => $poNumber,
+                'invoices_found' => count($invoices),
+            ],
+            'description_comparison' => $descriptionComparison,
+        ];
+
+        // Only make additional API calls for detailed debug if not skipped
+        if (!$skipDebugCalls) {
+            $debug['premier_raw_sample'] = $this->getRawPremierSample($requisition->premier_po_id);
+            $debug['premier_deleted_lines'] = $this->getDeletedLines($requisition->premier_po_id);
+        }
+
         return [
             'comparison' => $comparisonResult,
             'summary' => $summary,
@@ -116,23 +143,7 @@ class POComparisonService
             'invoice_total' => $invoiceTotal,
             'invoices' => $invoiceSummary,
             'fetched_at' => now()->toIso8601String(),
-            'debug' => [
-                'local_count' => count($localLines),
-                'premier_count' => count($premierLines),
-                'invoice_lines_count' => count($invoiceLines),
-                'local_sample' => array_values(array_slice($localLines, 0, 2)),
-                'premier_sample' => array_values(array_slice($premierLines, 0, 2)),
-                'invoice_lines_sample' => array_values(array_slice($invoiceLines, 0, 5)),
-                'premier_raw_sample' => $this->getRawPremierSample($requisition->premier_po_id),
-                'premier_deleted_lines' => $this->getDeletedLines($requisition->premier_po_id),
-                'expected_po_id' => $requisition->premier_po_id,
-                'invoice_query' => [
-                    'method' => 'po_number_lookup',
-                    'po_number' => $poNumber,
-                    'invoices_found' => count($invoices),
-                ],
-                'description_comparison' => $descriptionComparison,
-            ],
+            'debug' => $debug,
         ];
     }
 

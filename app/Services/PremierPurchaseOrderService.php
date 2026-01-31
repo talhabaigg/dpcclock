@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncPremierPoLinesJob;
+use App\Models\PremierPoHeader;
+use App\Models\PremierPoLine;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -18,14 +21,126 @@ class PremierPurchaseOrderService
     }
 
     /**
-     * Get PO lines from Premier API for a specific Purchase Order
-     * Caches results for 5 minutes
+     * Get PO lines - uses local database first, falls back to API
+     * Returns data in Premier API format for compatibility
+     *
+     * @param string $premierPoId
+     * @param bool $forceRefresh Force fetch from API even if cached
+     * @param bool $cacheOnly Only return cached data, don't fall back to API
      */
-    public function getPurchaseOrderLines(string $premierPoId): array
+    public function getPurchaseOrderLines(string $premierPoId, bool $forceRefresh = false, bool $cacheOnly = false): array
     {
-        $cacheKey = "premier_po_lines_{$premierPoId}";
+        // Try to get from local database first (unless forced refresh)
+        if (!$forceRefresh) {
+            $localLines = $this->getFromLocalDatabase($premierPoId);
+            if (!empty($localLines)) {
+                return $localLines;
+            }
+        }
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($premierPoId) {
+        // If cache only mode, don't fall back to API
+        if ($cacheOnly) {
+            return [];
+        }
+
+        // Fall back to API
+        return $this->fetchFromPremierApi($premierPoId);
+    }
+
+    /**
+     * Get lines from local database, converted to Premier API format
+     */
+    protected function getFromLocalDatabase(string $premierPoId): array
+    {
+        $lines = PremierPoLine::getByPremierPoId($premierPoId);
+
+        if ($lines->isEmpty()) {
+            return [];
+        }
+
+        // Convert to Premier API format for compatibility
+        return $lines->map(function (PremierPoLine $line) {
+            return [
+                'PurchaseOrderLineId' => $line->premier_line_id,
+                'PurchaseOrderId' => $line->premier_po_id,
+                'Line' => $line->line_number,
+                'LineDescription' => $line->description,
+                'Quantity' => (float) $line->quantity,
+                'UnitCost' => (float) $line->unit_cost,
+                'Amount' => (float) $line->amount,
+                'InvoiceBalance' => (float) $line->invoice_balance,
+                'CostItemId' => $line->cost_item_id,
+                'CostTypeId' => $line->cost_type_id,
+                'JobId' => $line->job_id,
+                'ItemId' => $line->item_id,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Queue a sync job for the given PO
+     */
+    public function queueSync(string $premierPoId, ?int $requisitionId = null): void
+    {
+        SyncPremierPoLinesJob::dispatch($premierPoId, $requisitionId);
+    }
+
+    /**
+     * Sync PO lines immediately (for when you need the data now)
+     */
+    public function syncNow(string $premierPoId, ?int $requisitionId = null): array
+    {
+        $lines = $this->fetchFromPremierApi($premierPoId);
+
+        if (!empty($lines)) {
+            // Store in database
+            $this->storeLines($premierPoId, $lines, $requisitionId);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Store lines in the local database
+     */
+    protected function storeLines(string $premierPoId, array $lines, ?int $requisitionId): void
+    {
+        $syncedAt = now();
+
+        foreach ($lines as $line) {
+            $lineId = $line['PurchaseOrderLineId'] ?? null;
+            if (!$lineId) {
+                continue;
+            }
+
+            PremierPoLine::updateOrCreate(
+                ['premier_line_id' => $lineId],
+                [
+                    'premier_po_id' => $premierPoId,
+                    'requisition_id' => $requisitionId,
+                    'line_number' => $line['Line'] ?? 0,
+                    'description' => $line['LineDescription'] ?? '',
+                    'quantity' => (float) ($line['Quantity'] ?? 0),
+                    'unit_cost' => (float) ($line['UnitCost'] ?? 0),
+                    'amount' => (float) ($line['Amount'] ?? 0),
+                    'invoice_balance' => (float) ($line['InvoiceBalance'] ?? 0),
+                    'cost_item_id' => $line['CostItemId'] ?? null,
+                    'cost_type_id' => $line['CostTypeId'] ?? null,
+                    'job_id' => $line['JobId'] ?? null,
+                    'item_id' => $line['ItemId'] ?? null,
+                    'synced_at' => $syncedAt,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Fetch PO lines directly from Premier API
+     * Used when local data is not available or refresh is forced
+     */
+    public function fetchFromPremierApi(string $premierPoId): array
+    {
+        try {
             $token = $this->authService->getAccessToken();
 
             $response = Http::withToken($token)
@@ -97,7 +212,13 @@ class PremierPurchaseOrderService
             }
 
             return $data;
-        });
+        } catch (\Exception $e) {
+            Log::error('fetchFromPremierApi failed', [
+                'premier_po_id' => $premierPoId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -209,4 +330,131 @@ class PremierPurchaseOrderService
         })->toArray();
     }
 
+    /**
+     * Get PO header - uses local database first, falls back to API
+     */
+    public function getPurchaseOrderHeader(string $premierPoId, bool $forceRefresh = false): ?array
+    {
+        // Try to get from local database first (unless forced refresh)
+        if (!$forceRefresh) {
+            $localHeader = PremierPoHeader::getByPremierPoId($premierPoId);
+            if ($localHeader) {
+                return $this->headerToArray($localHeader);
+            }
+        }
+
+        // Fall back to API
+        return $this->fetchHeaderFromPremierApi($premierPoId);
+    }
+
+    /**
+     * Convert local header model to array format matching Premier API
+     */
+    protected function headerToArray(PremierPoHeader $header): array
+    {
+        return [
+            'PurchaseOrderId' => $header->premier_po_id,
+            'PONumber' => $header->po_number,
+            'VendorId' => $header->vendor_id,
+            'VendorCode' => $header->vendor_code,
+            'VendorName' => $header->vendor_name,
+            'JobId' => $header->job_id,
+            'JobNumber' => $header->job_number,
+            'PODate' => $header->po_date?->toIso8601String(),
+            'RequiredDate' => $header->required_date?->toIso8601String(),
+            'Total' => (float) $header->total_amount,
+            'InvoicedAmount' => (float) $header->invoiced_amount,
+            'Status' => $header->status,
+            'ApprovalStatus' => $header->approval_status,
+            'Description' => $header->description,
+        ];
+    }
+
+    /**
+     * Fetch PO header directly from Premier API
+     */
+    public function fetchHeaderFromPremierApi(string $premierPoId): ?array
+    {
+        try {
+            $token = $this->authService->getAccessToken();
+
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->get("{$this->baseUrl}/api/PurchaseOrder/GetPurchaseOrder", [
+                    'purchaseOrderId' => $premierPoId,
+                ]);
+
+            if ($response->failed()) {
+                Log::warning('Failed to fetch Premier PO header', [
+                    'premier_po_id' => $premierPoId,
+                    'status' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+                return null;
+            }
+
+            $data = $response->json('Data');
+
+            // Handle nested response structure
+            if (is_array($data) && isset($data[0])) {
+                if (is_array($data[0]) && isset($data[0][0])) {
+                    $data = $data[0][0];
+                } elseif (isset($data[0]['PurchaseOrderId'])) {
+                    $data = $data[0];
+                }
+            }
+
+            return $data;
+        } catch (\Exception $e) {
+            Log::error('fetchHeaderFromPremierApi failed', [
+                'premier_po_id' => $premierPoId,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Store PO header in the local database
+     */
+    public function storeHeader(string $premierPoId, array $headerData, ?int $requisitionId = null): PremierPoHeader
+    {
+        $syncedAt = now();
+
+        return PremierPoHeader::updateOrCreate(
+            ['premier_po_id' => $premierPoId],
+            [
+                'requisition_id' => $requisitionId,
+                'po_number' => $headerData['PONumber'] ?? null,
+                'vendor_id' => $headerData['VendorId'] ?? null,
+                'vendor_code' => $headerData['VendorCode'] ?? null,
+                'vendor_name' => $headerData['VendorName'] ?? null,
+                'job_id' => $headerData['JobId'] ?? null,
+                'job_number' => $headerData['JobNumber'] ?? null,
+                'po_date' => isset($headerData['PODate']) ? \Carbon\Carbon::parse($headerData['PODate']) : null,
+                'required_date' => isset($headerData['RequiredDate']) ? \Carbon\Carbon::parse($headerData['RequiredDate']) : null,
+                'total_amount' => (float) ($headerData['Total'] ?? $headerData['Amount'] ?? 0),
+                'invoiced_amount' => (float) ($headerData['InvoicedAmount'] ?? $headerData['InvoiceBalance'] ?? 0),
+                'status' => $headerData['Status'] ?? $headerData['POStatus'] ?? null,
+                'approval_status' => $headerData['ApprovalStatus'] ?? null,
+                'description' => $headerData['Description'] ?? null,
+                'raw_data' => $headerData,
+                'synced_at' => $syncedAt,
+            ]
+        );
+    }
+
+    /**
+     * Sync PO header immediately
+     */
+    public function syncHeaderNow(string $premierPoId, ?int $requisitionId = null): ?PremierPoHeader
+    {
+        $headerData = $this->fetchHeaderFromPremierApi($premierPoId);
+
+        if ($headerData) {
+            return $this->storeHeader($premierPoId, $headerData, $requisitionId);
+        }
+
+        return null;
+    }
 }

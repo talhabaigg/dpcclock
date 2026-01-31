@@ -46,6 +46,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\AllowanceTypeController;
 use App\Http\Controllers\OncostController;
+use App\Http\Controllers\POComparisonReportController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -618,6 +619,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     Route::get('/reports/req-line-items-desc', [ReportController::class, 'reqLineReport'])->name('reports.reqLineReport')
         ->middleware('permission:reports.requisition-lines');
+
+    // PO Comparison Report
+    Route::middleware('permission:requisitions.view')->group(function () {
+        Route::get('/reports/po-comparison', [POComparisonReportController::class, 'index'])->name('reports.poComparison');
+        Route::get('/reports/po-comparison/data', [POComparisonReportController::class, 'getData'])->name('reports.poComparison.data');
+        Route::post('/reports/po-comparison/insights', [POComparisonReportController::class, 'getInsights'])->name('reports.poComparison.insights');
+        Route::post('/reports/po-comparison/insights/refresh', [POComparisonReportController::class, 'refreshInsights'])->name('reports.poComparison.insights.refresh');
+        Route::get('/reports/po-comparison/sync-status', [POComparisonReportController::class, 'getSyncStatus'])->name('reports.poComparison.syncStatus');
+        Route::post('/reports/po-comparison/queue-sync', [POComparisonReportController::class, 'queueSync'])->name('reports.poComparison.queueSync');
+    });
 
     // ============================================
     // SYSTEM & ADMIN

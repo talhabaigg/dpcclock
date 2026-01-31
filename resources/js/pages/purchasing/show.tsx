@@ -287,7 +287,7 @@ export default function RequisitionShow() {
 
                                 {activities.map((a) => {
                                     return (
-                                        <TableRow>
+                                        <TableRow key={a.id}>
                                             <TableCell>{a.id}</TableCell>
                                             <TableCell>{a.event}</TableCell>
                                             <TableCell className="w-full">
