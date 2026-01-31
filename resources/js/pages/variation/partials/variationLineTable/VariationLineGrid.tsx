@@ -5,7 +5,7 @@ import { CostCode } from '@/pages/purchasing/types';
 import { createColumnDefs } from './columnDefs';
 import { getGridOptions, getRowStyle } from './gridConfig';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
-import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
+import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     LineItem,
@@ -22,6 +22,7 @@ interface VariationLineGridProps {
     costTypes: CostType[];
     onDataChange: (lineItems: LineItem[]) => void;
     onSelectionChange?: (count: number) => void;
+    height?: string;
 }
 
 export interface VariationLineGridRef {
@@ -32,9 +33,10 @@ export interface VariationLineGridRef {
     getSelectedCount: () => number;
 }
 const isDarkMode = document.documentElement.classList.contains('dark');
-const appliedTheme = isDarkMode ? darkTheme : myTheme;
+const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
+
 const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProps>(
-    ({ lineItems, costCodes, costTypes, onDataChange, onSelectionChange }, ref) => {
+    ({ lineItems, costCodes, costTypes, onDataChange, onSelectionChange, height }, ref) => {
         const gridRef = useRef<AgGridReact>(null);
 
         // Sync grid data back to parent
@@ -215,9 +217,8 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
         }));
 
         return (
-            <div className=" w-full" style={{ height: 'calc(100vh - 450px)', minHeight: '400px' }}>
+            <div className="ag-theme-shadcn w-full" style={{ height: height || '500px', minHeight: '300px' }}>
                 <AgGridReact
-
                     ref={gridRef}
                     theme={appliedTheme}
                     rowData={lineItems}

@@ -2,10 +2,13 @@ import { AgGridReact } from 'ag-grid-react';
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { ColDef, GridOptions, SelectCellEditor } from 'ag-grid-community';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
-import { shadcnTheme } from '@/themes/ag-grid-theme';
+import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
 import { LocationSearchEditor } from './cellEditors/LocationSearchEditor';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const isDarkMode = document.documentElement.classList.contains('dark');
+const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
 
 interface HeaderData {
     location_id: string;
@@ -100,7 +103,7 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
 
         const gridOptions: GridOptions = useMemo(() => {
             return {
-                theme: shadcnTheme,
+                theme: appliedTheme,
                 defaultColDef: {
                     resizable: true,
                     sortable: false,
@@ -157,7 +160,7 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
         }));
 
         return (
-            <div className="ag-theme-quartz w-full" style={{ height: '96px' }}>
+            <div className="ag-theme-shadcn w-full" style={{ height: '96px' }}>
                 <AgGridReact
                     ref={gridRef}
                     rowData={[headerData]}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\LoadVariationsFromPremierJob;
 use App\Models\CostCode;
 use App\Models\Location;
 use App\Models\Variation;
@@ -38,82 +39,9 @@ class VariationController extends Controller
 
     public function loadVariationsFromPremier(Location $location)
     {
-        $authService = new PremierAuthenticationService();
-        $token = $authService->getAccessToken();
-        $companyService = new GetCompanyCodeService();
-        $companyId = $companyService->getCompanyCode($location->eh_parent_id);
+        LoadVariationsFromPremierJob::dispatch($location);
 
-        $variationService = new VariationService();
-        $response = $variationService->getChangeOrders($location, $companyId, $token);
-        if ($response->ok()) {
-            $data = $response->json('Data');
-            foreach ($data as $item) {
-                $variation = Variation::updateOrCreate(
-                    [
-                        'premier_co_id' => $item['ChangeOrderID'],
-                    ],
-                    [
-                        'co_number' => $item['ChangeOrderNumber'],
-                        'location_id' => $location->id,
-                        'type' => $item['ChangeTypeCode'] ?? 'N/A',
-                        'description' => $item['Description'],
-                        'co_date' => $item['CODate'],
-                        'status' => $item['COStatus'],
-                        'premier_co_id' => $item['ChangeOrderID'],
-                    ]
-                );
-
-                $lines = $variationService->getChangeOrderLines($item['ChangeOrderID'], $companyId, $token);
-                if ($lines->ok()) {
-                    $lineData = $lines->json('Data');
-                    // Log::info('Line Data:', ['lineData' => json_encode($lineData, JSON_PRETTY_PRINT)]);
-                    $latestLineNumbers = collect($lineData)
-                        ->pluck('LineNumber')
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->toArray();
-
-                    foreach ($lineData as $line) {
-                        $variation->lineItems()->updateOrCreate(
-                            ['line_number' => $line['LineNumber']],
-
-                            [
-
-                                'description' => $line['CostItemDescription'],
-                                'qty' => $line['Quantity'] ?? 1,
-                                'unit_cost' => $line['UnitCost'] ?? 0,
-                                'total_cost' => $line['Cost'] ?? 0,
-                                'revenue' => $line['Revenue'] ?? 0,
-                                'cost_item' => $line['CostItemCode'],
-                                'cost_type' => $line['CostTypeCode'],
-                            ]
-                        );
-                    }
-
-                    $variation->lineItems()
-                        ->whereNotIn('line_number', $latestLineNumbers)
-                        ->delete();
-                }
-            }
-        } else {
-            Log::error('Failed to fetch variations from Premier', [
-                'response' => $response->json(),
-            ]);
-
-
-            return redirect()
-                ->back()
-                ->with('error', [
-                    'message' => 'Failed to fetch variations from Premier.',
-                    'response' => is_array($response->json()) || is_object($response->json())
-                        ? json_encode($response->json(), JSON_PRETTY_PRINT)
-                        : $response->json(),
-                ]);
-        }
-
-        return redirect()->back()->with('success', 'Variations synced from Premier successfully.');
-
+        return redirect()->back()->with('success', 'Variation sync job has been queued. Changes will appear shortly.');
     }
     public function index()
     {
