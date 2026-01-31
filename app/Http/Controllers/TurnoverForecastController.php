@@ -65,7 +65,7 @@ class TurnoverForecastController extends Controller
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
         }
 
-        $locations = $locationsQuery->select('id', 'name', 'external_id')->get();
+        $locations = $locationsQuery->select('id', 'name', 'external_id', 'eh_parent_id')->get();
 
         // Get forecast projects - hide them if user has restricted access (not admin or backoffice)
         $forecastProjects = collect([]);
@@ -299,9 +299,17 @@ class TurnoverForecastController extends Controller
                 $lastSubmittedAt = $currentJobForecast->submitted_at?->toIso8601String();
             }
 
+            // Determine company from eh_parent_id (cast to int for strict match comparison)
+            $company = match ((int) $location->eh_parent_id) {
+                1198645 => 'GRE',
+                1249093 => 'SWCP',
+                default => 'Unknown',
+            };
+
             $combinedData[] = [
                 'id' => $location->id,
                 'type' => 'location',
+                'company' => $company,
                 'job_name' => $location->name,
                 'job_number' => $jobNumber,
                 'project_manager' => $projectManager,
@@ -425,6 +433,7 @@ class TurnoverForecastController extends Controller
             $combinedData[] = [
                 'id' => $project->id,
                 'type' => 'forecast_project',
+                'company' => 'Forecast',
                 'job_name' => $project->name,
                 'job_number' => $project->project_number,
                 // Forecast status fields

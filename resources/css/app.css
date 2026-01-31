@@ -257,3 +257,118 @@
 .dark .ag-pinned-right-header {
     background-color: #1f2937 !important;
 }
+
+/* ================================
+   Unified Forecast Grid Styling
+   ================================ */
+
+/* Row type left border indicators */
+.forecast-row-revenue {
+    border-left: 3px solid #10b981 !important; /* emerald-500 */
+}
+
+.forecast-row-cost {
+    border-left: 3px solid #f59e0b !important; /* amber-500 */
+    background-color: rgba(251, 191, 36, 0.05) !important;
+}
+
+.dark .forecast-row-cost {
+    background-color: rgba(251, 191, 36, 0.08) !important;
+}
+
+.forecast-row-profit {
+    border-left: 3px solid #3b82f6 !important; /* blue-500 */
+    background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+.dark .forecast-row-profit {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+.forecast-row-target {
+    border-left: 3px solid #8b5cf6 !important; /* violet-500 */
+    background-color: rgba(139, 92, 246, 0.05) !important;
+}
+
+.dark .forecast-row-target {
+    background-color: rgba(139, 92, 246, 0.08) !important;
+}
+
+.forecast-row-variance {
+    border-left: 3px solid #6366f1 !important; /* indigo-500 */
+}
+
+.forecast-row-labour {
+    border-left: 3px solid #a855f7 !important; /* purple-500 */
+    background-color: rgba(168, 85, 247, 0.08) !important;
+}
+
+.dark .forecast-row-labour {
+    background-color: rgba(168, 85, 247, 0.15) !important;
+}
+
+.forecast-row-total {
+    border-left: 3px solid #64748b !important; /* slate-500 */
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+}
+
+.dark .forecast-row-total {
+    background-color: #1e293b !important;
+}
+
+/* Header styling for actual vs forecast months */
+.forecast-header-actual {
+    background-color: rgba(16, 185, 129, 0.1) !important; /* emerald */
+    border-bottom: 2px solid #10b981 !important;
+}
+
+.dark .forecast-header-actual {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.forecast-header-forecast {
+    background-color: rgba(59, 130, 246, 0.08) !important; /* blue */
+    border-bottom: 2px solid #93c5fd !important;
+}
+
+.dark .forecast-header-forecast {
+    background-color: rgba(59, 130, 246, 0.12) !important;
+    border-bottom-color: #3b82f6 !important;
+}
+
+/* View mode toggle styling */
+.forecast-view-toggle {
+    @apply flex gap-1 rounded-lg border border-slate-200 bg-slate-50/50 p-1;
+}
+
+.dark .forecast-view-toggle {
+    @apply border-slate-700 bg-slate-800/50;
+}
+
+/* Pinned bottom row styling for totals */
+.ag-row-pinned {
+    font-weight: 600 !important;
+    background-color: #f8fafc !important;
+    border-top: 2px solid #cbd5e1 !important;
+}
+
+.dark .ag-row-pinned {
+    background-color: #1e293b !important;
+    border-top-color: #475569 !important;
+}
+
+/* Smooth transitions for row hover */
+.ag-row {
+    transition: background-color 0.15s ease;
+}
+
+/* Better focus states */
+.ag-cell-focus {
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: -2px;
+}
+
+.dark .ag-cell-focus {
+    outline-color: #60a5fa !important;
+}
