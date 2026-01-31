@@ -26,3 +26,30 @@ export interface RequisitionData {
     next_page_url: string | null;
     prev_page_url: string | null;
 }
+
+export interface FilterOptions {
+    statuses: string[];
+    suppliers: string[];
+    locations: string[];
+    creators: string[];
+    deliver_to: string[];
+    contacts: string[];
+}
+
+export interface CostRange {
+    min: number;
+    max: number;
+}
+
+export interface Filters {
+    search: string;
+    status: string;
+    supplier: string;
+    location: string;
+    creator: string;
+    deliver_to: string;
+    contact: string;
+    templates_only: boolean;
+    min_cost: string;
+    max_cost: string;
+}

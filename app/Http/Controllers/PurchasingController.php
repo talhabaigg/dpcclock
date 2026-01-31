@@ -156,40 +156,136 @@ class PurchasingController extends Controller
     }
 
 
-    public function index()
+    public function index(Request $request)
     {
-
         $user = auth()->user();
 
-        if ($user->hasPermissionTo('requisitions.view-all')) {
-            $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
+        // Build base query
+        $query = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
+            ->withSum('lineItems', 'total_cost');
 
-                ->withSum('lineItems', 'total_cost')
-
-                ->orderByDesc('id')
-                ->paginate(200);
-
-            // dd($requisitions);
-            return Inertia::render('purchasing/index', [
-                'requisitions' => $requisitions,
-            ]);
+        // Apply permission-based filtering
+        if (!$user->hasPermissionTo('requisitions.view-all')) {
+            $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
+            $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+            $query->whereIn('project_number', $location_ids);
         }
-        $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
 
-        $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+        // Apply search filter
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                    ->orWhere('order_reference', 'like', "%{$search}%")
+                    ->orWhereHas('supplier', function ($sq) use ($search) {
+                        $sq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('creator', function ($cq) use ($search) {
+                        $cq->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
 
+        // Apply status filter
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
 
+        // Apply supplier filter
+        if ($request->filled('supplier')) {
+            $query->whereHas('supplier', function ($q) use ($request) {
+                $q->where('name', $request->input('supplier'));
+            });
+        }
 
-        $requisitions = Requisition::with('supplier', 'creator', 'location', 'notes')
-            ->withSum('lineItems', 'total_cost')
-            ->whereIn('project_number', $location_ids)
-            ->orderByDesc('id')
-            ->paginate(100);
+        // Apply location filter
+        if ($request->filled('location')) {
+            $query->whereHas('location', function ($q) use ($request) {
+                $q->where('name', $request->input('location'));
+            });
+        }
 
+        // Apply creator filter
+        if ($request->filled('creator')) {
+            $query->whereHas('creator', function ($q) use ($request) {
+                $q->where('name', $request->input('creator'));
+            });
+        }
 
+        // Apply deliver_to filter
+        if ($request->filled('deliver_to')) {
+            $query->where('deliver_to', $request->input('deliver_to'));
+        }
+
+        // Apply delivery_contact filter
+        if ($request->filled('contact')) {
+            $query->where('delivery_contact', $request->input('contact'));
+        }
+
+        // Apply templates only filter
+        if ($request->boolean('templates_only')) {
+            $query->where('is_template', true);
+        }
+
+        // Apply cost range filter (withSum already called above)
+        if ($request->filled('min_cost')) {
+            $query->having('line_items_sum_total_cost', '>=', $request->input('min_cost'));
+        }
+        if ($request->filled('max_cost')) {
+            $query->having('line_items_sum_total_cost', '<=', $request->input('max_cost'));
+        }
+
+        // Order and paginate
+        $requisitions = $query->orderByDesc('id')->paginate(50)->withQueryString();
+
+        // Get filter options for dropdowns
+        $filterOptionsQuery = Requisition::query();
+        if (!$user->hasPermissionTo('requisitions.view-all')) {
+            $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
+            $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+            $filterOptionsQuery->whereIn('project_number', $location_ids);
+        }
+
+        $filterOptions = [
+            'statuses' => Requisition::distinct()->pluck('status')->filter()->values(),
+            'suppliers' => Supplier::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('supplier_number'))
+                ->pluck('name')->filter()->values(),
+            'locations' => Location::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('project_number'))
+                ->pluck('name')->filter()->values(),
+            'creators' => \App\Models\User::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('created_by'))
+                ->pluck('name')->filter()->values(),
+            'deliver_to' => $filterOptionsQuery->clone()->distinct()->pluck('deliver_to')->filter()->values(),
+            'contacts' => $filterOptionsQuery->clone()->distinct()->pluck('delivery_contact')->filter()->values(),
+        ];
+
+        // Get cost range for slider
+        $costStats = DB::table('requisitions')
+            ->selectRaw('
+                MIN((SELECT COALESCE(SUM(total_cost), 0) FROM requisition_line_items WHERE requisition_line_items.requisition_id = requisitions.id)) as min_cost,
+                MAX((SELECT COALESCE(SUM(total_cost), 0) FROM requisition_line_items WHERE requisition_line_items.requisition_id = requisitions.id)) as max_cost
+            ')
+            ->whereNull('deleted_at')
+            ->first();
 
         return Inertia::render('purchasing/index', [
             'requisitions' => $requisitions,
+            'filterOptions' => $filterOptions,
+            'costRange' => [
+                'min' => (float) ($costStats->min_cost ?? 0),
+                'max' => (float) ($costStats->max_cost ?? 10000),
+            ],
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'status' => $request->input('status', ''),
+                'supplier' => $request->input('supplier', ''),
+                'location' => $request->input('location', ''),
+                'creator' => $request->input('creator', ''),
+                'deliver_to' => $request->input('deliver_to', ''),
+                'contact' => $request->input('contact', ''),
+                'templates_only' => $request->boolean('templates_only'),
+                'min_cost' => $request->input('min_cost', ''),
+                'max_cost' => $request->input('max_cost', ''),
+            ],
         ]);
     }
 

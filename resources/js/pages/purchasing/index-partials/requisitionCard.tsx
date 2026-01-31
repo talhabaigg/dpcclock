@@ -1,16 +1,12 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardFooter, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
 import { useInitials } from '@/hooks/use-initials';
 import { Link } from '@inertiajs/react';
 import { CircleCheck, EllipsisVertical, TruckIcon } from 'lucide-react';
@@ -21,120 +17,121 @@ interface RequisitionCardProps {
     requisition: Requisition;
 }
 
+const getStatusConfig = (status: string) => {
+    switch (status) {
+        case 'success':
+            return { bg: 'bg-amber-500', text: 'Awaiting', color: 'text-amber-600' };
+        case 'sent':
+            return { bg: 'bg-emerald-500', text: 'Sent', color: 'text-emerald-600' };
+        case 'pending':
+            return { bg: 'bg-slate-400', text: 'Pending', color: 'text-slate-500' };
+        default:
+            return { bg: 'bg-slate-400', text: status, color: 'text-slate-500' };
+    }
+};
+
 const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
     useInitials();
+    const statusConfig = getStatusConfig(requisition.status);
+    const cost = Number(requisition.line_items_sum_total_cost) || 0;
+
     return (
-        <Card className="p-2 shadow-md">
-            <CardTitle className="flex justify-between">
-                <div>{requisition.id}</div>
-                {requisition.po_number ? <>PO{requisition.po_number}</> : 'Not generated'}
-            </CardTitle>{' '}
-            {/* Replace 'title' with an actual field from Requisition */}
-            <CardDescription className="p-0">
-                <div className="flex justify-between">
-                    <Label>Project</Label>
-                    <Label className="">{requisition.location.name}</Label>
-                </div>
+        <Link href={`/requisition/${requisition.id}`} className="block min-w-0 max-w-full">
+            <Card className="group relative overflow-hidden border-l-4 border-l-transparent bg-white transition-all duration-200 hover:border-l-blue-500 hover:shadow-md active:scale-[0.99] dark:border-border dark:bg-card dark:hover:border-l-blue-400 dark:hover:bg-muted/50">
+                {/* Status indicator dot */}
+                <div className={`absolute top-3 right-3 h-3 w-3 rounded-full md:h-2.5 md:w-2.5 ${statusConfig.bg}`} title={statusConfig.text} />
 
-                {requisition.notes.length > 0 && (
-                    <div className="mt-2">
-                        <LatestNoteButton requisition={requisition} />
+                <div className="p-3 sm:p-3">
+                    {/* Row 1: Amount + PO */}
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                        <span className="text-lg font-bold tabular-nums text-slate-900 sm:text-xl dark:text-white">
+                            ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        {requisition.po_number ? (
+                            <span className="shrink-0 rounded-md bg-blue-100 px-2 py-1 font-mono text-xs font-bold text-blue-700 sm:text-sm dark:bg-blue-900/50 dark:text-blue-300">
+                                PO{requisition.po_number}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-slate-400">No PO</span>
+                        )}
                     </div>
-                )}
 
-                <div>
-                    <Accordion type="single" collapsible className="p-0">
-                        <AccordionItem value="item-1">
-                            <AccordionTrigger>View Details</AccordionTrigger>
-                            <AccordionContent>
-                                <div className="flex justify-between">
-                                    <Label>Template</Label>
-                                    <Label>{requisition.is_template ? 'yes' : 'no'}</Label>
-                                </div>
+                    {/* Row 2: Supplier */}
+                    <div className="mb-2 flex items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {requisition.supplier?.name}
+                        </span>
+                        <span className="hidden shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 sm:inline dark:bg-muted dark:text-slate-400">
+                            {requisition.supplier?.code}
+                        </span>
+                    </div>
 
-                                <div className="flex justify-between">
-                                    <Label>Supplier</Label>
-                                    <Label>{requisition.supplier.name}</Label>
-                                </div>
-                                <div className="flex justify-between">
-                                    <Label>Status</Label>
-                                    <Label>{requisition.status}</Label>
-                                </div>
-                                <div className="flex justify-between">
-                                    <Label>Order Ref</Label>
-                                    <Label>{requisition.order_reference ? requisition.order_reference : '-'}</Label>
-                                </div>
-                                <div className="flex justify-between">
-                                    <Label>Required Date</Label>
-                                    <Label>{new Date(requisition.date_required).toLocaleDateString('en-GB')}</Label>
-                                </div>
-                                <div className="flex justify-between">
-                                    <Label>Create Date</Label>
-                                    <Label>{new Date(requisition.created_at).toLocaleDateString('en-GB')}</Label>
-                                </div>
-                                <div className="flex justify-between">
-                                    <Label>Created by</Label>
-                                    <Label>{requisition.creator.name}</Label>
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                </div>
-            </CardDescription>
-            <CardFooter className="-mt-8 flex justify-between p-0">
-                <div className="space-x-2">
-                    <Badge> {requisition.supplier.code}</Badge>
-                    <Badge variant="secondary">${(Number(requisition.line_items_sum_total_cost) || 0).toFixed(2)}</Badge>
+                    {/* Row 3: Metadata line */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
+                        <span className="font-mono font-medium">#{requisition.id}</span>
+                        <span className="hidden text-slate-300 sm:inline dark:text-slate-600">|</span>
+                        <span className="truncate">{requisition.location?.name || 'No project'}</span>
+                        <span className="text-slate-300 dark:text-slate-600">|</span>
+                        <span className="tabular-nums">{new Date(requisition.date_required).toLocaleDateString('en-GB')}</span>
+                    </div>
+
+                    {/* Notes indicator */}
+                    {requisition.notes && requisition.notes.length > 0 && (
+                        <div className="mt-2">
+                            <LatestNoteButton requisition={requisition} />
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex items-center">
-                    <div className="mr-1">
+                {/* Footer: Actions */}
+                <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-3 py-2 sm:py-1.5 dark:border-border dark:bg-muted/30">
+                    <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>
+                        {statusConfig.text}
+                    </span>
+                    <div className="flex items-center gap-1 sm:gap-0.5" onClick={(e) => e.preventDefault()}>
                         <AddNoteButton requisition_id={requisition.id} />
-                    </div>
-                    <div className="flex items-center">
+
                         {requisition.status === 'success' && (
                             <Link href={`/requisition/${requisition.id}/mark-sent-to-supplier`}>
-                                <Button variant="ghost" className="size-8">
-                                    <CircleCheck className="h-24 w-24" />
+                                <Button variant="ghost" size="sm" className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-emerald-100 hover:text-emerald-600 sm:h-6 sm:w-6 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-400">
+                                    <CircleCheck className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                 </Button>
                             </Link>
                         )}
                         {requisition.status === 'sent' && (
-                            <Button variant="ghost" className="size-8" disabled title="Sent to supplier">
-                                <TruckIcon />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 rounded text-emerald-500 sm:h-6 sm:w-6" disabled>
+                                <TruckIcon className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                             </Button>
                         )}
-                        <div className="flex items-center gap-2 sm:hidden">
-                            <Link href={`/requisition/${requisition.id}`}>
-                                <Button>Open</Button>
-                            </Link>
-                        </div>
-                    </div>
 
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild className="hidden rounded-sm p-1 hover:bg-gray-200 sm:block">
-                            <EllipsisVertical size={24} />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <Link href={`/requisition/${requisition.id}`}>
-                                <DropdownMenuItem>View </DropdownMenuItem>
-                            </Link>
-                            <Link href={`/requisition/${requisition.id}/copy`}>
-                                <DropdownMenuItem>Copy </DropdownMenuItem>
-                            </Link>{' '}
-                            <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
-                                <DropdownMenuItem>{requisition.is_template ? 'Remove template' : 'Mark template'}</DropdownMenuItem>
-                            </Link>
-                            <Link href={`/requisition/${requisition.id}/delete`} className="text-red-500">
-                                <DropdownMenuItem> Delete</DropdownMenuItem>
-                            </Link>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 sm:h-6 sm:w-6 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                                    <EllipsisVertical className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 sm:w-40">
+                                <Link href={`/requisition/${requisition.id}`}>
+                                    <DropdownMenuItem className="py-2.5 text-sm sm:py-1.5 sm:text-xs">View Details</DropdownMenuItem>
+                                </Link>
+                                <Link href={`/requisition/${requisition.id}/copy`}>
+                                    <DropdownMenuItem className="py-2.5 text-sm sm:py-1.5 sm:text-xs">Duplicate</DropdownMenuItem>
+                                </Link>
+                                <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
+                                    <DropdownMenuItem className="py-2.5 text-sm sm:py-1.5 sm:text-xs">
+                                        {requisition.is_template ? 'Remove Template' : 'Save as Template'}
+                                    </DropdownMenuItem>
+                                </Link>
+                                <DropdownMenuSeparator />
+                                <Link href={`/requisition/${requisition.id}/delete`}>
+                                    <DropdownMenuItem className="py-2.5 text-sm text-red-600 focus:text-red-600 sm:py-1.5 sm:text-xs">Delete</DropdownMenuItem>
+                                </Link>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
-            </CardFooter>
-        </Card>
+            </Card>
+        </Link>
     );
 };
 
