@@ -65,7 +65,8 @@
       "Bash(Get-Content c:Laraveldpcclockstoragelogslaravel.log -Tail 100)",
       "Bash(Select-String -Pattern \"passkey|Passkey|WebAuthn|webauthn\" -Context 5,5)",
       "Bash(sqlite3:*)",
-      "Bash(docker run:*)"
+      "Bash(docker run:*)",
+      "WebFetch(domain:ui.shadcn.com)"
     ]
   }
 }

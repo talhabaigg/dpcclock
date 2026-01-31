@@ -1,6 +1,6 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { SearchSelect } from '@/components/search-select';
-import { Alert, AlertTitle } from '@/components/ui/alert';
+// Alert components removed - using inline alert
 import {
     AlertDialog,
     AlertDialogAction,
@@ -11,11 +11,11 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
+// Badge removed - not used in compact design
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { DialogContent, DialogDescription } from '@/components/ui/dialog';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+// HoverCard removed - simplified form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -26,7 +26,7 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { AlertCircleIcon, Info, ShieldQuestion, X } from 'lucide-react';
+import { AlertCircleIcon, Building2, Calendar, FileText, Loader2, MapPin, PenLine, Phone, Rocket, Send, Sparkles, Trash2, Plus, Truck, User, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
@@ -498,84 +498,129 @@ export default function Create() {
         }
     }, [rowData, data]); //this hook saves data in local storage unless autoSaving was set to false - that is done while submitting so that local storage is clear
 
+    // Calculate total for display
+    const totalAmount = rowData.reduce((sum, item) => sum + (item.total_cost || 0), 0);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
             {permissions.includes('ai.chat') && (
                 <ChatDock enableVoice={permissions.includes('ai.voice')} />
             )}
-            {/* <div className="mx-auto p-2 sm:min-w-full">
-                <SimpleChatBox />
-            </div> */}
 
-            {orderRestored && (
-                <Alert className="mx-4 mt-2 flex max-w-full flex-row items-center p-1 px-2 sm:max-w-1/2">
-                    <AlertCircleIcon />
-                    <AlertTitle className="mt-1">Your order was restored from memory</AlertTitle>
-                    <Button className="ml-auto" variant="ghost" size="sm" onClick={() => setOrderRestored(false)}>
-                        <X size={6} />
-                    </Button>
-                </Alert>
-            )}
+            {/* HEADER - Compact but polished */}
+            <div className="relative border-b border-border/60 bg-gradient-to-r from-muted/40 via-background to-muted/30">
+                <div className="flex items-center justify-between px-4 py-4 md:px-6">
+                    {/* Left - Icon + Title */}
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/25">
+                            <FileText className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold tracking-tight">
+                                {requisition ? 'Edit Requisition' : 'New Requisition'}
+                            </h1>
+                            {requisition && (
+                                <p className="text-xs text-muted-foreground">Requisition #{requisition.id}</p>
+                            )}
+                        </div>
+                    </div>
 
-            {/* {errors && (
-                <div className="m-2 text-red-500">
-                    {Object.values(errors).map((error, index) => (
-                        <div key={index}>{error}</div>
-                    ))}
+                    {/* Right - Stats pills */}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-sm">
+                            <span className="font-medium tabular-nums">{rowData.length}</span>
+                            <span className="text-muted-foreground">items</span>
+                        </div>
+                        <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1.5 text-sm ring-1 ring-emerald-500/20">
+                            <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                ${totalAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    </div>
                 </div>
-            )} */}
 
-            <div className="p-4">
-                <Label className="p-2 text-xl font-bold">{requisition ? 'Edit Requisition' : 'Create Requisition'}</Label>
+                {/* Restored Draft Alert - inside header */}
+                {orderRestored && (
+                    <div className="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40 md:px-6">
+                        <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <span className="font-medium text-amber-800 dark:text-amber-200">Draft restored from memory</span>
+                        <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-amber-700 hover:bg-amber-200/50 hover:text-amber-900 dark:text-amber-300" onClick={() => setOrderRestored(false)}>
+                            <X className="h-3 w-3" />
+                        </Button>
+                    </div>
+                )}
+            </div>
+
+            {/* MAIN CONTENT */}
+            <div className="px-4 pb-6 md:px-6">
+                {/* Loading Dialog */}
                 <Dialog open={pastingItems} onOpenChange={setPastingItems}>
-                    <DialogContent>
-                        <DialogDescription className="flex flex-col items-center gap-2">
+                    <DialogContent className="sm:max-w-sm">
+                        <DialogHeader>
+                            <DialogTitle>Processing Items</DialogTitle>
+                        </DialogHeader>
+                        <DialogDescription className="flex flex-col items-center gap-4 py-4">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             <span className="text-sm">Adding line items...</span>
-                            <BarLoader width={150} color={'#4A5568'} />
+                            <BarLoader width={180} color={'hsl(var(--primary))'} />
                         </DialogDescription>
                     </DialogContent>
                 </Dialog>
 
+                {/* Expired Price Dialog */}
                 <AlertDialog open={expiredPriceDialog.open} onOpenChange={(open) => setExpiredPriceDialog({ ...expiredPriceDialog, open })}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Price Expired</AlertDialogTitle>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertCircleIcon className="h-5 w-5 text-destructive" />
+                                Price Expired
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
-                                The base price for item <strong>{expiredPriceDialog.itemCode}</strong> expired on{' '}
+                                Item <strong>{expiredPriceDialog.itemCode}</strong> price expired on{' '}
                                 <strong>
                                     {expiredPriceDialog.expiryDate
                                         ? new Date(expiredPriceDialog.expiryDate).toLocaleDateString('en-AU')
                                         : 'N/A'}
                                 </strong>
-                                . This item cannot be added to the requisition until the price is updated.
+                                . Update the price before adding to requisition.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                        <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={() => {
                                     window.open(`/material-items/${expiredPriceDialog.itemId}/edit`, '_blank');
                                 }}
                             >
-                                Update Price in Database
+                                <PenLine className="mr-2 h-4 w-4" />
+                                Update Price
                             </AlertDialogAction>
                             <AlertDialogAction
+                                className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
                                 onClick={() => {
                                     toast.info('Please contact the supplier to get an updated quote.');
                                 }}
                             >
-                                Get Quote from Supplier
+                                <Send className="mr-2 h-4 w-4" />
+                                Request Quote
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
-                <Card className="my-4 p-4">
-                    <div className="flex flex-col items-center gap-2 md:flex-row">
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm font-bold">Project</Label>
-
+                {/* FORM FIELDS - Redesigned with icons and better styling */}
+                <div className="mt-4 space-y-4">
+                    {/* Primary Fields Row */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {/* Project Field */}
+                        <div className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                            <div className="mb-3 flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                                    <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <Label className="text-sm font-semibold">Project / Location</Label>
+                            </div>
                             <SearchSelect
                                 optionName="Project"
                                 selectedOption={data.project_id}
@@ -585,152 +630,104 @@ export default function Create() {
                                     label: location.name,
                                 }))}
                             />
-                            {/* <Select value={data.project_id} onValueChange={(val) => setData('project_id', val)}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select a location" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {locations.map((location) => (
-                                        <SelectItem key={location.id} value={String(location.id)}>
-                                            {location.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select> */}
                         </div>
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="flex flex-row items-center text-sm">
-                                Supplier{' '}
-                                <span className="ml-1 flex items-center">
-                                    {' '}
-                                    <HoverCard>
-                                        <HoverCardTrigger>(*)</HoverCardTrigger>
-                                        <HoverCardContent>
-                                            <div className="flex flex-col space-y-2">
-                                                <Badge>
-                                                    <Info className="h-4 w-4" />
-                                                    Info
-                                                </Badge>
-                                                <Label className="text-xs">This field is required.</Label>
-                                            </div>
-                                        </HoverCardContent>
-                                    </HoverCard>
-                                </span>
-                            </Label>
-                            <div className="w-full">
-                                <SearchSelect
-                                    optionName="supplier"
-                                    selectedOption={selectedSupplier}
-                                    onValueChange={handleSupplierChange}
-                                    options={suppliers.map((supplier) => ({
-                                        value: String(supplier.id),
-                                        label: supplier.name,
-                                    }))}
-                                />
-                            </div>
 
-                            {/* <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select a supplier" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {suppliers.map((supplier) => (
-                                        <SelectItem key={supplier.id} value={String(supplier.id)}>
-                                            {supplier.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select> */}
+                        {/* Supplier Field */}
+                        <div className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                            <div className="mb-3 flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
+                                    <Building2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                </div>
+                                <Label className="text-sm font-semibold">Supplier</Label>
+                                <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">Required</span>
+                            </div>
+                            <SearchSelect
+                                optionName="supplier"
+                                selectedOption={selectedSupplier}
+                                onValueChange={handleSupplierChange}
+                                options={suppliers.map((supplier) => ({
+                                    value: String(supplier.id),
+                                    label: supplier.name,
+                                }))}
+                            />
                         </div>
                     </div>
-                    <div className="flex flex-col items-center gap-2 md:flex-row">
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Date required</Label>
+
+                    {/* Secondary Fields Row */}
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                        {/* Date Required */}
+                        <div className="relative z-10 rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
+                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <Calendar className="h-3.5 w-3.5" />
+                                Date Required
+                            </Label>
                             <DatePickerDemo
                                 value={data.date_required ? new Date(data.date_required) : undefined}
                                 onChange={(date) => setData('date_required', date ? format(date, 'yyyy-MM-dd HH:mm:ss') : '')}
                             />
-
-                            {/* <Input
-                                placeholder="Enter date required"
-                                type="date"
-                                value={data.date_required}
-                                onChange={(e) => setData('date_required', e.target.value)}
-                            /> */}
                         </div>
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="flex flex-row items-center text-sm">
-                                Delivery Contact{' '}
-                                <span className="ml-1 flex items-center">
-                                    {' '}
-                                    <HoverCard>
-                                        <HoverCardTrigger>
-                                            <ShieldQuestion className="h-4 w-4" />
-                                        </HoverCardTrigger>
-                                        <HoverCardContent>
-                                            <div className="flex flex-col space-y-2">
-                                                <Badge>
-                                                    <ShieldQuestion className="h-4 w-4" />
-                                                    Info
-                                                </Badge>
-                                                <Label className="text-xs">This field is only printed on pdf and not sent to Premier.</Label>
-                                            </div>
-                                        </HoverCardContent>
-                                    </HoverCard>
-                                </span>
+
+                        {/* Delivery Contact */}
+                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
+                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <Phone className="h-3.5 w-3.5" />
+                                Delivery Contact
                             </Label>
                             <Input
-                                placeholder="Delivery Contact"
+                                placeholder="Contact name..."
                                 value={data.delivery_contact ?? ''}
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
+                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
                             />
                         </div>
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="text-sm">Reqested by</Label>
-                            <Input placeholder="Requested by" value={data.requested_by} onChange={(e) => setData('requested_by', e.target.value)} />
-                        </div>
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <Label className="flex flex-row items-center text-sm">
-                                Deliver to{' '}
-                                <span className="ml-1 flex items-center">
-                                    {' '}
-                                    <HoverCard>
-                                        <HoverCardTrigger>
-                                            <ShieldQuestion className="h-4 w-4" />
-                                        </HoverCardTrigger>
-                                        <HoverCardContent>
-                                            <div className="flex flex-col space-y-2">
-                                                <Badge>
-                                                    <ShieldQuestion className="h-4 w-4" />
-                                                    Info
-                                                </Badge>
-                                                <Label className="text-xs">This field is only printed on pdf and not sent to Premier.</Label>
-                                            </div>
-                                        </HoverCardContent>
-                                    </HoverCard>
-                                </span>
-                            </Label>
-                            <Input placeholder="Deliver to" value={data.deliver_to ?? ''} onChange={(e) => setData('deliver_to', e.target.value)} />
-                        </div>
-                        <div className="flex w-full flex-col md:w-1/2">
-                            <div className="flex justify-between">
-                                {' '}
-                                <Label className="text-sm">Order reference</Label>
-                                <span className="text-muted-foreground text-xs">(Memo field in Premier PO)</span>
-                            </div>
 
+                        {/* Requested By */}
+                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
+                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <User className="h-3.5 w-3.5" />
+                                Requested By
+                            </Label>
                             <Input
-                                placeholder="Order reference"
+                                placeholder="Your name..."
+                                value={data.requested_by}
+                                onChange={(e) => setData('requested_by', e.target.value)}
+                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                            />
+                        </div>
+
+                        {/* Deliver To */}
+                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
+                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <Truck className="h-3.5 w-3.5" />
+                                Deliver To
+                            </Label>
+                            <Input
+                                placeholder="Delivery location..."
+                                value={data.deliver_to ?? ''}
+                                onChange={(e) => setData('deliver_to', e.target.value)}
+                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                            />
+                        </div>
+
+                        {/* Order Reference */}
+                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
+                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <FileText className="h-3.5 w-3.5" />
+                                Order Reference
+                            </Label>
+                            <Input
+                                placeholder="Memo..."
                                 value={data.order_reference ?? ''}
                                 onChange={(e) => setData('order_reference', e.target.value)}
+                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
                             />
                         </div>
                     </div>
-                </Card>
+                </div>
 
-                <Card>
-                    <CardContent className="-p-4 -my-5">
-                        {' '}
+                {/* LINE ITEMS GRID */}
+                <Card className="mt-4 overflow-hidden border-border/50 shadow-md">
+                    <CardContent className="p-0">
                         <div style={{ height: gridSize }}>
                             <AgGridReact
                                 ref={gridRef}
@@ -812,28 +809,38 @@ export default function Create() {
                         </div>
                     </CardContent>
                 </Card>
+                {/* AI Image Extractor */}
                 {permissions.includes('requisitions.view-all') && (
-                    <AiImageExtractor
-                        setFile={setFile}
-                        file={file}
-                        setPastingItems={setPastingItems}
-                        projectId={data.project_id}
-                        setRowData={setRowData}
-                    />
+                    <div className="mt-4">
+                        <AiImageExtractor
+                            setFile={setFile}
+                            file={file}
+                            setPastingItems={setPastingItems}
+                            projectId={data.project_id}
+                            setRowData={setRowData}
+                        />
+                    </div>
                 )}
 
-                {/* Add Button */}
-                <div className="mt-4 flex justify-between">
-                    <div>
-                        <Button onClick={addNewRow}>Add</Button>
-                        {/* Delete Button */}
-                        <Button onClick={deleteSelectedRow} className="ml-2">
+                {/* ACTION BAR */}
+                <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/50 bg-gradient-to-r from-muted/40 via-muted/20 to-muted/40 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    {/* Left - Row actions */}
+                    <div className="flex items-center gap-2">
+                        <Button onClick={addNewRow} variant="outline" className="shadow-sm">
+                            <Plus className="mr-1.5 h-4 w-4" />
+                            Add Row
+                        </Button>
+                        <Button onClick={deleteSelectedRow} variant="outline" className="text-destructive shadow-sm hover:bg-destructive/10">
+                            <Trash2 className="mr-1.5 h-4 w-4" />
                             Delete
                         </Button>
                     </div>
-                    <div className="flex w-1/2 flex-col items-center justify-end sm:flex-row">
-                        <div className="hidden w-1/2 flex-row items-center justify-end -space-x-2 sm:flex sm:flex-row">
+
+                    {/* Right - Tools and Submit */}
+                    <div className="flex items-center gap-3">
+                        <div className="hidden items-center gap-1 rounded-lg border border-border/50 bg-background/80 p-1 shadow-sm backdrop-blur-sm sm:flex">
                             <GridStateToolbar gridRef={gridRef} />
+                            <div className="mx-1 h-5 w-px bg-border/50" />
                             <PasteTableButton
                                 rowData={rowData}
                                 setRowData={setRowData}
@@ -845,8 +852,24 @@ export default function Create() {
                         <div className="hidden sm:block">
                             <GridSizeSelector onChange={(val) => setGridSize(val)} />
                         </div>
-                        <Button onClick={handleSubmit} className="ml-auto sm:ml-2 sm:w-auto" disabled={processing}>
-                            Submit
+
+                        <Button
+                            onClick={handleSubmit}
+                            disabled={processing}
+                            size="lg"
+                            className="bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30"
+                        >
+                            {processing ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <Rocket className="mr-2 h-4 w-4" />
+                                    Submit Requisition
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>
