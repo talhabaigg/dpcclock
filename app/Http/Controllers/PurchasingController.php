@@ -314,6 +314,19 @@ class PurchasingController extends Controller
         ]);
     }
 
+    public function printPreview($id)
+    {
+        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')
+            ->withSum('lineItems', 'total_cost')
+            ->findOrFail($id);
+
+        return Inertia::render('purchasing/print', [
+            'requisition' => $requisition,
+            'printedBy' => auth()->user()->name,
+            'printedAt' => now()->format('d/m/Y H:i'),
+        ]);
+    }
+
     public function copy($id)
     {
         $originalRequisition = Requisition::with('lineItems')->findOrFail($id);

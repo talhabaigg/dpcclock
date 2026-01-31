@@ -264,6 +264,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')
         ->middleware('permission:requisitions.send');
     Route::middleware('permission:requisitions.export')->group(function () {
+        Route::get('requisition/{id}/print', [PurchasingController::class, 'printPreview'])->name('requisition.print');
         Route::get('requisition/pdf/{requisition}', PurchasingController::class)->name('requisition.pdf');
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
     });

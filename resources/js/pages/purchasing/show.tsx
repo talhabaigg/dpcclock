@@ -280,12 +280,12 @@ export default function RequisitionShow() {
                                     <span className="hidden sm:inline">Excel</span>
                                 </Button>
                             </a>
-                            <a href={`/requisition/pdf/${requisition.id}`}>
+                            <Link href={`/requisition/${requisition.id}/print`}>
                                 <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
                                     <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="hidden sm:inline">PDF</span>
+                                    <span className="hidden sm:inline">Print</span>
                                 </Button>
-                            </a>
+                            </Link>
                             <Link href={`/requisition/${requisition.id}/copy`}>
                                 <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
                                     <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
