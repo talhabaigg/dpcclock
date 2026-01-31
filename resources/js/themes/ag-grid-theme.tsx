@@ -77,3 +77,80 @@ export const shadcnTheme = themeQuartz.withParams({
     rowHeight: 40,
     headerHeight: 44,
 });
+
+// Shadcn-inspired theme - clean minimal look matching shadcn/ui table
+export const shadcnLightTheme = themeQuartz.withParams({
+    // Colors - using transparent/white backgrounds like shadcn table
+    accentColor: '#18181b', // zinc-900 (primary)
+    backgroundColor: '#ffffff',
+    borderColor: '#e4e4e7', // zinc-200
+    browserColorScheme: 'light',
+    foregroundColor: '#18181b', // zinc-900
+
+    // Header - clean, no background, just border bottom
+    headerBackgroundColor: '#ffffff',
+    headerTextColor: '#71717a', // zinc-500 (muted-foreground)
+    headerFontSize: 12,
+    headerFontWeight: 500,
+    headerVerticalPaddingScale: 0.9,
+    headerHeight: 40,
+
+    // Row styling - minimal, clean
+    oddRowBackgroundColor: '#ffffff',
+    rowHeight: 48,
+    rowVerticalPaddingScale: 1,
+    selectedRowBackgroundColor: '#f4f4f5', // zinc-100 (muted)
+    rangeSelectionBackgroundColor: '#f4f4f5',
+
+    // Typography
+    fontFamily: 'inherit',
+    headerFontFamily: 'inherit',
+    dataFontSize: 14,
+
+    // Borders - subtle, only row borders
+    cellHorizontalPaddingScale: 0.8,
+    columnBorder: false,
+    rowBorder: true,
+    wrapperBorder: true,
+    wrapperBorderRadius: '8px',
+    borderRadius: '6px',
+    spacing: 8,
+});
+
+export const shadcnDarkTheme = themeQuartz.withParams({
+    // Colors - dark mode matching shadcn
+    accentColor: '#fafafa', // zinc-50 (primary dark)
+    backgroundColor: '#09090b', // zinc-950
+    borderColor: '#27272a', // zinc-800
+    browserColorScheme: 'dark',
+    foregroundColor: '#fafafa', // zinc-50
+
+    // Header - clean, transparent
+    headerBackgroundColor: '#09090b',
+    headerTextColor: '#a1a1aa', // zinc-400 (muted-foreground dark)
+    headerFontSize: 12,
+    headerFontWeight: 500,
+    headerVerticalPaddingScale: 0.9,
+    headerHeight: 40,
+
+    // Row styling
+    oddRowBackgroundColor: '#09090b',
+    rowHeight: 48,
+    rowVerticalPaddingScale: 1,
+    selectedRowBackgroundColor: '#27272a', // zinc-800 (muted dark)
+    rangeSelectionBackgroundColor: '#27272a',
+
+    // Typography
+    fontFamily: 'inherit',
+    headerFontFamily: 'inherit',
+    dataFontSize: 14,
+
+    // Borders
+    cellHorizontalPaddingScale: 0.8,
+    columnBorder: false,
+    rowBorder: true,
+    wrapperBorder: true,
+    wrapperBorderRadius: '8px',
+    borderRadius: '6px',
+    spacing: 8,
+});

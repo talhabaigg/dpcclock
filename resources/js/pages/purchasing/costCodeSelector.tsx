@@ -28,7 +28,7 @@ export function CostCodeSelector({ value, onValueChange, costCodes }: CostCodeSe
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+                <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between border-0 bg-transparent hover:bg-transparent">
                     {value && costCodes.find((costCode) => costCode.code === value)
                         ? costCodes.find((costCode) => costCode.code === value)?.code
                         : 'Search Cost Code'}

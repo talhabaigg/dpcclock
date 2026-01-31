@@ -372,3 +372,106 @@
 .dark .ag-cell-focus {
     outline-color: #60a5fa !important;
 }
+
+/* ================================
+   Shadcn-style AG Grid Theme
+   Clean, minimal styling matching shadcn/ui table
+   ================================ */
+.ag-theme-shadcn {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    border: 1px solid #e4e4e7 !important;
+}
+
+.dark .ag-theme-shadcn {
+    border-color: #27272a !important;
+}
+
+.ag-theme-shadcn .ag-root-wrapper {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden;
+}
+
+.dark .ag-theme-shadcn .ag-root-wrapper {
+    background-color: #09090b !important;
+}
+
+.ag-theme-shadcn .ag-header {
+    background-color: transparent !important;
+    border-bottom: 1px solid #e4e4e7 !important;
+}
+
+.dark .ag-theme-shadcn .ag-header {
+    background-color: transparent !important;
+    border-bottom-color: #27272a !important;
+}
+
+.ag-theme-shadcn .ag-header-cell {
+    font-weight: 500 !important;
+    font-size: 12px !important;
+    color: #71717a !important;
+}
+
+.dark .ag-theme-shadcn .ag-header-cell {
+    color: #a1a1aa !important;
+}
+
+.ag-theme-shadcn .ag-row {
+    border-bottom: 1px solid #e4e4e7 !important;
+    background-color: transparent !important;
+}
+
+.dark .ag-theme-shadcn .ag-row {
+    border-bottom-color: #27272a !important;
+}
+
+.ag-theme-shadcn .ag-row:last-child {
+    border-bottom: none !important;
+}
+
+.ag-theme-shadcn .ag-row:hover {
+    background-color: #f4f4f5 !important;
+}
+
+.dark .ag-theme-shadcn .ag-row:hover {
+    background-color: #18181b !important;
+}
+
+.ag-theme-shadcn .ag-row-selected {
+    background-color: #f4f4f5 !important;
+}
+
+.dark .ag-theme-shadcn .ag-row-selected {
+    background-color: #27272a !important;
+}
+
+.ag-theme-shadcn .ag-cell {
+    font-size: 14px !important;
+    color: #18181b !important;
+    border: none !important;
+}
+
+.dark .ag-theme-shadcn .ag-cell {
+    color: #fafafa !important;
+}
+
+.ag-theme-shadcn .ag-body {
+    background-color: transparent !important;
+}
+
+.dark .ag-theme-shadcn .ag-body {
+    background-color: #09090b !important;
+}
+
+/* AG Grid Cell Error Styling */
+.ag-cell-error {
+    background-color: rgba(239, 68, 68, 0.08) !important;
+    border-left: 3px solid #ef4444 !important;
+}
+
+.dark .ag-cell-error {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    border-left-color: #f87171 !important;
+}

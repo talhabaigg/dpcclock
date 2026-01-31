@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserInfo } from '@/components/user-info';
@@ -25,12 +26,14 @@ import {
     FileSpreadsheet,
     FileText,
     GitCompare,
+    HelpCircle,
     History,
     MapPin,
     Package,
     Pencil,
     Phone,
     RotateCcw,
+    Send,
     Trash2,
     User,
 } from 'lucide-react';
@@ -304,12 +307,91 @@ export default function RequisitionShow() {
                                 </Link>
                             )}
                             {requisition.status === 'pending' && (
-                                <Link href={`/requisition/${requisition.id}/api-send`}>
-                                    <Button size="sm" className="h-8 gap-1 bg-emerald-600 px-2 text-xs text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                        <CircleCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                        <span className="hidden xs:inline">Send to</span> Premier
-                                    </Button>
-                                </Link>
+                                <div className="flex items-center gap-1">
+                                    <Link href={`/requisition/${requisition.id}/api-send`}>
+                                        <Button size="sm" className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                            <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                            Send to Premier
+                                        </Button>
+                                    </Link>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2 sm:h-9">
+                                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-md">
+                                            <DialogHeader>
+                                                <DialogTitle className="flex items-center gap-2">
+                                                    <Send className="h-5 w-5 text-blue-600" />
+                                                    What happens next?
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Understanding the purchase order workflow
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="mt-4 space-y-4">
+                                                {/* Step 1 */}
+                                                <div className="flex gap-3">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                                                        1
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-semibold text-foreground">Sent to Premier</h4>
+                                                        <p className="mt-0.5 text-sm text-muted-foreground">
+                                                            After clicking send, the order is received in Premier Construction Software (Superior's ERP suite).
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 2 */}
+                                                <div className="flex gap-3">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+                                                        2
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-semibold text-foreground">Admin Review</h4>
+                                                        <p className="mt-0.5 text-sm text-muted-foreground">
+                                                            A procurement admin will review the requisition and convert it to a purchase order.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 3 */}
+                                                <div className="flex gap-3">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                                                        3
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-semibold text-foreground">Sent to Supplier</h4>
+                                                        <p className="mt-0.5 text-sm text-muted-foreground">
+                                                            Once approved, the purchase order is sent to the supplier. The status will update to "Sent".
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Status info */}
+                                                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                                                    <p className="text-xs font-medium text-muted-foreground">Status meanings:</p>
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        <Badge variant="outline" className="gap-1 border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                                                            Pending
+                                                        </Badge>
+                                                        <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                            Awaiting
+                                                        </Badge>
+                                                        <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                            Sent
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
                             )}
                             {requisition.status !== 'pending' && requisition.status !== 'failed' && (
                                 <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">

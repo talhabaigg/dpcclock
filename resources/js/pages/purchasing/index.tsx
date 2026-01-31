@@ -203,28 +203,28 @@ export default function RequisitionList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Requisitions" />
 
-            <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-background dark:via-background dark:to-background">
+            <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-background dark:via-background dark:to-background">
                 {/* Header Section */}
-                <div className="relative border-b border-slate-200/40 bg-white/70 px-4 py-6 backdrop-blur-xl sm:px-6 md:px-8 lg:px-10 dark:border-border dark:bg-background/70">
+                <div className="relative border-b border-slate-200/40 bg-white/70 px-3 py-4 backdrop-blur-xl sm:px-6 sm:py-6 md:px-8 lg:px-10 dark:border-border dark:bg-background/70">
                     {/* Subtle gradient overlay */}
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-500/[0.02] via-purple-500/[0.02] to-pink-500/[0.02] dark:from-blue-500/[0.03] dark:via-purple-500/[0.03] dark:to-pink-500/[0.03]" />
 
                     {/* Top Row: Title and Create Button */}
-                    <div className="relative mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-slate-50">Requisitions</h1>
-                            <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Manage and track all purchase requisitions</p>
+                            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-slate-50">Requisitions</h1>
+                            <p className="mt-0.5 text-xs font-medium text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">Manage and track all purchase requisitions</p>
                         </div>
                         <Link href="/requisition/create">
-                            <Button className="group h-12 w-full gap-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-6 text-base font-medium shadow-lg shadow-slate-900/20 ring-1 ring-slate-900/10 transition-all duration-300 hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 hover:ring-slate-800/20 sm:w-auto dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white">
-                                <CirclePlus className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" />
+                            <Button className="group h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-4 text-sm font-medium shadow-lg shadow-slate-900/20 ring-1 ring-slate-900/10 transition-all duration-300 hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 hover:ring-slate-800/20 sm:h-12 sm:w-auto sm:gap-2.5 sm:rounded-xl sm:px-6 sm:text-base dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white">
+                                <CirclePlus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 sm:h-5 sm:w-5" />
                                 Create Requisition
                             </Button>
                         </Link>
                     </div>
 
                     {/* Search, Filters, and View Toggle Row */}
-                    <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div className="relative flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center">
                         {/* Search Bar */}
                         <div className="relative w-full lg:max-w-md">
                             <div
@@ -235,18 +235,18 @@ export default function RequisitionList() {
                             />
                             <Search
                                 className={cn(
-                                    'absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 transition-all duration-200',
+                                    'absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-all duration-200 sm:left-4 sm:h-5 sm:w-5',
                                     isSearchFocused ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500',
                                 )}
                             />
                             <Input
                                 type="text"
-                                placeholder="Search by ID, supplier, creator, or reference..."
+                                placeholder="Search requisitions..."
                                 value={searchInput}
                                 onChange={(e) => handleSearchChange(e.target.value)}
                                 onFocus={() => setIsSearchFocused(true)}
                                 onBlur={() => setIsSearchFocused(false)}
-                                className="h-12 rounded-xl border-slate-200/60 bg-white/80 pl-12 pr-12 text-base shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 placeholder:text-slate-400 hover:border-slate-300 hover:shadow-md focus:border-slate-300 focus:bg-white focus:shadow-lg focus:ring-slate-900/10 dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-slate-600 dark:focus:bg-slate-800 dark:focus:ring-white/10"
+                                className="h-11 rounded-xl border-slate-200/60 bg-white/80 pl-11 pr-10 text-sm shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 placeholder:text-slate-400 hover:border-slate-300 hover:shadow-md focus:border-slate-300 focus:bg-white focus:shadow-lg focus:ring-slate-900/10 sm:h-12 sm:pl-12 sm:pr-12 sm:text-base dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-slate-600 dark:focus:bg-slate-800 dark:focus:ring-white/10"
                             />
                             {searchInput && (
                                 <button
@@ -259,24 +259,24 @@ export default function RequisitionList() {
                         </div>
 
                         {/* Filter Button, Active Badges, and View Toggle */}
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             <Sheet>
                                 <SheetTrigger asChild>
                                     <Button
                                         variant="outline"
                                         className={cn(
-                                            'group h-12 gap-2.5 rounded-xl border-slate-200/60 bg-white/80 px-5 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 hover:border-slate-300 hover:bg-white hover:shadow-md hover:ring-slate-900/10 active:scale-[0.98] dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:hover:border-slate-600 dark:hover:bg-slate-800',
+                                            'group h-10 gap-2 rounded-xl border-slate-200/60 bg-white/80 px-3 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 hover:border-slate-300 hover:bg-white hover:shadow-md hover:ring-slate-900/10 active:scale-[0.98] sm:h-12 sm:gap-2.5 sm:px-5 dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:hover:border-slate-600 dark:hover:bg-slate-800',
                                             totalActiveFilters > 0 &&
                                                 'border-blue-300/60 bg-blue-50/80 ring-blue-500/10 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-700/60 dark:bg-blue-950/40 dark:ring-blue-500/10 dark:hover:border-blue-600 dark:hover:bg-blue-950/60',
                                         )}
                                     >
                                         <SlidersHorizontal
                                             className={cn(
-                                                'h-5 w-5 transition-transform duration-300 group-hover:rotate-12',
+                                                'h-4 w-4 transition-transform duration-300 group-hover:rotate-12 sm:h-5 sm:w-5',
                                                 totalActiveFilters > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500',
                                             )}
                                         />
-                                        <span className={cn('font-medium', totalActiveFilters > 0 ? 'text-blue-700 dark:text-blue-300' : '')}>
+                                        <span className={cn('text-sm font-medium sm:text-base', totalActiveFilters > 0 ? 'text-blue-700 dark:text-blue-300' : '')}>
                                             Filters
                                         </span>
                                         {totalActiveFilters > 0 && (
@@ -415,17 +415,17 @@ export default function RequisitionList() {
                             {/* View Toggle */}
                             <div className="ml-auto">
                                 <Tabs value={viewMode} onValueChange={handleViewModeChange}>
-                                    <TabsList className="h-12 gap-1.5 rounded-xl bg-slate-100/80 p-1.5 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm dark:bg-slate-800/80 dark:ring-white/5">
+                                    <TabsList className="h-10 gap-1 rounded-xl bg-slate-100/80 p-1 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm sm:h-12 sm:gap-1.5 sm:p-1.5 dark:bg-slate-800/80 dark:ring-white/5">
                                         <TabsTrigger
                                             value="table"
-                                            className="h-9 gap-2 rounded-lg px-4 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
+                                            className="h-8 gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 sm:h-9 sm:gap-2 sm:px-4 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
                                         >
                                             <LayoutList className="h-4 w-4" />
                                             <span className="hidden sm:inline">Table</span>
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="cards"
-                                            className="h-9 gap-2 rounded-lg px-4 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
+                                            className="h-8 gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 sm:h-9 sm:gap-2 sm:px-4 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
                                         >
                                             <LayoutGrid className="h-4 w-4" />
                                             <span className="hidden sm:inline">Cards</span>
@@ -438,41 +438,41 @@ export default function RequisitionList() {
                 </div>
 
                 {/* Content Area - Full Width */}
-                <div className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
+                <div className="flex-1 p-2 sm:p-6 md:p-8 lg:p-10">
                     <Tabs value={viewMode} onValueChange={handleViewModeChange}>
                         {/* Table View */}
                         <TabsContent value="table" className="mt-0">
-                            <Card className="overflow-hidden rounded-2xl border-slate-200/40 bg-white/90 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl dark:border-border dark:bg-card dark:shadow-background/50 dark:ring-white/5">
-                                <CardHeader className="border-b border-slate-100/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 px-5 py-4 sm:px-8 sm:py-5 dark:border-border dark:from-background dark:via-muted/30 dark:to-background">
+                            <Card className="overflow-hidden rounded-xl border-slate-200/40 bg-white/90 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl sm:rounded-2xl dark:border-border dark:bg-card dark:shadow-background/50 dark:ring-white/5">
+                                <CardHeader className="border-b border-slate-100/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 px-3 py-3 sm:px-8 sm:py-5 dark:border-border dark:from-background dark:via-muted/30 dark:to-background">
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3 sm:gap-4">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-white shadow-sm ring-1 ring-slate-900/5 dark:from-slate-800 dark:to-slate-900 dark:ring-white/10">
+                                        <div className="flex items-center gap-2 sm:gap-4">
+                                            <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-white shadow-sm ring-1 ring-slate-900/5 sm:flex dark:from-slate-800 dark:to-slate-900 dark:ring-white/10">
                                                 <FileText className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                                             </div>
-                                            <span className="text-sm font-semibold text-slate-700 sm:text-base dark:text-slate-300">
+                                            <span className="text-xs font-semibold text-slate-700 sm:text-base dark:text-slate-300">
                                                 Showing {reqs.length} of {requisitions.last_page * 50}+ requisitions
                                             </span>
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-0">
-                                    <div className="overflow-x-auto">
-                                        <Table>
+                                <CardContent className="min-w-0 p-0">
+                                    <div className="min-w-0 overflow-x-auto">
+                                        <Table className="w-full">
                                             <TableHeader>
                                                 <TableRow className="border-b-2 border-slate-100/80 bg-gradient-to-r from-slate-50/80 via-slate-100/50 to-slate-50/80 hover:bg-slate-50/80 dark:border-border dark:from-muted/50 dark:via-muted/30 dark:to-muted/50 dark:hover:bg-muted/50">
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="whitespace-nowrap px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         ID
                                                     </TableHead>
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="whitespace-nowrap px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         Supplier
                                                     </TableHead>
                                                     <TableHead className="hidden whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:table-cell sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         Project
                                                     </TableHead>
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="hidden whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:table-cell sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         PO #
                                                     </TableHead>
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="whitespace-nowrap px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         Status
                                                     </TableHead>
                                                     <TableHead className="hidden whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs md:table-cell dark:text-slate-400">
@@ -493,10 +493,10 @@ export default function RequisitionList() {
                                                     <TableHead className="hidden whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs xl:table-cell dark:text-slate-400">
                                                         Deliver To
                                                     </TableHead>
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="whitespace-nowrap px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         Value
                                                     </TableHead>
-                                                    <TableHead className="whitespace-nowrap px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
+                                                    <TableHead className="whitespace-nowrap px-1 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
                                                         <span className="sr-only">Actions</span>
                                                     </TableHead>
                                                 </TableRow>
@@ -511,20 +511,20 @@ export default function RequisitionList() {
                                                             'hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-blue-50/40 hover:to-transparent dark:hover:from-blue-950/30 dark:hover:via-blue-950/20 dark:hover:to-transparent',
                                                         )}
                                                     >
-                                                        <TableCell className="px-4 py-4 sm:px-6 sm:py-5">
+                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
                                                             <Link
                                                                 href={`/requisition/${requisition.id}`}
-                                                                className="inline-flex items-center rounded-lg bg-slate-100/80 px-2.5 py-1 font-mono text-sm font-semibold text-slate-900 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-blue-900/50 dark:hover:text-blue-300"
+                                                                className="inline-flex items-center rounded-lg bg-slate-100/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-900 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700 sm:px-2.5 sm:py-1 sm:text-sm dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-blue-900/50 dark:hover:text-blue-300"
                                                             >
                                                                 #{requisition.id}
                                                             </Link>
                                                         </TableCell>
 
-                                                        <TableCell className="max-w-28 px-4 py-4 sm:max-w-36 sm:px-6 sm:py-5">
+                                                        <TableCell className="max-w-20 px-2 py-3 sm:max-w-36 sm:px-6 sm:py-5">
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <span className="block truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                                        <span className="block truncate text-xs font-semibold text-slate-700 sm:text-sm dark:text-slate-300">
                                                                             {requisition.supplier?.name.toUpperCase()}
                                                                         </span>
                                                                     </TooltipTrigger>
@@ -550,7 +550,7 @@ export default function RequisitionList() {
                                                             </TooltipProvider>
                                                         </TableCell>
 
-                                                        <TableCell className="px-4 py-4 sm:px-6 sm:py-5">
+                                                        <TableCell className="hidden px-4 py-4 sm:table-cell sm:px-6 sm:py-5">
                                                             {requisition.po_number ? (
                                                                 <Badge
                                                                     variant="outline"
@@ -563,10 +563,10 @@ export default function RequisitionList() {
                                                             )}
                                                         </TableCell>
 
-                                                        <TableCell className="px-4 py-4 sm:px-6 sm:py-5">
+                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
                                                             <Badge
                                                                 className={cn(
-                                                                    'rounded-lg border px-2.5 py-1 text-xs font-semibold capitalize shadow-sm',
+                                                                    'rounded-md border px-1.5 py-0.5 text-[10px] font-semibold capitalize shadow-sm sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-xs',
                                                                     getStatusStyles(requisition.status),
                                                                 )}
                                                             >
@@ -615,8 +615,8 @@ export default function RequisitionList() {
                                                             </span>
                                                         </TableCell>
 
-                                                        <TableCell className="px-4 py-4 sm:px-6 sm:py-5">
-                                                            <span className="inline-flex items-center rounded-lg bg-emerald-50/80 px-2.5 py-1 font-mono text-sm font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
+                                                            <span className="inline-flex items-center rounded-md bg-emerald-50/80 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-700 sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-sm dark:bg-emerald-950/40 dark:text-emerald-400">
                                                                 $
                                                                 {(Number(requisition.line_items_sum_total_cost) || 0).toLocaleString('en-US', {
                                                                     minimumFractionDigits: 2,
@@ -625,8 +625,8 @@ export default function RequisitionList() {
                                                             </span>
                                                         </TableCell>
 
-                                                        <TableCell className="px-4 py-4 sm:px-6 sm:py-5">
-                                                            <div className="flex items-center justify-end gap-2">
+                                                        <TableCell className="px-1 py-3 sm:px-6 sm:py-5">
+                                                            <div className="flex items-center justify-end gap-1 sm:gap-2">
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
@@ -634,9 +634,9 @@ export default function RequisitionList() {
                                                                                 <Button
                                                                                     variant="ghost"
                                                                                     size="icon"
-                                                                                    className="h-10 w-10 rounded-xl text-slate-500 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 hover:shadow-md active:scale-95 dark:hover:bg-blue-950/50 dark:hover:text-blue-400"
+                                                                                    className="h-8 w-8 rounded-lg text-slate-500 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 hover:shadow-md active:scale-95 sm:h-10 sm:w-10 sm:rounded-xl dark:hover:bg-blue-950/50 dark:hover:text-blue-400"
                                                                                 >
-                                                                                    <Eye className="h-5 w-5" />
+                                                                                    <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                                                                                 </Button>
                                                                             </Link>
                                                                         </TooltipTrigger>
@@ -666,10 +666,10 @@ export default function RequisitionList() {
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
-                                                                            className="h-10 w-10 rounded-xl text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700 hover:shadow-md active:scale-95 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                                                            className="h-8 w-8 rounded-lg text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700 hover:shadow-md active:scale-95 sm:h-10 sm:w-10 sm:rounded-xl dark:hover:bg-slate-800 dark:hover:text-slate-200"
                                                                         >
                                                                             <span className="sr-only">Open menu</span>
-                                                                            <EllipsisVertical className="h-5 w-5" />
+                                                                            <EllipsisVertical className="h-4 w-4 sm:h-5 sm:w-5" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
                                                                     <DropdownMenuContent align="end" className="w-56 rounded-xl p-2 shadow-xl ring-1 ring-slate-900/5 dark:ring-white/5">
@@ -715,18 +715,18 @@ export default function RequisitionList() {
                             </Card>
 
                             {/* Pagination */}
-                            <div className="mt-6 sm:mt-8">
-                                <Card className="rounded-2xl border-slate-200/40 bg-white/90 shadow-lg shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl dark:border-border dark:bg-card dark:shadow-background/50 dark:ring-white/5">
-                                    <CardContent className="px-5 py-5 sm:px-8 sm:py-6">
-                                        <div className="flex flex-col items-center justify-between gap-4 sm:flex-row sm:gap-6">
-                                            <p className="text-sm font-medium text-slate-500 sm:text-base dark:text-slate-400">
+                            <div className="mt-4 sm:mt-8">
+                                <Card className="rounded-xl border-slate-200/40 bg-white/90 shadow-lg shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl sm:rounded-2xl dark:border-border dark:bg-card dark:shadow-background/50 dark:ring-white/5">
+                                    <CardContent className="px-3 py-3 sm:px-8 sm:py-6">
+                                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-6">
+                                            <p className="text-xs font-medium text-slate-500 sm:text-base dark:text-slate-400">
                                                 Page{' '}
                                                 <span className="font-bold text-slate-700 dark:text-slate-300">{requisitions.current_page}</span> of{' '}
                                                 <span className="font-bold text-slate-700 dark:text-slate-300">{requisitions.last_page}</span>
                                             </p>
 
                                             <Pagination>
-                                                <PaginationContent className="gap-2">
+                                                <PaginationContent className="gap-1 sm:gap-2">
                                                     <PaginationItem>
                                                         <PaginationLink
                                                             href={requisitions.first_page_url}
@@ -744,7 +744,7 @@ export default function RequisitionList() {
                                                         <PaginationPrevious
                                                             href={requisitions.prev_page_url || '#'}
                                                             className={cn(
-                                                                'h-11 rounded-xl border border-slate-200/60 bg-white shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
+                                                                'h-9 rounded-lg border border-slate-200/60 bg-white px-2 text-xs shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:h-11 sm:rounded-xl sm:px-4 sm:text-sm dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
                                                                 !requisitions.prev_page_url && 'pointer-events-none opacity-50',
                                                             )}
                                                         />
@@ -781,7 +781,7 @@ export default function RequisitionList() {
                                                     })()}
 
                                                     <PaginationItem className="sm:hidden">
-                                                        <span className="flex h-11 min-w-11 items-center justify-center rounded-xl border border-slate-900 bg-gradient-to-r from-slate-900 to-slate-800 px-3 text-sm font-bold text-white shadow-lg shadow-slate-900/20 dark:border-white dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10">
+                                                        <span className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-900 bg-gradient-to-r from-slate-900 to-slate-800 px-2 text-xs font-bold text-white shadow-lg shadow-slate-900/20 dark:border-white dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10">
                                                             {requisitions.current_page}
                                                         </span>
                                                     </PaginationItem>
@@ -790,7 +790,7 @@ export default function RequisitionList() {
                                                         <PaginationNext
                                                             href={requisitions.next_page_url || '#'}
                                                             className={cn(
-                                                                'h-11 rounded-xl border border-slate-200/60 bg-white shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
+                                                                'h-9 rounded-lg border border-slate-200/60 bg-white px-2 text-xs shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:h-11 sm:rounded-xl sm:px-4 sm:text-sm dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
                                                                 !requisitions.next_page_url && 'pointer-events-none opacity-50',
                                                             )}
                                                         />

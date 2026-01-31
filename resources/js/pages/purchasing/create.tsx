@@ -13,13 +13,12 @@ import {
 } from '@/components/ui/alert-dialog';
 // Badge removed - not used in compact design
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 // HoverCard removed - simplified form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Dialog } from '@radix-ui/react-dialog';
@@ -229,13 +228,22 @@ export default function Create() {
     //     wrapperBorderRadius: '10px',
     //     wrapperBorder: false,
     // });
-    const appliedTheme = isDarkMode ? darkTheme : myTheme;
+    const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
     // const rowSelection = useMemo(() => {
     //     return {
     //         mode: 'multiRow',
     //     };
     // }, []);
     const rowSelection = 'multiple';
+
+    // Cell class function for error styling
+    const cellClassRules = (field: string) => ({
+        'ag-cell-error': (params: any) => {
+            if (params.node?.rowIndex === undefined) return false;
+            return !!errors[`items.${params.node.rowIndex}.${field}`];
+        },
+    });
+
     const columnDefs = [
         {
             field: 'serial_number',
@@ -250,9 +258,17 @@ export default function Create() {
             headerName: 'Description',
             editable: true,
             singleClickEdit: false,
+            cellClassRules: cellClassRules('description'),
             cellRenderer: (params: any) => {
-                if (params.value) return params.value; // If description exists, show it
-                return <span className="text-gray-500">Double click to type...</span>;
+                const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.description`] : null;
+                return (
+                    <div className="flex flex-col">
+                        <span className={error ? 'text-destructive' : ''}>
+                            {params.value || <span className="text-gray-500">Double click to type...</span>}
+                        </span>
+                        {error && <span className="text-[10px] text-destructive">{error}</span>}
+                    </div>
+                );
             },
         },
         {
@@ -261,9 +277,17 @@ export default function Create() {
             editable: true,
             cellEditor: ComboboxDemo,
             minWidth: 250,
+            cellClassRules: cellClassRules('code'),
             cellRenderer: (params: any) => {
-                if (params.value) return params.value; // If code exists, show it
-                return <span className="text-gray-500">Search item...</span>;
+                const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.code`] : null;
+                return (
+                    <div className="flex flex-col">
+                        <span className={error ? 'text-destructive' : ''}>
+                            {params.value || <span className="text-gray-500">Search item...</span>}
+                        </span>
+                        {error && <span className="text-[10px] text-destructive">{error}</span>}
+                    </div>
+                );
             },
             cellEditorParams: {
                 selectedSupplier,
@@ -327,6 +351,19 @@ export default function Create() {
             headerName: 'Qty',
             editable: true,
             type: 'numericColumn',
+            cellClassRules: cellClassRules('qty'),
+            cellRenderer: (params: any) => {
+                const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.qty`] : null;
+                if (error) {
+                    return (
+                        <div className="flex flex-col text-right">
+                            <span className="text-destructive">{params.value}</span>
+                            <span className="text-[10px] text-destructive">{error}</span>
+                        </div>
+                    );
+                }
+                return params.value;
+            },
             onCellValueChanged: (e) => {
                 const { unit_cost, qty } = e.data;
                 e.data.total_cost = (unit_cost || 0) * (qty || 0);
@@ -341,16 +378,26 @@ export default function Create() {
             headerName: 'Unit Cost',
             editable: true,
             type: 'numericColumn',
+            cellClassRules: cellClassRules('unit_cost'),
+            cellRenderer: (params: any) => {
+                const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.unit_cost`] : null;
+                const formatted = params.value != null ? `$${parseFloat(params.value).toFixed(6)}` : '';
+                if (error) {
+                    return (
+                        <div className="flex flex-col text-right">
+                            <span className="text-destructive">{formatted}</span>
+                            <span className="text-[10px] text-destructive">{error}</span>
+                        </div>
+                    );
+                }
+                return formatted;
+            },
             onCellValueChanged: (e) => {
                 const { unit_cost, qty } = e.data;
                 e.data.total_cost = (unit_cost || 0) * (qty || 0);
                 const updated = [...rowData];
                 updated[e.rowIndex] = e.data;
                 setRowData(updated);
-            },
-            valueFormatter: (params: any) => {
-                if (params.value == null) return '';
-                return `$${parseFloat(params.value).toFixed(6)}`; // Format to 6 decimal places
             },
         },
         {
@@ -379,14 +426,26 @@ export default function Create() {
             field: 'cost_code',
             headerName: 'Cost Code',
             editable: true,
+            cellClassRules: cellClassRules('cost_code'),
             cellEditorParams: (params: any) => ({
                 value: params.value || '',
                 costCodes: costCodes,
             }),
             cellEditor: CostCodeSelector,
-            valueFormatter: (params) => {
+            cellRenderer: (params: any) => {
+                const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.cost_code`] : null;
                 const costCode = costCodes.find((code) => code.code === params.value);
-                return costCode ? `${costCode.code} - ${costCode.description}` : params.value;
+                const displayValue = costCode ? `${costCode.code} - ${costCode.description}` : params.value;
+
+                if (error) {
+                    return (
+                        <div className="flex flex-col">
+                            <span className="text-destructive">{displayValue || 'Select...'}</span>
+                            <span className="text-[10px] text-destructive">{error}</span>
+                        </div>
+                    );
+                }
+                return displayValue || <span className="text-gray-500">Select...</span>;
             },
         },
         {
@@ -451,11 +510,6 @@ export default function Create() {
 
     const [file, setFile] = useState<File | null>(null);
 
-    useEffect(() => {
-        if (errors && Object.keys(errors).length > 0) {
-            toast.error(errors[Object.keys(errors)[0]]); // Display the first error message
-        }
-    }, [errors]);
 
     useEffect(() => {
         if (!flash) return;
@@ -514,7 +568,7 @@ export default function Create() {
                     {/* Left - Icon + Title */}
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/25">
-                            <FileText className="h-5 w-5 text-white" />
+                            <FileText className="h-5 w-5 text-primary-foreground" />
                         </div>
                         <div>
                             <h1 className="text-xl font-bold tracking-tight">
@@ -609,15 +663,54 @@ export default function Create() {
                     </AlertDialogContent>
                 </AlertDialog>
 
+                {/* Error Summary Banner - Shows all validation errors */}
+                {Object.keys(errors).length > 0 && (
+                    <div className="mt-4 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
+                        <div className="mb-3 flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+                                <AlertCircleIcon className="h-4 w-4 text-destructive" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-destructive">Validation Errors</h3>
+                                <p className="text-xs text-destructive/80">Please fix the following errors before submitting</p>
+                            </div>
+                        </div>
+                        <ul className="space-y-1.5 pl-10">
+                            {Object.entries(errors).map(([key, message]) => {
+                                // Format nested error keys like "items.0.code" to "Line 1 - Code"
+                                const formatErrorKey = (errorKey: string): string => {
+                                    const itemMatch = errorKey.match(/^items\.(\d+)\.(\w+)$/);
+                                    if (itemMatch) {
+                                        const lineNum = parseInt(itemMatch[1]) + 1;
+                                        const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                        return `Line ${lineNum} - ${field}`;
+                                    }
+                                    return errorKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                };
+
+                                return (
+                                    <li key={key} className="flex items-start gap-2 text-sm">
+                                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                                        <span>
+                                            <span className="font-medium text-destructive">{formatErrorKey(key)}:</span>{' '}
+                                            <span className="text-destructive/90">{message}</span>
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                )}
+
                 {/* FORM FIELDS - Redesigned with icons and better styling */}
                 <div className="mt-4 space-y-4">
                     {/* Primary Fields Row */}
                     <div className="grid gap-4 md:grid-cols-2">
                         {/* Project Field */}
-                        <div className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                        <div className={`group rounded-xl border bg-card p-4 shadow-sm transition-all hover:shadow-md ${errors.project_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}>
                             <div className="mb-3 flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                                    <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.project_id ? 'bg-destructive/10' : 'bg-blue-500/10'}`}>
+                                    <MapPin className={`h-4 w-4 ${errors.project_id ? 'text-destructive' : 'text-blue-600 dark:text-blue-400'}`} />
                                 </div>
                                 <Label className="text-sm font-semibold">Project / Location</Label>
                             </div>
@@ -630,13 +723,19 @@ export default function Create() {
                                     label: location.name,
                                 }))}
                             />
+                            {errors.project_id && (
+                                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3.5 w-3.5" />
+                                    {errors.project_id}
+                                </p>
+                            )}
                         </div>
 
                         {/* Supplier Field */}
-                        <div className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                        <div className={`group rounded-xl border bg-card p-4 shadow-sm transition-all hover:shadow-md ${errors.supplier_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}>
                             <div className="mb-3 flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
-                                    <Building2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.supplier_id ? 'bg-destructive/10' : 'bg-violet-500/10'}`}>
+                                    <Building2 className={`h-4 w-4 ${errors.supplier_id ? 'text-destructive' : 'text-violet-600 dark:text-violet-400'}`} />
                                 </div>
                                 <Label className="text-sm font-semibold">Supplier</Label>
                                 <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">Required</span>
@@ -650,14 +749,20 @@ export default function Create() {
                                     label: supplier.name,
                                 }))}
                             />
+                            {errors.supplier_id && (
+                                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3.5 w-3.5" />
+                                    {errors.supplier_id}
+                                </p>
+                            )}
                         </div>
                     </div>
 
                     {/* Secondary Fields Row */}
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                         {/* Date Required */}
-                        <div className="relative z-10 rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
-                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <div className={`relative z-10 rounded-lg border bg-card/50 p-3 transition-all ${errors.date_required ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
+                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.date_required ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <Calendar className="h-3.5 w-3.5" />
                                 Date Required
                             </Label>
@@ -665,11 +770,17 @@ export default function Create() {
                                 value={data.date_required ? new Date(data.date_required) : undefined}
                                 onChange={(date) => setData('date_required', date ? format(date, 'yyyy-MM-dd HH:mm:ss') : '')}
                             />
+                            {errors.date_required && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3 w-3" />
+                                    {errors.date_required}
+                                </p>
+                            )}
                         </div>
 
                         {/* Delivery Contact */}
-                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
-                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.delivery_contact ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
+                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.delivery_contact ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <Phone className="h-3.5 w-3.5" />
                                 Delivery Contact
                             </Label>
@@ -677,13 +788,19 @@ export default function Create() {
                                 placeholder="Contact name..."
                                 value={data.delivery_contact ?? ''}
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
-                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.delivery_contact ? 'ring-1 ring-destructive/50' : ''}`}
                             />
+                            {errors.delivery_contact && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3 w-3" />
+                                    {errors.delivery_contact}
+                                </p>
+                            )}
                         </div>
 
                         {/* Requested By */}
-                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
-                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.requested_by ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
+                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.requested_by ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <User className="h-3.5 w-3.5" />
                                 Requested By
                             </Label>
@@ -691,13 +808,19 @@ export default function Create() {
                                 placeholder="Your name..."
                                 value={data.requested_by}
                                 onChange={(e) => setData('requested_by', e.target.value)}
-                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.requested_by ? 'ring-1 ring-destructive/50' : ''}`}
                             />
+                            {errors.requested_by && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3 w-3" />
+                                    {errors.requested_by}
+                                </p>
+                            )}
                         </div>
 
                         {/* Deliver To */}
-                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
-                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.deliver_to ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
+                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.deliver_to ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <Truck className="h-3.5 w-3.5" />
                                 Deliver To
                             </Label>
@@ -705,13 +828,19 @@ export default function Create() {
                                 placeholder="Delivery location..."
                                 value={data.deliver_to ?? ''}
                                 onChange={(e) => setData('deliver_to', e.target.value)}
-                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.deliver_to ? 'ring-1 ring-destructive/50' : ''}`}
                             />
+                            {errors.deliver_to && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3 w-3" />
+                                    {errors.deliver_to}
+                                </p>
+                            )}
                         </div>
 
                         {/* Order Reference */}
-                        <div className="rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-border">
-                            <Label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.order_reference ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
+                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.order_reference ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <FileText className="h-3.5 w-3.5" />
                                 Order Reference
                             </Label>
@@ -719,16 +848,56 @@ export default function Create() {
                                 placeholder="Memo..."
                                 value={data.order_reference ?? ''}
                                 onChange={(e) => setData('order_reference', e.target.value)}
-                                className="border-0 bg-background/50 shadow-none focus-visible:ring-1"
+                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.order_reference ? 'ring-1 ring-destructive/50' : ''}`}
                             />
+                            {errors.order_reference && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                    <AlertCircleIcon className="h-3 w-3" />
+                                    {errors.order_reference}
+                                </p>
+                            )}
                         </div>
                     </div>
+
+                    {/* Items validation errors */}
+                    {(() => {
+                        const itemErrors = Object.entries(errors).filter(([key]) => key === 'items' || key.startsWith('items.'));
+                        if (itemErrors.length === 0) return null;
+
+                        return (
+                            <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                    <AlertCircleIcon className="h-4 w-4 shrink-0 text-destructive" />
+                                    <p className="text-sm font-semibold text-destructive">Line Items Errors</p>
+                                </div>
+                                <ul className="mt-2 space-y-1 pl-6">
+                                    {itemErrors.map(([key, message]) => {
+                                        const itemMatch = key.match(/^items\.(\d+)\.(\w+)$/);
+                                        let label = key;
+                                        if (itemMatch) {
+                                            const lineNum = parseInt(itemMatch[1]) + 1;
+                                            const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                            label = `Line ${lineNum} - ${field}`;
+                                        } else if (key === 'items') {
+                                            label = 'Items';
+                                        }
+                                        return (
+                                            <li key={key} className="flex items-start gap-2 text-sm">
+                                                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive/70" />
+                                                <span className="text-destructive/90">
+                                                    <span className="font-medium">{label}:</span> {message}
+                                                </span>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* LINE ITEMS GRID */}
-                <Card className="mt-4 overflow-hidden border-border/50 shadow-md">
-                    <CardContent className="p-0">
-                        <div style={{ height: gridSize }}>
+                <div className="ag-theme-shadcn mt-4" style={{ height: gridSize }}>
                             <AgGridReact
                                 ref={gridRef}
                                 rowData={rowData}
@@ -806,9 +975,7 @@ export default function Create() {
                                     }
                                 }}
                             />
-                        </div>
-                    </CardContent>
-                </Card>
+                </div>
                 {/* AI Image Extractor */}
                 {permissions.includes('requisitions.view-all') && (
                     <div className="mt-4">
