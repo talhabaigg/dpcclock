@@ -33,6 +33,7 @@ class POComparisonService
             'unit_cost' => (float) $item->unit_cost,
             'total_cost' => (float) $item->total_cost,
             'cost_code' => $item->cost_code,
+            'price_list' => $item->price_list,
             'source' => 'local',
         ])->toArray();
 
@@ -626,5 +627,28 @@ class POComparisonService
             'total_variance' => $totalVariance,
             'has_discrepancies' => ($modified + $added + $removed) > 0,
         ];
+    }
+
+    /**
+     * Parse a numeric value from a string (handles currency symbols, commas, etc.)
+     */
+    protected function parseNumericValue(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        // Remove currency symbols, spaces, and commas, then try to parse
+        $cleaned = preg_replace('/[^\d.\-]/', '', (string) $value);
+
+        if ($cleaned === '' || $cleaned === '-') {
+            return null;
+        }
+
+        return (float) $cleaned;
     }
 }

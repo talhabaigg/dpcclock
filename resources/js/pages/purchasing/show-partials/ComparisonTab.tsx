@@ -24,6 +24,7 @@ type LineItem = {
     unit_cost: number;
     total_cost: number;
     cost_code: string | null;
+    price_list?: number | string | null;
     has_invoice?: boolean;
     invoice_balance?: number;
     source: 'local' | 'premier';
@@ -329,6 +330,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                     <p><span className="text-muted-foreground">Code:</span> {item.code || 'null'}</p>
                                     <p><span className="text-muted-foreground">Desc:</span> {item.description || 'null'}</p>
                                     <p><span className="text-muted-foreground">Qty:</span> {item.qty} @ {formatCurrency(item.unit_cost)}</p>
+                                    <p><span className="text-muted-foreground">Price List:</span> <span className="font-medium text-blue-600">{item.price_list ?? 'null'}</span></p>
                                 </div>
                             )) : <pre className="text-red-500">{JSON.stringify(debug.local_sample, null, 2)}</pre>}
                         </div>
@@ -526,17 +528,18 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                        <Table className="min-w-[1500px]">
+                        <Table className="min-w-[1600px]">
                             <TableHeader>
                                 <TableRow className="border-b-2">
                                     <TableHead rowSpan={2} className="w-[80px] border-r bg-muted/30 align-middle">Status</TableHead>
                                     <TableHead rowSpan={2} className="min-w-[180px] border-r bg-muted/30 align-middle">Description</TableHead>
-                                    <TableHead colSpan={3} className="border-r bg-blue-50 text-center text-blue-700">Original (Local)</TableHead>
+                                    <TableHead colSpan={4} className="border-r bg-blue-50 text-center text-blue-700">Original (Local)</TableHead>
                                     <TableHead colSpan={4} className="border-r bg-green-50 text-center text-green-700">Premier PO</TableHead>
                                     <TableHead colSpan={4} className="border-r bg-purple-50 text-center text-purple-700">Invoiced</TableHead>
                                 </TableRow>
                                 <TableRow className="border-b-2">
                                     <TableHead className="w-[50px] text-right text-xs text-blue-600">Qty</TableHead>
+                                    <TableHead className="w-[100px] text-left text-xs text-blue-600">Price List</TableHead>
                                     <TableHead className="w-[80px] text-right text-xs text-blue-600">Unit</TableHead>
                                     <TableHead className="w-[90px] border-r text-right text-xs text-blue-600">Total</TableHead>
                                     <TableHead className="w-[50px] text-right text-xs text-green-600">Qty</TableHead>
@@ -600,6 +603,15 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                     <span className="text-blue-700">{item.local.qty}</span>
                                                 ) : (
                                                     <span className="text-muted-foreground">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-left max-w-[120px]">
+                                                {item.local?.price_list != null && item.local.price_list !== '' ? (
+                                                    <span className="text-blue-600 text-xs whitespace-normal break-words block">
+                                                        {String(item.local.price_list)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">—</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
