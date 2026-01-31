@@ -252,34 +252,44 @@ class TurnoverForecastController extends Controller
             $remainingBudget = $budget - $costToDate;
 
             // ============ LABOUR FORECAST DATA ============
-            // Get labour forecasts for this location
-            // We want all forecasts that overlap with our range, but for simplicity let's just get all approved/submitted ones
-            // Actually simpler: Get all forecasts for this location, then group by month
-            $labourForecasts = LabourForecast::where('location_id', $location->id)
+            // Get the latest approved labour forecast for this location
+            // Then calculate total headcount by month from its entries (which have week_ending dates)
+            $latestApprovedForecast = LabourForecast::where('location_id', $location->id)
+                ->where('status', LabourForecast::STATUS_APPROVED)
                 ->with('entries')
-                ->get();
-            
+                ->orderBy('forecast_month', 'desc')
+                ->first();
+
             $labourForecastHeadcount = [];
-            foreach ($labourForecasts as $forecast) {
-                $monthKey = $forecast->forecast_month->format('Y-m');
-                
-                // Calculate average weekly headcount for this month
-                // First group entries by week
-                $weeklyHeadcounts = [];
-                foreach ($forecast->entries as $entry) {
-                    $weekKey = $entry->week_ending->format('Y-m-d');
-                    if (!isset($weeklyHeadcounts[$weekKey])) {
-                        $weeklyHeadcounts[$weekKey] = 0;
+            if ($latestApprovedForecast) {
+                // Group entries by month (using week_ending date) and sum headcount
+                // Each entry has a week_ending date - we use that to determine which month it belongs to
+                $monthlyHeadcounts = [];
+                $monthlyWeekCounts = [];
+
+                foreach ($latestApprovedForecast->entries as $entry) {
+                    // Use week_ending to determine the month this entry belongs to
+                    $monthKey = $entry->week_ending->format('Y-m');
+
+                    if (!isset($monthlyHeadcounts[$monthKey])) {
+                        $monthlyHeadcounts[$monthKey] = 0;
+                        $monthlyWeekCounts[$monthKey] = [];
                     }
-                    $weeklyHeadcounts[$weekKey] += $entry->headcount;
+
+                    // Track headcount per week to calculate average
+                    $weekKey = $entry->week_ending->format('Y-m-d');
+                    if (!isset($monthlyWeekCounts[$monthKey][$weekKey])) {
+                        $monthlyWeekCounts[$monthKey][$weekKey] = 0;
+                    }
+                    $monthlyWeekCounts[$monthKey][$weekKey] += (float) $entry->headcount;
                 }
-                
-                // Calculate average
-                $count = count($weeklyHeadcounts);
-                if ($count > 0) {
-                    $averageHeadcount = array_sum($weeklyHeadcounts) / $count;
-                    // Use the latest forecast if multiple exist for same month (shouldn't happen with unique constraint but good safety)
-                    $labourForecastHeadcount[$monthKey] = $averageHeadcount;
+
+                // Calculate average headcount per month (average of weekly totals)
+                foreach ($monthlyWeekCounts as $month => $weeks) {
+                    $weekCount = count($weeks);
+                    if ($weekCount > 0) {
+                        $labourForecastHeadcount[$month] = array_sum($weeks) / $weekCount;
+                    }
                 }
             }
 
