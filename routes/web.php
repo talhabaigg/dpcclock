@@ -625,6 +625,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/po-comparison', [POComparisonReportController::class, 'index'])->name('reports.poComparison');
         Route::get('/reports/po-comparison/data', [POComparisonReportController::class, 'getData'])->name('reports.poComparison.data');
         Route::post('/reports/po-comparison/insights', [POComparisonReportController::class, 'getInsights'])->name('reports.poComparison.insights');
+        Route::post('/reports/po-comparison/insights/stream', [POComparisonReportController::class, 'streamInsights'])->name('reports.poComparison.insights.stream');
+        Route::post('/reports/po-comparison/insights/follow-up', [POComparisonReportController::class, 'askFollowUp'])->name('reports.poComparison.insights.followUp');
+        Route::post('/reports/po-comparison/insights/follow-up/stream', [POComparisonReportController::class, 'streamFollowUp'])->name('reports.poComparison.insights.followUp.stream');
         Route::post('/reports/po-comparison/insights/refresh', [POComparisonReportController::class, 'refreshInsights'])->name('reports.poComparison.insights.refresh');
         Route::get('/reports/po-comparison/sync-status', [POComparisonReportController::class, 'getSyncStatus'])->name('reports.poComparison.syncStatus');
         Route::post('/reports/po-comparison/queue-sync', [POComparisonReportController::class, 'queueSync'])->name('reports.poComparison.queueSync');

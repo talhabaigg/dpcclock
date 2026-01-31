@@ -108,8 +108,10 @@ class POComparisonReportController extends Controller
                 $summaryData = $this->reportService->prepareDataForAI($reportData);
             }
 
+            $conversationId = $request->input('conversation_id');
+
             // Generate insights
-            $result = $this->insightsService->generateInsights($summaryData);
+            $result = $this->insightsService->generateInsights($summaryData, $conversationId);
 
             return response()->json($result);
 
@@ -122,6 +124,107 @@ class POComparisonReportController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to generate insights: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle follow-up questions for AI insights
+     */
+    public function askFollowUp(Request $request)
+    {
+        $validated = $request->validate([
+            'conversation_id' => 'required|string',
+            'question' => 'required|string|max:1000',
+        ]);
+
+        try {
+            $result = $this->insightsService->askFollowUp(
+                $validated['conversation_id'],
+                $validated['question']
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('PO Insights follow-up failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process follow-up: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Stream AI insights (SSE)
+     */
+    public function streamInsights(Request $request)
+    {
+        try {
+            if (!$request->has('summary_data')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Summary data is required for streaming insights',
+                ], 400);
+            }
+
+            $summaryData = $request->input('summary_data');
+            $streamClosure = $this->insightsService->streamInsights($summaryData);
+
+            return response()->stream($streamClosure, 200, [
+                'Content-Type' => 'text/event-stream',
+                'Cache-Control' => 'no-cache, no-transform',
+                'Connection' => 'keep-alive',
+                'X-Accel-Buffering' => 'no',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('PO Insights streaming failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to stream insights: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Stream follow-up response (SSE)
+     */
+    public function streamFollowUp(Request $request)
+    {
+        $validated = $request->validate([
+            'conversation_id' => 'required|string',
+            'question' => 'required|string|max:1000',
+        ]);
+
+        try {
+            $streamClosure = $this->insightsService->streamFollowUp(
+                $validated['conversation_id'],
+                $validated['question']
+            );
+
+            return response()->stream($streamClosure, 200, [
+                'Content-Type' => 'text/event-stream',
+                'Cache-Control' => 'no-cache, no-transform',
+                'Connection' => 'keep-alive',
+                'X-Accel-Buffering' => 'no',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('PO Insights follow-up streaming failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to stream follow-up: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -146,7 +249,7 @@ class POComparisonReportController extends Controller
             // Clear cache
             $this->insightsService->clearCache($summaryData);
 
-            // Regenerate
+            // Regenerate with new conversation
             $result = $this->insightsService->generateInsights($summaryData);
 
             return response()->json($result);

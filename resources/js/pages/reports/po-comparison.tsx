@@ -19,7 +19,6 @@ import { Head, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import {
     AlertCircle,
-    AlertTriangle,
     ArrowDown,
     ArrowDownRight,
     ArrowUp,
@@ -32,16 +31,18 @@ import {
     Download,
     FileText,
     Filter,
-    Lightbulb,
     Loader2,
     Minus,
     Plus,
     Printer,
     RefreshCw,
     Sparkles,
+    Square,
     TrendingDown,
     TrendingUp,
+    User,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import Echo from 'laravel-echo';
 import Papa from 'papaparse';
 import Pusher from 'pusher-js';
@@ -132,15 +133,11 @@ type POViolation = {
     violations: PriceListViolation[];
 };
 
-type Insight = {
-    headline: string;
-    hidden_patterns: { pattern: string; significance: string; investigate: string }[];
-    anomalies: { what: string; expected: string; actual: string; risk_level: string }[];
-    supplier_behavior: { supplier: string; behavior: string; concern_level: string; action: string }[];
-    process_gaps: { gap: string; evidence: string; fix: string }[];
-    questions_to_investigate: string[];
-    if_this_continues: string;
-    quick_wins: { action: string; expected_impact: string }[];
+type ChatMessage = {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    status: 'sending' | 'streaming' | 'complete' | 'error';
 };
 
 type SyncStatus = {
@@ -195,10 +192,14 @@ export default function POComparisonReport() {
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
 
-    // AI insights state
-    const [insights, setInsights] = useState<Insight | null>(null);
+    // AI insights chat state
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [conversationId, setConversationId] = useState<string | null>(null);
     const [insightsLoading, setInsightsLoading] = useState(false);
     const [insightsError, setInsightsError] = useState<string | null>(null);
+    const [followUpQuestion, setFollowUpQuestion] = useState('');
+    const [followUpLoading, setFollowUpLoading] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
     // AI summary data (prepared by backend to avoid re-fetching)
     const [aiSummaryData, setAiSummaryData] = useState<Record<string, any> | null>(null);
@@ -350,87 +351,324 @@ export default function POComparisonReport() {
         }
     }, [buildFilters]);
 
+    // Helper to generate unique message IDs
+    const generateMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Abort controller ref for cancelling streams
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Helper to parse SSE events
+    const parseSSEEvent = (raw: string): { type: string; data: any } | null => {
+        if (!raw.trim()) return null;
+
+        const lines = raw.split('\n');
+        let eventName: string | null = null;
+        let dataLine: string | null = null;
+
+        for (const line of lines) {
+            if (line.startsWith('event:')) {
+                eventName = line.slice('event:'.length).trim();
+            } else if (line.startsWith('data:')) {
+                dataLine = line.slice('data:'.length).trim();
+            }
+        }
+
+        if (!dataLine) return null;
+
+        try {
+            const payload = JSON.parse(dataLine);
+
+            if (eventName === 'done') {
+                return { type: 'done', data: payload };
+            }
+
+            if (payload.delta !== undefined) {
+                return { type: 'delta', data: payload };
+            }
+
+            if (payload.error) {
+                return { type: 'error', data: payload };
+            }
+        } catch {
+            // Invalid JSON, skip
+        }
+
+        return null;
+    };
+
+    // Stream insights from the API
     const fetchInsights = useCallback(async () => {
         if (!aiSummaryData) {
             setInsightsError('No report data available. Please generate the report first.');
             return;
         }
 
+        // Cancel any existing stream
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+
         setInsightsLoading(true);
         setInsightsError(null);
 
+        // Create streaming assistant message
+        const assistantId = generateMessageId();
+        const assistantMessage: ChatMessage = {
+            id: assistantId,
+            role: 'assistant',
+            content: '',
+            status: 'streaming',
+        };
+        setChatMessages([assistantMessage]);
+
         try {
-            // Send pre-computed summary data to avoid re-fetching from Premier
-            const response = await fetch('/reports/po-comparison/insights', {
+            const response = await fetch('/reports/po-comparison/insights/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Accept': 'text/event-stream',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({ summary_data: aiSummaryData }),
+                signal: abortControllerRef.current.signal,
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP error: ${response.status}`);
             }
 
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to generate insights');
+            if (!response.body) {
+                throw new Error('No response body received');
             }
 
-            setInsights(data.insights);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                // SSE blocks are separated by \n\n
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+
+                for (const part of parts) {
+                    const event = parseSSEEvent(part);
+                    if (!event) continue;
+
+                    if (event.type === 'delta' && event.data.delta) {
+                        setChatMessages(prev =>
+                            prev.map(m =>
+                                m.id === assistantId
+                                    ? { ...m, content: m.content + event.data.delta }
+                                    : m
+                            )
+                        );
+                    } else if (event.type === 'done') {
+                        setConversationId(event.data.conversation_id);
+                        setChatMessages(prev =>
+                            prev.map(m =>
+                                m.id === assistantId
+                                    ? { ...m, status: 'complete' as const }
+                                    : m
+                            )
+                        );
+                    } else if (event.type === 'error') {
+                        throw new Error(event.data.error);
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+                const event = parseSSEEvent(buffer);
+                if (event?.type === 'done') {
+                    setConversationId(event.data.conversation_id);
+                    setChatMessages(prev =>
+                        prev.map(m =>
+                            m.id === assistantId
+                                ? { ...m, status: 'complete' as const }
+                                : m
+                        )
+                    );
+                }
+            }
+
+            // Mark complete if not already
+            setChatMessages(prev =>
+                prev.map(m =>
+                    m.id === assistantId && m.status === 'streaming'
+                        ? { ...m, status: 'complete' as const }
+                        : m
+                )
+            );
         } catch (err: any) {
+            if (err.name === 'AbortError') return;
             setInsightsError(err.message || 'Failed to generate AI insights');
+            setChatMessages(prev =>
+                prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, content: m.content || 'Failed to generate insights.', status: 'error' as const }
+                        : m
+                )
+            );
         } finally {
             setInsightsLoading(false);
+            abortControllerRef.current = null;
         }
     }, [aiSummaryData]);
 
     const refreshInsights = async () => {
-        if (!aiSummaryData) {
-            setInsightsError('No report data available. Please generate the report first.');
-            return;
-        }
+        // Clear messages and start fresh
+        setChatMessages([]);
+        setConversationId(null);
+        setFollowUpQuestion('');
+        // Then fetch new insights
+        await fetchInsights();
+    };
 
-        setInsightsLoading(true);
-        setInsightsError(null);
+    const askFollowUp = async () => {
+        if (!conversationId || !followUpQuestion.trim()) return;
+
+        const question = followUpQuestion.trim();
+        setFollowUpQuestion('');
+        setFollowUpLoading(true);
+
+        // Cancel any existing stream
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+
+        // Add user message immediately
+        const userMessage: ChatMessage = {
+            id: generateMessageId(),
+            role: 'user',
+            content: question,
+            status: 'complete',
+        };
+
+        // Create streaming assistant message
+        const assistantId = generateMessageId();
+        const assistantMessage: ChatMessage = {
+            id: assistantId,
+            role: 'assistant',
+            content: '',
+            status: 'streaming',
+        };
+
+        setChatMessages(prev => [...prev, userMessage, assistantMessage]);
 
         try {
-            // Send pre-computed summary data to avoid re-fetching from Premier
-            const response = await fetch('/reports/po-comparison/insights/refresh', {
+            const response = await fetch('/reports/po-comparison/insights/follow-up/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Accept': 'text/event-stream',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({ summary_data: aiSummaryData }),
+                body: JSON.stringify({ conversation_id: conversationId, question }),
+                signal: abortControllerRef.current.signal,
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP error: ${response.status}`);
             }
 
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to refresh insights');
+            if (!response.body) {
+                throw new Error('No response body received');
             }
 
-            setInsights(data.insights);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+
+                for (const part of parts) {
+                    const event = parseSSEEvent(part);
+                    if (!event) continue;
+
+                    if (event.type === 'delta' && event.data.delta) {
+                        setChatMessages(prev =>
+                            prev.map(m =>
+                                m.id === assistantId
+                                    ? { ...m, content: m.content + event.data.delta }
+                                    : m
+                            )
+                        );
+                    } else if (event.type === 'done') {
+                        setChatMessages(prev =>
+                            prev.map(m =>
+                                m.id === assistantId
+                                    ? { ...m, status: 'complete' as const }
+                                    : m
+                            )
+                        );
+                    } else if (event.type === 'error') {
+                        throw new Error(event.data.error);
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+                const event = parseSSEEvent(buffer);
+                if (event?.type === 'done') {
+                    setChatMessages(prev =>
+                        prev.map(m =>
+                            m.id === assistantId
+                                ? { ...m, status: 'complete' as const }
+                                : m
+                        )
+                    );
+                }
+            }
+
+            // Mark complete if not already
+            setChatMessages(prev =>
+                prev.map(m =>
+                    m.id === assistantId && m.status === 'streaming'
+                        ? { ...m, status: 'complete' as const }
+                        : m
+                )
+            );
         } catch (err: any) {
-            setInsightsError(err.message || 'Failed to refresh insights');
+            if (err.name === 'AbortError') return;
+            setChatMessages(prev =>
+                prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, content: `Error: ${err.message}`, status: 'error' as const }
+                        : m
+                )
+            );
         } finally {
-            setInsightsLoading(false);
+            setFollowUpLoading(false);
+            abortControllerRef.current = null;
         }
     };
+
+    // Auto-scroll chat to bottom when messages change
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
 
     const fetchSyncStatus = useCallback(async () => {
         setSyncStatusLoading(true);
@@ -494,7 +732,9 @@ export default function POComparisonReport() {
         setHasSearched(true);
         fetchReportData();
         fetchSyncStatus();
-        setInsights(null); // Clear insights when filters change
+        setChatMessages([]); // Clear chat when filters change
+        setConversationId(null);
+        setFollowUpQuestion('');
         setAiSummaryData(null); // Clear summary data when filters change
     };
 
@@ -720,18 +960,18 @@ export default function POComparisonReport() {
                                         <div className="flex items-center gap-3 text-sm">
                                             <span className="flex items-center gap-1">
                                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                                <span className="text-green-700">{syncStatus.cached} cached</span>
+                                                <span className="text-green-700 dark:text-green-400">{syncStatus.cached} cached</span>
                                             </span>
                                             {syncStatus.stale > 0 && (
                                                 <span className="flex items-center gap-1">
                                                     <RefreshCw className="h-4 w-4 text-amber-500" />
-                                                    <span className="text-amber-700">{syncStatus.stale} stale</span>
+                                                    <span className="text-amber-700 dark:text-amber-400">{syncStatus.stale} stale</span>
                                                 </span>
                                             )}
                                             {syncStatus.missing > 0 && (
                                                 <span className="flex items-center gap-1">
                                                     <AlertCircle className="h-4 w-4 text-red-500" />
-                                                    <span className="text-red-700">{syncStatus.missing} missing</span>
+                                                    <span className="text-red-700 dark:text-red-400">{syncStatus.missing} missing</span>
                                                 </span>
                                             )}
                                         </div>
@@ -780,7 +1020,7 @@ export default function POComparisonReport() {
                                     />
                                     <span className={cn(
                                         "text-sm font-medium min-w-[60px] text-right",
-                                        syncStatus.ready_percent === 100 ? "text-green-600" : "text-amber-600"
+                                        syncStatus.ready_percent === 100 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
                                     )}>
                                         {syncStatus.ready_percent}%
                                     </span>
@@ -883,7 +1123,7 @@ export default function POComparisonReport() {
                                 </CardContent>
                             </Card>
 
-                            <Card className={cn('print:border print:shadow-none', aggregate.total_variance > 0 ? 'border-amber-200 bg-amber-50' : aggregate.total_variance < 0 ? 'border-green-200 bg-green-50' : '')}>
+                            <Card className={cn('print:border print:shadow-none', aggregate.total_variance > 0 ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : aggregate.total_variance < 0 ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30' : '')}>
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -916,38 +1156,38 @@ export default function POComparisonReport() {
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
                                     <p className="text-xs text-muted-foreground">Items Unchanged</p>
-                                    <p className="text-lg font-semibold text-green-600">{aggregate.items_unchanged}</p>
+                                    <p className="text-lg font-semibold text-green-600 dark:text-green-400">{aggregate.items_unchanged}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
                                     <p className="text-xs text-muted-foreground">Items Modified</p>
-                                    <p className="text-lg font-semibold text-amber-600">{aggregate.items_modified}</p>
+                                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.items_modified}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
                                     <p className="text-xs text-muted-foreground">Items Added</p>
-                                    <p className="text-lg font-semibold text-blue-600">{aggregate.items_added}</p>
+                                    <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">{aggregate.items_added}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
                                     <p className="text-xs text-muted-foreground">Items Removed</p>
-                                    <p className="text-lg font-semibold text-red-600">{aggregate.items_removed}</p>
+                                    <p className="text-lg font-semibold text-red-600 dark:text-red-400">{aggregate.items_removed}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
                                     <p className="text-xs text-muted-foreground">POs with Issues</p>
-                                    <p className="text-lg font-semibold text-amber-600">{aggregate.pos_with_variances}</p>
+                                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.pos_with_variances}</p>
                                 </CardContent>
                             </Card>
                         </div>
 
                         {/* CRITICAL: Price List Violations Alert */}
                         {aggregate.price_list_violations > 0 && (
-                            <Alert variant="destructive" className="border-red-500 bg-red-50 print:border print:bg-red-50">
+                            <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/30 print:border print:bg-red-50">
                                 <AlertCircle className="h-5 w-5" />
                                 <AlertTitle className="text-lg font-bold">
                                     Price List Violations Detected
@@ -957,7 +1197,7 @@ export default function POComparisonReport() {
                                         <strong>{aggregate.price_list_violations} item(s)</strong> with contracted price lists have pricing changes.
                                         This represents a potential breach in the purchasing/invoice process.
                                     </p>
-                                    <p className="text-lg font-bold text-red-700">
+                                    <p className="text-lg font-bold text-red-700 dark:text-red-400">
                                         Total Impact: {formatCurrency(aggregate.price_list_violation_value)}
                                     </p>
                                 </AlertDescription>
@@ -968,7 +1208,7 @@ export default function POComparisonReport() {
                         <Tabs defaultValue={aggregate.price_list_violations > 0 ? 'violations' : 'summary'} className="print:hidden">
                             <TabsList className="grid w-full grid-cols-4">
                                 {aggregate.price_list_violations > 0 && (
-                                    <TabsTrigger value="violations" className="text-red-600">
+                                    <TabsTrigger value="violations" className="text-red-600 dark:text-red-400">
                                         <AlertCircle className="mr-2 h-4 w-4" />
                                         Violations ({aggregate.price_list_violations})
                                     </TabsTrigger>
@@ -982,21 +1222,21 @@ export default function POComparisonReport() {
                                     Details
                                 </TabsTrigger>
                                 <TabsTrigger value="insights">
-                                    <Brain className="mr-2 h-4 w-4" />
-                                    AI Insights
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Ask AI
                                 </TabsTrigger>
                             </TabsList>
 
                             {/* Price List Violations Tab */}
                             {aggregate.price_list_violations > 0 && (
                                 <TabsContent value="violations" className="space-y-4">
-                                    <Card className="border-red-200">
-                                        <CardHeader className="bg-red-50">
+                                    <Card className="border-red-200 dark:border-red-800">
+                                        <CardHeader className="bg-red-50 dark:bg-red-950/30">
                                             <div className="flex items-center gap-2">
                                                 <AlertCircle className="h-6 w-6 text-red-600" />
                                                 <div>
-                                                    <CardTitle className="text-red-700">Price List Compliance Violations</CardTitle>
-                                                    <CardDescription className="text-red-600">
+                                                    <CardTitle className="text-red-700 dark:text-red-300">Price List Compliance Violations</CardTitle>
+                                                    <CardDescription className="text-red-600 dark:text-red-400">
                                                         Items with contracted price lists that have unauthorized price changes
                                                     </CardDescription>
                                                 </div>
@@ -1005,7 +1245,7 @@ export default function POComparisonReport() {
                                         <CardContent className="pt-4">
                                             <div className="space-y-4">
                                                 {priceListViolations.map((po, idx) => (
-                                                    <Card key={idx} className="border-red-100">
+                                                    <Card key={idx} className="border-red-100 dark:border-red-900">
                                                         <CardHeader className="pb-2">
                                                             <div className="flex items-center justify-between">
                                                                 <div>
@@ -1029,12 +1269,12 @@ export default function POComparisonReport() {
                                                                 </TableHeader>
                                                                 <TableBody>
                                                                     {po.violations.map((v, vIdx) => (
-                                                                        <TableRow key={vIdx} className="bg-red-50">
+                                                                        <TableRow key={vIdx} className="bg-red-50 dark:bg-red-950/30">
                                                                             <TableCell className="font-medium max-w-[200px] truncate">
                                                                                 {v.description}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs">
+                                                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 text-xs">
                                                                                     {v.price_list}
                                                                                 </Badge>
                                                                             </TableCell>
@@ -1096,7 +1336,7 @@ export default function POComparisonReport() {
                                                             key={item.requisition.id}
                                                             className={cn(
                                                                 'cursor-pointer hover:bg-muted/50',
-                                                                item.summary.has_discrepancies && 'bg-amber-50/50',
+                                                                item.summary.has_discrepancies && 'bg-amber-50/50 dark:bg-amber-950/30',
                                                             )}
                                                             onClick={() => toggleRowExpand(item.requisition.id)}
                                                         >
@@ -1127,17 +1367,17 @@ export default function POComparisonReport() {
                                                             <TableCell className="text-center">
                                                                 <div className="flex items-center justify-center gap-1">
                                                                     {item.summary.modified_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700">
+                                                                        <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
                                                                             {item.summary.modified_count} mod
                                                                         </Badge>
                                                                     )}
                                                                     {item.summary.added_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700">
+                                                                        <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                                                                             +{item.summary.added_count}
                                                                         </Badge>
                                                                     )}
                                                                     {item.summary.removed_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-red-100 text-red-700">
+                                                                        <Badge variant="outline" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
                                                                             -{item.summary.removed_count}
                                                                         </Badge>
                                                                     )}
@@ -1158,7 +1398,7 @@ export default function POComparisonReport() {
                             {/* Details Tab */}
                             <TabsContent value="details" className="space-y-4">
                                 {reportData.map((item) => (
-                                    <Card key={item.requisition.id} className={cn(item.summary.has_discrepancies && 'border-amber-200')}>
+                                    <Card key={item.requisition.id} className={cn(item.summary.has_discrepancies && 'border-amber-200 dark:border-amber-800')}>
                                         <CardHeader className="pb-2">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -1202,9 +1442,9 @@ export default function POComparisonReport() {
                                                             <TableRow
                                                                 key={idx}
                                                                 className={cn(
-                                                                    line.status === 'added' && 'bg-blue-50',
-                                                                    line.status === 'removed' && 'bg-red-50',
-                                                                    line.status === 'modified' && 'bg-amber-50',
+                                                                    line.status === 'added' && 'bg-blue-50 dark:bg-blue-950/30',
+                                                                    line.status === 'removed' && 'bg-red-50 dark:bg-red-950/30',
+                                                                    line.status === 'modified' && 'bg-amber-50 dark:bg-amber-950/30',
                                                                 )}
                                                             >
                                                                 <TableCell>
@@ -1212,10 +1452,10 @@ export default function POComparisonReport() {
                                                                         variant="outline"
                                                                         className={cn(
                                                                             'text-xs',
-                                                                            line.status === 'unchanged' && 'bg-green-100 text-green-700',
-                                                                            line.status === 'modified' && 'bg-amber-100 text-amber-700',
-                                                                            line.status === 'added' && 'bg-blue-100 text-blue-700',
-                                                                            line.status === 'removed' && 'bg-red-100 text-red-700',
+                                                                            line.status === 'unchanged' && 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+                                                                            line.status === 'modified' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+                                                                            line.status === 'added' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+                                                                            line.status === 'removed' && 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
                                                                         )}
                                                                     >
                                                                         {line.status}
@@ -1271,233 +1511,180 @@ export default function POComparisonReport() {
 
                             {/* AI Insights Tab */}
                             <TabsContent value="insights" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
+                                <Card className="flex flex-col h-[700px]">
+                                    <CardHeader className="flex-shrink-0">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Sparkles className="h-5 w-5 text-purple-500" />
-                                                <CardTitle>AI-Powered Insights</CardTitle>
+                                                <CardTitle>AI Procurement Advisor</CardTitle>
                                             </div>
                                             <div className="flex gap-2">
-                                                {!insights && !insightsLoading && (
+                                                {chatMessages.length === 0 && !insightsLoading && (
                                                     <Button onClick={fetchInsights}>
                                                         <Brain className="mr-2 h-4 w-4" />
-                                                        Generate Insights
+                                                        Start Analysis
                                                     </Button>
                                                 )}
-                                                {insights && (
+                                                {chatMessages.length > 0 && (
                                                     <Button variant="outline" onClick={refreshInsights} disabled={insightsLoading}>
                                                         <RefreshCw className={cn('mr-2 h-4 w-4', insightsLoading && 'animate-spin')} />
-                                                        Refresh
+                                                        New Analysis
                                                     </Button>
                                                 )}
                                             </div>
                                         </div>
                                         <CardDescription>
-                                            AI analysis of your PO comparison data to identify trends, risks, and opportunities
+                                            Chat with AI about your procurement data. Ask follow-up questions to dive deeper.
                                         </CardDescription>
                                     </CardHeader>
-                                    <CardContent>
+                                    <CardContent className="flex-1 flex flex-col overflow-hidden">
                                         {insightsError && (
-                                            <Alert variant="destructive" className="mb-4">
+                                            <Alert variant="destructive" className="mb-4 flex-shrink-0">
                                                 <AlertCircle className="h-4 w-4" />
                                                 <AlertTitle>Error</AlertTitle>
                                                 <AlertDescription>{insightsError}</AlertDescription>
                                             </Alert>
                                         )}
 
-                                        {insightsLoading && (
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-2 text-muted-foreground">
-                                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                                    <span>Analyzing your data with AI...</span>
+                                        {/* Chat Messages Area */}
+                                        <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+
+                                            {chatMessages.length === 0 && !insightsLoading && !insightsError && (
+                                                <div className="text-center py-12">
+                                                    <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                                                    <p className="text-muted-foreground mb-2">Your AI Procurement Advisor</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Click "Start Analysis" to get insights on your PO data.<br />
+                                                        You can ask follow-up questions to explore specific areas.
+                                                    </p>
                                                 </div>
-                                                <Skeleton className="h-24 w-full" />
-                                                <Skeleton className="h-48 w-full" />
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {!insights && !insightsLoading && !insightsError && (
-                                            <div className="text-center py-12">
-                                                <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                                                <p className="text-muted-foreground">Click "Generate Insights" to analyze your PO data with AI</p>
-                                            </div>
-                                        )}
-
-                                        {insights && (
-                                            <div className="space-y-6">
-                                                {/* Headline */}
-                                                <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-100">
-                                                    <p className="text-lg font-semibold text-gray-800">{insights.headline}</p>
-                                                </div>
-
-                                                {/* Hidden Patterns */}
-                                                {insights.hidden_patterns && insights.hidden_patterns.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                                                            <Sparkles className="h-5 w-5 text-purple-500" />
-                                                            Hidden Patterns Detected
-                                                        </h3>
-                                                        <div className="space-y-3">
-                                                            {insights.hidden_patterns.map((item, idx) => (
-                                                                <Card key={idx} className="border-l-4 border-l-purple-500">
-                                                                    <CardContent className="p-4">
-                                                                        <p className="font-medium text-purple-900">{item.pattern}</p>
-                                                                        <p className="text-sm text-gray-600 mt-1">{item.significance}</p>
-                                                                        <p className="text-sm text-purple-700 mt-2 font-medium">Investigate: {item.investigate}</p>
-                                                                    </CardContent>
-                                                                </Card>
-                                                            ))}
+                                            {chatMessages.map((message) => (
+                                                <div
+                                                    key={message.id}
+                                                    className={cn(
+                                                        'flex gap-3',
+                                                        message.role === 'user' && 'justify-end'
+                                                    )}
+                                                >
+                                                    {message.role === 'assistant' && (
+                                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                                                            <Sparkles className="h-4 w-4 text-white" />
                                                         </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Anomalies */}
-                                                {insights.anomalies && insights.anomalies.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                                                            <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                                            Anomalies Detected
-                                                        </h3>
-                                                        <div className="space-y-3">
-                                                            {insights.anomalies.map((anomaly, idx) => (
-                                                                <Alert
-                                                                    key={idx}
-                                                                    className={cn(
-                                                                        anomaly.risk_level === 'high' && 'border-red-200 bg-red-50',
-                                                                        anomaly.risk_level === 'medium' && 'border-amber-200 bg-amber-50',
-                                                                        anomaly.risk_level === 'low' && 'border-blue-200 bg-blue-50',
-                                                                    )}
-                                                                >
-                                                                    <AlertCircle className="h-4 w-4" />
-                                                                    <AlertTitle className="flex items-center gap-2">
-                                                                        {anomaly.what}
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className={cn(
-                                                                                'text-xs',
-                                                                                anomaly.risk_level === 'high' && 'bg-red-100 text-red-700',
-                                                                                anomaly.risk_level === 'medium' && 'bg-amber-100 text-amber-700',
-                                                                                anomaly.risk_level === 'low' && 'bg-blue-100 text-blue-700',
-                                                                            )}
-                                                                        >
-                                                                            {anomaly.risk_level}
-                                                                        </Badge>
-                                                                    </AlertTitle>
-                                                                    <AlertDescription>
-                                                                        <p><strong>Expected:</strong> {anomaly.expected}</p>
-                                                                        <p><strong>Actual:</strong> {anomaly.actual}</p>
-                                                                    </AlertDescription>
-                                                                </Alert>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Supplier Behavior */}
-                                                {insights.supplier_behavior && insights.supplier_behavior.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3">Supplier Behavior Patterns</h3>
-                                                        <div className="space-y-2">
-                                                            {insights.supplier_behavior.map((item, idx) => (
-                                                                <div
-                                                                    key={idx}
-                                                                    className={cn(
-                                                                        'p-3 rounded-lg border',
-                                                                        item.concern_level === 'high' && 'bg-red-50 border-red-200',
-                                                                        item.concern_level === 'medium' && 'bg-amber-50 border-amber-200',
-                                                                        item.concern_level === 'low' && 'bg-green-50 border-green-200',
-                                                                    )}
-                                                                >
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="font-semibold">{item.supplier}</span>
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className={cn(
-                                                                                'text-xs',
-                                                                                item.concern_level === 'high' && 'bg-red-100 text-red-700',
-                                                                                item.concern_level === 'medium' && 'bg-amber-100 text-amber-700',
-                                                                                item.concern_level === 'low' && 'bg-green-100 text-green-700',
-                                                                            )}
-                                                                        >
-                                                                            {item.concern_level}
-                                                                        </Badge>
+                                                    )}
+                                                    <div
+                                                        className={cn(
+                                                            'max-w-[85%] rounded-lg p-4',
+                                                            message.role === 'assistant'
+                                                                ? 'bg-muted/30 border prose prose-sm max-w-none dark:prose-invert prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-purple-300 prose-blockquote:bg-purple-50 dark:prose-blockquote:bg-purple-950/30 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded'
+                                                                : 'bg-primary text-primary-foreground',
+                                                            message.status === 'error' && 'border-destructive'
+                                                        )}
+                                                    >
+                                                        {message.role === 'assistant' ? (
+                                                            message.status === 'streaming' && !message.content ? (
+                                                                <div className="space-y-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Sparkles className="size-4 text-violet-500 animate-pulse" />
+                                                                        <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                                                                            Thinking...
+                                                                        </span>
                                                                     </div>
-                                                                    <p className="text-sm">{item.behavior}</p>
-                                                                    <p className="text-sm font-medium mt-1">Action: {item.action}</p>
+                                                                    <div className="space-y-2">
+                                                                        <Skeleton className="h-4 w-full" />
+                                                                        <Skeleton className="h-4 w-4/5" />
+                                                                        <Skeleton className="h-4 w-3/5" />
+                                                                    </div>
                                                                 </div>
-                                                            ))}
+                                                            ) : (
+                                                                <>
+                                                                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                                                                    {message.status === 'streaming' && (
+                                                                        <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />
+                                                                    )}
+                                                                </>
+                                                            )
+                                                        ) : (
+                                                            <p>{message.content}</p>
+                                                        )}
+                                                    </div>
+                                                    {message.role === 'user' && (
+                                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                                                            <User className="h-4 w-4 text-primary-foreground" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            <div ref={chatEndRef} />
+                                        </div>
+
+                                        {/* Follow-up Input - Styled like chat-input */}
+                                        {chatMessages.length > 0 && chatMessages.some(m => m.status === 'complete') && (
+                                            <div className="flex-shrink-0 pt-4 border-t">
+                                                <div className="group relative">
+                                                    {/* Rainbow gradient border effect */}
+                                                    <div
+                                                        className="absolute -inset-[1px] rounded-2xl opacity-0 blur-sm transition-opacity duration-300 group-focus-within:opacity-60"
+                                                        style={{
+                                                            background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
+                                                            backgroundSize: '200% 100%',
+                                                            animation: 'rainbow-shift 8s linear infinite',
+                                                        }}
+                                                    />
+                                                    <div className="relative flex items-center gap-3 rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm transition-all duration-200 group-focus-within:border-border group-focus-within:shadow-md">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Ask a follow-up question..."
+                                                            value={followUpQuestion}
+                                                            onChange={(e) => setFollowUpQuestion(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    askFollowUp();
+                                                                }
+                                                            }}
+                                                            disabled={followUpLoading || chatMessages.some(m => m.status === 'streaming')}
+                                                            className="min-h-[24px] flex-1 bg-transparent text-base leading-relaxed outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        />
+                                                        <div className="flex shrink-0 items-center">
+                                                            {(followUpLoading || chatMessages.some(m => m.status === 'streaming')) ? (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="icon"
+                                                                    variant="outline"
+                                                                    className="size-9 rounded-full"
+                                                                    onClick={() => abortControllerRef.current?.abort()}
+                                                                >
+                                                                    <Square className="size-4" fill="currentColor" />
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="icon"
+                                                                    className={cn(
+                                                                        'size-9 rounded-full transition-all',
+                                                                        followUpQuestion.trim()
+                                                                            ? 'bg-foreground text-background shadow-md hover:bg-foreground/90 hover:scale-105'
+                                                                            : 'bg-muted text-muted-foreground cursor-not-allowed'
+                                                                    )}
+                                                                    onClick={askFollowUp}
+                                                                    disabled={!followUpQuestion.trim()}
+                                                                >
+                                                                    <ArrowUp className="size-5" />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                )}
-
-                                                {/* Process Gaps */}
-                                                {insights.process_gaps && insights.process_gaps.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                                                            <AlertCircle className="h-5 w-5 text-orange-500" />
-                                                            Process Gaps Identified
-                                                        </h3>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            {insights.process_gaps.map((gap, idx) => (
-                                                                <Card key={idx} className="border-l-4 border-l-orange-500">
-                                                                    <CardContent className="p-4">
-                                                                        <h4 className="font-medium text-orange-900">{gap.gap}</h4>
-                                                                        <p className="text-sm text-gray-600 mt-1">Evidence: {gap.evidence}</p>
-                                                                        <p className="text-sm text-green-700 mt-2 font-medium">Fix: {gap.fix}</p>
-                                                                    </CardContent>
-                                                                </Card>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Questions to Investigate */}
-                                                {insights.questions_to_investigate && insights.questions_to_investigate.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                                                            <Lightbulb className="h-5 w-5 text-blue-500" />
-                                                            Questions to Investigate
-                                                        </h3>
-                                                        <ul className="space-y-2">
-                                                            {insights.questions_to_investigate.map((question, idx) => (
-                                                                <li key={idx} className="flex items-start gap-2 p-2 bg-blue-50 rounded border border-blue-100">
-                                                                    <span className="text-blue-600 font-bold">{idx + 1}.</span>
-                                                                    <span>{question}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-
-                                                {/* If This Continues */}
-                                                {insights.if_this_continues && (
-                                                    <Alert className="border-amber-300 bg-amber-50">
-                                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                                        <AlertTitle>If This Continues...</AlertTitle>
-                                                        <AlertDescription>{insights.if_this_continues}</AlertDescription>
-                                                    </Alert>
-                                                )}
-
-                                                {/* Quick Wins */}
-                                                {insights.quick_wins && insights.quick_wins.length > 0 && (
-                                                    <div>
-                                                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                                                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                                            Quick Wins
-                                                        </h3>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            {insights.quick_wins.map((win, idx) => (
-                                                                <Card key={idx} className="border-l-4 border-l-green-500 bg-green-50">
-                                                                    <CardContent className="p-4">
-                                                                        <p className="font-medium">{win.action}</p>
-                                                                        <p className="text-sm text-green-700 mt-1">Expected impact: {win.expected_impact}</p>
-                                                                    </CardContent>
-                                                                </Card>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                </div>
+                                                {/* CSS animation for rainbow effect */}
+                                                <style>{`
+                                                    @keyframes rainbow-shift {
+                                                        0% { background-position: 0% 50%; }
+                                                        100% { background-position: 200% 50%; }
+                                                    }
+                                                `}</style>
                                             </div>
                                         )}
                                     </CardContent>
