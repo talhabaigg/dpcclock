@@ -7,9 +7,10 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertCircleIcon, ArrowBigUp, CircleCheck, Cuboid, FileSpreadsheet, FileText, History, RotateCcw } from 'lucide-react';
+import { AlertCircleIcon, ArrowBigUp, CircleCheck, Cuboid, FileSpreadsheet, FileText, GitCompare, History, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import ComparisonTab from './show-partials/ComparisonTab';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
@@ -45,6 +46,7 @@ export default function RequisitionShow() {
             date_required: string;
             order_reference: string;
             status: string;
+            premier_po_id: string | null;
             supplier: { name: string };
             creator: { name: string };
             line_items: {
@@ -215,6 +217,10 @@ export default function RequisitionShow() {
                             <History className="mr-1 h-4 w-4" />
                             Log
                         </TabsTrigger>
+                        <TabsTrigger value="compare" className="flex flex-1 items-center space-x-2">
+                            <GitCompare className="mr-1 h-4 w-4" />
+                            Compare
+                        </TabsTrigger>
                     </TabsList>
                     <TabsContent value="items">
                         <Card className="m-0 mt-4 max-w-96 p-0 text-sm sm:max-w-full">
@@ -357,6 +363,9 @@ export default function RequisitionShow() {
                                 })}
                             </Table>
                         </Card>
+                    </TabsContent>
+                    <TabsContent value="compare">
+                        <ComparisonTab requisitionId={requisition.id} premierPoId={requisition.premier_po_id} />
                     </TabsContent>
                 </Tabs>
             </div>

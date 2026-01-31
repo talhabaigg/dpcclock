@@ -24,6 +24,9 @@ use App\Services\ExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
+use Illuminate\Support\Facades\Log;
+use App\Services\POComparisonService;
+use App\Services\PremierPurchaseOrderService;
 
 class PurchasingController extends Controller
 {
@@ -653,6 +656,55 @@ class PurchasingController extends Controller
 
     }
 
+    /**
+     * Get comparison data between local requisition and Premier PO
+     */
+    public function getComparison($id)
+    {
+        $requisition = Requisition::with('lineItems')->findOrFail($id);
 
+        if (!$requisition->premier_po_id) {
+            return response()->json([
+                'error' => 'This requisition has not been synced with Premier yet.',
+                'can_compare' => false,
+            ], 400);
+        }
 
+        try {
+            $comparisonService = new POComparisonService();
+            $comparison = $comparisonService->compare($requisition);
+
+            return response()->json([
+                'can_compare' => true,
+                ...$comparison,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('PO Comparison failed', [
+                'requisition_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to fetch comparison data: ' . $e->getMessage(),
+                'can_compare' => false,
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh comparison data (clear cache and re-fetch)
+     */
+    public function refreshComparison($id)
+    {
+        $requisition = Requisition::findOrFail($id);
+
+        if (!$requisition->premier_po_id) {
+            return response()->json(['error' => 'No Premier PO ID'], 400);
+        }
+
+        $premierService = new PremierPurchaseOrderService();
+        $premierService->clearCache($requisition->premier_po_id);
+
+        return $this->getComparison($id);
+    }
 }

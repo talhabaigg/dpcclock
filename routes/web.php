@@ -267,6 +267,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('requisition/excel/{requisition}', [PurchasingController::class, 'excelImport'])->name('requisition.excel');
     });
 
+    // PO Comparison Routes
+    Route::middleware('permission:requisitions.view')->group(function () {
+        Route::get('/requisition/{id}/compare', [PurchasingController::class, 'getComparison'])->name('requisition.compare');
+        Route::post('/requisition/{id}/compare/refresh', [PurchasingController::class, 'refreshComparison'])->name('requisition.compare.refresh');
+    });
+
     // ============================================
     // MATERIAL ITEMS MANAGEMENT
     // ============================================
