@@ -190,15 +190,22 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         }, 3000);
 
         const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
-        const onCostData = costData.map((code) => ({
-            cost_item: code.code,
-            cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
-            percent: code.pivot.variation_ratio / 100 || 0,
-            prelim_type: code.pivot.prelim_type || '',
-            description: code.description,
-        }));
+        const onCostData = costData.map((code) => {
+            const percentRaw = code.pivot?.variation_ratio;
+            const prelimTypeRaw = code.pivot?.prelim_type ?? '';
+            const prelimType = String(prelimTypeRaw).trim().toUpperCase();
+            const costType = costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '';
+            return {
+                cost_item: code.code,
+                cost_type: costType,
+                percent: (percentRaw ?? 0) / 100 || 0,
+                prelim_type: prelimType,
+                prelim_type_raw: prelimTypeRaw,
+                description: code.description,
+            };
+        });
 
-        const PrelimLab = onCostData.filter((item) => item.prelim_type === 'LAB');
+        const PrelimLab = onCostData.filter((item) => item.prelim_type.startsWith('LAB'));
         const baseAmount = parseFloat(genAmount);
 
         const newLines = PrelimLab.map((item, index) => {
@@ -231,15 +238,22 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         }, 3000);
 
         const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
-        const onCostData = costData.map((code) => ({
-            cost_item: code.code,
-            cost_type: costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '',
-            percent: code.pivot.variation_ratio / 100 || 0,
-            prelim_type: code.pivot.prelim_type || '',
-            description: code.description,
-        }));
+        const onCostData = costData.map((code) => {
+            const percentRaw = code.pivot?.variation_ratio;
+            const prelimTypeRaw = code.pivot?.prelim_type ?? '';
+            const prelimType = String(prelimTypeRaw).trim().toUpperCase();
+            const costType = costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '';
+            return {
+                cost_item: code.code,
+                cost_type: costType,
+                percent: (percentRaw ?? 0) / 100 || 0,
+                prelim_type: prelimType,
+                prelim_type_raw: prelimTypeRaw,
+                description: code.description,
+            };
+        });
 
-        const PrelimMat = onCostData.filter((item) => item.prelim_type === 'MAT');
+        const PrelimMat = onCostData.filter((item) => item.prelim_type.startsWith('MAT'));
         const baseAmount = parseFloat(genAmount);
 
         const newLines = PrelimMat.map((item, index) => {
@@ -384,9 +398,10 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                                 </label>
                                                 <Input
                                                     id="amount"
-                                                    type="number"
+                                                    type="text"
+                                                    inputMode="decimal"
                                                     value={genAmount}
-                                                    onChange={(e) => setGenAmount(e.target.value)}
+                                                    onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
                                                     placeholder="0.00"
                                                     className="h-12 border-2 text-center text-lg font-medium focus-visible:border-primary"
                                                 />

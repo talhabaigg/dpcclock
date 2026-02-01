@@ -4,61 +4,58 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CostType } from '../utils';
 
-interface Location {
-    id: number;
-    name: string;
-}
-
-interface LocationSearchEditorProps {
+interface CostTypeSearchEditorProps {
     value: string;
     onValueChange: (value: string) => void;
-    stopEditing: () => void;
-    locations: Location[];
+    costTypes: CostType[];
 }
 
-export function LocationSearchEditor({ value, onValueChange, stopEditing, locations = [] }: LocationSearchEditorProps) {
+export function CostTypeSearchEditor({ value, onValueChange, costTypes = [] }: CostTypeSearchEditorProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    const filteredLocations = locations.filter((location) =>
-        location.name.toLowerCase().includes(search.toLowerCase())
+    const filteredCostTypes = costTypes.filter((costType) =>
+        `${costType.value} ${costType.description}`.toLowerCase().includes(search.toLowerCase())
     );
 
-    const selectedLocation = locations.find((loc) => String(loc.id) === value);
+    const selectedCostType = costTypes.find((type) => type.value === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between border-0 bg-transparent hover:bg-transparent">
-                    {selectedLocation ? selectedLocation.name : 'Search Location'}
+                    {selectedCostType ? selectedCostType.description : 'Search Cost Type'}
                     <ChevronsUpDown className="opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0">
                 <Command>
                     <CommandInput
-                        placeholder="Search location..."
+                        placeholder="Search cost type..."
                         className="h-9"
                         value={search}
                         onValueChange={setSearch}
                     />
                     <CommandList>
-                        <CommandEmpty>No location found.</CommandEmpty>
+                        <CommandEmpty>No cost type found.</CommandEmpty>
                         <CommandGroup>
-                            {filteredLocations.map((location) => (
+                            {filteredCostTypes.map((costType) => (
                                 <CommandItem
-                                    key={location.id}
-                                    value={`${location.id} ${location.name}`}
+                                    key={costType.value}
+                                    value={`${costType.value} ${costType.description}`}
                                     onSelect={() => {
-                                        onValueChange(String(location.id));
+                                        onValueChange(costType.value);
                                         setSearch('');
                                         setOpen(false);
-                                        stopEditing();
                                     }}
                                 >
-                                    {location.name}
-                                    <Check className={cn('ml-auto', value === String(location.id) ? 'opacity-100' : 'opacity-0')} />
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{costType.value}</span>
+                                        <span className="text-xs text-muted-foreground">{costType.description}</span>
+                                    </div>
+                                    <Check className={cn('ml-auto', value === costType.value ? 'opacity-100' : 'opacity-0')} />
                                 </CommandItem>
                             ))}
                         </CommandGroup>

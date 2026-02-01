@@ -1,8 +1,9 @@
 import { ColDef } from 'ag-grid-community';
 import { CostCode } from '@/pages/purchasing/types';
-import { LineNumberRenderer } from './cellRenderers/LineNumberRenderer';
 import { ActionsCellRenderer } from './cellRenderers/ActionsCellRenderer';
-import { currencyFormatter, percentageFormatter, CostType } from './utils';
+import { currencyFormatter, CostType } from './utils';
+import { CostCodeSelector } from '@/pages/purchasing/costCodeSelector';
+import { CostTypeSearchEditor } from './cellEditors/CostTypeSearchEditor';
 
 export const createColumnDefs = (
     costCodes: CostCode[],
@@ -27,13 +28,11 @@ export const createColumnDefs = (
             flex: 2,
             minWidth: 200,
             editable: true,
-            cellEditor: 'agSelectCellEditor',
-            cellEditorParams: {
-                values: [...costCodes]
-                    .sort((a, b) => a.code.localeCompare(b.code))
-                    .map((code) => String(code.code)),
-            },
-
+            cellEditor: CostCodeSelector,
+            cellEditorParams: (params: any) => ({
+                value: params.value || '',
+                costCodes: costCodes,
+            }),
             valueFormatter: (params) => {
                 if (!params.value) return 'Select Cost Item...';
                 const costCode = costCodes.find((code) => code.code === params.value);
@@ -46,10 +45,12 @@ export const createColumnDefs = (
             flex: 1.5,
             minWidth: 160,
             editable: true,
-            cellEditor: 'agSelectCellEditor',
-            cellEditorParams: {
-                values: costTypes.map((type) => type.value),
-            },
+            cellEditor: CostTypeSearchEditor,
+            cellEditorParams: (params: any) => ({
+                value: params.value || '',
+                costTypes: costTypes,
+                onValueChange: params.onValueChange,
+            }),
             valueFormatter: (params) => {
                 if (!params.value) return 'Select Cost Type...';
                 const costType = costTypes.find((type) => type.value === params.value);

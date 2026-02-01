@@ -21,7 +21,6 @@ export const getGridOptions = (): GridOptions => {
             enableClickSelection: false,
         },
         singleClickEdit: true,
-        stopEditingWhenCellsLoseFocus: true,
         enableCellTextSelection: true,
         ensureDomOrder: true,
         animateRows: true,
@@ -30,11 +29,8 @@ export const getGridOptions = (): GridOptions => {
         suppressMenuHide: true,
         suppressContextMenu: false,
         enableBrowserTooltips: true,
-        autoSizeStrategy: {
-            type: 'fitGridWidth',
-            defaultMinWidth: 100,
-        },
         suppressHorizontalScroll: false,
+        popupParent: document.body,
     };
 };
 

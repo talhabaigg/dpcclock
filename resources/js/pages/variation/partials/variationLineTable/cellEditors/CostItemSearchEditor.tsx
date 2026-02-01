@@ -4,61 +4,60 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CostCode } from '@/pages/purchasing/types';
 
-interface Location {
-    id: number;
-    name: string;
-}
-
-interface LocationSearchEditorProps {
+interface CostItemSearchEditorProps {
     value: string;
     onValueChange: (value: string) => void;
-    stopEditing: () => void;
-    locations: Location[];
+    costCodes: CostCode[];
 }
 
-export function LocationSearchEditor({ value, onValueChange, stopEditing, locations = [] }: LocationSearchEditorProps) {
+export function CostItemSearchEditor({ value, onValueChange, costCodes = [] }: CostItemSearchEditorProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    const filteredLocations = locations.filter((location) =>
-        location.name.toLowerCase().includes(search.toLowerCase())
+    const sortedCostCodes = [...costCodes].sort((a, b) => a.code.localeCompare(b.code));
+
+    const filteredCostCodes = sortedCostCodes.filter((costCode) =>
+        `${costCode.code} ${costCode.description}`.toLowerCase().includes(search.toLowerCase())
     );
 
-    const selectedLocation = locations.find((loc) => String(loc.id) === value);
+    const selectedCostCode = costCodes.find((code) => code.code === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between border-0 bg-transparent hover:bg-transparent">
-                    {selectedLocation ? selectedLocation.name : 'Search Location'}
+                    {selectedCostCode ? selectedCostCode.code : 'Search Cost Item'}
                     <ChevronsUpDown className="opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0">
                 <Command>
                     <CommandInput
-                        placeholder="Search location..."
+                        placeholder="Search cost item..."
                         className="h-9"
                         value={search}
                         onValueChange={setSearch}
                     />
                     <CommandList>
-                        <CommandEmpty>No location found.</CommandEmpty>
+                        <CommandEmpty>No cost item found.</CommandEmpty>
                         <CommandGroup>
-                            {filteredLocations.map((location) => (
+                            {filteredCostCodes.map((costCode) => (
                                 <CommandItem
-                                    key={location.id}
-                                    value={`${location.id} ${location.name}`}
+                                    key={costCode.code}
+                                    value={`${costCode.code} ${costCode.description}`}
                                     onSelect={() => {
-                                        onValueChange(String(location.id));
+                                        onValueChange(costCode.code);
                                         setSearch('');
                                         setOpen(false);
-                                        stopEditing();
                                     }}
                                 >
-                                    {location.name}
-                                    <Check className={cn('ml-auto', value === String(location.id) ? 'opacity-100' : 'opacity-0')} />
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{costCode.code}</span>
+                                        <span className="text-xs text-muted-foreground text-wrap">{costCode.description}</span>
+                                    </div>
+                                    <Check className={cn('ml-auto', value === costCode.code ? 'opacity-100' : 'opacity-0')} />
                                 </CommandItem>
                             ))}
                         </CommandGroup>

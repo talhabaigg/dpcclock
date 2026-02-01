@@ -1,6 +1,6 @@
 import { AgGridReact } from 'ag-grid-react';
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import { ColDef, GridOptions, SelectCellEditor } from 'ag-grid-community';
+import { ColDef, GridOptions } from 'ag-grid-community';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
 import { LocationSearchEditor } from './cellEditors/LocationSearchEditor';
@@ -46,17 +46,16 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
                     minWidth: 200,
                     wrapText: true,
                     autoHeight: true,
-
                     editable: true,
-                    cellEditor: 'agSelectCellEditor',
-                    cellEditorParams: {
-                        values: [...locations]
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((loc) => String(loc.id)),
-                    },
-
+                    cellEditor: LocationSearchEditor,
+                    cellEditorParams: (params: any) => ({
+                        value: params.value || '',
+                        locations: [...locations].sort((a, b) => a.name.localeCompare(b.name)),
+                        onValueChange: params.onValueChange,
+                        stopEditing: params.stopEditing,
+                    }),
                     valueFormatter: (params) => {
-                        if (!params.value) return 'Select location...';  // placeholder text
+                        if (!params.value) return 'Select location...';
                         const location = locations.find((loc) => String(loc.id) === params.value);
                         return location ? location.name : params.value;
                     },
@@ -114,16 +113,14 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
                     },
                 },
                 singleClickEdit: true,
-                stopEditingWhenCellsLoseFocus: true,
                 enableCellTextSelection: true,
-                suppressRowClickSelection: true,
+                rowSelection: {
+                    mode: 'singleRow',
+                    enableClickSelection: false,
+                },
                 suppressMovableColumns: true,
                 headerHeight: 44,
                 rowHeight: 52,
-                autoSizeStrategy: {
-                    type: 'fitGridWidth',
-                    defaultMinWidth: 100,
-                },
                 popupParent: document.body,
                 onCellValueChanged: (event) => {
                     const gridApi = gridRef.current?.api;
