@@ -122,7 +122,7 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
                 headerHeight: 44,
                 rowHeight: 52,
                 popupParent: document.body,
-                onCellValueChanged: (event) => {
+                onCellValueChanged: () => {
                     const gridApi = gridRef.current?.api;
                     if (!gridApi) return;
 

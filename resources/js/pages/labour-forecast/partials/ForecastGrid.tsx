@@ -65,7 +65,7 @@ export const ForecastGrid = ({
     onOpenWeekCostBreakdown,
 }: ForecastGridProps) => {
     // Check if a parent row has child rows
-    const hasChildRows = useCallback((_parentId: string) => {
+    const hasChildRows = useCallback(() => {
         return true;
     }, []);
 

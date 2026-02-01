@@ -238,7 +238,7 @@ export function buildCostColumnDefs({
                     ],
                 },
                 ...forecastMonths.map((m, idx) => {
-                    const isLastMonth = idx === forecastMonths.length - 1;
+                    void (idx === forecastMonths.length - 1); // isLastMonth - kept for future use
                     const isOverlapMonth = displayMonths.includes(m);
                     const isCurrentMonth = isOverlapMonth && currentMonth && m === currentMonth;
                     const headerName = isCurrentMonth ? `↑ ${formatMonthHeader(m)}` : formatMonthHeader(m);
@@ -650,7 +650,7 @@ export function buildRevenueColumnDefs({
                     ],
                 },
                 ...forecastMonths.map((m, idx) => {
-                    const isLastMonth = idx === forecastMonths.length - 1;
+                    void (idx === forecastMonths.length - 1); // isLastMonth - kept for future use
                     const isOverlapMonth = displayMonths.includes(m);
                     const isCurrentMonth = isOverlapMonth && currentMonth && m === currentMonth;
                     const headerName = isCurrentMonth ? `↑ ${formatMonthHeader(m)}` : formatMonthHeader(m);

@@ -54,7 +54,7 @@ type PageProps = {
 };
 
 export default function PermissionsIndex() {
-    const { permissions, categories, corePermissions, flash } = usePage<PageProps>().props;
+    const { permissions, categories, flash } = usePage<PageProps>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [isCreateOpen, setIsCreateOpen] = useState(false);

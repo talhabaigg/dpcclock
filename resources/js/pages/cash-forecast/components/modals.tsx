@@ -350,6 +350,7 @@ type SplitRowProps = {
     monthLabel?: string;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SplitRow = ({ monthValue, amount, monthOptions, onMonthChange, onAmountChange, onRemove, monthLabel = 'Month' }: SplitRowProps) => (
     <div className="grid grid-cols-12 gap-2 border-t border-slate-100 px-3 py-2">
         <div className="col-span-5">

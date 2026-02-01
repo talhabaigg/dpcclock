@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAmount, formatMonthHeader, getCostItemLabel } from '../utils';
 import { SourceIndicator, DataSourceLegend } from './summary-cards';
 import type { MonthNode, CashOutSource, DataSource } from '../types';
-import { ChevronRight, Info, Settings2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 // Icons
 const ExpandIcon = ({ expanded }: { expanded: boolean }) => (
@@ -167,6 +166,7 @@ export const CostItemRow = ({
         : undefined;
 
     // Calculate source data for this cost item for a specific month
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const getMonthSource = (month: string): DataSource | 'mixed' | undefined => {
         if (flowType !== 'cash_out' || !cashOutSources) return undefined;
 

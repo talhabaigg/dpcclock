@@ -125,7 +125,7 @@ export const AllowanceConfigDialog = ({
                 template: template.id,
             }),
             {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 
                 allowances: allowanceConfig as any,
                 rdo_fares_travel: rdoFaresTravel,
                 rdo_site_allowance: rdoSiteAllowance,

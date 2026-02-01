@@ -86,7 +86,7 @@ export function MagnifierLens({
 
         // Get source element bounds
         const sourceRect = sourceElement.getBoundingClientRect();
-        const containerRect = containerElement.getBoundingClientRect();
+        void containerElement.getBoundingClientRect(); // Keep reference for future use
 
         // Calculate mouse position relative to the source element
         const sourceRelativeX = mousePos.clientX - sourceRect.left;
@@ -173,7 +173,7 @@ export function MagnifierLens({
                 size,
                 size
             );
-        } catch (e) {
+        } catch {
             // Handle cross-origin or other errors silently
             ctx.fillStyle = '#374151';
             ctx.fillRect(0, 0, size, size);

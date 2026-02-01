@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
-    AlertCircle,
     ArrowUpDown,
     Building2,
     CheckCircle2,
@@ -94,7 +93,7 @@ export default function LocationsList() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('companySelected') ?? null);
 
-    const { sortedItems: sortedLocations, handleSort, sort: sortConfig } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
+    const { sortedItems: sortedLocations, handleSort } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
 
     const handleCompanyChange = (value: string) => {
         setFilter(value);

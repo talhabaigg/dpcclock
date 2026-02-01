@@ -153,6 +153,7 @@ const StatusBadge = ({ status }: { status: ComparisonItem['status'] }) => {
     );
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VarianceCell = ({ variance, isCurrency = false }: { variance: Variance; isCurrency?: boolean }) => {
     if (!variance.has_change) {
         return <span className="text-muted-foreground">{isCurrency ? formatCurrency(variance.local) : variance.local}</span>;

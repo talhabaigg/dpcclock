@@ -23,15 +23,15 @@ type UseCashForecastDataProps = {
     costCodeDescriptions?: Record<string, string>;
 };
 
-export const useCashForecastData = ({
-    months,
-    cashInSources,
-    cashInAdjustments,
-    cashOutSources,
-    cashOutAdjustments,
-    costTypeByCostItem,
-    costCodeDescriptions = {},
-}: UseCashForecastDataProps) => {
+export const useCashForecastData = (props: UseCashForecastDataProps) => {
+    const {
+        months,
+        cashInSources,
+        cashInAdjustments,
+        cashOutSources,
+        cashOutAdjustments,
+        costCodeDescriptions = {},
+    } = props;
     // Calculate totals
     const totals = useMemo<CashFlowTotals>(() => {
         return months.reduce(

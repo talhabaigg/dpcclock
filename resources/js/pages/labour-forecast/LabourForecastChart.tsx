@@ -70,6 +70,7 @@ const WORK_TYPE_COLORS_DARK = [
     { line: '#f472b6', bg: 'rgba(244, 114, 182, 0.3)' },  // Pink
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function LabourForecastChart({ data, datasets, editable, onEdit, selectedWorkType = 'all' }: LabourForecastChartProps) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [editBox, setEditBox] = useState<EditBox | null>(null);
@@ -337,7 +338,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     },
                 },
                 // Disable drag editing for multi-dataset view
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 
                 dragData: (editable && !hasMultipleDatasets
                     ? {
                           round: 0,

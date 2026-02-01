@@ -96,7 +96,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                             });
                             break;
 
-                        case 'error':
+                        case 'error': {
                             hasError = true;
                             const errorMessage = new Error(
                                 event.data.error || 'An error occurred'
@@ -115,6 +115,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                             );
                             onError?.(errorMessage);
                             break;
+                        }
                     }
                 }
 

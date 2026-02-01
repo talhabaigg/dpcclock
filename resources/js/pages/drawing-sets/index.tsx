@@ -1,12 +1,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { format } from 'date-fns';
 import Echo from 'laravel-echo';
 import {
     AlertCircle,
@@ -463,16 +461,6 @@ export default function DrawingSetsIndex() {
                                             </div>
                                         ) : (
                                             items.map((set) => {
-                                                const progress =
-                                                    set.page_count > 0
-                                                        ? Math.round(
-                                                              ((set.successful_sheets_count +
-                                                                  set.sheets_needing_review_count) /
-                                                                  set.page_count) *
-                                                                  100
-                                                          )
-                                                        : 0;
-
                                                 return (
                                                     <div
                                                         key={set.id}

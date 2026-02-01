@@ -96,12 +96,13 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         updateStatus('processing');
                         break;
 
-                    case 'conversation.item.input_audio_transcription.completed':
+                    case 'conversation.item.input_audio_transcription.completed': {
                         // User's speech transcribed
                         const transcript = message.transcript || '';
                         setUserTranscript(transcript);
                         onTranscript?.(transcript, true);
                         break;
+                    }
 
                     case 'response.audio.delta':
                         // Audio is being streamed - this means AI is speaking
@@ -113,26 +114,28 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         console.log('Audio output completed');
                         break;
 
-                    case 'response.audio_transcript.delta':
+                    case 'response.audio_transcript.delta': {
                         // AI is speaking - accumulate transcript
                         const delta = message.delta || '';
                         setAiResponse((prev) => prev + delta);
                         updateStatus('processing'); // AI is responding
                         break;
+                    }
 
-                    case 'response.audio_transcript.done':
+                    case 'response.audio_transcript.done': {
                         // AI finished speaking this segment
                         const fullTranscript = message.transcript || '';
                         setAiResponse(fullTranscript);
                         onResponse?.(fullTranscript);
                         break;
+                    }
 
                     case 'response.output_item.done':
                         // An output item (audio/text) completed
                         console.log('Output item done:', message.item?.type);
                         break;
 
-                    case 'response.function_call_arguments.done':
+                    case 'response.function_call_arguments.done': {
                         // Tool call completed from AI
                         const toolCallId = message.call_id;
                         const toolName = message.name;
@@ -185,6 +188,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                             console.error('Tool execution error:', toolError);
                         }
                         break;
+                    }
 
                     case 'response.done':
                         // Full response completed
@@ -193,12 +197,13 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         setAiResponse('');
                         break;
 
-                    case 'error':
+                    case 'error': {
                         console.error('Realtime API error:', message.error);
                         const error = new Error(message.error?.message || 'Unknown error');
                         onError?.(error);
                         updateStatus('error');
                         break;
+                    }
                 }
             } catch (err) {
                 console.error('Error parsing data channel message:', err);

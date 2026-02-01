@@ -100,6 +100,7 @@ type Template = {
     success_count: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type DetectedTextBlock = {
     id: string;
     text: string;

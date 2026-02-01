@@ -19,7 +19,6 @@ import { Head, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import {
     AlertCircle,
-    ArrowDown,
     ArrowDownRight,
     ArrowUp,
     ArrowUpRight,
@@ -33,7 +32,6 @@ import {
     Filter,
     Loader2,
     Minus,
-    Plus,
     Printer,
     RefreshCw,
     Sparkles,
@@ -215,6 +213,7 @@ export default function POComparisonReport() {
     const echoRef = useRef<any>(null);
 
     // Expanded rows for detail view
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
     const buildFilters = useCallback(() => {

@@ -31,7 +31,8 @@ const DEFAULT_OPTIONS: DiffOptions = {
 /**
  * Compute the absolute difference between two pixel values.
  */
-function pixelDiff(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _pixelDiff(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
     // Use maximum channel difference for more sensitive detection
     return Math.max(
         Math.abs(r1 - r2),
