@@ -337,7 +337,8 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     },
                 },
                 // Disable drag editing for multi-dataset view
-                dragData: editable && !hasMultipleDatasets
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                dragData: (editable && !hasMultipleDatasets
                     ? {
                           round: 0,
                           showTooltip: true,
@@ -359,7 +360,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                               onEdit(point.weekKey, Math.max(0, Math.round(newY)));
                           },
                       }
-                    : false,
+                    : false) as any,
             },
             // Disable click editing for multi-dataset view
             onClick: !hasMultipleDatasets ? (_evt: any, elements: any[], chart: any) => {

@@ -543,7 +543,7 @@ export default function QaStageDrawingShow() {
             }
             return false;
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
         [drawing.id], // Intentionally exclude alignmentTool to prevent loops
     );
 
@@ -574,7 +574,7 @@ export default function QaStageDrawingShow() {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [alignmentTool.isAligned, alignmentTool.transform.cssTransform, compareRevisionId]);
 
     // Load alignment when candidate revision changes
@@ -810,7 +810,7 @@ export default function QaStageDrawingShow() {
             }, 100);
             return () => clearTimeout(timeoutId);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [diffCanvasVersion, showCompareOverlay]);
 
     // Load and render candidate PDF for overlay comparison

@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Check, Copy, Download, Image, RefreshCw, Sparkles, User } from 'lucide-react';
+import { Check, Copy, Download, Image as ImageIcon, RefreshCw, Sparkles, User } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -834,7 +834,7 @@ function StreamingIndicator({ forceTool }: { forceTool?: string }) {
             <div className="space-y-4">
                 {/* Animated generating image text */}
                 <div className="flex items-center gap-2">
-                    <Image className="size-4 text-pink-500 animate-pulse" />
+                    <ImageIcon className="size-4 text-pink-500 animate-pulse" />
                     <span className="bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
                         Generating image...
                     </span>
@@ -861,7 +861,7 @@ function StreamingIndicator({ forceTool }: { forceTool?: string }) {
                         <div className="relative size-12">
                             <div className="absolute inset-0 rounded-full border-2 border-pink-500/20" />
                             <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-pink-500 animate-spin" />
-                            <Image className="absolute inset-0 m-auto size-5 text-pink-500/60" />
+                            <ImageIcon className="absolute inset-0 m-auto size-5 text-pink-500/60" />
                         </div>
                         <span className="text-xs text-muted-foreground">Creating your image...</span>
                     </div>

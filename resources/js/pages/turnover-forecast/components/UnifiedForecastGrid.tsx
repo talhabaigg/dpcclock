@@ -328,7 +328,7 @@ export function UnifiedForecastGrid({
 
     // Get row ID for stable rendering
     const getRowId = useCallback((params: GetRowIdParams) => {
-        return (params.data as UnifiedRow)?.id ?? `row-${params.rowIndex}`;
+        return (params.data as UnifiedRow)?.id ?? `row-${params.level}-${Date.now()}`;
     }, []);
 
     // Get row height - labour rows need more space

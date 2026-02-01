@@ -58,6 +58,7 @@ interface PageProps {
     payRateTemplates: PayRateTemplate[];
     payCategories: PayCategory[];
     flash: { success?: string; error?: string };
+    [key: string]: unknown;
 }
 
 export default function PayRateTemplatesIndex() {

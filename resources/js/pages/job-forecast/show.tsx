@@ -243,7 +243,11 @@ const ShowJobForecastPage = ({
 
     const handleChartOpen = useCallback(
         (ctx: ChartContext) => {
-            setChartCtx({ ...ctx, editable: ctx.editable && !isEditingLocked });
+            if (ctx.open) {
+                setChartCtx({ ...ctx, editable: ctx.editable && !isEditingLocked });
+            } else {
+                setChartCtx(ctx);
+            }
         },
         [isEditingLocked],
     );

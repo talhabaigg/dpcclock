@@ -311,7 +311,7 @@ export const useWaterfallData = ({
 
                     const mappedType = costTypeByCostItem[costItemCode] ?? null;
                     const costType =
-                        mappedType && allowedTypes.has(mappedType) && mappedType !== 'REV'
+                        mappedType && allowedTypes.has(mappedType as (typeof WATERFALL_ORDER)[number]) && mappedType !== 'REV'
                             ? mappedType
                             : 'UNM';
                     sums.set(costType, (sums.get(costType) ?? 0) - item.total);

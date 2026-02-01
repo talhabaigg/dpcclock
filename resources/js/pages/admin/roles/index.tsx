@@ -61,14 +61,14 @@ export default function RolesIndex() {
     const [editingRole, setEditingRole] = useState<Role | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<Role | null>(null);
 
-    const createForm = useForm({
+    const createForm = useForm<{ name: string; permissions: string[] }>({
         name: '',
-        permissions: [] as string[],
+        permissions: [],
     });
 
-    const editForm = useForm({
+    const editForm = useForm<{ name: string; permissions: string[] }>({
         name: '',
-        permissions: [] as string[],
+        permissions: [],
     });
 
     const handleCreate = (e: React.FormEvent) => {
@@ -110,9 +110,9 @@ export default function RolesIndex() {
     const togglePermission = (form: typeof createForm | typeof editForm, permission: string) => {
         const current = form.data.permissions;
         if (current.includes(permission)) {
-            form.setData('permissions', current.filter((p) => p !== permission));
+            form.setData({ ...form.data, permissions: current.filter((p) => p !== permission) });
         } else {
-            form.setData('permissions', [...current, permission]);
+            form.setData({ ...form.data, permissions: [...current, permission] });
         }
     };
 
@@ -120,9 +120,9 @@ export default function RolesIndex() {
         const categoryPerms = permissions[category]?.map((p) => p.name) || [];
         if (select) {
             const newPerms = [...new Set([...form.data.permissions, ...categoryPerms])];
-            form.setData('permissions', newPerms);
+            form.setData({ ...form.data, permissions: newPerms });
         } else {
-            form.setData('permissions', form.data.permissions.filter((p) => !categoryPerms.includes(p)));
+            form.setData({ ...form.data, permissions: form.data.permissions.filter((p) => !categoryPerms.includes(p)) });
         }
     };
 

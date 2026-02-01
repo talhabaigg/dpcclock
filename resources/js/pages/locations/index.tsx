@@ -94,7 +94,7 @@ export default function LocationsList() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('companySelected') ?? null);
 
-    const { sortedItems: sortedLocations, handleSort, sortConfig } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
+    const { sortedItems: sortedLocations, handleSort, sort: sortConfig } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
 
     const handleCompanyChange = (value: string) => {
         setFilter(value);

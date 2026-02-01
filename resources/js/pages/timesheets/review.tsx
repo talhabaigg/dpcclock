@@ -91,7 +91,7 @@ const ReviewTimesheets = ({ weekEnding, locations, selectedLocation, days, emplo
                     selectedOption={selectedLocation}
                 />
             </div>
-            <ReviewTimesheetGrid days={days} employees={employees} selectedLocation={selectedLocation} flash={flash} />
+            <ReviewTimesheetGrid days={days} employees={employees} flash={flash} />
         </AppLayout>
     );
 };

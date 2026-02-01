@@ -6,6 +6,7 @@ interface PageProps {
     auth: {
         permissions: string[];
     };
+    [key: string]: unknown;
 }
 
 const Dashboard = () => {

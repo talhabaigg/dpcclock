@@ -325,7 +325,7 @@ export function useDiffOverlay(
             setState(prev => ({ ...prev, diffResult: null }));
             debouncedRecompute();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [opts.scale]); // Only depend on scale, not on state.showDiff or debouncedRecompute to avoid loops
 
     // Cleanup

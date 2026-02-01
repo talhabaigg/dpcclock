@@ -101,7 +101,7 @@ export const buildLabourForecastColumnDefs = (onCostClick?: (locationId: number,
             sortable: true,
             cellClass: 'text-right font-medium',
             headerClass: 'ag-right-aligned-header',
-            cellRenderer: (params: ValueGetterParams) => {
+            cellRenderer: (params: ICellRendererParams) => {
                 const value = params.value;
                 const locationId = params.data?.id;
                 const locationName = params.data?.name;
