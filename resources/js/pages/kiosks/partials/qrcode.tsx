@@ -21,7 +21,7 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get('/retrieve-kiosk-token');
+            const response = await axios.get(`/retrieve-kiosk-token?kioskId=${kioskId}`);
             const newToken = response.data.token;
 
             if (newToken !== token) {

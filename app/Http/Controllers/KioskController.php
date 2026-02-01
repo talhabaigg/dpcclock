@@ -286,18 +286,18 @@ class KioskController extends Controller
     public function validateToken($kioskId, Request $request)
     {
         $token = $request->get('token');
-        // dd($token);
-        $cachedToken = cache()->get("kiosk_token:$token");
-        // dd($cachedToken);
-        if ($token === ($cachedToken['token'] ?? null)) {
-            // Mark the token as validated by setting it in the session or a cookie
-            $kioskUser = User::find(2);
 
-            if (!$kioskUser instanceof \Illuminate\Contracts\Auth\Authenticatable) {
-                return response()->json(['message' => 'No kiosk user found'], 404);
-            }
-            Auth::login(user: $kioskUser);
-            // Redirect to the kiosk resource page after successful validation
+        // Token is now scoped to kiosk
+        $cachedToken = cache()->get("kiosk_token:{$kioskId}:{$token}");
+
+        if ($token === ($cachedToken['token'] ?? null)) {
+            // Store kiosk access in session - no user login needed
+            Session::put('kiosk_access', [
+                'kiosk_id' => (int) $kioskId,
+                'validated_at' => now(),
+                'expires_at' => now()->addMinutes(30),
+            ]);
+
             return redirect()->route('kiosks.show', ['kiosk' => $kioskId]);
         }
 

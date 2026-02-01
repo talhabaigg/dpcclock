@@ -91,6 +91,7 @@ class KioskAuthController extends Controller
 
     public function validatePin($kioskId, $employeeId, Request $request)
     {
+        // Frontend sends database IDs for this route
         $employee = Employee::findOrFail($employeeId);
         $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
 

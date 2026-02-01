@@ -149,19 +149,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.create');
 
     // ============================================
-    // KIOSK MANAGEMENT
+    // KIOSK MANAGEMENT (Admin routes - require auth)
     // ============================================
     Route::middleware('permission:kiosks.view')->group(function () {
-        Route::resource('kiosks', KioskController::class)->names('kiosks');
+        Route::get('kiosks', [KioskController::class, 'index'])->name('kiosks.index');
         Route::resource('clocks', ClockController::class)->names('clocks');
-        Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
-        Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
-        Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
-            return redirect()->route('kiosks.show', ['kiosk' => $kioskId]);
-        });
-        Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskAuthController::class, 'validatePin'])->name('kiosk.validate-pin');
-        Route::get('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'showResetPinPage'])->name('kiosk.auth.reset-pin');
-        Route::post('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'resetPin'])->name('kiosk.auth.reset-pin.post');
     });
     Route::get('/kiosks/{kioskId}/employees/sync', [KioskController::class, 'syncEmployees'])->name('kiosks.employees.sync')
         ->middleware('permission:kiosks.sync');
@@ -669,6 +661,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validateToken'])->name('kiosk.validateToken');
+
+// ============================================
+// KIOSK ACCESS ROUTES (QR code scanned users + authenticated admins)
+// ============================================
+Route::middleware('kiosk.access')->group(function () {
+    Route::get('kiosks/{kiosk}', [KioskController::class, 'show'])->name('kiosks.show');
+    Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
+    Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
+    Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
+        $kiosk = \App\Models\Kiosk::where('eh_kiosk_id', $kioskId)->first();
+        return redirect()->route('kiosks.show', ['kiosk' => $kiosk?->id ?? $kioskId]);
+    });
+    Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskAuthController::class, 'validatePin'])->name('kiosk.validate-pin');
+    Route::get('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'showResetPinPage'])->name('kiosk.auth.reset-pin');
+    Route::post('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'resetPin'])->name('kiosk.auth.reset-pin.post');
+});
 
 Route::get('/kiosk', function () {
     $employees = Employee::all();

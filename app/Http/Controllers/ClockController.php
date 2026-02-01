@@ -797,53 +797,59 @@ class ClockController extends Controller
     }
 
 
-    public function generateKioskToken()
+    public function generateKioskToken(Request $request)
     {
-        $token = Str::random(32); // Generate a random 32-character token
-        $expiresAt = now('Australia/Brisbane')->addMinutes(2); // Set expiration time to 30 minutes from now
+        $kioskId = $request->query('kioskId');
+        if (!$kioskId) {
+            return response()->json(['error' => 'kioskId is required'], 400);
+        }
 
-        // Save the token in cache with the key 'kiosk_token:{token}', which will expire in 30 minutes
-        Cache::put("kiosk_token:$token", [
+        $token = Str::random(32);
+        $expiresAt = now('Australia/Brisbane')->addMinutes(5);
+
+        // Scope token to specific kiosk
+        Cache::put("kiosk_token:{$kioskId}:{$token}", [
             'token' => $token,
+            'kiosk_id' => $kioskId,
             'expires_at' => $expiresAt,
-        ], $expiresAt); // Cache expires in 30 minutes (considering the timezone)
+        ], $expiresAt);
 
-        // Save the latest token in cache to track which token to use
-        Cache::put('kiosk_token_latest', $token, $expiresAt); // Cache the latest token
+        // Track latest token per kiosk (not global)
+        Cache::put("kiosk_token_latest:{$kioskId}", $token, $expiresAt);
 
         return response()->json(['token' => $token]);
     }
 
 
-    public function retrieveKioskToken()
+    public function retrieveKioskToken(Request $request)
     {
-        // Retrieve the latest token from the cache
-        $latestToken = Cache::get('kiosk_token_latest');
+        $kioskId = $request->query('kioskId');
+        if (!$kioskId) {
+            return response()->json(['error' => 'kioskId is required'], 400);
+        }
+
+        // Retrieve the latest token for this specific kiosk
+        $latestToken = Cache::get("kiosk_token_latest:{$kioskId}");
 
         if ($latestToken) {
-            // Retrieve the cached token using the latest token as the key
-            $cachedToken = Cache::get("kiosk_token:$latestToken");
+            $cachedToken = Cache::get("kiosk_token:{$kioskId}:{$latestToken}");
 
             if ($cachedToken) {
-                // Convert expiration time to a Carbon instance with timezone support
                 $expiresAt = Carbon::parse($cachedToken['expires_at'])->setTimezone('Australia/Brisbane');
-                $now = now('Australia/Brisbane'); // Ensure we're comparing time in the same timezone
+                $now = now('Australia/Brisbane');
 
-                // Check if the token will expire in less than 1 minute (60 seconds)
                 $diffInSeconds = $expiresAt->diffInSeconds($now);
 
                 // If the token will expire in less than 1 minute, generate a new one
                 if ($diffInSeconds <= 60 && $diffInSeconds >= 0) {
-                    return $this->generateKioskToken();
+                    return $this->generateKioskToken($request);
                 }
 
-                // Return the cached token if it's still valid
                 return response()->json(['token' => $cachedToken['token']]);
             }
         }
 
-        // If no token exists or it's expired, generate a new one
-        return $this->generateKioskToken();
+        return $this->generateKioskToken($request);
     }
     public function viewTimesheet(Request $request)
     {
