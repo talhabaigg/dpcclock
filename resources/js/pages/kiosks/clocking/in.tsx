@@ -40,7 +40,7 @@ export default function ClockIn() {
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
         setShowProcessing(true);
-        form.post(route('clocks.store'), {
+        form.post(route('clocks.in'), {
             onSuccess: () => {
                 setClockedIn(true);
                 setShowProcessing(false);

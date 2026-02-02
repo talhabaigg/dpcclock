@@ -670,6 +670,7 @@ Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validate
 // ============================================
 Route::middleware('kiosk.access')->group(function () {
     Route::get('kiosks/{kiosk}', [KioskController::class, 'show'])->name('kiosks.show');
+    Route::post('/clock/in', [ClockController::class, 'store'])->name('clocks.in');
     Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
