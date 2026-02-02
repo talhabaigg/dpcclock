@@ -23,6 +23,15 @@ class Requisition extends Model
         'is_template',
         'order_reference',
         'premier_po_id',
+        'submitted_at',
+        'processed_at',
+        'submitted_by',
+        'processed_by',
+    ];
+
+    protected $casts = [
+        'submitted_at' => 'datetime',
+        'processed_at' => 'datetime',
     ];
 
     protected static function booted()
@@ -65,6 +74,16 @@ class Requisition extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
+    }
+
+    public function submitter()
+    {
+        return $this->belongsTo(User::class, 'submitted_by', 'id');
+    }
+
+    public function processor()
+    {
+        return $this->belongsTo(User::class, 'processed_by', 'id');
     }
     public function getActivitylogOptions(): LogOptions
     {

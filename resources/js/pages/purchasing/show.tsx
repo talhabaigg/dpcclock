@@ -21,6 +21,7 @@ import {
     ChevronRight,
     CircleCheck,
     CirclePlus,
+    Clock,
     Copy,
     Cuboid,
     Edit3,
@@ -39,6 +40,7 @@ import {
     Send,
     Trash2,
     User,
+    UserCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -65,9 +67,14 @@ export default function RequisitionShow() {
             order_reference: string;
             status: string;
             premier_po_id: string | null;
+            submitted_at: string | null;
+            processed_at: string | null;
+            created_at: string;
             location: { name: string };
             supplier: { name: string };
             creator: { name: string };
+            submitter: { name: string } | null;
+            processor: { name: string } | null;
             line_items: {
                 id: number;
                 code: string;
@@ -229,6 +236,22 @@ export default function RequisitionShow() {
         }
     }, []);
 
+    // Format datetime for display
+    const formatDateTime = (dateString: string | null) => {
+        if (!dateString) return null;
+        try {
+            return new Date(dateString).toLocaleString('en-AU', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        } catch {
+            return null;
+        }
+    };
+
     // Detail items
     const detailItems = [
         { icon: Building2, label: 'Project', value: requisition.location?.name },
@@ -239,6 +262,11 @@ export default function RequisitionShow() {
         { icon: FileText, label: 'Reference', value: requisition.order_reference },
         { icon: Calendar, label: 'Required', value: requisition.date_required },
         { icon: User, label: 'Created By', value: requisition.creator?.name },
+        { icon: Clock, label: 'Created At', value: formatDateTime(requisition.created_at) },
+        { icon: UserCheck, label: 'Submitted By', value: requisition.submitter?.name },
+        { icon: Clock, label: 'Submitted At', value: formatDateTime(requisition.submitted_at) },
+        { icon: UserCheck, label: 'Processed By', value: requisition.processor?.name },
+        { icon: Clock, label: 'Processed At', value: formatDateTime(requisition.processed_at) },
     ];
 
     return (

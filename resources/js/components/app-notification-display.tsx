@@ -3,6 +3,7 @@ import { Bell, X } from 'lucide-react';
 import { useCallback } from 'react';
 import JobForecastStatusNotification from './notification-components/job-forecast-status-notification';
 import { NotificationProps } from './notification-components/Notification';
+import RequisitionSentToOfficeNotification from './notification-components/requisition-sent-to-office-notification';
 import SyncNotification from './notification-components/sync-notification';
 import { Button } from './ui/button';
 
@@ -50,6 +51,15 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
                     case 'LabourForecastStatus':
                         return (
                             <JobForecastStatusNotification
+                                key={notification.id}
+                                notification={notification}
+                                onDismiss={handleDismiss}
+                            />
+                        );
+
+                    case 'RequisitionSentToOffice':
+                        return (
+                            <RequisitionSentToOfficeNotification
                                 key={notification.id}
                                 notification={notification}
                                 onDismiss={handleDismiss}

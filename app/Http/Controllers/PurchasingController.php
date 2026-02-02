@@ -27,6 +27,9 @@ use Spatie\Activitylog\Models\Activity;
 use Illuminate\Support\Facades\Log;
 use App\Services\POComparisonService;
 use App\Services\PremierPurchaseOrderService;
+use App\Notifications\RequisitionSentToOfficeNotification;
+use App\Models\User;
+use Illuminate\Support\Facades\Notification;
 
 class PurchasingController extends Controller
 {
@@ -293,7 +296,7 @@ class PurchasingController extends Controller
 
     public function show($id)
     {
-        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator')->withSum('lineItems', 'total_cost')->findOrFail($id);
+        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator', 'submitter', 'processor')->withSum('lineItems', 'total_cost')->findOrFail($id);
         $requisitionItemIds = $requisition->lineItems()->pluck('id');
         $activities = Activity::query()
             ->with('causer')
@@ -477,6 +480,12 @@ class PurchasingController extends Controller
         if (!$requisition->po_number) {
             $next_num = $generatePONumberService->generate($requisition);
         }
+
+        // Track who processed the requisition and when
+        $requisition->processed_at = now();
+        $requisition->processed_by = auth()->id();
+        $requisition->save();
+
         $excelService = new ExcelExportService();
         $fileName = $excelService->generateCsv($requisition);
         activity()
@@ -510,6 +519,12 @@ class PurchasingController extends Controller
         if (!$requisition->po_number) {
             $generatePONumberService->generate($requisition);
         }
+
+        // Track who processed the requisition and when
+        $requisition->processed_at = now();
+        $requisition->processed_by = auth()->id();
+        $requisition->save();
+
         $authService = new PremierAuthenticationService();
         $token = $authService->getAccessToken();
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
@@ -539,13 +554,15 @@ class PurchasingController extends Controller
 
     public function sendToOffice($id)
     {
-        $requisition = Requisition::findOrFail($id);
+        $requisition = Requisition::with(['location', 'supplier', 'lineItems'])->findOrFail($id);
 
         if ($requisition->status !== 'pending') {
             return redirect()->back()->with('error', 'Requisition must be in pending status to send to office.');
         }
 
         $requisition->status = 'office_review';
+        $requisition->submitted_at = now();
+        $requisition->submitted_by = auth()->id();
         $requisition->save();
 
         activity()
@@ -553,6 +570,10 @@ class PurchasingController extends Controller
             ->event('sent to office')
             ->causedBy(auth()->user())
             ->log("Requisition #{$requisition->id} was sent to office for review.");
+
+        // Send notification to backoffice users
+        $backofficeUsers = User::role('backoffice')->get();
+        Notification::send($backofficeUsers, new RequisitionSentToOfficeNotification($requisition, auth()->user()));
 
         return redirect()->back()->with('success', 'Requisition sent to office for review.');
     }
