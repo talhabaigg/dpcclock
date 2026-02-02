@@ -316,6 +316,20 @@ class TurnoverForecastController extends Controller
                 $lastSubmittedAt = $currentJobForecast->submitted_at?->toIso8601String();
             }
 
+            // Calculate sum of all actuals + forecasts (preferring actuals per month)
+            // This helps identify discrepancies with total_contract_value
+            $allMonthsSet = array_unique(array_merge(
+                array_keys($revenueActuals),
+                array_keys($revenueForecast)
+            ));
+            $calculatedTotalRevenue = 0;
+            foreach ($allMonthsSet as $month) {
+                $actualVal = $revenueActuals[$month] ?? 0;
+                $forecastVal = $revenueForecast[$month] ?? 0;
+                // Prefer actual over forecast
+                $calculatedTotalRevenue += ($actualVal != 0) ? $actualVal : $forecastVal;
+            }
+
             // Determine company from eh_parent_id (cast to int for strict match comparison)
             $company = match ((int) $location->eh_parent_id) {
                 1198645 => 'GRE',
@@ -340,6 +354,8 @@ class TurnoverForecastController extends Controller
                 'claimed_to_date' => (float) $claimedToDate,
                 'revenue_contract_fy' => (float) $revenueContractFY,
                 'total_contract_value' => (float) $totalContractValue,
+                'calculated_total_revenue' => (float) $calculatedTotalRevenue,
+                'revenue_variance' => (float) ($calculatedTotalRevenue - $totalContractValue),
                 'remaining_revenue_value_fy' => (float) $remainingRevenueValueFY,
                 'remaining_order_book' => (float) $remainingOrderBook,
                 // Cost fields
@@ -447,6 +463,9 @@ class TurnoverForecastController extends Controller
                 default => 'not_started',
             };
 
+            // For forecast projects, calculated total is just sum of all forecasts
+            $calculatedTotalRevenue = array_sum($revenueForecast);
+
             $combinedData[] = [
                 'id' => $project->id,
                 'type' => 'forecast_project',
@@ -461,6 +480,8 @@ class TurnoverForecastController extends Controller
                 'current_estimate_revenue' => 0,
                 'revenue_contract_fy' => (float) $revenueContractFY,
                 'total_contract_value' => (float) $totalContractValue,
+                'calculated_total_revenue' => (float) $calculatedTotalRevenue,
+                'revenue_variance' => (float) ($calculatedTotalRevenue - $totalContractValue),
                 'remaining_revenue_value_fy' => (float) $remainingRevenueValueFY,
                 'remaining_order_book' => (float) $remainingOrderBook,
                 // Cost fields

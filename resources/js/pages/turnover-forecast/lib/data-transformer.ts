@@ -23,6 +23,8 @@ export type TurnoverRow = {
     claimed_to_date: number;
     revenue_contract_fy: number;
     total_contract_value: number;
+    calculated_total_revenue: number;
+    revenue_variance: number;
     remaining_revenue_value_fy: number;
     remaining_order_book: number;
     // Cost fields

@@ -2,11 +2,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, Filter } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Filter, HelpCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 import { UnifiedForecastGrid, type ViewMode } from './components/UnifiedForecastGrid';
@@ -16,6 +17,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Turnover Forecast', href: '/tur
 
 const STORAGE_KEY = 'turnover-forecast-excluded-jobs';
 const GRID_HEIGHT_KEY = 'turnover-forecast-grid-height';
+const SELECTED_FY_KEY = 'turnover-forecast-selected-fy';
 
 type TurnoverForecastProps = {
     data: TurnoverRow[];
@@ -95,10 +97,21 @@ export default function TurnoverForecastIndex({
     }, []);
 
     const [selectedFY, setSelectedFY] = useState<string>(() => {
+        try {
+            const stored = localStorage.getItem(SELECTED_FY_KEY);
+            if (stored) return stored;
+        } catch {
+            // Ignore storage errors
+        }
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
         return currentMonth >= 7 ? currentYear.toString() : (currentYear - 1).toString();
     });
+
+    // Save selected FY to localStorage
+    useEffect(() => {
+        localStorage.setItem(SELECTED_FY_KEY, selectedFY);
+    }, [selectedFY]);
 
     const goToPreviousFY = () => {
         if (selectedFY === 'all') return;
@@ -156,6 +169,8 @@ export default function TurnoverForecastIndex({
                 acc.revenueContractFY += safeNumber(row.revenue_contract_fy);
                 acc.costContractFY += safeNumber(row.cost_contract_fy);
                 acc.totalContractValue += safeNumber(row.total_contract_value);
+                acc.calculatedTotalRevenue += safeNumber(row.calculated_total_revenue);
+                acc.revenueVariance += safeNumber(row.revenue_variance);
 
                 // For each month, prefer actuals over forecasts
                 filteredMonths.forEach((month) => {
@@ -180,6 +195,8 @@ export default function TurnoverForecastIndex({
                 revenueContractFY: 0,
                 costContractFY: 0,
                 totalContractValue: 0,
+                calculatedTotalRevenue: 0,
+                revenueVariance: 0,
                 completedTurnoverYTD: 0,
                 forecastRevenueYTG: 0,
             }
@@ -194,6 +211,32 @@ export default function TurnoverForecastIndex({
     const turnoverTargetFYTotal = filteredMonths.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
     const remainingTargetToAchieve = Math.max(turnoverTargetFYTotal - totalFY, 0);
     const targetBaseline = turnoverTargetFYTotal > 0 ? turnoverTargetFYTotal : totalFY;
+
+    // Debug: Log jobs with revenue variance for investigation
+    useEffect(() => {
+        if (selectedFY === 'all') {
+            const jobsWithVariance = filteredData
+                .filter((row) => Math.abs(safeNumber(row.revenue_variance)) > 1000)
+                .map((row) => ({
+                    job: row.job_number,
+                    name: row.job_name,
+                    totalContractValue: safeNumber(row.total_contract_value),
+                    calculatedTotal: safeNumber(row.calculated_total_revenue),
+                    variance: safeNumber(row.revenue_variance),
+                }))
+                .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+
+            if (jobsWithVariance.length > 0) {
+                console.group('Revenue Variance Analysis (All Time)');
+                console.log('Total Contract Value:', formatCurrency(totals.totalContractValue));
+                console.log('Calculated Total (Actuals + Forecasts):', formatCurrency(totals.calculatedTotalRevenue));
+                console.log('Total Variance:', formatCurrency(totals.revenueVariance));
+                console.log('Jobs with variance > $1,000:');
+                console.table(jobsWithVariance);
+                console.groupEnd();
+            }
+        }
+    }, [filteredData, selectedFY, totals]);
 
     const handleHeightChange = useCallback((newHeight: number) => {
         setGridHeight(newHeight);
@@ -312,7 +355,29 @@ export default function TurnoverForecastIndex({
                 <div className="group relative overflow-hidden rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 via-white to-slate-50 dark:from-blue-950/30 dark:via-gray-900 dark:to-slate-900 p-6 shadow-sm transition-all hover:shadow-md">
                     <div className="flex items-start justify-between">
                         <div className="flex-1 space-y-1">
-                            <div className="text-sm font-medium text-blue-700 dark:text-blue-400">FY Turnover Progress</div>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400 cursor-help">
+                                        FY Turnover Progress
+                                        <HelpCircle className="h-3.5 w-3.5 opacity-60" />
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-80" side="right">
+                                    <div className="space-y-2">
+                                        <h4 className="font-semibold">FY Turnover Progress</h4>
+                                        <p className="text-sm text-muted-foreground">
+                                            Sum of all revenue for the selected period, calculated as:
+                                        </p>
+                                        <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-1">
+                                            <li><strong>Completed YTD:</strong> Actual revenue claimed (from billing data)</li>
+                                            <li><strong>Work in Hand:</strong> Forecasted revenue for months without actuals</li>
+                                        </ul>
+                                        <p className="text-xs text-muted-foreground/80 pt-1 border-t">
+                                            For each month, actuals are used if available; otherwise forecasts are used.
+                                        </p>
+                                    </div>
+                                </HoverCardContent>
+                            </HoverCard>
                             <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                                 {formatCurrency(totalFY)}
                             </div>
@@ -349,27 +414,66 @@ export default function TurnoverForecastIndex({
 
                         {/* Legend */}
                         <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-500" />
-                                <div>
-                                    <div className="font-medium text-slate-700 dark:text-slate-300">Completed Turnover YTD</div>
-                                    <div>{formatCurrency(completedTurnoverYTD)}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500" />
-                                <div>
-                                    <div className="font-medium text-slate-700 dark:text-slate-300">Work in Hand {fyLabel}</div>
-                                    <div>{formatCurrency(workInHandFY)}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-500" />
-                                <div>
-                                    <div className="font-medium text-slate-700 dark:text-slate-300">Budget Balance to Achieve</div>
-                                    <div>{formatCurrency(remainingTargetToAchieve)}</div>
-                                </div>
-                            </div>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="flex items-center gap-2 cursor-help">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-500" />
+                                        <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                Completed Turnover YTD
+                                                <HelpCircle className="h-3 w-3 opacity-50" />
+                                            </div>
+                                            <div>{formatCurrency(completedTurnoverYTD)}</div>
+                                        </div>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-72">
+                                    <h4 className="font-semibold mb-1">Completed Turnover YTD</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                        Actual revenue that has been claimed and billed. This comes from billing data (ArProgressBillingSummary) for months where claims have been submitted.
+                                    </p>
+                                </HoverCardContent>
+                            </HoverCard>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="flex items-center gap-2 cursor-help">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500" />
+                                        <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                Work in Hand {fyLabel}
+                                                <HelpCircle className="h-3 w-3 opacity-50" />
+                                            </div>
+                                            <div>{formatCurrency(workInHandFY)}</div>
+                                        </div>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-72">
+                                    <h4 className="font-semibold mb-1">Work in Hand</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                        Forecasted revenue for months that don't yet have actual billing data. These are projections from job forecasts that are expected to be claimed in the future.
+                                    </p>
+                                </HoverCardContent>
+                            </HoverCard>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="flex items-center gap-2 cursor-help">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-500" />
+                                        <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                Budget Balance to Achieve
+                                                <HelpCircle className="h-3 w-3 opacity-50" />
+                                            </div>
+                                            <div>{formatCurrency(remainingTargetToAchieve)}</div>
+                                        </div>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-72">
+                                    <h4 className="font-semibold mb-1">Budget Balance to Achieve</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                        The gap between the budget target and current turnover progress. Calculated as: Budget Target - (Completed + Work in Hand). Shows how much more revenue is needed to meet the budget.
+                                    </p>
+                                </HoverCardContent>
+                            </HoverCard>
                         </div>
 
                         {/* Target bar */}
@@ -387,20 +491,46 @@ export default function TurnoverForecastIndex({
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-500" />
-                                <div>
-                                    <div className="font-medium text-slate-700 dark:text-slate-300">Budget Turnover YTD</div>
-                                    <div>{formatCurrency(targetTurnoverYTD)}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-600" />
-                                <div>
-                                    <div className="font-medium text-slate-700 dark:text-slate-300">Budget Turnover {fyLabel}</div>
-                                    <div>{formatCurrency(turnoverTargetFYTotal)}</div>
-                                </div>
-                            </div>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="flex items-center gap-2 cursor-help">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-500" />
+                                        <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                Budget Turnover YTD
+                                                <HelpCircle className="h-3 w-3 opacity-50" />
+                                            </div>
+                                            <div>{formatCurrency(targetTurnoverYTD)}</div>
+                                        </div>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-72">
+                                    <h4 className="font-semibold mb-1">Budget Turnover YTD</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                        The cumulative monthly revenue targets from the start of the period up to (but not including) the current month. This represents what should have been achieved by now according to budget.
+                                    </p>
+                                </HoverCardContent>
+                            </HoverCard>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger asChild>
+                                    <div className="flex items-center gap-2 cursor-help">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-600" />
+                                        <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                Budget Turnover {fyLabel}
+                                                <HelpCircle className="h-3 w-3 opacity-50" />
+                                            </div>
+                                            <div>{formatCurrency(turnoverTargetFYTotal)}</div>
+                                        </div>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-72">
+                                    <h4 className="font-semibold mb-1">Budget Turnover Total</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                        The total revenue target for the entire selected period. Sum of all monthly revenue targets set in the Company Monthly Revenue Targets.
+                                    </p>
+                                </HoverCardContent>
+                            </HoverCard>
                         </div>
                     </div>
 

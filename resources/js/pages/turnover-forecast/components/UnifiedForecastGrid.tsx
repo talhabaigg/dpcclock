@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/button';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
 import type { ColDef, GridReadyEvent, ColumnState, GetRowIdParams } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, RotateCcw } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { Download, HelpCircle, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
     transformToUnifiedRows,
@@ -30,6 +31,34 @@ import { ColumnVisibilityDropdown, type ColumnGroup } from './ColumnVisibilityDr
 import { ColumnPresetManager, type ColumnPreset } from './ColumnPresetManager';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+// Custom header component with help icon and HoverCard
+interface HeaderWithHelpProps {
+    displayName: string;
+    helpText: string;
+}
+
+function HeaderWithHelp({ displayName, helpText }: HeaderWithHelpProps) {
+    return (
+        <div className="flex items-center gap-1">
+            <span>{displayName}</span>
+            <HoverCard openDelay={200}>
+                <HoverCardTrigger asChild>
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <HelpCircle className="h-3.5 w-3.5" />
+                    </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-72 text-sm font-normal" side="bottom">
+                    {helpText}
+                </HoverCardContent>
+            </HoverCard>
+        </div>
+    );
+}
 
 const COLUMN_STATE_KEY = 'turnover-forecast-unified-column-state';
 
@@ -76,6 +105,24 @@ export function UnifiedForecastGrid({
         }
     });
 
+    // Re-apply hidden columns when viewMode changes to ensure AG Grid respects React state
+    useEffect(() => {
+        if (!gridRef.current?.api || viewMode === 'targets') return;
+
+        // Get all column IDs that should be hidden/shown based on React state
+        const allColumnIds = [
+            'projectType', 'jobName', 'projectManager', 'overUnderBilling',
+            'forecastStatus', 'toDate', 'contractFY', 'totalValue',
+            'remainingFY', 'remainingTotal'
+        ];
+
+        // Apply visibility for each column
+        allColumnIds.forEach((colId) => {
+            const shouldHide = hiddenColumns.has(colId);
+            gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
+        });
+    }, [viewMode, hiddenColumns]);
+
     // Transform data based on view mode
     const rowData = useMemo(() => {
         if (viewMode === 'targets') {
@@ -118,7 +165,12 @@ export function UnifiedForecastGrid({
         if (viewMode === 'targets') {
             // Targets view has different columns
             staticCols.push({
-                headerName: 'Metric',
+                headerComponent: () => (
+                    <HeaderWithHelp
+                        displayName="Metric"
+                        helpText="Revenue Target: Monthly budget targets. Actual + Forecast: Combined actuals and forecasts. Variance: Difference between actual/forecast and target."
+                    />
+                ),
                 field: 'jobNumber',
                 width: 160,
                 pinned: 'left',
@@ -126,7 +178,12 @@ export function UnifiedForecastGrid({
             });
 
             staticCols.push({
-                headerName: `Total ${fyLabel}`,
+                headerComponent: () => (
+                    <HeaderWithHelp
+                        displayName={`Total ${fyLabel}`}
+                        helpText="Sum of all monthly values for the selected financial year"
+                    />
+                ),
                 field: 'fyTotal',
                 width: 140,
                 valueFormatter: (params) => formatCurrency(params.value),
@@ -145,7 +202,12 @@ export function UnifiedForecastGrid({
             // Standard columns for revenue/expanded view
             staticCols.push(
                 {
-                    headerName: 'Type',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Type"
+                            helpText='Indicates project source: "location" for jobs from Access Dimensions, "forecast_project" for manually created forecast projects'
+                        />
+                    ),
                     field: 'projectType',
                     width: 100,
                     pinned: 'left',
@@ -153,7 +215,12 @@ export function UnifiedForecastGrid({
                     cellClass: getPinnedCellClass,
                 },
                 {
-                    headerName: 'Job Number',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Job Number"
+                            helpText="Unique job identifier. Click to view the job forecast details."
+                        />
+                    ),
                     field: 'jobNumber',
                     width: 120,
                     pinned: 'left',
@@ -175,7 +242,12 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerName: 'Job Name',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Job Name"
+                            helpText="Name of the project or job"
+                        />
+                    ),
                     field: 'jobName',
                     width: 150,
                     pinned: 'left',
@@ -189,13 +261,23 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerName: 'Project Manager',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Project Manager"
+                            helpText="The manager responsible for this project"
+                        />
+                    ),
                     field: 'projectManager',
                     width: 140,
                     hide: hiddenColumns.has('projectManager'),
                 },
                 {
-                    headerName: 'Over/Under Billing',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Over/Under Billing"
+                            helpText="Difference between claimed revenue and cost incurred. Green = over-billed (claimed more than spent), Red = under-billed (spent more than claimed)"
+                        />
+                    ),
                     field: 'overUnderBilling',
                     width: 140,
                     hide: hiddenColumns.has('overUnderBilling'),
@@ -209,7 +291,12 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerName: 'Forecast Status',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Forecast Status"
+                            helpText="Current status of the forecast: not_started, draft, submitted, or finalized"
+                        />
+                    ),
                     field: 'forecastStatus',
                     width: 130,
                     hide: hiddenColumns.has('forecastStatus'),
@@ -226,7 +313,12 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerName: 'To Date',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="To Date"
+                            helpText="Revenue: Total claimed to date from progress billing. Cost: Total cost incurred to date."
+                        />
+                    ),
                     field: 'toDate',
                     width: 130,
                     hide: hiddenColumns.has('toDate'),
@@ -238,7 +330,12 @@ export function UnifiedForecastGrid({
                     cellClass: getValueCellClass,
                 },
                 {
-                    headerName: `Contract ${fyLabel}`,
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName={`Contract ${fyLabel}`}
+                            helpText="Sum of monthly values for the selected financial year. Uses actuals where available, otherwise forecast values."
+                        />
+                    ),
                     field: 'contractFY',
                     width: 130,
                     hide: hiddenColumns.has('contractFY'),
@@ -250,7 +347,12 @@ export function UnifiedForecastGrid({
                     cellClass: getValueCellClass,
                 },
                 {
-                    headerName: 'Total Value',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Total Value"
+                            helpText="Revenue: Total contract value from Job Summary. Cost: Total budget for the project."
+                        />
+                    ),
                     field: 'totalValue',
                     width: 130,
                     hide: hiddenColumns.has('totalValue'),
@@ -262,7 +364,12 @@ export function UnifiedForecastGrid({
                     cellClass: getValueCellClass,
                 },
                 {
-                    headerName: `Remaining ${fyLabel}`,
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName={`Remaining ${fyLabel}`}
+                            helpText="Remaining value to be claimed/incurred in the current financial year (Contract FY minus To Date value for this FY)"
+                        />
+                    ),
                     field: 'remainingFY',
                     width: 140,
                     hide: hiddenColumns.has('remainingFY'),
@@ -274,7 +381,12 @@ export function UnifiedForecastGrid({
                     cellClass: getValueCellClass,
                 },
                 {
-                    headerName: 'Remaining Total',
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Remaining Total"
+                            helpText="Revenue: Remaining order book (Total Value minus Claimed To Date). Cost: Remaining budget (Budget minus Cost To Date)."
+                        />
+                    ),
                     field: 'remainingTotal',
                     width: 140,
                     hide: hiddenColumns.has('remainingTotal'),
@@ -422,12 +534,15 @@ export function UnifiedForecastGrid({
     const handleToggleColumn = useCallback((columnId: string) => {
         setHiddenColumns((prev) => {
             const next = new Set(prev);
-            if (next.has(columnId)) {
+            const shouldShow = next.has(columnId);
+            if (shouldShow) {
                 next.delete(columnId);
             } else {
                 next.add(columnId);
             }
             localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify([...next]));
+            // Toggle visibility via AG Grid API
+            gridRef.current?.api?.setColumnsVisible([columnId], shouldShow);
             return next;
         });
         // Mark as modified from preset
@@ -438,26 +553,52 @@ export function UnifiedForecastGrid({
     const handleShowAllColumns = useCallback(() => {
         setHiddenColumns(new Set());
         localStorage.removeItem(`${COLUMN_STATE_KEY}-hidden`);
+        // Show all columns via AG Grid API
+        if (gridRef.current?.api) {
+            const allColumnIds = [
+                'projectType', 'jobName', 'projectManager', 'overUnderBilling',
+                'forecastStatus', 'toDate', 'contractFY', 'totalValue',
+                'remainingFY', 'remainingTotal'
+            ];
+            gridRef.current.api.setColumnsVisible(allColumnIds, true);
+        }
     }, []);
 
     const handleHideAllColumns = useCallback(() => {
         const allIds = columnGroups.flatMap((g) => g.columns.map((c) => c.id));
         setHiddenColumns(new Set(allIds));
         localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(allIds));
+        // Hide columns via AG Grid API
+        if (gridRef.current?.api) {
+            gridRef.current.api.setColumnsVisible(allIds, false);
+        }
     }, [columnGroups]);
 
     // Preset management
     const handleLoadPreset = useCallback((preset: ColumnPreset) => {
-        // Apply column state
+        // Apply column state (for column order, width, pinning)
         if (preset.columnState && gridRef.current?.api) {
             gridRef.current.api.applyColumnState({ state: preset.columnState, applyOrder: true });
             localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(preset.columnState));
         }
 
-        // Apply hidden columns
+        // Apply hidden columns via React state
         const newHiddenColumns = new Set(preset.hiddenColumns);
         setHiddenColumns(newHiddenColumns);
         localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(preset.hiddenColumns));
+
+        // Also explicitly set visibility via AG Grid API to ensure sync
+        if (gridRef.current?.api) {
+            const allColumnIds = [
+                'projectType', 'jobName', 'projectManager', 'overUnderBilling',
+                'forecastStatus', 'toDate', 'contractFY', 'totalValue',
+                'remainingFY', 'remainingTotal'
+            ];
+            allColumnIds.forEach((colId) => {
+                const shouldHide = newHiddenColumns.has(colId);
+                gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
+            });
+        }
 
         updateCurrentColumnState();
     }, [updateCurrentColumnState]);
