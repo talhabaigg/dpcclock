@@ -353,9 +353,18 @@
     border-top: 2px solid #cbd5e1 !important;
 }
 
+.ag-row-pinned .ag-cell {
+    background-color: #f8fafc !important;
+}
+
 .dark .ag-row-pinned {
     background-color: #1e293b !important;
     border-top-color: #475569 !important;
+}
+
+.dark .ag-row-pinned .ag-cell {
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important;
 }
 
 /* Smooth transitions for row hover */

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { shadcnTheme } from '@/themes/ag-grid-theme';
+import { shadcnTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -120,6 +120,31 @@ const ShowJobForecastPage = ({
     const [showRevenue] = useState(true);
     const [showMargin] = useState(true);
 
+    // Dark mode detection for AG Grid theme
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        if (typeof document !== 'undefined') {
+            return document.documentElement.classList.contains('dark');
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        // Watch for dark mode changes
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    setIsDarkMode(document.documentElement.classList.contains('dark'));
+                }
+            });
+        });
+
+        observer.observe(document.documentElement, { attributes: true });
+
+        return () => observer.disconnect();
+    }, []);
+
+    const gridTheme = isDarkMode ? shadcnDarkTheme : shadcnTheme;
+
     // Revenue Report Dialog State
     const [revenueReportOpen, setRevenueReportOpen] = useState(false);
 
@@ -143,6 +168,11 @@ const ShowJobForecastPage = ({
 
     // Track pending changes (items to add/delete) - only saved when "Save Forecast" is clicked
     const [pendingDeletedItemIds, setPendingDeletedItemIds] = useState<{ cost: number[]; revenue: number[] }>({
+        cost: [],
+        revenue: [],
+    });
+    // Track orphaned cost_items to delete (for cleaning up orphaned forecast data)
+    const [pendingOrphanedCostItemsToDelete, setPendingOrphanedCostItemsToDelete] = useState<{ cost: string[]; revenue: string[] }>({
         cost: [],
         revenue: [],
     });
@@ -536,12 +566,15 @@ const ShowJobForecastPage = ({
         const saveUrl = isForecastProject ? `/forecast-projects/${forecastProjectId}/forecast` : `/location/${locationId}/job-forecast`;
 
         if (isForecastProject) {
-            const newCostItems = costGridData.filter((row) => row.id < 0);
-            const newRevenueItems = revenueGridData.filter((row) => row.id < 0);
+            // Filter new items (negative ID) but exclude orphaned rows (which have is_orphaned flag)
+            const newCostItems = costGridData.filter((row) => row.id < 0 && !row.is_orphaned);
+            const newRevenueItems = revenueGridData.filter((row) => row.id < 0 && !row.is_orphaned);
 
             const payload = {
                 deletedCostItems: pendingDeletedItemIds.cost,
                 deletedRevenueItems: pendingDeletedItemIds.revenue,
+                orphanedCostItemsToDelete: pendingOrphanedCostItemsToDelete.cost,
+                orphanedRevenueItemsToDelete: pendingOrphanedCostItemsToDelete.revenue,
                 newCostItems: newCostItems.map((item) => ({
                     cost_item: item.cost_item,
                     cost_item_description: item.cost_item_description,
@@ -563,6 +596,7 @@ const ShowJobForecastPage = ({
                     setIsSaving(false);
                     setSaveSuccess(true);
                     setPendingDeletedItemIds({ cost: [], revenue: [] });
+                    setPendingOrphanedCostItemsToDelete({ cost: [], revenue: [] });
                     setTimeout(() => {
                         setSaveSuccess(false);
                     }, 1500);
@@ -710,11 +744,22 @@ const ShowJobForecastPage = ({
         setCostGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
 
         // Track existing items for deletion on save
-        const existingIds = idsToDelete.filter((id) => id > 0);
+        const existingIds = idsToDelete.filter((id: number) => id > 0);
         if (existingIds.length > 0) {
             setPendingDeletedItemIds((prev) => ({
                 ...prev,
                 cost: [...prev.cost, ...existingIds],
+            }));
+        }
+
+        // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
+        const orphanedCostItems = selectedNodes
+            .filter((node) => node.data.is_orphaned)
+            .map((node) => node.data.cost_item as string);
+        if (orphanedCostItems.length > 0) {
+            setPendingOrphanedCostItemsToDelete((prev) => ({
+                ...prev,
+                cost: [...prev.cost, ...orphanedCostItems],
             }));
         }
     };
@@ -734,11 +779,22 @@ const ShowJobForecastPage = ({
         setRevenueGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
 
         // Track existing items for deletion on save
-        const existingIds = idsToDelete.filter((id) => id > 0);
+        const existingIds = idsToDelete.filter((id: number) => id > 0);
         if (existingIds.length > 0) {
             setPendingDeletedItemIds((prev) => ({
                 ...prev,
                 revenue: [...prev.revenue, ...existingIds],
+            }));
+        }
+
+        // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
+        const orphanedCostItems = selectedNodes
+            .filter((node) => node.data.is_orphaned)
+            .map((node) => node.data.cost_item as string);
+        if (orphanedCostItems.length > 0) {
+            setPendingOrphanedCostItemsToDelete((prev) => ({
+                ...prev,
+                revenue: [...prev.revenue, ...orphanedCostItems],
             }));
         }
     };
@@ -2154,7 +2210,7 @@ const ShowJobForecastPage = ({
                         )}
                         <div className="ag-theme-quartz flex-1">
                             <AgGridReact
-                                theme={shadcnTheme}
+                                theme={gridTheme}
                                 ref={gridOne}
                                 alignedGrids={[gridTwo]}
                                 rowData={costGridData}
@@ -2237,7 +2293,7 @@ const ShowJobForecastPage = ({
                         )}
                         <div className="ag-theme-balham flex-1">
                             <AgGridReact
-                                theme={shadcnTheme}
+                                theme={gridTheme}
                                 ref={gridTwo}
                                 headerHeight={0}
                                 groupHeaderHeight={0}

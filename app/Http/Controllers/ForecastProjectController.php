@@ -53,12 +53,22 @@ class ForecastProjectController extends Controller
         // Get all unique months from forecast data
         $forecastData = JobForecastData::where('forecast_project_id', $id)->get();
 
+        // Find the earliest month with existing forecast data
+        $earliestForecastMonth = $forecastData->min('month');
+
         // Calculate forecast months
         // For forecast projects, use project start date if available, otherwise current month
-        $startMonth = $project->start_date ? date('Y-m', strtotime($project->start_date->format('Y-m-d'))) : date('Y-m');
+        $defaultStartMonth = $project->start_date ? date('Y-m', strtotime($project->start_date->format('Y-m-d'))) : date('Y-m');
 
-        // For end date, use project end date if available, otherwise default to 12 months from start
-        $endDate = $project->end_date ? $project->end_date->format('Y-m-d') : date('Y-m-d', strtotime($startMonth . '-01 +12 months'));
+        // Use the earliest of: project start date, current month, or earliest forecast data month
+        // This ensures users can always edit existing forecasts
+        $startMonth = $defaultStartMonth;
+        if ($earliestForecastMonth && $earliestForecastMonth < $startMonth) {
+            $startMonth = $earliestForecastMonth;
+        }
+
+        // For end date, use project end date if available, otherwise default to 12 months from current month
+        $endDate = $project->end_date ? $project->end_date->format('Y-m-d') : date('Y-m-d', strtotime(date('Y-m') . '-01 +12 months'));
         $endMonth = date('Y-m', strtotime($endDate));
 
         $forecastMonths = [];
@@ -128,6 +138,71 @@ class ForecastProjectController extends Controller
 
             return $row;
         })->values()->all();
+
+        // Find orphaned revenue forecasts (forecasts that don't have a matching revenue item)
+        // This ensures users can see and edit/delete forecast data even if the revenue item was deleted
+        $existingRevenueCostItems = $project->revenueItems->pluck('cost_item')->toArray();
+        $orphanedRevenueForecasts = $forecastData
+            ->where('grid_type', 'revenue')
+            ->whereNotIn('cost_item', $existingRevenueCostItems)
+            ->groupBy('cost_item');
+
+        foreach ($orphanedRevenueForecasts as $costItem => $forecasts) {
+            $row = [
+                'id' => -1 * (count($revenueRows) + 1), // Negative ID to indicate orphaned row
+                'cost_item' => $costItem,
+                'cost_item_description' => '(Orphaned forecast data)',
+                'contract_sum_to_date' => 0,
+                'type' => 'forecast',
+                'is_orphaned' => true,
+            ];
+
+            // Initialize all forecast months to null
+            foreach ($forecastMonths as $month) {
+                $row[$month] = null;
+            }
+
+            // Load the orphaned forecast data
+            foreach ($forecasts as $forecast) {
+                if (in_array($forecast->month, $forecastMonths)) {
+                    $row[$forecast->month] = (float) $forecast->forecast_amount;
+                }
+            }
+
+            $revenueRows[] = $row;
+        }
+
+        // Find orphaned cost forecasts (forecasts that don't have a matching cost item)
+        $existingCostItems = $project->costItems->pluck('cost_item')->toArray();
+        $orphanedCostForecasts = $forecastData
+            ->where('grid_type', 'cost')
+            ->whereNotIn('cost_item', $existingCostItems)
+            ->groupBy('cost_item');
+
+        foreach ($orphanedCostForecasts as $costItem => $forecasts) {
+            $row = [
+                'id' => -1 * (count($costRows) + 1), // Negative ID to indicate orphaned row
+                'cost_item' => $costItem,
+                'cost_item_description' => '(Orphaned forecast data)',
+                'budget' => 0,
+                'type' => 'forecast',
+                'is_orphaned' => true,
+            ];
+
+            // Initialize all forecast months to null
+            foreach ($forecastMonths as $month) {
+                $row[$month] = null;
+            }
+
+            // Load the orphaned forecast data
+            foreach ($forecasts as $forecast) {
+                if (in_array($forecast->month, $forecastMonths)) {
+                    $row[$forecast->month] = (float) $forecast->forecast_amount;
+                }
+            }
+
+            $costRows[] = $row;
+        }
 
         return Inertia::render('job-forecast/show', [
             'costRowData' => $costRows,
@@ -235,6 +310,12 @@ class ForecastProjectController extends Controller
             ->where('id', $itemId)
             ->firstOrFail();
 
+        // Also delete associated forecast data
+        JobForecastData::where('forecast_project_id', $projectId)
+            ->where('grid_type', 'cost')
+            ->where('cost_item', $costItem->cost_item)
+            ->delete();
+
         $costItem->delete();
 
         return response()->json([
@@ -301,6 +382,12 @@ class ForecastProjectController extends Controller
         $revenueItem = ForecastProjectRevenueItem::where('forecast_project_id', $projectId)
             ->where('id', $itemId)
             ->firstOrFail();
+
+        // Also delete associated forecast data
+        JobForecastData::where('forecast_project_id', $projectId)
+            ->where('grid_type', 'revenue')
+            ->where('cost_item', $revenueItem->cost_item)
+            ->delete();
 
         $revenueItem->delete();
 
@@ -402,6 +489,11 @@ class ForecastProjectController extends Controller
             'deletedCostItems.*' => 'integer',
             'deletedRevenueItems' => 'sometimes|array',
             'deletedRevenueItems.*' => 'integer',
+            // Orphaned forecast data cleanup
+            'orphanedCostItemsToDelete' => 'sometimes|array',
+            'orphanedCostItemsToDelete.*' => 'string',
+            'orphanedRevenueItemsToDelete' => 'sometimes|array',
+            'orphanedRevenueItemsToDelete.*' => 'string',
             'newCostItems' => 'sometimes|array',
             'newCostItems.*.cost_item' => 'required|string|max:255',
             'newCostItems.*.cost_item_description' => 'nullable|string',
@@ -439,6 +531,20 @@ class ForecastProjectController extends Controller
                         return $id > 0;
                     });
                     if (!empty($existingCostItemIds)) {
+                        // Get the cost_item values before deleting
+                        $costItemsToDelete = ForecastProjectCostItem::whereIn('id', $existingCostItemIds)
+                            ->where('forecast_project_id', $id)
+                            ->pluck('cost_item')
+                            ->toArray();
+
+                        // Delete associated forecast data
+                        if (!empty($costItemsToDelete)) {
+                            JobForecastData::where('forecast_project_id', $id)
+                                ->where('grid_type', 'cost')
+                                ->whereIn('cost_item', $costItemsToDelete)
+                                ->delete();
+                        }
+
                         ForecastProjectCostItem::whereIn('id', $existingCostItemIds)
                             ->where('forecast_project_id', $id)
                             ->delete();
@@ -450,10 +556,40 @@ class ForecastProjectController extends Controller
                         return $id > 0;
                     });
                     if (!empty($existingRevenueItemIds)) {
+                        // Get the cost_item values before deleting
+                        $revenueItemsToDelete = ForecastProjectRevenueItem::whereIn('id', $existingRevenueItemIds)
+                            ->where('forecast_project_id', $id)
+                            ->pluck('cost_item')
+                            ->toArray();
+
+                        // Delete associated forecast data
+                        if (!empty($revenueItemsToDelete)) {
+                            JobForecastData::where('forecast_project_id', $id)
+                                ->where('grid_type', 'revenue')
+                                ->whereIn('cost_item', $revenueItemsToDelete)
+                                ->delete();
+                        }
+
                         ForecastProjectRevenueItem::whereIn('id', $existingRevenueItemIds)
                             ->where('forecast_project_id', $id)
                             ->delete();
                     }
+                }
+
+                // Delete orphaned cost forecast data (forecast data without matching cost items)
+                if (!empty($validated['orphanedCostItemsToDelete'])) {
+                    JobForecastData::where('forecast_project_id', $id)
+                        ->where('grid_type', 'cost')
+                        ->whereIn('cost_item', $validated['orphanedCostItemsToDelete'])
+                        ->delete();
+                }
+
+                // Delete orphaned revenue forecast data (forecast data without matching revenue items)
+                if (!empty($validated['orphanedRevenueItemsToDelete'])) {
+                    JobForecastData::where('forecast_project_id', $id)
+                        ->where('grid_type', 'revenue')
+                        ->whereIn('cost_item', $validated['orphanedRevenueItemsToDelete'])
+                        ->delete();
                 }
 
                 // Add new cost items
