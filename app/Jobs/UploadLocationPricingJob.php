@@ -90,6 +90,7 @@ class UploadLocationPricingJob implements ShouldQueue
                 'malformed' => 0,
                 'duplicate' => 0,
                 'failed_lookup' => 0,
+                'locked_skipped' => 0,
                 'processed' => 0,
             ];
 
@@ -102,9 +103,18 @@ class UploadLocationPricingJob implements ShouldQueue
             Log::info('UploadLocationPricingJob: Loading reference data');
             $locationsData = Location::select('id', 'external_id')->get()->keyBy('external_id');
             $materials = MaterialItem::select('id', 'code')->get()->keyBy('code');
+
+            // Preload locked pricing items
+            $lockedPricing = DB::table('location_item_pricing')
+                ->where('is_locked', true)
+                ->get()
+                ->groupBy('location_id')
+                ->map(fn($items) => $items->pluck('material_item_id')->toArray());
+
             Log::info('UploadLocationPricingJob: Reference data loaded', [
                 'locations_count' => $locationsData->count(),
-                'materials_count' => $materials->count()
+                'materials_count' => $materials->count(),
+                'locked_items_locations' => $lockedPricing->count()
             ]);
 
             // Process each row
@@ -158,6 +168,23 @@ class UploadLocationPricingJob implements ShouldQueue
 
                 // Check for duplicates within the file
                 $key = $location->id . '-' . $material->id;
+
+                // Check if this item is locked
+                $locationLockedItems = $lockedPricing->get($location->id, []);
+                if (in_array($material->id, $locationLockedItems)) {
+                    $stats['locked_skipped']++;
+                    $failedRows[] = [
+                        'row' => $row,
+                        'reason' => 'Locked: price is locked and cannot be modified'
+                    ];
+                    Log::debug('UploadLocationPricingJob: Locked item skipped', [
+                        'row' => $rowIndex + 2,
+                        'location_id' => $location->id,
+                        'material_id' => $material->id
+                    ]);
+                    continue;
+                }
+
                 if (isset($seen[$key])) {
                     $stats['duplicate']++;
                     $failedRows[] = [
@@ -174,17 +201,32 @@ class UploadLocationPricingJob implements ShouldQueue
                 $seen[$key] = true;
                 $locationIds[] = $location->id;
 
+                // Handle is_locked from CSV - can set to true but cannot unlock
+                $isLocked = false;
+                if (isset($data['is_locked'])) {
+                    $isLockedValue = strtolower(trim($data['is_locked']));
+                    $isLocked = in_array($isLockedValue, ['true', '1', 'yes']);
+                    Log::debug('UploadLocationPricingJob: is_locked processing', [
+                        'row' => $rowIndex + 2,
+                        'raw_value' => $data['is_locked'],
+                        'lowercase_value' => $isLockedValue,
+                        'result' => $isLocked
+                    ]);
+                }
+
                 $dataToInsert[] = [
                     'location_id' => $location->id,
                     'material_item_id' => $material->id,
                     'unit_cost_override' => floatval($data['unit_cost'] ?? 0),
+                    'is_locked' => $isLocked,
+                    'updated_by' => $this->userId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
             }
 
             $stats['processed'] = count($dataToInsert);
-            $totalFailed = $stats['malformed'] + $stats['failed_lookup'] + $stats['duplicate'];
+            $totalFailed = $stats['malformed'] + $stats['failed_lookup'] + $stats['duplicate'] + $stats['locked_skipped'];
 
             Log::info('UploadLocationPricingJob: Processing complete', [
                 'total_rows_in_csv' => $totalRows,
@@ -195,13 +237,14 @@ class UploadLocationPricingJob implements ShouldQueue
                     'malformed' => $stats['malformed'],
                     'failed_lookup' => $stats['failed_lookup'],
                     'duplicate' => $stats['duplicate'],
+                    'locked_skipped' => $stats['locked_skipped'],
                 ],
                 'recorded_total' => $stats['processed'] + $totalFailed,
                 'validation' => [
                     'csv_rows_accounted_for' => ($totalRows === ($stats['empty'] + $stats['processed'] + $totalFailed)),
                     'recorded_total_equals_processed_plus_failed' => (($stats['processed'] + $totalFailed) === ($stats['processed'] + $totalFailed)),
                     'calculation' => sprintf(
-                        'CSV: %d = %d empty + %d processed + %d failed (malformed:%d + lookup:%d + duplicate:%d) | Recorded: %d = %d processed + %d failed',
+                        'CSV: %d = %d empty + %d processed + %d failed (malformed:%d + lookup:%d + duplicate:%d + locked:%d) | Recorded: %d = %d processed + %d failed',
                         $totalRows,
                         $stats['empty'],
                         $stats['processed'],
@@ -209,6 +252,7 @@ class UploadLocationPricingJob implements ShouldQueue
                         $stats['malformed'],
                         $stats['failed_lookup'],
                         $stats['duplicate'],
+                        $stats['locked_skipped'],
                         $stats['processed'] + $totalFailed,
                         $stats['processed'],
                         $totalFailed
@@ -230,12 +274,13 @@ class UploadLocationPricingJob implements ShouldQueue
 
             // Perform database transaction
             DB::transaction(function () use ($uniqueLocationIds, $dataToInsert) {
-                // Delete old pricing only for relevant locations
+                // Delete old pricing only for relevant locations, preserving locked items
                 $deletedCount = DB::table('location_item_pricing')
                     ->whereIn('location_id', $uniqueLocationIds)
+                    ->where('is_locked', false)
                     ->delete();
 
-                Log::info('UploadLocationPricingJob: Old pricing deleted', [
+                Log::info('UploadLocationPricingJob: Old unlocked pricing deleted', [
                     'deleted_count' => $deletedCount
                 ]);
 

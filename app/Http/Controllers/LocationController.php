@@ -63,13 +63,19 @@ class LocationController extends Controller
             'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
         ]);
 
+        // Load user names for material items updated_by
+        $userIds = $location->materialItems->pluck('pivot.updated_by')->filter()->unique()->values();
+        $users = \App\Models\User::whereIn('id', $userIds)->pluck('name', 'id');
+
+        // Attach user names to material items
+        $location->materialItems->each(function ($item) use ($users) {
+            $item->pivot->updated_by_name = $item->pivot->updated_by ? ($users[$item->pivot->updated_by] ?? null) : null;
+        });
+
         $monthlySpending = $this->getMonthlySpending($location);
-        // dd($monthlySpending);
 
         // Fetch sub-locations for the specified location
         $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
-
-        // dd($location->materialItems);
 
         return Inertia::render('locations/show', [
             'location' => $location,

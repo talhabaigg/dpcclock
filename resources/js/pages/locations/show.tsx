@@ -9,7 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
@@ -27,6 +29,7 @@ import {
     Hash,
     Heart,
     Layers,
+    Lock,
     MapPin,
     Package,
     RefreshCcw,
@@ -66,6 +69,10 @@ type Location = {
         };
         pivot?: {
             unit_cost_override: number;
+            is_locked: boolean;
+            updated_by: number | null;
+            updated_by_name: string | null;
+            updated_at: string | null;
         };
     }>;
     cost_codes: Array<{
@@ -105,10 +112,11 @@ export default function LocationShow() {
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [csvImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost']);
+    const [csvImportHeaders] = useState<string[]>(['location_id', 'code', 'unit_cost', 'is_locked']);
     const [activeTab, setActiveTab] = useState('sublocations');
-    const isLoading = false;
-    const [open, setOpen] = useState(isLoading);
+    const [showLockedOnly, setShowLockedOnly] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [open, setOpen] = useState(false);
 
     const splitExternalId = (externalId: string) => {
         if (!externalId) {
@@ -141,9 +149,19 @@ export default function LocationShow() {
         formData.append('file', selectedFile);
         formData.append('location_id', locationId.toString());
 
+        setIsUploading(true);
         router.post('/material-items/location/upload', formData, {
             forceFormData: true,
-            onSuccess: () => setSelectedFile(null),
+            onSuccess: () => {
+                setSelectedFile(null);
+                setIsUploading(false);
+            },
+            onError: () => {
+                setIsUploading(false);
+            },
+            onFinish: () => {
+                setIsUploading(false);
+            },
         });
     };
 
@@ -167,7 +185,10 @@ export default function LocationShow() {
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
 
     const handleCsvSubmit = (mappedData: any) => {
-        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
+        // Explicitly use header order to ensure CSV columns match expected order
+        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) =>
+            csvImportHeaders.map(header => row[header] ?? '').join(',')
+        ).join('\n')}`;
         const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
         setSelectedFile(file);
         setShouldUploadAfterSet(true);
@@ -186,6 +207,10 @@ export default function LocationShow() {
         }
     }, [flash.success]);
 
+    const filteredMaterialItems = showLockedOnly
+        ? location.material_items?.filter(item => Boolean(item.pivot?.is_locked)) ?? []
+        : location.material_items ?? [];
+
     const tabCounts = {
         sublocations: location.subLocations?.length || 0,
         costCodes: location.cost_codes?.length || 0,
@@ -196,7 +221,11 @@ export default function LocationShow() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Location`} />
-            <LoadingDialog open={open} setOpen={setOpen} />
+            <LoadingDialog
+                open={open || isUploading}
+                setOpen={setOpen}
+                message={isUploading ? 'Uploading price list...' : 'Loading...'}
+            />
 
             <div className="flex flex-col gap-6 p-4 md:p-6">
                 {/* Page Header */}
@@ -582,7 +611,18 @@ export default function LocationShow() {
                                         </CardTitle>
                                         <CardDescription>{tabCounts.pricelist} item(s) in price list</CardDescription>
                                     </div>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex items-center gap-2 mr-2">
+                                            <Switch
+                                                id="show-locked"
+                                                checked={showLockedOnly}
+                                                onCheckedChange={setShowLockedOnly}
+                                            />
+                                            <Label htmlFor="show-locked" className="text-sm flex items-center gap-1 cursor-pointer">
+                                                <Lock className="h-3.5 w-3.5" />
+                                                Locked Only
+                                            </Label>
+                                        </div>
                                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                                         <a href={`/material-items/location/${location.id}/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
@@ -607,27 +647,50 @@ export default function LocationShow() {
                                                 <TableHead className="pl-6">Code</TableHead>
                                                 <TableHead>Supplier</TableHead>
                                                 <TableHead>Description</TableHead>
-                                                <TableHead className="pr-6 text-right">Unit Cost</TableHead>
+                                                <TableHead className="text-right">Unit Cost</TableHead>
+                                                <TableHead className="pr-6">Updated By</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {!location.material_items || location.material_items.length === 0 ? (
+                                            {filteredMaterialItems.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="h-32 text-center">
+                                                    <TableCell colSpan={5} className="h-32 text-center">
                                                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                             <Package className="h-8 w-8 opacity-40" />
-                                                            <p>No price list available</p>
-                                                            <p className="text-xs">Import a CSV to add items</p>
+                                                            <p>{showLockedOnly ? 'No locked items' : 'No price list available'}</p>
+                                                            <p className="text-xs">{showLockedOnly ? 'No items are currently locked' : 'Import a CSV to add items'}</p>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                location.material_items.map((item) => (
-                                                    <TableRow key={item.id} className="group transition-colors hover:bg-muted/50">
+                                                filteredMaterialItems.map((item) => (
+                                                    <TableRow
+                                                        key={item.id}
+                                                        className={cn(
+                                                            'group transition-colors',
+                                                            Boolean(item.pivot?.is_locked)
+                                                                ? 'bg-amber-50/50 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
+                                                                : 'hover:bg-muted/50'
+                                                        )}
+                                                    >
                                                         <TableCell className="pl-6">
-                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
-                                                                {item.code}
-                                                            </code>
+                                                            <div className="flex items-center gap-2">
+                                                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+                                                                    {item.code}
+                                                                </code>
+                                                                {Boolean(item.pivot?.is_locked) ? (
+                                                                    <TooltipProvider delayDuration={200}>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger>
+                                                                                <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                <p>Price is locked</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                ) : null}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell>
                                                             {item.supplier?.code ? (
@@ -639,10 +702,24 @@ export default function LocationShow() {
                                                             )}
                                                         </TableCell>
                                                         <TableCell className="max-w-md truncate text-muted-foreground">{item.description}</TableCell>
-                                                        <TableCell className="pr-6 text-right">
+                                                        <TableCell className="text-right">
                                                             <span className="font-medium text-emerald-600 dark:text-emerald-400">
                                                                 ${Number(item.pivot?.unit_cost_override ?? 0).toFixed(2)}
                                                             </span>
+                                                        </TableCell>
+                                                        <TableCell className="pr-6">
+                                                            {item.pivot?.updated_by_name ? (
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-medium">{item.pivot.updated_by_name}</span>
+                                                                    {item.pivot?.updated_at && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {new Date(item.pivot.updated_at).toLocaleDateString()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-sm italic text-muted-foreground">-</span>
+                                                            )}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))

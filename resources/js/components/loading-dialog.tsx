@@ -2,7 +2,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/compon
 import { Loader2 } from 'lucide-react';
 import { Label } from './ui/label';
 
-const LoadingDialog = ({ open, setOpen }) => {
+type LoadingDialogProps = {
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    message?: string;
+};
+
+const LoadingDialog = ({ open, setOpen, message = 'Loading...' }: LoadingDialogProps) => {
     return (
         <Dialog open={open} onOpenChange={(value) => setOpen(value)}>
             <DialogContent>
@@ -10,7 +16,7 @@ const LoadingDialog = ({ open, setOpen }) => {
                     <DialogDescription className="mx-auto">
                         <div className="flex flex-col items-center space-y-2">
                             <Loader2 className="animate-spin" />
-                            <Label>Loading...</Label>
+                            <Label>{message}</Label>
                         </div>
                     </DialogDescription>
                 </DialogHeader>

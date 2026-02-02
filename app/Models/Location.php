@@ -37,7 +37,7 @@ class Location extends Model
     public function materialItems()
     {
         return $this->belongsToMany(MaterialItem::class, 'location_item_pricing')
-            ->withPivot('unit_cost_override')
+            ->withPivot('unit_cost_override', 'is_locked', 'updated_by')
             ->withTimestamps();
     }
 
