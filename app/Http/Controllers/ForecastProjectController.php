@@ -68,19 +68,19 @@ class ForecastProjectController extends Controller
         }
 
         // For end date, use project end date if available, otherwise default to 12 months from current month
-        $endDate = $project->end_date ? $project->end_date->format('Y-m-d') : date('Y-m-d', strtotime(date('Y-m') . '-01 +12 months'));
+        $endDate = $project->end_date ? $project->end_date->format('Y-m-d') : date('Y-m-d', strtotime(date('Y-m').'-01 +12 months'));
         $endMonth = date('Y-m', strtotime($endDate));
 
         $forecastMonths = [];
         $current = $startMonth;
         while ($current <= $endMonth) {
             $forecastMonths[] = $current;
-            $current = date('Y-m', strtotime($current . ' +1 month'));
+            $current = date('Y-m', strtotime($current.' +1 month'));
         }
 
         // Load saved forecast data grouped by grid_type and cost_item
         $savedForecasts = $forecastData->groupBy(function ($item) {
-            return $item->grid_type . '_' . $item->cost_item;
+            return $item->grid_type.'_'.$item->cost_item;
         });
 
         // Build cost rows (no actuals, just budget and forecast)
@@ -99,7 +99,7 @@ class ForecastProjectController extends Controller
             }
 
             // Load forecast data from saved records
-            $forecastKey = 'cost_' . $item->cost_item;
+            $forecastKey = 'cost_'.$item->cost_item;
             if (isset($savedForecasts[$forecastKey])) {
                 foreach ($savedForecasts[$forecastKey] as $forecast) {
                     if (in_array($forecast->month, $forecastMonths)) {
@@ -127,7 +127,7 @@ class ForecastProjectController extends Controller
             }
 
             // Load forecast data from saved records
-            $forecastKey = 'revenue_' . $item->cost_item;
+            $forecastKey = 'revenue_'.$item->cost_item;
             if (isset($savedForecasts[$forecastKey])) {
                 foreach ($savedForecasts[$forecastKey] as $forecast) {
                     if (in_array($forecast->month, $forecastMonths)) {
@@ -227,7 +227,7 @@ class ForecastProjectController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'project_number' => 'sometimes|required|string|max:255|unique:forecast_projects,project_number,' . $id,
+            'project_number' => 'sometimes|required|string|max:255|unique:forecast_projects,project_number,'.$id,
             'description' => 'nullable|string',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
@@ -421,20 +421,20 @@ class ForecastProjectController extends Controller
         DB::beginTransaction();
         try {
             // Delete items
-            if (!empty($validated['deletedCostItems'])) {
+            if (! empty($validated['deletedCostItems'])) {
                 ForecastProjectCostItem::whereIn('id', $validated['deletedCostItems'])
                     ->where('forecast_project_id', $id)
                     ->delete();
             }
 
-            if (!empty($validated['deletedRevenueItems'])) {
+            if (! empty($validated['deletedRevenueItems'])) {
                 ForecastProjectRevenueItem::whereIn('id', $validated['deletedRevenueItems'])
                     ->where('forecast_project_id', $id)
                     ->delete();
             }
 
             // Add new cost items
-            if (!empty($validated['newCostItems'])) {
+            if (! empty($validated['newCostItems'])) {
                 $maxOrder = $project->costItems()->max('display_order') ?? -1;
                 foreach ($validated['newCostItems'] as $item) {
                     $project->costItems()->create([
@@ -447,7 +447,7 @@ class ForecastProjectController extends Controller
             }
 
             // Add new revenue items
-            if (!empty($validated['newRevenueItems'])) {
+            if (! empty($validated['newRevenueItems'])) {
                 $maxOrder = $project->revenueItems()->max('display_order') ?? -1;
                 foreach ($validated['newRevenueItems'] as $item) {
                     $project->revenueItems()->create([
@@ -467,8 +467,9 @@ class ForecastProjectController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Failed to save items: ' . $e->getMessage(),
+                'message' => 'Failed to save items: '.$e->getMessage(),
                 'success' => false,
             ], 500);
         }
@@ -526,11 +527,11 @@ class ForecastProjectController extends Controller
             // Handle new format (all-in-one save)
             if (isset($validated['costForecastData']) && isset($validated['revenueForecastData'])) {
                 // Delete items (only delete items that exist in DB - positive IDs)
-                if (!empty($validated['deletedCostItems'])) {
-                    $existingCostItemIds = array_filter($validated['deletedCostItems'], function($id) {
+                if (! empty($validated['deletedCostItems'])) {
+                    $existingCostItemIds = array_filter($validated['deletedCostItems'], function ($id) {
                         return $id > 0;
                     });
-                    if (!empty($existingCostItemIds)) {
+                    if (! empty($existingCostItemIds)) {
                         // Get the cost_item values before deleting
                         $costItemsToDelete = ForecastProjectCostItem::whereIn('id', $existingCostItemIds)
                             ->where('forecast_project_id', $id)
@@ -538,7 +539,7 @@ class ForecastProjectController extends Controller
                             ->toArray();
 
                         // Delete associated forecast data
-                        if (!empty($costItemsToDelete)) {
+                        if (! empty($costItemsToDelete)) {
                             JobForecastData::where('forecast_project_id', $id)
                                 ->where('grid_type', 'cost')
                                 ->whereIn('cost_item', $costItemsToDelete)
@@ -551,11 +552,11 @@ class ForecastProjectController extends Controller
                     }
                 }
 
-                if (!empty($validated['deletedRevenueItems'])) {
-                    $existingRevenueItemIds = array_filter($validated['deletedRevenueItems'], function($id) {
+                if (! empty($validated['deletedRevenueItems'])) {
+                    $existingRevenueItemIds = array_filter($validated['deletedRevenueItems'], function ($id) {
                         return $id > 0;
                     });
-                    if (!empty($existingRevenueItemIds)) {
+                    if (! empty($existingRevenueItemIds)) {
                         // Get the cost_item values before deleting
                         $revenueItemsToDelete = ForecastProjectRevenueItem::whereIn('id', $existingRevenueItemIds)
                             ->where('forecast_project_id', $id)
@@ -563,7 +564,7 @@ class ForecastProjectController extends Controller
                             ->toArray();
 
                         // Delete associated forecast data
-                        if (!empty($revenueItemsToDelete)) {
+                        if (! empty($revenueItemsToDelete)) {
                             JobForecastData::where('forecast_project_id', $id)
                                 ->where('grid_type', 'revenue')
                                 ->whereIn('cost_item', $revenueItemsToDelete)
@@ -577,7 +578,7 @@ class ForecastProjectController extends Controller
                 }
 
                 // Delete orphaned cost forecast data (forecast data without matching cost items)
-                if (!empty($validated['orphanedCostItemsToDelete'])) {
+                if (! empty($validated['orphanedCostItemsToDelete'])) {
                     JobForecastData::where('forecast_project_id', $id)
                         ->where('grid_type', 'cost')
                         ->whereIn('cost_item', $validated['orphanedCostItemsToDelete'])
@@ -585,7 +586,7 @@ class ForecastProjectController extends Controller
                 }
 
                 // Delete orphaned revenue forecast data (forecast data without matching revenue items)
-                if (!empty($validated['orphanedRevenueItemsToDelete'])) {
+                if (! empty($validated['orphanedRevenueItemsToDelete'])) {
                     JobForecastData::where('forecast_project_id', $id)
                         ->where('grid_type', 'revenue')
                         ->whereIn('cost_item', $validated['orphanedRevenueItemsToDelete'])
@@ -593,7 +594,7 @@ class ForecastProjectController extends Controller
                 }
 
                 // Add new cost items
-                if (!empty($validated['newCostItems'])) {
+                if (! empty($validated['newCostItems'])) {
                     $maxOrder = $project->costItems()->max('display_order') ?? -1;
                     foreach ($validated['newCostItems'] as $item) {
                         $project->costItems()->create([
@@ -606,7 +607,7 @@ class ForecastProjectController extends Controller
                 }
 
                 // Add new revenue items
-                if (!empty($validated['newRevenueItems'])) {
+                if (! empty($validated['newRevenueItems'])) {
                     $maxOrder = $project->revenueItems()->max('display_order') ?? -1;
                     foreach ($validated['newRevenueItems'] as $item) {
                         $project->revenueItems()->create([
@@ -714,10 +715,10 @@ class ForecastProjectController extends Controller
 
             \Log::error('Forecast save failed:', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
+            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: '.$e->getMessage()]);
         }
     }
 }

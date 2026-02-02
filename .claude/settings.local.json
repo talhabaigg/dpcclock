@@ -69,7 +69,10 @@
       "WebFetch(domain:ui.shadcn.com)",
       "Bash(docker compose:*)",
       "Bash(docker network:*)",
-      "Bash(docker inspect:*)"
+      "Bash(docker inspect:*)",
+      "Bash(composer run lint:*)",
+      "Bash(./vendor/bin/pint:*)",
+      "Bash(npx stylelint:*)"
     ]
   }
 }

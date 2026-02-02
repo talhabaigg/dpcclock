@@ -10,7 +10,7 @@ interface RequisitionSentToOfficeNotificationProps {
 }
 
 const RequisitionSentToOfficeNotification = ({ notification, onDismiss }: RequisitionSentToOfficeNotificationProps) => {
-    const { title, body, requisition_id, location_name, supplier_name, total_cost, sender_name } = notification.data;
+    const { title, body, requisition_id, location_name, total_cost } = notification.data;
 
     // Format the notification time
     const formatTime = (dateString: string) => {

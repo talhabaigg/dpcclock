@@ -668,7 +668,7 @@ export default function LocationShow() {
                                                         key={item.id}
                                                         className={cn(
                                                             'group transition-colors',
-                                                            Boolean(item.pivot?.is_locked)
+                                                            item.pivot?.is_locked
                                                                 ? 'bg-amber-50/50 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
                                                                 : 'hover:bg-muted/50'
                                                         )}
@@ -678,7 +678,7 @@ export default function LocationShow() {
                                                                 <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
                                                                     {item.code}
                                                                 </code>
-                                                                {Boolean(item.pivot?.is_locked) ? (
+                                                                {item.pivot?.is_locked ? (
                                                                     <TooltipProvider delayDuration={200}>
                                                                         <Tooltip>
                                                                             <TooltipTrigger>
