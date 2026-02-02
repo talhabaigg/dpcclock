@@ -23,6 +23,7 @@ class RequisitionLineItem extends Model
         'total_cost',
         'cost_code',
         'price_list',
+        'is_locked',
     ];
 
 

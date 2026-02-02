@@ -25,7 +25,7 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { AlertCircleIcon, Building2, Calendar, FileText, Loader2, MapPin, PenLine, Phone, Rocket, Send, Sparkles, Trash2, Plus, Truck, User, X } from 'lucide-react';
+import { AlertCircleIcon, Building2, Calendar, FileText, Loader2, Lock, MapPin, PenLine, Phone, Rocket, Send, Sparkles, Trash2, Plus, Truck, User, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
@@ -81,6 +81,7 @@ type LineItem = {
     serial_number?: number; // Optional, will be set automatically
     cost_code?: string; // Assuming cost_code is a string
     price_list?: string; // Assuming price_list is a string
+    is_locked?: boolean; // True if price comes from location item pricing
 };
 type Requisition = {
     id: number;
@@ -125,6 +126,13 @@ export default function Create() {
         expiryDate: string | null;
     }>({ open: false, itemCode: '', itemId: null, expiryDate: null });
 
+    const [lockedPriceDialog, setLockedPriceDialog] = useState<{
+        open: boolean;
+        itemCode: string;
+        priceList: string;
+        isLocked: boolean;
+    }>({ open: false, itemCode: '', priceList: '', isLocked: false });
+
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
     });
@@ -166,12 +174,13 @@ export default function Create() {
                 (requisition.line_items || []).map((item, idx) => ({
                     code: item.code ?? '',
                     description: item.description ?? '',
-                    unit_cost: item.unit_cost ?? 0,
-                    qty: item.qty ?? 1,
-                    total_cost: item.total_cost ?? 0,
+                    unit_cost: Number(item.unit_cost) || 0,
+                    qty: Number(item.qty) || 1,
+                    total_cost: Number(item.total_cost) || 0,
                     serial_number: item.serial_number ?? idx + 1,
                     cost_code: item.cost_code ?? '',
                     price_list: item.price_list ?? '',
+                    is_locked: item.is_locked ?? false,
                 })),
             );
         }
@@ -335,6 +344,7 @@ export default function Create() {
                     e.data.price_list = item.price_list; // assuming pricelist is numeric
                     e.data.cost_code = item.cost_code; // assuming costcode is a string
                     e.data.total_cost = (e.data.unit_cost || 0) * (e.data.qty || 0); // Calculate total based on unit cost and quantity
+                    e.data.is_locked = item.is_locked ?? false; // Lock price if it comes from location pricing
 
                     // Update rowData
                     const updated = [...rowData];
@@ -376,12 +386,20 @@ export default function Create() {
         {
             field: 'unit_cost',
             headerName: 'Unit Cost',
-            editable: true,
+            editable: (params: any) => {
+                // Not editable if price came from a project/location price list
+                const priceList = params.data?.price_list;
+                return !priceList || priceList === 'base_price';
+            },
             type: 'numericColumn',
             cellClassRules: cellClassRules('unit_cost'),
             cellRenderer: (params: any) => {
                 const error = params.node?.rowIndex !== undefined ? errors[`items.${params.node.rowIndex}.unit_cost`] : null;
                 const formatted = params.value != null ? `$${parseFloat(params.value).toFixed(6)}` : '';
+                const isLocked = params.data?.is_locked;
+                const priceList = params.data?.price_list;
+                const isFromProjectList = priceList && priceList !== 'base_price';
+
                 if (error) {
                     return (
                         <div className="flex flex-col text-right">
@@ -390,7 +408,40 @@ export default function Create() {
                         </div>
                     );
                 }
+
+                // Show lock icon only when is_locked is true, but style differently if from project list
+                if (isLocked) {
+                    return (
+                        <div className="flex items-center justify-end gap-1.5 cursor-pointer" title="Project locked price - click for details">
+                            <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                            <span className="text-amber-700 dark:text-amber-300">{formatted}</span>
+                        </div>
+                    );
+                }
+
+                // From project list but not locked - still not editable, subtle styling
+                if (isFromProjectList) {
+                    return (
+                        <div className="flex items-center justify-end gap-1.5 cursor-pointer" title="Project price - click for details">
+                            <span className="text-slate-600 dark:text-slate-300">{formatted}</span>
+                        </div>
+                    );
+                }
+
                 return formatted;
+            },
+            onCellClicked: (e: any) => {
+                const priceList = e.data?.price_list;
+                const isFromProjectList = priceList && priceList !== 'base_price';
+
+                if (isFromProjectList) {
+                    setLockedPriceDialog({
+                        open: true,
+                        itemCode: e.data.code || '',
+                        priceList: e.data.price_list || '',
+                        isLocked: e.data.is_locked ?? false,
+                    });
+                }
             },
             onCellValueChanged: (e) => {
                 const { unit_cost, qty } = e.data;
@@ -455,7 +506,7 @@ export default function Create() {
     ];
 
     const [rowData, setRowData] = useState([
-        { code: '', description: '', unit_cost: 0, qty: 1, total_cost: 0, serial_number: 1, cost_code: '', price_list: '' },
+        { code: '', description: '', unit_cost: 0, qty: 1, total_cost: 0, serial_number: 1, cost_code: '', price_list: '', is_locked: false },
     ]); // Initialize with one empty row
     useEffect(() => {
         setData('items', rowData);
@@ -471,6 +522,7 @@ export default function Create() {
             price_list: '',
             total_cost: 0,
             serial_number: rowData.length + 1, // Increment the line index based on the current row count
+            is_locked: false,
         };
         setRowData([...rowData, newRow]);
     };
@@ -553,7 +605,7 @@ export default function Create() {
     }, [rowData, data]); //this hook saves data in local storage unless autoSaving was set to false - that is done while submitting so that local storage is clear
 
     // Calculate total for display
-    const totalAmount = rowData.reduce((sum, item) => sum + (item.total_cost || 0), 0);
+    const totalAmount = rowData.reduce((sum, item) => sum + (Number(item.total_cost) || 0), 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -658,6 +710,36 @@ export default function Create() {
                             >
                                 <Send className="mr-2 h-4 w-4" />
                                 Request Quote
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Project Price Dialog */}
+                <AlertDialog open={lockedPriceDialog.open} onOpenChange={(open) => setLockedPriceDialog({ ...lockedPriceDialog, open })}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                {lockedPriceDialog.isLocked ? (
+                                    <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                ) : (
+                                    <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                )}
+                                {lockedPriceDialog.isLocked ? 'Project Locked Price' : 'Project Price'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                The price for item <strong>{lockedPriceDialog.itemCode}</strong> is set from the project price list{' '}
+                                <strong>{lockedPriceDialog.priceList}</strong> and cannot be modified on this requisition.
+                                <br /><br />
+                                {lockedPriceDialog.isLocked
+                                    ? 'This price is locked to ensure pricing consistency across all orders for this project.'
+                                    : 'This price comes from the project item list to maintain consistent pricing.'}
+                                {' '}To change this price, please update it in the project's item pricing settings.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogAction onClick={() => setLockedPriceDialog({ open: false, itemCode: '', priceList: '', isLocked: false })}>
+                                Understood
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
@@ -904,6 +986,12 @@ export default function Create() {
                                 theme={appliedTheme}
                                 rowSelection={rowSelection}
                                 rowDragManaged={true}
+                                getRowClass={(params) => {
+                                    if (params.data?.is_locked === true) {
+                                        return 'ag-row-locked';
+                                    }
+                                    return '';
+                                }}
                                 onRowDragEnd={(event) => {
                                     const movingData = event.node.data;
                                     const overIndex = event.overIndex;
@@ -958,6 +1046,7 @@ export default function Create() {
                                                     serial_number: rowData.length + 1,
                                                     cost_code: '',
                                                     price_list: '',
+                                                    is_locked: false,
                                                 };
 
                                                 const updated = [...rowData, newRow];

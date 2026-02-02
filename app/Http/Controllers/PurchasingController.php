@@ -82,6 +82,7 @@ class PurchasingController extends Controller
             'items.*.price_list' => 'nullable|string|max:255',
             'items.*.serial_number' => 'nullable|integer',
             'items.*.total_cost' => 'nullable|numeric|min:0',
+            'items.*.is_locked' => 'nullable|boolean',
         ]);
 
         // if ($validated['project_id']) {
@@ -123,6 +124,7 @@ class PurchasingController extends Controller
                 'cost_code' => $item['cost_code'] ?? null,
                 'price_list' => $item['price_list'] ?? null,
                 'total_cost' => $item['total_cost'] ?? 0,
+                'is_locked' => $item['is_locked'] ?? false,
             ]);
         }
 
@@ -339,13 +341,72 @@ class PurchasingController extends Controller
         $newRequisition->updated_at = now();
         $newRequisition->save();
 
+        $locationId = $newRequisition->project_number;
+
         foreach ($originalRequisition->lineItems as $lineItem) {
             $newLineItem = $lineItem->replicate();
             $newLineItem->requisition_id = $newRequisition->id;
+
+            // Refresh price from current project price lists
+            if ($lineItem->code) {
+                $currentPrice = $this->getCurrentItemPrice($lineItem->code, $locationId);
+                if ($currentPrice) {
+                    // Item has project-specific pricing - use it
+                    $newLineItem->unit_cost = $currentPrice['unit_cost'];
+                    $newLineItem->total_cost = $currentPrice['unit_cost'] * $newLineItem->qty;
+                    $newLineItem->price_list = $currentPrice['price_list'];
+                    $newLineItem->is_locked = $currentPrice['is_locked'];
+                } else {
+                    // No project pricing - set to $0 (no base prices)
+                    $newLineItem->unit_cost = 0;
+                    $newLineItem->total_cost = 0;
+                    $newLineItem->price_list = null;
+                    $newLineItem->is_locked = false;
+                }
+            } else {
+                // No item code - set to $0
+                $newLineItem->unit_cost = 0;
+                $newLineItem->total_cost = 0;
+                $newLineItem->price_list = null;
+                $newLineItem->is_locked = false;
+            }
+
             $newLineItem->save();
         }
 
-        return redirect()->route('requisition.edit', $newRequisition->id)->with('success', 'Requisition copied successfully.');
+        return redirect()->route('requisition.edit', $newRequisition->id)->with('success', 'Requisition copied successfully. Prices have been updated to current values.');
+    }
+
+    /**
+     * Get current price for an item from location pricing only
+     * Returns null if no location-specific pricing exists (keeps original price)
+     */
+    private function getCurrentItemPrice($code, $locationId)
+    {
+        $item = MaterialItem::where('code', $code)->first();
+
+        if (!$item) {
+            return null;
+        }
+
+        // Check for location-specific pricing only
+        $locationPrice = DB::table('location_item_pricing')
+            ->where('material_item_id', $item->id)
+            ->where('location_id', $locationId)
+            ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
+            ->select('locations.name as location_name', 'location_item_pricing.unit_cost_override', 'location_item_pricing.is_locked')
+            ->first();
+
+        if ($locationPrice) {
+            return [
+                'unit_cost' => $locationPrice->unit_cost_override,
+                'price_list' => $locationPrice->location_name,
+                'is_locked' => (bool) $locationPrice->is_locked,
+            ];
+        }
+
+        // No location pricing - return null to keep original price
+        return null;
     }
 
     public function toggleRequisitionTemplate($id)
@@ -476,6 +537,77 @@ class PurchasingController extends Controller
         return redirect()->back()->with('success', 'Marked as sent from Premier to Supplier');
     }
 
+    public function sendToOffice($id)
+    {
+        $requisition = Requisition::findOrFail($id);
+
+        if ($requisition->status !== 'pending') {
+            return redirect()->back()->with('error', 'Requisition must be in pending status to send to office.');
+        }
+
+        $requisition->status = 'office_review';
+        $requisition->save();
+
+        activity()
+            ->performedOn($requisition)
+            ->event('sent to office')
+            ->causedBy(auth()->user())
+            ->log("Requisition #{$requisition->id} was sent to office for review.");
+
+        return redirect()->back()->with('success', 'Requisition sent to office for review.');
+    }
+
+    public function refreshPricing($id)
+    {
+        $requisition = Requisition::with('lineItems')->findOrFail($id);
+
+        if (!in_array($requisition->status, ['pending', 'failed', 'office_review'])) {
+            return redirect()->back()->with('error', 'Cannot refresh pricing for requisitions that have been sent.');
+        }
+
+        $locationId = $requisition->project_number;
+        $updatedCount = 0;
+        $zeroPriceCount = 0;
+
+        foreach ($requisition->lineItems as $lineItem) {
+            if ($lineItem->code) {
+                $currentPrice = $this->getCurrentItemPrice($lineItem->code, $locationId);
+                if ($currentPrice) {
+                    $lineItem->unit_cost = $currentPrice['unit_cost'];
+                    $lineItem->total_cost = $currentPrice['unit_cost'] * $lineItem->qty;
+                    $lineItem->price_list = $currentPrice['price_list'];
+                    $lineItem->is_locked = $currentPrice['is_locked'];
+                    $updatedCount++;
+                } else {
+                    // No project pricing - set to $0
+                    $lineItem->unit_cost = 0;
+                    $lineItem->total_cost = 0;
+                    $lineItem->price_list = null;
+                    $lineItem->is_locked = false;
+                    $zeroPriceCount++;
+                }
+                $lineItem->save();
+            }
+        }
+
+        activity()
+            ->performedOn($requisition)
+            ->event('pricing refreshed')
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'updated_count' => $updatedCount,
+                'zero_price_count' => $zeroPriceCount,
+            ])
+            ->log("Requisition #{$requisition->id} pricing was refreshed. {$updatedCount} items updated, {$zeroPriceCount} items set to \$0.");
+
+        $message = "Pricing refreshed. {$updatedCount} items updated from project price list.";
+        if ($zeroPriceCount > 0) {
+            $message .= " {$zeroPriceCount} items set to \$0 (no project pricing).";
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
+
     public function edit($id)
     {
 
@@ -516,6 +648,7 @@ class PurchasingController extends Controller
             'items.*.serial_number' => 'nullable|integer',
             'items.*.cost_code' => 'nullable|string',
             'items.*.price_list' => 'nullable|string',
+            'items.*.is_locked' => 'nullable|boolean',
         ]);
         // dd($validated);
 

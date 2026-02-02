@@ -538,7 +538,7 @@ class MaterialItemController extends Controller
             ->where('material_item_id', $id)
             ->where('location_id', $locationId)
             ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
-            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override', 'location_item_pricing.is_locked')
             ->first();
 
         Log::info('Location price fetched: ' . json_encode($location_price));
@@ -546,9 +546,11 @@ class MaterialItemController extends Controller
         // Check if base price is expired (only applies when no location price exists)
         $priceExpired = false;
         $priceExpiryDate = null;
+        $isLocked = false;
 
         if ($location_price) {
             $item->unit_cost = $location_price->unit_cost_override;
+            $isLocked = (bool) $location_price->is_locked;
         } else {
             // Using base price - check if it's expired
             if ($item->price_expiry_date && $item->price_expiry_date->isPast()) {
@@ -563,6 +565,7 @@ class MaterialItemController extends Controller
         $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
         $itemArray['price_expired'] = $priceExpired;
         $itemArray['price_expiry_date'] = $priceExpiryDate;
+        $itemArray['is_locked'] = $isLocked;
 
         Log::info('Material item found: ' . json_encode($itemArray));
 
@@ -587,7 +590,7 @@ class MaterialItemController extends Controller
             ->where('material_item_id', $item->id)
             ->where('location_id', $locationId)
             ->join('locations', 'location_item_pricing.location_id', '=', 'locations.id')
-            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override')
+            ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override', 'location_item_pricing.is_locked')
             ->first();
 
         Log::info('Location price fetched: ' . json_encode($location_price));
@@ -595,9 +598,11 @@ class MaterialItemController extends Controller
         // Check if base price is expired (only applies when no location price exists)
         $priceExpired = false;
         $priceExpiryDate = null;
+        $isLocked = false;
 
         if ($location_price) {
             $item->unit_cost = $location_price->unit_cost_override;
+            $isLocked = (bool) $location_price->is_locked;
         } else {
             // Using base price - check if it's expired
             if ($item->price_expiry_date && $item->price_expiry_date->isPast()) {
@@ -612,6 +617,7 @@ class MaterialItemController extends Controller
         $itemArray['cost_code'] = $item->costCode ? $item->costCode->code : null;
         $itemArray['price_expired'] = $priceExpired;
         $itemArray['price_expiry_date'] = $priceExpiryDate;
+        $itemArray['is_locked'] = $isLocked;
 
         Log::info('Material item found: ' . json_encode($itemArray));
 

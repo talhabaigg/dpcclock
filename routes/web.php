@@ -251,8 +251,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:requisitions.process')->group(function () {
         Route::get('/requisition/{id}/process', [PurchasingController::class, 'process'])->name('requisition.process');
         Route::get('/requisition/{id}/api-send', [PurchasingController::class, 'sendApi'])->name('requisition.sendapi');
+        Route::get('/requisition/{id}/refresh-pricing', [PurchasingController::class, 'refreshPricing'])->name('requisition.refreshPricing');
         Route::get('/location/{locationId}/purchase-orders/sync-premier', [PurchasingController::class, 'getPurchaseOrdersForLocation'])->name('location.purchase-orders');
     });
+    Route::get('/requisition/{id}/send-to-office', [PurchasingController::class, 'sendToOffice'])->name('requisition.sendToOffice')
+        ->middleware('permission:requisitions.create');
     Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')
         ->middleware('permission:requisitions.send');
     Route::middleware('permission:requisitions.export')->group(function () {

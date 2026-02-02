@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { closestCenter, DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { EyeOff, GripVertical, Hourglass, Loader, Truck, X } from 'lucide-react';
+import { Building, EyeOff, GripVertical, Hourglass, Loader, Truck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import RequisitionCard from './requisitionCard';
 import { Requisition } from './types';
@@ -15,12 +15,13 @@ interface CardsIndexProps {
 
 const statusMap = {
     pending: { label: 'Pending', icon: <Loader className="h-4 w-4" /> },
+    office_review: { label: 'Waiting for Review', icon: <Building className="h-4 w-4" /> },
     success: { label: 'Awaiting', icon: <Hourglass className="h-4 w-4" /> },
     sent: { label: 'Sent', icon: <Truck className="h-4 w-4" /> },
 };
 
 type StatusKey = keyof typeof statusMap;
-const allStatuses: StatusKey[] = ['pending', 'success', 'sent'];
+const allStatuses: StatusKey[] = ['pending', 'office_review', 'success', 'sent'];
 
 const SortableColumn = ({
     id,
@@ -112,8 +113,24 @@ const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed.order)) setColumnOrder(parsed.order);
-            if (Array.isArray(parsed.hidden)) setHidden(parsed.hidden);
+            if (Array.isArray(parsed.order)) {
+                // Merge saved order with any new statuses that weren't in saved settings
+                const savedOrder = parsed.order as StatusKey[];
+                const newStatuses = allStatuses.filter((s) => !savedOrder.includes(s));
+                // Insert new statuses after 'pending' if it exists, otherwise at the start
+                const pendingIndex = savedOrder.indexOf('pending');
+                if (newStatuses.length > 0) {
+                    const mergedOrder = [...savedOrder];
+                    mergedOrder.splice(pendingIndex + 1, 0, ...newStatuses);
+                    setColumnOrder(mergedOrder.filter((s) => allStatuses.includes(s)));
+                } else {
+                    setColumnOrder(savedOrder.filter((s) => allStatuses.includes(s)));
+                }
+            }
+            if (Array.isArray(parsed.hidden)) {
+                // Only keep hidden statuses that still exist
+                setHidden((parsed.hidden as StatusKey[]).filter((s) => allStatuses.includes(s)));
+            }
         }
     }, []);
 

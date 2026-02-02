@@ -14,6 +14,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import {
     AlertCircleIcon,
     ArrowUpDown,
+    Building,
     Building2,
     Calendar,
     ChevronDown,
@@ -28,10 +29,12 @@ import {
     GitCompare,
     HelpCircle,
     History,
+    Lock,
     MapPin,
     Package,
     Pencil,
     Phone,
+    RefreshCw,
     RotateCcw,
     Send,
     Trash2,
@@ -49,7 +52,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function RequisitionShow() {
-    const { requisition, activities, flash } = usePage().props as unknown as {
+    const { requisition, activities, flash, auth } = usePage().props as unknown as {
         requisition: {
             id: number;
             po_number: string;
@@ -74,6 +77,7 @@ export default function RequisitionShow() {
                 total_cost: number;
                 cost_code: string;
                 price_list: string;
+                is_locked: boolean;
             }[];
             line_items_sum_total_cost: number;
         };
@@ -83,7 +87,18 @@ export default function RequisitionShow() {
             error?: string;
             message?: string;
         };
+        auth: {
+            permissions: string[];
+        };
     };
+
+    // Check if any line items have base price (not from project list)
+    const hasBasePriceItems = requisition.line_items?.some(
+        (item) => !item.price_list || item.price_list === 'base_price'
+    );
+
+    // Check if user can process requisitions (send to Premier)
+    const canProcessRequisitions = auth?.permissions?.includes('requisitions.process');
 
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -145,6 +160,8 @@ export default function RequisitionShow() {
                 return { bg: 'bg-slate-400', bgLight: 'bg-slate-50 dark:bg-slate-900', text: 'Pending', textColor: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-700' };
             case 'failed':
                 return { bg: 'bg-red-500', bgLight: 'bg-red-50 dark:bg-red-950', text: 'Failed', textColor: 'text-red-600 dark:text-red-400', border: 'border-red-200 dark:border-red-800' };
+            case 'office_review':
+                return { bg: 'bg-purple-500', bgLight: 'bg-purple-50 dark:bg-purple-950', text: 'Waiting for Review', textColor: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' };
             default:
                 return { bg: 'bg-slate-400', bgLight: 'bg-slate-50 dark:bg-slate-900', text: status, textColor: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-700' };
         }
@@ -295,6 +312,14 @@ export default function RequisitionShow() {
                                     <span className="hidden sm:inline">Duplicate</span>
                                 </Button>
                             </Link>
+                            {canProcessRequisitions && (requisition.status === 'pending' || requisition.status === 'failed' || requisition.status === 'office_review') && (
+                                <Link href={`/requisition/${requisition.id}/refresh-pricing`}>
+                                    <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                        <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                        <span className="hidden sm:inline">Refresh Pricing</span>
+                                    </Button>
+                                </Link>
+                            )}
 
                             <div className="flex-1" />
 
@@ -306,7 +331,49 @@ export default function RequisitionShow() {
                                     </Button>
                                 </Link>
                             )}
-                            {requisition.status === 'pending' && (
+                            {requisition.status === 'pending' && hasBasePriceItems && (
+                                <div className="flex items-center gap-1">
+                                    <Link href={`/requisition/${requisition.id}/send-to-office`}>
+                                        <Button size="sm" className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                            <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                            Send to Office
+                                        </Button>
+                                    </Link>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2 sm:h-9">
+                                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-md">
+                                            <DialogHeader>
+                                                <DialogTitle className="flex items-center gap-2">
+                                                    <Building className="h-5 w-5 text-purple-600" />
+                                                    Why Send to Office?
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    This requisition requires office review
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="mt-4 space-y-4">
+                                                <p className="text-sm text-muted-foreground">
+                                                    This requisition contains items with <strong>base prices</strong> (not from the project price list).
+                                                    These orders require review by an office administrator before being sent to Premier.
+                                                </p>
+                                                <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950/50">
+                                                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300">What happens next:</p>
+                                                    <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-purple-600 dark:text-purple-400">
+                                                        <li>Order is sent to the office for review</li>
+                                                        <li>An admin will verify pricing and details</li>
+                                                        <li>Admin sends the order to Premier</li>
+                                                    </ol>
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            )}
+                            {requisition.status === 'pending' && !hasBasePriceItems && (
                                 <div className="flex items-center gap-1">
                                     <Link href={`/requisition/${requisition.id}/api-send`}>
                                         <Button size="sm" className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
@@ -393,7 +460,21 @@ export default function RequisitionShow() {
                                     </Dialog>
                                 </div>
                             )}
-                            {requisition.status !== 'pending' && requisition.status !== 'failed' && (
+                            {requisition.status === 'office_review' && canProcessRequisitions && (
+                                <Link href={`/requisition/${requisition.id}/api-send`}>
+                                    <Button size="sm" className="h-8 gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                        <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                        Send to Premier
+                                    </Button>
+                                </Link>
+                            )}
+                            {requisition.status === 'office_review' && !canProcessRequisitions && (
+                                <Badge variant="outline" className="gap-1 border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400">
+                                    <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                    Waiting for Review
+                                </Badge>
+                            )}
+                            {requisition.status !== 'pending' && requisition.status !== 'failed' && requisition.status !== 'office_review' && (
                                 <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
                                     <CircleCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     <span className="hidden xs:inline">Sent to</span> Premier
@@ -563,12 +644,21 @@ export default function RequisitionShow() {
                                                             key={item.id}
                                                             className={cn(
                                                                 'transition-colors',
-                                                                index % 2 === 0 ? 'bg-white dark:bg-card' : 'bg-slate-50/50 dark:bg-muted/10',
-                                                                'hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
+                                                                item.is_locked
+                                                                    ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50'
+                                                                    : cn(
+                                                                        index % 2 === 0 ? 'bg-white dark:bg-card' : 'bg-slate-50/50 dark:bg-muted/10',
+                                                                        'hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
+                                                                    ),
                                                             )}
                                                         >
                                                             <TableCell className="px-2 py-2 font-mono text-xs text-slate-700 sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
-                                                                {item.code}
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {item.is_locked ? (
+                                                                        <Lock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                                                                    ) : null}
+                                                                    <span>{item.code}</span>
+                                                                </div>
                                                             </TableCell>
                                                             <TableCell className="max-w-[120px] px-2 py-2 text-xs text-slate-600 sm:max-w-[200px] sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
                                                                 <span className="line-clamp-2">{item.description}</span>
@@ -582,7 +672,14 @@ export default function RequisitionShow() {
                                                                 {item.qty}
                                                             </TableCell>
                                                             <TableCell className="hidden px-2 py-2 text-right text-xs tabular-nums text-slate-600 sm:table-cell sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
-                                                                ${Number(item.unit_cost)?.toFixed(2)}
+                                                                <div className="flex items-center justify-end gap-1.5" title={item.is_locked ? 'Project locked price' : undefined}>
+                                                                    {item.is_locked ? (
+                                                                        <Lock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                                                    ) : null}
+                                                                    <span className={item.is_locked ? 'text-amber-700 dark:text-amber-300' : ''}>
+                                                                        ${Number(item.unit_cost)?.toFixed(2)}
+                                                                    </span>
+                                                                </div>
                                                             </TableCell>
                                                             <TableCell className="px-2 py-2 text-right text-xs font-semibold tabular-nums text-slate-900 sm:px-4 sm:py-2.5 sm:text-sm dark:text-white">
                                                                 ${Number(item.total_cost)?.toFixed(2)}
