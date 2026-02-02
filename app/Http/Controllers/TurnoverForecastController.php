@@ -205,19 +205,17 @@ class TurnoverForecastController extends Controller
             }
 
             // ============ REVENUE FY CALCULATIONS ============
-            // Calculate revenue forecast this FY
-            $revenueForecastFY = 0;
-            foreach ($revenueForecast as $month => $amount) {
-                if (
-                    $month >= date('Y-m', strtotime($fyStartDate)) &&
-                    $month <= date('Y-m', strtotime($fyEndDate))
-                ) {
-                    $revenueForecastFY += $amount;
+            // Calculate revenue contract FY by preferring actuals over forecasts per month
+            $revenueContractFY = 0;
+            $fyMonths = $this->generateMonthRange(date('Y-m', strtotime($fyStartDate)), date('Y-m', strtotime($fyEndDate)));
+            foreach ($fyMonths as $month) {
+                // Prefer actual over forecast for each month
+                if (isset($revenueActuals[$month]) && $revenueActuals[$month] != 0) {
+                    $revenueContractFY += $revenueActuals[$month];
+                } elseif (isset($revenueForecast[$month])) {
+                    $revenueContractFY += $revenueForecast[$month];
                 }
             }
-
-            // Revenue Contract FY = actuals this FY + forecast this FY
-            $revenueContractFY = $claimedActualsFY + $revenueForecastFY;
 
             // Remaining revenue value FY = Contract FY - claimed actuals for this FY
             $remainingRevenueValueFY = $revenueContractFY - $claimedActualsFY;
@@ -231,19 +229,28 @@ class TurnoverForecastController extends Controller
                 ->whereBetween('transaction_date', [$fyStartDate, $fyEndDate])
                 ->sum('amount');
 
-            // Calculate cost forecast this FY
-            $costForecastFY = 0;
-            foreach ($costForecast as $month => $amount) {
-                if (
-                    $month >= date('Y-m', strtotime($fyStartDate)) &&
-                    $month <= date('Y-m', strtotime($fyEndDate))
-                ) {
-                    $costForecastFY += $amount;
+            // Calculate cost contract FY:
+            // - Past months: prefer actuals over forecast
+            // - Current month and future: prefer forecast over actuals
+            $currentMonth = date('Y-m');
+            $costContractFY = 0;
+            foreach ($fyMonths as $month) {
+                if ($month < $currentMonth) {
+                    // Past month: prefer actuals over forecast
+                    if (isset($costActuals[$month]) && $costActuals[$month] != 0) {
+                        $costContractFY += $costActuals[$month];
+                    } elseif (isset($costForecast[$month])) {
+                        $costContractFY += $costForecast[$month];
+                    }
+                } else {
+                    // Current or future month: prefer forecast over actuals
+                    if (isset($costForecast[$month]) && $costForecast[$month] != 0) {
+                        $costContractFY += $costForecast[$month];
+                    } elseif (isset($costActuals[$month])) {
+                        $costContractFY += $costActuals[$month];
+                    }
                 }
             }
-
-            // Cost Contract FY = actuals this FY + forecast this FY
-            $costContractFY = $costActualsFY + $costForecastFY;
 
             // Remaining cost value FY = Contract FY - cost actuals for this FY
             $remainingCostValueFY = $costContractFY - $costActualsFY;

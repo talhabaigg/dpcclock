@@ -148,9 +148,6 @@ export default function TurnoverForecastIndex({
 
     // Calculate totals for summary
     const totals = useMemo(() => {
-        const monthsToDate = lastActualMonth ? filteredMonths.filter((month) => month < lastActualMonth) : [];
-        const monthsRemaining = lastActualMonth ? filteredMonths.filter((month) => month >= lastActualMonth) : filteredMonths;
-
         return filteredData.reduce(
             (acc, row) => {
                 acc.budget += safeNumber(row.budget);
@@ -159,8 +156,21 @@ export default function TurnoverForecastIndex({
                 acc.revenueContractFY += safeNumber(row.revenue_contract_fy);
                 acc.costContractFY += safeNumber(row.cost_contract_fy);
                 acc.totalContractValue += safeNumber(row.total_contract_value);
-                acc.completedTurnoverYTD += monthsToDate.reduce((sum, month) => sum + safeNumber(row.revenue_actuals?.[month]), 0);
-                acc.forecastRevenueYTG += monthsRemaining.reduce((sum, month) => sum + safeNumber(row.revenue_forecast?.[month]), 0);
+
+                // For each month, prefer actuals over forecasts
+                filteredMonths.forEach((month) => {
+                    const actualValue = safeNumber(row.revenue_actuals?.[month]);
+                    const forecastValue = safeNumber(row.revenue_forecast?.[month]);
+
+                    if (actualValue !== 0) {
+                        // Use actual - count as completed turnover
+                        acc.completedTurnoverYTD += actualValue;
+                    } else if (forecastValue !== 0) {
+                        // Use forecast - count as work in hand
+                        acc.forecastRevenueYTG += forecastValue;
+                    }
+                });
+
                 return acc;
             },
             {
@@ -174,7 +184,7 @@ export default function TurnoverForecastIndex({
                 forecastRevenueYTG: 0,
             }
         );
-    }, [filteredData, filteredMonths, lastActualMonth]);
+    }, [filteredData, filteredMonths]);
 
     const completedTurnoverYTD = totals.completedTurnoverYTD;
     const workInHandFY = totals.forecastRevenueYTG;
