@@ -18,6 +18,7 @@ class JobForecastData extends Model
         'cost_item',
         'month',
         'forecast_amount',
+        'note',
     ];
 
     protected $casts = [

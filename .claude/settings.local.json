@@ -72,7 +72,8 @@
       "Bash(docker inspect:*)",
       "Bash(composer run lint:*)",
       "Bash(./vendor/bin/pint:*)",
-      "Bash(npx stylelint:*)"
+      "Bash(npx stylelint:*)",
+      "Bash(git log:*)"
     ]
   }
 }

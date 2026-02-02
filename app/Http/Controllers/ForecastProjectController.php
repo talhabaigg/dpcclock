@@ -105,7 +105,16 @@ class ForecastProjectController extends Controller
                     if (in_array($forecast->month, $forecastMonths)) {
                         $row[$forecast->month] = (float) $forecast->forecast_amount;
                     }
+                    // Get note from any month record (notes are per cost_item, stored redundantly)
+                    if (! isset($row['note']) && ! empty($forecast->note)) {
+                        $row['note'] = $forecast->note;
+                    }
                 }
+            }
+
+            // Initialize note if not set
+            if (! isset($row['note'])) {
+                $row['note'] = null;
             }
 
             return $row;
@@ -133,7 +142,16 @@ class ForecastProjectController extends Controller
                     if (in_array($forecast->month, $forecastMonths)) {
                         $row[$forecast->month] = (float) $forecast->forecast_amount;
                     }
+                    // Get note from any month record
+                    if (! isset($row['note']) && ! empty($forecast->note)) {
+                        $row['note'] = $forecast->note;
+                    }
                 }
+            }
+
+            // Initialize note if not set
+            if (! isset($row['note'])) {
+                $row['note'] = null;
             }
 
             return $row;
@@ -155,6 +173,7 @@ class ForecastProjectController extends Controller
                 'contract_sum_to_date' => 0,
                 'type' => 'forecast',
                 'is_orphaned' => true,
+                'note' => null,
             ];
 
             // Initialize all forecast months to null
@@ -166,6 +185,10 @@ class ForecastProjectController extends Controller
             foreach ($forecasts as $forecast) {
                 if (in_array($forecast->month, $forecastMonths)) {
                     $row[$forecast->month] = (float) $forecast->forecast_amount;
+                }
+                // Get note from any month record
+                if (! isset($row['note']) && ! empty($forecast->note)) {
+                    $row['note'] = $forecast->note;
                 }
             }
 
@@ -187,6 +210,7 @@ class ForecastProjectController extends Controller
                 'budget' => 0,
                 'type' => 'forecast',
                 'is_orphaned' => true,
+                'note' => null,
             ];
 
             // Initialize all forecast months to null
@@ -198,6 +222,10 @@ class ForecastProjectController extends Controller
             foreach ($forecasts as $forecast) {
                 if (in_array($forecast->month, $forecastMonths)) {
                     $row[$forecast->month] = (float) $forecast->forecast_amount;
+                }
+                // Get note from any month record
+                if (! isset($row['note']) && ! empty($forecast->note)) {
+                    $row['note'] = $forecast->note;
                 }
             }
 
@@ -508,16 +536,19 @@ class ForecastProjectController extends Controller
             'costForecastData.*.cost_item' => 'required|string',
             'costForecastData.*.months' => 'present|array',
             'costForecastData.*.months.*' => 'nullable|numeric',
+            'costForecastData.*.note' => 'nullable|string|max:500',
             'revenueForecastData' => 'sometimes|array',
             'revenueForecastData.*.cost_item' => 'required|string',
             'revenueForecastData.*.months' => 'present|array',
             'revenueForecastData.*.months.*' => 'nullable|numeric',
+            'revenueForecastData.*.note' => 'nullable|string|max:500',
             // Legacy format (optional)
             'grid_type' => 'sometimes|in:cost,revenue',
             'forecast_data' => 'sometimes|array',
             'forecast_data.*.cost_item' => 'required|string',
             'forecast_data.*.months' => 'present|array',
             'forecast_data.*.months.*' => 'nullable|numeric',
+            'forecast_data.*.note' => 'nullable|string|max:500',
         ]);
 
         $project = ForecastProject::findOrFail($id);
@@ -622,6 +653,7 @@ class ForecastProjectController extends Controller
                 // Save cost forecast data
                 foreach ($validated['costForecastData'] as $row) {
                     $costItem = $row['cost_item'];
+                    $note = $row['note'] ?? null;
                     foreach ($row['months'] as $month => $amount) {
                         if ($amount !== null && $amount !== '') {
                             JobForecastData::updateOrCreate(
@@ -633,6 +665,7 @@ class ForecastProjectController extends Controller
                                 ],
                                 [
                                     'forecast_amount' => $amount,
+                                    'note' => $note,
                                 ]
                             );
                         } else {
@@ -650,6 +683,7 @@ class ForecastProjectController extends Controller
                 // Save revenue forecast data
                 foreach ($validated['revenueForecastData'] as $row) {
                     $costItem = $row['cost_item'];
+                    $note = $row['note'] ?? null;
                     foreach ($row['months'] as $month => $amount) {
                         if ($amount !== null && $amount !== '') {
                             JobForecastData::updateOrCreate(
@@ -661,6 +695,7 @@ class ForecastProjectController extends Controller
                                 ],
                                 [
                                     'forecast_amount' => $amount,
+                                    'note' => $note,
                                 ]
                             );
                         } else {
@@ -680,6 +715,7 @@ class ForecastProjectController extends Controller
 
                 foreach ($validated['forecast_data'] as $row) {
                     $costItem = $row['cost_item'];
+                    $note = $row['note'] ?? null;
 
                     foreach ($row['months'] as $month => $amount) {
                         if ($amount !== null && $amount !== '') {
@@ -692,6 +728,7 @@ class ForecastProjectController extends Controller
                                 ],
                                 [
                                     'forecast_amount' => $amount,
+                                    'note' => $note,
                                 ]
                             );
                         } else {

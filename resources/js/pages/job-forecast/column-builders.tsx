@@ -47,6 +47,30 @@ export function buildCostColumnDefs({
             headerClass: 'ag-left-aligned-header',
         },
         {
+            headerName: 'Notes',
+            field: 'note',
+            pinned: 'left',
+            resizable: true,
+            width: 200,
+            editable: (params) => !isLocked && !params.node.rowPinned,
+            singleClickEdit: true,
+            cellEditor: 'agLargeTextCellEditor',
+            cellEditorParams: {
+                maxLength: 500,
+                rows: 6,
+                cols: 50,
+            },
+            cellEditorPopup: true,
+            headerClass: 'ag-left-aligned-header',
+            cellClass: 'text-left text-xs',
+            tooltipValueGetter: (p: any) => p.value,
+            valueSetter: (p: any) => {
+                const value = p.newValue?.trim() || null;
+                updateRowCell(p.data._rowKey, 'note', value);
+                return true;
+            },
+        },
+        {
             headerName: 'Final $',
             field: 'budget',
             filter: false,
@@ -427,6 +451,30 @@ export function buildRevenueColumnDefs({
             filter: true,
             flex: 1,
             headerClass: 'ag-left-aligned-header',
+        },
+        {
+            headerName: 'Notes',
+            field: 'note',
+            pinned: 'left',
+            resizable: true,
+            width: 200,
+            editable: (params) => !isLocked && !params.node.rowPinned,
+            singleClickEdit: true,
+            cellEditor: 'agLargeTextCellEditor',
+            cellEditorParams: {
+                maxLength: 500,
+                rows: 6,
+                cols: 50,
+            },
+            cellEditorPopup: true,
+            headerClass: 'ag-left-aligned-header',
+            cellClass: 'text-left text-xs',
+            tooltipValueGetter: (p: any) => p.value,
+            valueSetter: (p: any) => {
+                const value = p.newValue?.trim() || null;
+                updateRowCell(p.data._rowKey, 'note', value);
+                return true;
+            },
         },
         {
             headerName: 'Final $',

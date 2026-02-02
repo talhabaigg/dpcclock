@@ -545,6 +545,7 @@ const ShowJobForecastPage = ({
             return {
                 cost_item: row.cost_item,
                 months,
+                note: row.note || null,
             };
         });
 
@@ -560,6 +561,7 @@ const ShowJobForecastPage = ({
             return {
                 cost_item: row.cost_item,
                 months,
+                note: row.note || null,
             };
         });
 

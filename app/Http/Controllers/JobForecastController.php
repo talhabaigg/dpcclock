@@ -12,11 +12,11 @@ use App\Models\LabourForecast;
 use App\Models\Location;
 use App\Models\User;
 use App\Notifications\JobForecastStatusNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class JobForecastController extends Controller
 {
@@ -27,21 +27,20 @@ class JobForecastController extends Controller
 
         // Check if user has access to this location
         $user = Auth::user();
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             // Get accessible location IDs based on kiosk access
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
 
             // Check if this location is accessible
-            if (!in_array($location->eh_location_id, $accessibleLocationIds)) {
+            if (! in_array($location->eh_location_id, $accessibleLocationIds)) {
                 abort(403, 'You do not have access to this job forecast.');
             }
         }
 
         $jobNumber = $location->external_id;
-        $jobName = $location->name ?? 'Job ' . $jobNumber;
+        $jobName = $location->name ?? 'Job '.$jobNumber;
 
         $lastUpdate = JobCostDetail::where('job_number', $jobNumber)->max('updated_at');
-
 
         // $jobCost = JobCostDetail::where('job_number', $jobNumber)->limit(10)->get();
         $actualsByMonth = JobCostDetail::where('job_number', $jobNumber)
@@ -90,7 +89,7 @@ class JobForecastController extends Controller
             ->all();
 
         $requestedForecastMonth = $request->query('forecast_month');
-        $hasRequestedForecastMonth = !empty($requestedForecastMonth);
+        $hasRequestedForecastMonth = ! empty($requestedForecastMonth);
         $selectedForecastMonth = null;
         $forecastMonthDate = null;
         if ($requestedForecastMonth) {
@@ -100,7 +99,7 @@ class JobForecastController extends Controller
             }
         }
 
-        if (!$selectedForecastMonth) {
+        if (! $selectedForecastMonth) {
             $selectedForecastMonth = $availableForecastMonths[0] ?? $currentMonth;
             $forecastMonthDate = \DateTime::createFromFormat('Y-m', $selectedForecastMonth);
         }
@@ -113,7 +112,7 @@ class JobForecastController extends Controller
                 ->first();
         }
 
-        if (!$jobForecast && !empty($availableForecastMonths) && !$hasRequestedForecastMonth) {
+        if (! $jobForecast && ! empty($availableForecastMonths) && ! $hasRequestedForecastMonth) {
             $jobForecast = JobForecast::where('job_number', $jobNumber)
                 ->orderBy('forecast_month', 'desc')
                 ->first();
@@ -162,6 +161,7 @@ class JobForecastController extends Controller
             ->groupBy('cost_item')
             ->map(function ($items) {
                 $first = $items->first();
+
                 return [
                     'cost_item' => $first->cost_item,
                     'cost_item_description' => $first->cost_item_description ?? '',
@@ -175,7 +175,7 @@ class JobForecastController extends Controller
         // Calculate forecast months first
         $endDate = $JobSummary->actual_end_date ?? $JobSummary->estimated_end_date ?? date('Y-m-d');
         $endMonth = date('Y-m', strtotime($endDate));
-        $lastActualMonth = !empty($months) ? end($months) : $currentMonth;
+        $lastActualMonth = ! empty($months) ? end($months) : $currentMonth;
 
         // Forecast starts from selected forecast month (versioned forecasts)
         $startForecastMonth = $selectedForecastMonth ?: $currentMonth;
@@ -184,7 +184,7 @@ class JobForecastController extends Controller
         $current = $startForecastMonth;
         while ($current <= $endMonth) {
             $forecastMonths[] = $current;
-            $current = date('Y-m', strtotime($current . ' +1 month'));
+            $current = date('Y-m', strtotime($current.' +1 month'));
         }
         $overlapForecastMonths = array_values(array_intersect($forecastMonths, $months));
 
@@ -195,20 +195,20 @@ class JobForecastController extends Controller
                 ->where('job_forecast_id', $jobForecast->id)
                 ->get()
                 ->groupBy(function ($item) {
-                    return $item->grid_type . '_' . $item->cost_item;
+                    return $item->grid_type.'_'.$item->cost_item;
                 });
         } else {
             $savedForecasts = JobForecastData::where('job_number', $jobNumber)
                 ->whereNull('job_forecast_id')
                 ->get()
                 ->groupBy(function ($item) {
-                    return $item->grid_type . '_' . $item->cost_item;
+                    return $item->grid_type.'_'.$item->cost_item;
                 });
         }
 
         // Build cost rows from ALL budget items (not just those with actuals)
         $costRows = $budgetByCostItem
-            ->map(function ($budgetItem) use ($months, $actualsByCostItem, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth) {
+            ->map(function ($budgetItem) use ($months, $actualsByCostItem, $forecastMonths, $overlapForecastMonths, $savedForecasts) {
                 $costItem = $budgetItem['cost_item'];
 
                 $row = [
@@ -223,7 +223,7 @@ class JobForecastController extends Controller
                     $row[$m] = null;
                 }
                 foreach ($overlapForecastMonths as $m) {
-                    $row['forecast_' . $m] = null;
+                    $row['forecast_'.$m] = null;
                 }
 
                 // Fill in actuals if they exist for this cost item
@@ -234,17 +234,26 @@ class JobForecastController extends Controller
                 }
 
                 // Load forecast data from saved records
-                $forecastKey = 'cost_' . $costItem;
+                $forecastKey = 'cost_'.$costItem;
                 if (isset($savedForecasts[$forecastKey])) {
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
                             if (in_array($forecast->month, $overlapForecastMonths)) {
-                                $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
+                                $row['forecast_'.$forecast->month] = (float) $forecast->forecast_amount;
                             } else {
                                 $row[$forecast->month] = (float) $forecast->forecast_amount;
                             }
                         }
+                        // Get note from any month record (notes are per cost_item, stored redundantly)
+                        if (! isset($row['note']) && ! empty($forecast->note)) {
+                            $row['note'] = $forecast->note;
+                        }
                     }
+                }
+
+                // Initialize note if not set
+                if (! isset($row['note'])) {
+                    $row['note'] = null;
                 }
 
                 return $row;
@@ -254,7 +263,7 @@ class JobForecastController extends Controller
             ->all();
 
         $revenueRows = [
-            (function () use ($revenuesByMonth, $months, $forecastMonths, $overlapForecastMonths, $savedForecasts, $currentMonth, $JobSummary) {
+            (function () use ($revenuesByMonth, $months, $forecastMonths, $overlapForecastMonths, $savedForecasts, $JobSummary) {
                 $row = [
                     'cost_item' => '99-99',
                     'cost_item_description' => 'Revenue',
@@ -266,7 +275,7 @@ class JobForecastController extends Controller
                     $row[$m] = null;
                 }
                 foreach ($overlapForecastMonths as $m) {
-                    $row['forecast_' . $m] = null;
+                    $row['forecast_'.$m] = null;
                 }
 
                 foreach ($revenuesByMonth as $r) {
@@ -279,16 +288,25 @@ class JobForecastController extends Controller
                     foreach ($savedForecasts[$forecastKey] as $forecast) {
                         if (in_array($forecast->month, $forecastMonths)) {
                             if (in_array($forecast->month, $overlapForecastMonths)) {
-                                $row['forecast_' . $forecast->month] = (float) $forecast->forecast_amount;
+                                $row['forecast_'.$forecast->month] = (float) $forecast->forecast_amount;
                             } else {
                                 $row[$forecast->month] = (float) $forecast->forecast_amount;
                             }
                         }
+                        // Get note from any month record
+                        if (! isset($row['note']) && ! empty($forecast->note)) {
+                            $row['note'] = $forecast->note;
+                        }
                     }
                 }
 
+                // Initialize note if not set
+                if (! isset($row['note'])) {
+                    $row['note'] = null;
+                }
+
                 return $row;
-            })()
+            })(),
         ];
 
         return Inertia::render('job-forecast/show', [
@@ -327,6 +345,7 @@ class JobForecastController extends Controller
             'forecast_data.*.cost_item' => 'required|string',
             'forecast_data.*.months' => 'present|array',   // present allows empty array
             'forecast_data.*.months.*' => 'nullable|numeric',
+            'forecast_data.*.note' => 'nullable|string|max:500',
         ]);
 
         $jobNumber = Location::where('id', $id)->value('external_id');
@@ -351,7 +370,7 @@ class JobForecastController extends Controller
         );
 
         // Check if forecast is editable (based on status, not just lock)
-        if (!$jobForecast->isEditable()) {
+        if (! $jobForecast->isEditable()) {
             return redirect()->back()->withErrors(['error' => 'This forecast cannot be edited in its current status.']);
         }
 
@@ -423,7 +442,7 @@ class JobForecastController extends Controller
             // }
         }
 
-        if (!empty($validationErrors)) {
+        if (! empty($validationErrors)) {
             return redirect()->back()->withErrors(['error' => implode("\n", $validationErrors)]);
         }
 
@@ -433,13 +452,13 @@ class JobForecastController extends Controller
 
             foreach ($validated['forecast_data'] as $row) {
                 $costItem = $row['cost_item'];
+                $note = $row['note'] ?? null;
 
                 foreach ($row['months'] as $month => $amount) {
                     // Strip "forecast_" prefix if present (for current month scenario)
                     $actualMonth = str_starts_with($month, 'forecast_') ? substr($month, 9) : $month;
 
                     if ($amount !== null && $amount !== '') {
-
 
                         JobForecastData::updateOrCreate(
                             [
@@ -452,6 +471,7 @@ class JobForecastController extends Controller
                             [
                                 'location_id' => $id,
                                 'forecast_amount' => $amount,
+                                'note' => $note,
                             ]
                         );
                     } else {
@@ -475,10 +495,10 @@ class JobForecastController extends Controller
 
             \Log::error('Job forecast save failed:', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: ' . $e->getMessage()]);
+            return redirect()->back()->withErrors(['error' => 'Failed to save forecast: '.$e->getMessage()]);
         }
     }
 
@@ -507,7 +527,8 @@ class JobForecastController extends Controller
         return redirect()->back()->with('success', $jobForecast->is_locked ? 'Forecast locked.' : 'Forecast unlocked.');
     }
 
-    public function compareForecast($location, Request $request) {
+    public function compareForecast($location, Request $request)
+    {
 
         $jobNumber = Location::where('id', $location)->value('external_id');
         $month = $request->query('month');
@@ -518,7 +539,7 @@ class JobForecastController extends Controller
             ? Carbon::parse($latestForecast->forecast_month)->format('Y-m')
             : null;
 
-        if (!$month) {
+        if (! $month) {
             return Inertia::render('compare-forecast/show', [
                 'comparisonData' => [
                     'cost' => [],
@@ -540,7 +561,7 @@ class JobForecastController extends Controller
 
         $forecastData = $jobForecast
             ? $jobForecast->data->groupBy(function ($item) {
-                return $item->grid_type . '_' . $item->cost_item;
+                return $item->grid_type.'_'.$item->cost_item;
             })
             : collect();
 
@@ -577,7 +598,7 @@ class JobForecastController extends Controller
 
                 foreach ($items as $item) {
                     $forecastAmount = null;
-                    $forecastKey = 'cost_' . $item->cost_item;
+                    $forecastKey = 'cost_'.$item->cost_item;
                     if (isset($forecastData[$forecastKey])) {
                         $forecastRecord = $forecastData[$forecastKey]->firstWhere('month', $item->month);
                         if ($forecastRecord) {
@@ -609,7 +630,7 @@ class JobForecastController extends Controller
 
                 foreach ($items as $item) {
                     $forecastAmount = null;
-                    $forecastKey = 'revenue_' . $item->cost_item;
+                    $forecastKey = 'revenue_'.$item->cost_item;
                     if (isset($forecastData[$forecastKey])) {
                         $forecastRecord = $forecastData[$forecastKey]->firstWhere('month', $item->month);
                         if ($forecastRecord) {
@@ -640,7 +661,6 @@ class JobForecastController extends Controller
             ->values()
             ->all();
 
-        
         return Inertia::render('compare-forecast/show', [
             'comparisonData' => [
                 'cost' => $costComparison,
@@ -671,21 +691,21 @@ class JobForecastController extends Controller
             ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
             ->first();
 
-        if (!$jobForecast) {
+        if (! $jobForecast) {
             return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
         }
 
-        if (!$jobForecast->canBeSubmitted()) {
+        if (! $jobForecast->canBeSubmitted()) {
             return redirect()->back()->withErrors(['error' => 'This forecast cannot be submitted in its current status.']);
         }
 
         // Check if forecast has any data
         $hasData = $jobForecast->data()->exists();
-        if (!$hasData) {
+        if (! $hasData) {
             return redirect()->back()->withErrors(['error' => 'Cannot submit an empty forecast. Please add forecast data first.']);
         }
 
-        if (!$jobForecast->submit($user)) {
+        if (! $jobForecast->submit($user)) {
             return redirect()->back()->withErrors(['error' => 'Failed to submit forecast.']);
         }
 
@@ -710,7 +730,7 @@ class JobForecastController extends Controller
         $user = Auth::user();
 
         // Only admins can finalize
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             return redirect()->back()->withErrors(['error' => 'You do not have permission to finalize forecasts.']);
         }
 
@@ -721,15 +741,15 @@ class JobForecastController extends Controller
             ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
             ->first();
 
-        if (!$jobForecast) {
+        if (! $jobForecast) {
             return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
         }
 
-        if (!$jobForecast->canBeFinalized()) {
+        if (! $jobForecast->canBeFinalized()) {
             return redirect()->back()->withErrors(['error' => 'This forecast cannot be finalized. It must be in submitted status.']);
         }
 
-        if (!$jobForecast->finalize($user)) {
+        if (! $jobForecast->finalize($user)) {
             return redirect()->back()->withErrors(['error' => 'Failed to finalize forecast.']);
         }
 
@@ -759,7 +779,7 @@ class JobForecastController extends Controller
         $user = Auth::user();
 
         // Only admins can reject
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             return redirect()->back()->withErrors(['error' => 'You do not have permission to reject forecasts.']);
         }
 
@@ -770,17 +790,17 @@ class JobForecastController extends Controller
             ->whereMonth('forecast_month', substr($validated['forecast_month'], 5, 2))
             ->first();
 
-        if (!$jobForecast) {
+        if (! $jobForecast) {
             return redirect()->back()->withErrors(['error' => 'Forecast not found.']);
         }
 
-        if (!$jobForecast->canBeRejected()) {
+        if (! $jobForecast->canBeRejected()) {
             return redirect()->back()->withErrors(['error' => 'This forecast cannot be rejected. It must be in submitted status.']);
         }
 
         $rejectionNote = $validated['rejection_note'] ?? null;
 
-        if (!$jobForecast->reject($user, $rejectionNote)) {
+        if (! $jobForecast->reject($user, $rejectionNote)) {
             return redirect()->back()->withErrors(['error' => 'Failed to reject forecast.']);
         }
 
@@ -823,7 +843,7 @@ class JobForecastController extends Controller
         );
 
         // Check if forecast is editable
-        if (!$jobForecast->isEditable()) {
+        if (! $jobForecast->isEditable()) {
             return redirect()->back()->withErrors(['error' => 'This forecast cannot be edited in its current status.']);
         }
 
@@ -849,7 +869,7 @@ class JobForecastController extends Controller
         $targetMonth = $validated['target_month'];
 
         // Determine source month - either provided or previous month from target
-        if (!empty($validated['source_month'])) {
+        if (! empty($validated['source_month'])) {
             $sourceMonth = $validated['source_month'];
         } else {
             // Calculate previous month from target
@@ -863,22 +883,22 @@ class JobForecastController extends Controller
             ->whereMonth('forecast_month', substr($sourceMonth, 5, 2))
             ->first();
 
-        if (!$sourceJobForecast) {
-            return redirect()->back()->withErrors(['error' => 'No forecast data found for ' . Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y') . '.']);
+        if (! $sourceJobForecast) {
+            return redirect()->back()->withErrors(['error' => 'No forecast data found for '.Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y').'.']);
         }
 
         // Get source forecast data
         $sourceData = JobForecastData::where('job_forecast_id', $sourceJobForecast->id)->get();
 
         if ($sourceData->isEmpty()) {
-            return redirect()->back()->withErrors(['error' => 'No forecast data to copy from ' . Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y') . '.']);
+            return redirect()->back()->withErrors(['error' => 'No forecast data to copy from '.Carbon::createFromFormat('Y-m', $sourceMonth)->format('M Y').'.']);
         }
 
         // Create or get target forecast
         $targetJobForecast = JobForecast::firstOrCreate(
             [
                 'job_number' => $jobNumber,
-                'forecast_month' => (new \DateTime($targetMonth . '-01')),
+                'forecast_month' => (new \DateTime($targetMonth.'-01')),
             ],
             [
                 'is_locked' => false,
@@ -888,7 +908,7 @@ class JobForecastController extends Controller
         );
 
         // Check if target forecast is editable
-        if (!$targetJobForecast->isEditable()) {
+        if (! $targetJobForecast->isEditable()) {
             return redirect()->back()->withErrors(['error' => 'Cannot copy to this forecast - it is not editable in its current status.']);
         }
 
@@ -929,13 +949,14 @@ class JobForecastController extends Controller
             DB::commit();
 
             $message = $existingTargetData
-                ? "Copied {$copiedCount} forecast entries from " . $sourceDate->format('M Y') . ". Existing data was merged/updated."
-                : "Copied {$copiedCount} forecast entries from " . $sourceDate->format('M Y') . ".";
+                ? "Copied {$copiedCount} forecast entries from ".$sourceDate->format('M Y').'. Existing data was merged/updated.'
+                : "Copied {$copiedCount} forecast entries from ".$sourceDate->format('M Y').'.';
 
             return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->withErrors(['error' => 'Failed to copy forecast data: ' . $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['error' => 'Failed to copy forecast data: '.$e->getMessage()]);
         }
     }
 
@@ -953,7 +974,7 @@ class JobForecastController extends Controller
             ->latest('approved_at')
             ->first();
 
-        if (!$labourForecast) {
+        if (! $labourForecast) {
             return response()->json([
                 'success' => false,
                 'message' => 'No approved labour forecast found for this location.',
@@ -974,11 +995,12 @@ class JobForecastController extends Controller
 
             // Get cost breakdown from snapshot
             $breakdown = $entry->cost_breakdown_snapshot;
-            if (!$breakdown) {
+            if (! $breakdown) {
                 \Log::warning('[POPULATE-DEBUG] Entry missing cost_breakdown_snapshot', [
                     'entry_id' => $entry->id,
                     'week_ending' => $month,
                 ]);
+
                 continue;
             }
 
@@ -1003,6 +1025,7 @@ class JobForecastController extends Controller
             // Include entries with ANY activity (headcount OR hours)
             if ($headcount <= 0 && $overtimeHours <= 0 && $leaveHours <= 0 && $rdoHours <= 0 && $publicHolidayHours <= 0) {
                 \Log::info('[POPULATE-DEBUG] Skipping entry with no headcount or hours');
+
                 continue;
             }
 
@@ -1016,7 +1039,7 @@ class JobForecastController extends Controller
             }
 
             // Initialize month if not exists
-            if (!isset($monthlyCosts[$month])) {
+            if (! isset($monthlyCosts[$month])) {
                 $monthlyCosts[$month] = [];
             }
 
@@ -1068,7 +1091,7 @@ class JobForecastController extends Controller
             $groupedOncosts = [];
             foreach ($allOncostItems as $item) {
                 $code = $item['code'];
-                if (!isset($groupedOncosts[$code])) {
+                if (! isset($groupedOncosts[$code])) {
                     $groupedOncosts[$code] = 0;
                 }
                 $groupedOncosts[$code] += $item['amount'] ?? 0;
@@ -1121,7 +1144,9 @@ class JobForecastController extends Controller
             $oncostsAdded = [];
             foreach ($onCostMappings as $mapping) {
                 $costCode = $mapping['cost_code'];
-                if (!$costCode) continue; // Skip if cost code not set
+                if (! $costCode) {
+                    continue;
+                } // Skip if cost code not set
 
                 $oncostCode = $mapping['oncost_code'];
                 $value = $groupedOncosts[$oncostCode] ?? 0;
@@ -1145,7 +1170,7 @@ class JobForecastController extends Controller
         \Log::info('[POPULATE-DEBUG] Finished processing entries, monthly costs summary', [
             'months' => array_keys($monthlyCosts),
             'cost_codes_per_month' => array_map('array_keys', $monthlyCosts),
-            'totals_per_month' => array_map(function($costs) {
+            'totals_per_month' => array_map(function ($costs) {
                 return array_sum($costs);
             }, $monthlyCosts),
         ]);
@@ -1154,7 +1179,7 @@ class JobForecastController extends Controller
         $forecastData = [];
         foreach ($monthlyCosts as $month => $costItems) {
             foreach ($costItems as $costItem => $amount) {
-                if (!isset($forecastData[$costItem])) {
+                if (! isset($forecastData[$costItem])) {
                     $forecastData[$costItem] = [
                         'cost_item' => $costItem,
                         'months' => [],
@@ -1181,12 +1206,11 @@ class JobForecastController extends Controller
                 'total_cost_codes' => count($forecastData),
                 'total_months' => count($monthlyCosts),
                 'total_amount' => round($totalAmount, 2),
-                'date_range' => !empty($monthlyCosts) ? [
+                'date_range' => ! empty($monthlyCosts) ? [
                     'start' => min(array_keys($monthlyCosts)),
                     'end' => max(array_keys($monthlyCosts)),
                 ] : null,
             ],
         ]);
     }
-
 }
