@@ -318,9 +318,9 @@ export default function RequisitionShow() {
                         <div className="-mx-1 mt-3 flex flex-wrap items-center gap-1.5 sm:mx-0 sm:gap-2">
                             <Link
                                 href={`/requisition/${requisition.id}/edit`}
-                                className={requisition.status !== 'pending' && requisition.status !== 'failed' ? 'pointer-events-none' : ''}
+                                className={requisition.status !== 'pending' && requisition.status !== 'failed' && !(requisition.status === 'office_review' && canApprovePricing) ? 'pointer-events-none' : ''}
                             >
-                                <Button size="sm" variant="outline" disabled={requisition.status !== 'pending' && requisition.status !== 'failed'} className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                <Button size="sm" variant="outline" disabled={requisition.status !== 'pending' && requisition.status !== 'failed' && !(requisition.status === 'office_review' && canApprovePricing)} className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
                                     <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     Edit
                                 </Button>

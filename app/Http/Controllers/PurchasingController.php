@@ -639,7 +639,11 @@ class PurchasingController extends Controller
     {
 
         $requisition = Requisition::with('supplier', 'lineItems')->findOrFail($id);
-        if ($requisition->status !== 'pending' && $requisition->status !== 'failed') {
+        $canEdit = $requisition->status === 'pending'
+            || $requisition->status === 'failed'
+            || ($requisition->status === 'office_review' && auth()->user()->can('requisitions.approve-pricing'));
+
+        if (!$canEdit) {
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();
