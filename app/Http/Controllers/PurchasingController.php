@@ -511,6 +511,12 @@ class PurchasingController extends Controller
     {
         // dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
+
+        // If status is office_review, user must have approve-pricing permission (backoffice only)
+        if ($requisition->status === 'office_review' && !auth()->user()->can('requisitions.approve-pricing')) {
+            return redirect()->back()->with('error', 'You do not have permission to approve pricing and send from office review.');
+        }
+
         $validateService = new \App\Services\ValidateRequisitionService();
         $generatePONumberService = new \App\Services\GeneratePONumberService();
         $requisitionService = new \App\Services\RequisitionService();

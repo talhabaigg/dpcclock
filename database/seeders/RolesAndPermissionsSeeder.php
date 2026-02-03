@@ -110,6 +110,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.edit' => 'Edit requisitions',
             'requisitions.delete' => 'Delete requisitions',
             'requisitions.process' => 'Process/approve requisitions',
+            'requisitions.approve-pricing' => 'Approve pricing and send from office review',
             'requisitions.send' => 'Send requisitions to suppliers',
             'requisitions.export' => 'Export requisitions (PDF/Excel)',
         ],
@@ -283,6 +284,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.edit',
             'requisitions.delete',
             'requisitions.process',
+            'requisitions.approve-pricing',
             'requisitions.send',
             'requisitions.export',
             // Materials

@@ -107,6 +107,9 @@ export default function RequisitionShow() {
     // Check if user can process requisitions (send to Premier)
     const canProcessRequisitions = auth?.permissions?.includes('requisitions.process');
 
+    // Check if user can approve pricing and send from office review (backoffice only)
+    const canApprovePricing = auth?.permissions?.includes('requisitions.approve-pricing');
+
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
     const [expandedActivities, setExpandedActivities] = useState<Set<number>>(new Set());
@@ -488,7 +491,7 @@ export default function RequisitionShow() {
                                     </Dialog>
                                 </div>
                             )}
-                            {requisition.status === 'office_review' && canProcessRequisitions && (
+                            {requisition.status === 'office_review' && canApprovePricing && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
                                     <Button size="sm" className="h-8 gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
                                         <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -496,7 +499,7 @@ export default function RequisitionShow() {
                                     </Button>
                                 </Link>
                             )}
-                            {requisition.status === 'office_review' && !canProcessRequisitions && (
+                            {requisition.status === 'office_review' && !canApprovePricing && (
                                 <Badge variant="outline" className="gap-1 border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400">
                                     <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     Waiting for Review
