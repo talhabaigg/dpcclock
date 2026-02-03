@@ -478,13 +478,14 @@ class MaterialItemController extends Controller
         $supplierId = $request->input('supplier_id');
         $locationId = $request->input('location_id');
         $search = $request->input('search');
+        $limit = min((int) $request->input('limit', 100), 10000); // Default 100, max 10000
 
         // Build cache key (unique per filter combination)
-        $cacheKey = "material_items:supplier_{$supplierId}:location_{$locationId}:search_" . md5($search ?? '');
+        $cacheKey = "material_items:supplier_{$supplierId}:location_{$locationId}:limit_{$limit}:search_" . md5($search ?? '');
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($supplierId, $locationId, $search) {
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($supplierId, $locationId, $search, $limit) {
             $query = MaterialItem::query()
-                ->select('material_items.id', 'material_items.code', 'material_items.description');
+                ->select('material_items.id', 'material_items.code', 'material_items.description', 'material_items.unit_cost');
 
             // Supplier filter
             if ($supplierId) {
@@ -513,7 +514,7 @@ class MaterialItemController extends Controller
                 }
             }
 
-            return $query->limit(100)->get();
+            return $query->limit($limit)->get();
         });
     }
 

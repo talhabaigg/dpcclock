@@ -73,7 +73,8 @@
       "Bash(composer run lint:*)",
       "Bash(./vendor/bin/pint:*)",
       "Bash(npx stylelint:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(grep:*)"
     ]
   }
 }

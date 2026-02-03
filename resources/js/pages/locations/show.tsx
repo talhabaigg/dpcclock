@@ -40,6 +40,8 @@ import {
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChartLineLabel } from './monthlySpendingChart';
+import AttachMaterialsDialog from './partials.tsx/AttachMaterialsDialog';
+import EditPriceDialog from './partials.tsx/EditPriceDialog';
 import FavouriteMaterialUploader from './partials.tsx/favMaterialUploader';
 
 type Location = {
@@ -623,6 +625,10 @@ export default function LocationShow() {
                                                 Locked Only
                                             </Label>
                                         </div>
+                                        <AttachMaterialsDialog
+                                            locationId={location.id}
+                                            existingMaterialIds={location.material_items?.map((m) => m.id) ?? []}
+                                        />
                                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                                         <a href={`/material-items/location/${location.id}/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
@@ -648,13 +654,14 @@ export default function LocationShow() {
                                                 <TableHead>Supplier</TableHead>
                                                 <TableHead>Description</TableHead>
                                                 <TableHead className="text-right">Unit Cost</TableHead>
-                                                <TableHead className="pr-6">Updated By</TableHead>
+                                                <TableHead>Updated By</TableHead>
+                                                <TableHead className="w-16 pr-6"></TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {filteredMaterialItems.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="h-32 text-center">
+                                                    <TableCell colSpan={6} className="h-32 text-center">
                                                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                             <Package className="h-8 w-8 opacity-40" />
                                                             <p>{showLockedOnly ? 'No locked items' : 'No price list available'}</p>
@@ -707,7 +714,7 @@ export default function LocationShow() {
                                                                 ${Number(item.pivot?.unit_cost_override ?? 0).toFixed(2)}
                                                             </span>
                                                         </TableCell>
-                                                        <TableCell className="pr-6">
+                                                        <TableCell>
                                                             {item.pivot?.updated_by_name ? (
                                                                 <div className="flex flex-col">
                                                                     <span className="text-sm font-medium">{item.pivot.updated_by_name}</span>
@@ -719,6 +726,18 @@ export default function LocationShow() {
                                                                 </div>
                                                             ) : (
                                                                 <span className="text-sm italic text-muted-foreground">-</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="pr-6">
+                                                            {!item.pivot?.is_locked && (
+                                                                <EditPriceDialog
+                                                                    locationId={location.id}
+                                                                    materialItemId={item.id}
+                                                                    code={item.code}
+                                                                    description={item.description}
+                                                                    currentPrice={Number(item.pivot?.unit_cost_override ?? 0)}
+                                                                    isLocked={item.pivot?.is_locked ?? false}
+                                                                />
                                                             )}
                                                         </TableCell>
                                                     </TableRow>

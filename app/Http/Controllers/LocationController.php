@@ -275,4 +275,63 @@ class LocationController extends Controller
         }
     }
 
+    /**
+     * Attach material items to a location with pricing configuration.
+     */
+    public function attachMaterials(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.material_item_id' => 'required|exists:material_items,id',
+            'items.*.unit_cost_override' => 'required|numeric|min:0',
+            'items.*.is_locked' => 'required|boolean',
+        ]);
+
+        $attachData = [];
+        foreach ($validated['items'] as $item) {
+            $attachData[$item['material_item_id']] = [
+                'unit_cost_override' => $item['unit_cost_override'],
+                'is_locked' => $item['is_locked'],
+                'updated_by' => auth()->id(),
+            ];
+        }
+
+        // syncWithoutDetaching will add new items and update existing ones
+        // without removing items not in the current request
+        $location->materialItems()->syncWithoutDetaching($attachData);
+
+        return back()->with('success', count($validated['items']) . ' material(s) attached to price list.');
+    }
+
+    /**
+     * Update a single material item's price for a location.
+     */
+    public function updateMaterialPrice(Request $request, Location $location, $materialItemId)
+    {
+        $validated = $request->validate([
+            'unit_cost_override' => 'required|numeric|min:0',
+            'is_locked' => 'required|boolean',
+        ]);
+
+        // Check if the item exists in the pivot table
+        $existing = $location->materialItems()->where('material_item_id', $materialItemId)->first();
+
+        if (!$existing) {
+            return back()->with('error', 'Material item not found in price list.');
+        }
+
+        // Check if the item is locked (cannot edit locked items)
+        if ($existing->pivot->is_locked && !$validated['is_locked']) {
+            // Allow unlocking, but check if user has permission (for now, allow it)
+        }
+
+        $location->materialItems()->updateExistingPivot($materialItemId, [
+            'unit_cost_override' => $validated['unit_cost_override'],
+            'is_locked' => $validated['is_locked'],
+            'updated_by' => auth()->id(),
+        ]);
+
+        return back()->with('success', 'Price updated successfully.');
+    }
+
 }

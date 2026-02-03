@@ -309,6 +309,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index')
         ->middleware('permission:suppliers.view');
+    Route::get('/suppliers/json', [SupplierController::class, 'getSuppliers'])->name('suppliers.json')
+        ->middleware('permission:suppliers.view');
     Route::get('/suppliers/download', [SupplierController::class, 'download'])->name('suppliers.download')
         ->middleware('permission:suppliers.export');
     Route::post('/suppliers/upload', [SupplierController::class, 'upload'])->name('suppliers.upload')
@@ -653,6 +655,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:materials.import');
     Route::get('/location/{location}/favourite-materials/download-csv', [LocationFavouriteMaterialItemsController::class, 'downloadFavouriteMaterials'])->name('location.favourite-materials.download')
         ->middleware('permission:materials.export');
+
+    // Attach Materials to Location (multi-stage dialog)
+    Route::post('/locations/{location}/attach-materials', [LocationController::class, 'attachMaterials'])->name('locations.attachMaterials')
+        ->middleware('permission:materials.import');
+    Route::patch('/locations/{location}/materials/{materialItemId}/price', [LocationController::class, 'updateMaterialPrice'])->name('locations.updateMaterialPrice')
+        ->middleware('permission:materials.edit');
 
     // PHP Limits (debug route)
     Route::get('/php-limits', fn() => response()->json([
