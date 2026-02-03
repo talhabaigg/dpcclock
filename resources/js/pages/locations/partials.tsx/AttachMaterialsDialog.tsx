@@ -196,6 +196,14 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
 
     const selectedSupplier = suppliers.find((s) => s.id === Number(selectedSupplierId));
 
+    const formatPrice = (price: string | number) => {
+        const num = Number(price);
+        // Show up to 6 decimals, but trim trailing zeros (minimum 2 decimals)
+        const formatted = num.toFixed(6).replace(/\.?0+$/, '');
+        const decimals = formatted.includes('.') ? formatted.split('.')[1].length : 0;
+        return decimals < 2 ? num.toFixed(2) : formatted;
+    };
+
     const canProceedStage1 = selectedSupplierId !== null;
     const canProceedStage2 = selectedMaterialIds.length > 0;
     const canProceedStage3 = pricingConfigs.length > 0 && pricingConfigs.every((c) => parseFloat(c.unit_cost_override) >= 0);
@@ -401,13 +409,13 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                                 <TableCell>
                                                     <Input
                                                         type="number"
-                                                        step="0.01"
+                                                        step="0.000001"
                                                         min="0"
                                                         value={config.unit_cost_override}
                                                         onChange={(e) =>
                                                             updatePricingConfig(config.material_item_id, 'unit_cost_override', e.target.value)
                                                         }
-                                                        className="h-8 w-24"
+                                                        className="h-8 w-28"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-center">
@@ -468,7 +476,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                                     {config.description}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">
-                                                    ${parseFloat(config.unit_cost_override).toFixed(2)}
+                                                    ${formatPrice(config.unit_cost_override)}
                                                 </TableCell>
                                                 <TableCell>
                                                     {config.is_locked && <Lock className="h-4 w-4 text-amber-500" />}

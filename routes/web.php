@@ -661,6 +661,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:materials.import');
     Route::patch('/locations/{location}/materials/{materialItemId}/price', [LocationController::class, 'updateMaterialPrice'])->name('locations.updateMaterialPrice')
         ->middleware('permission:materials.edit');
+    Route::delete('/locations/{location}/materials/{materialItemId}', [LocationController::class, 'detachMaterial'])->name('locations.detachMaterial')
+        ->middleware('permission:materials.edit');
+    Route::get('/locations/{location}/materials/{materialItemId}/history', [LocationController::class, 'getMaterialPriceHistory'])->name('locations.materialPriceHistory')
+        ->middleware('permission:materials.view');
+    Route::get('/locations/{location}/price-history', [LocationController::class, 'getLocationPriceHistory'])->name('locations.priceHistory')
+        ->middleware('permission:materials.view');
 
     // PHP Limits (debug route)
     Route::get('/php-limits', fn() => response()->json([

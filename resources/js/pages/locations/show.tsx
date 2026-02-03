@@ -43,6 +43,9 @@ import { ChartLineLabel } from './monthlySpendingChart';
 import AttachMaterialsDialog from './partials.tsx/AttachMaterialsDialog';
 import EditPriceDialog from './partials.tsx/EditPriceDialog';
 import FavouriteMaterialUploader from './partials.tsx/favMaterialUploader';
+import LocationPriceHistoryDialog from './partials.tsx/LocationPriceHistoryDialog';
+import PriceHistoryDialog from './partials.tsx/PriceHistoryDialog';
+import RemoveMaterialDialog from './partials.tsx/RemoveMaterialDialog';
 
 type Location = {
     id: number;
@@ -629,6 +632,10 @@ export default function LocationShow() {
                                             locationId={location.id}
                                             existingMaterialIds={location.material_items?.map((m) => m.id) ?? []}
                                         />
+                                        <LocationPriceHistoryDialog
+                                            locationId={location.id}
+                                            locationName={location.name}
+                                        />
                                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                                         <a href={`/material-items/location/${location.id}/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
@@ -655,7 +662,7 @@ export default function LocationShow() {
                                                 <TableHead>Description</TableHead>
                                                 <TableHead className="text-right">Unit Cost</TableHead>
                                                 <TableHead>Updated By</TableHead>
-                                                <TableHead className="w-16 pr-6"></TableHead>
+                                                <TableHead className="w-28 pr-6">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -711,7 +718,12 @@ export default function LocationShow() {
                                                         <TableCell className="max-w-md truncate text-muted-foreground">{item.description}</TableCell>
                                                         <TableCell className="text-right">
                                                             <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                                                ${Number(item.pivot?.unit_cost_override ?? 0).toFixed(2)}
+                                                                ${(() => {
+                                                                    const num = Number(item.pivot?.unit_cost_override ?? 0);
+                                                                    const formatted = num.toFixed(6).replace(/\.?0+$/, '');
+                                                                    const decimals = formatted.includes('.') ? formatted.split('.')[1].length : 0;
+                                                                    return decimals < 2 ? num.toFixed(2) : formatted;
+                                                                })()}
                                                             </span>
                                                         </TableCell>
                                                         <TableCell>
@@ -729,16 +741,32 @@ export default function LocationShow() {
                                                             )}
                                                         </TableCell>
                                                         <TableCell className="pr-6">
-                                                            {!item.pivot?.is_locked && (
-                                                                <EditPriceDialog
+                                                            <div className="flex items-center gap-1">
+                                                                {!item.pivot?.is_locked && (
+                                                                    <EditPriceDialog
+                                                                        locationId={location.id}
+                                                                        materialItemId={item.id}
+                                                                        code={item.code}
+                                                                        description={item.description}
+                                                                        currentPrice={Number(item.pivot?.unit_cost_override ?? 0)}
+                                                                        isLocked={item.pivot?.is_locked ?? false}
+                                                                    />
+                                                                )}
+                                                                <PriceHistoryDialog
                                                                     locationId={location.id}
                                                                     materialItemId={item.id}
                                                                     code={item.code}
                                                                     description={item.description}
-                                                                    currentPrice={Number(item.pivot?.unit_cost_override ?? 0)}
-                                                                    isLocked={item.pivot?.is_locked ?? false}
                                                                 />
-                                                            )}
+                                                                {!item.pivot?.is_locked && (
+                                                                    <RemoveMaterialDialog
+                                                                        locationId={location.id}
+                                                                        materialItemId={item.id}
+                                                                        code={item.code}
+                                                                        description={item.description}
+                                                                    />
+                                                                )}
+                                                            </div>
                                                         </TableCell>
                                                     </TableRow>
                                                 ))

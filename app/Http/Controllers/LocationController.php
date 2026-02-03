@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Location;
+use App\Models\LocationItemPriceHistory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Http;
@@ -287,6 +288,12 @@ class LocationController extends Controller
             'items.*.is_locked' => 'required|boolean',
         ]);
 
+        // Get existing items with their current values to determine if this is create or update
+        $existingItems = $location->materialItems()
+            ->whereIn('material_item_id', array_column($validated['items'], 'material_item_id'))
+            ->get()
+            ->keyBy('id');
+
         $attachData = [];
         foreach ($validated['items'] as $item) {
             $attachData[$item['material_item_id']] = [
@@ -299,6 +306,23 @@ class LocationController extends Controller
         // syncWithoutDetaching will add new items and update existing ones
         // without removing items not in the current request
         $location->materialItems()->syncWithoutDetaching($attachData);
+
+        // Log history for each item
+        foreach ($validated['items'] as $item) {
+            $existing = $existingItems->get($item['material_item_id']);
+            $isUpdate = $existing !== null;
+
+            LocationItemPriceHistory::log(
+                $location->id,
+                $item['material_item_id'],
+                $item['unit_cost_override'],
+                $item['is_locked'],
+                auth()->id(),
+                $isUpdate ? 'updated' : 'created',
+                $isUpdate ? (float) $existing->pivot->unit_cost_override : null,
+                $isUpdate ? (bool) $existing->pivot->is_locked : null
+            );
+        }
 
         return back()->with('success', count($validated['items']) . ' material(s) attached to price list.');
     }
@@ -331,7 +355,107 @@ class LocationController extends Controller
             'updated_by' => auth()->id(),
         ]);
 
+        // Log price history with previous values
+        LocationItemPriceHistory::log(
+            $location->id,
+            (int) $materialItemId,
+            $validated['unit_cost_override'],
+            $validated['is_locked'],
+            auth()->id(),
+            'updated',
+            (float) $existing->pivot->unit_cost_override,
+            (bool) $existing->pivot->is_locked
+        );
+
         return back()->with('success', 'Price updated successfully.');
+    }
+
+    /**
+     * Remove a material item from a location's price list.
+     */
+    public function detachMaterial(Location $location, $materialItemId)
+    {
+        // Get the current data before removing for history
+        $existing = $location->materialItems()->where('material_item_id', $materialItemId)->first();
+
+        if (!$existing) {
+            return back()->with('error', 'Material item not found in price list.');
+        }
+
+        // Prevent deletion of locked items
+        if ($existing->pivot->is_locked) {
+            return back()->with('error', 'Cannot remove a locked item. Unlock it first.');
+        }
+
+        // Log the deletion to history before removing
+        LocationItemPriceHistory::log(
+            $location->id,
+            (int) $materialItemId,
+            $existing->pivot->unit_cost_override,
+            $existing->pivot->is_locked,
+            auth()->id(),
+            'deleted'
+        );
+
+        // Remove the item from the pivot table
+        $location->materialItems()->detach($materialItemId);
+
+        return back()->with('success', 'Material removed from price list.');
+    }
+
+    /**
+     * Get the price history for a material item at a location.
+     */
+    public function getMaterialPriceHistory(Location $location, $materialItemId)
+    {
+        $history = LocationItemPriceHistory::where('location_id', $location->id)
+            ->where('material_item_id', $materialItemId)
+            ->with('changedByUser:id,name')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($record) {
+                return [
+                    'id' => $record->id,
+                    'unit_cost_override' => $record->unit_cost_override,
+                    'previous_unit_cost' => $record->previous_unit_cost,
+                    'is_locked' => $record->is_locked,
+                    'previous_is_locked' => $record->previous_is_locked,
+                    'change_type' => $record->change_type,
+                    'changed_by_name' => $record->changedByUser?->name ?? 'Unknown',
+                    'created_at' => $record->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json($history);
+    }
+
+    /**
+     * Get all price history for a location.
+     */
+    public function getLocationPriceHistory(Location $location)
+    {
+        $history = LocationItemPriceHistory::where('location_id', $location->id)
+            ->with(['changedByUser:id,name', 'materialItem:id,code,description'])
+            ->orderBy('created_at', 'desc')
+            ->limit(500) // Limit to prevent performance issues
+            ->get()
+            ->map(function ($record) {
+                return [
+                    'id' => $record->id,
+                    'material_item_id' => $record->material_item_id,
+                    'material_code' => $record->materialItem?->code ?? 'Unknown',
+                    'material_description' => $record->materialItem?->description ?? '',
+                    'unit_cost_override' => $record->unit_cost_override,
+                    'previous_unit_cost' => $record->previous_unit_cost,
+                    'is_locked' => $record->is_locked,
+                    'previous_is_locked' => $record->previous_is_locked,
+                    'change_type' => $record->change_type,
+                    'changed_by_name' => $record->changedByUser?->name ?? 'Unknown',
+                    'created_at' => $record->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json($history);
     }
 
 }

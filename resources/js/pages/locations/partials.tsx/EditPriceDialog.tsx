@@ -84,7 +84,7 @@ export default function EditPriceDialog({
                                 <Input
                                     id="price"
                                     type="number"
-                                    step="0.01"
+                                    step="0.000001"
                                     min="0"
                                     value={form.data.unit_cost_override}
                                     onChange={(e) => form.setData('unit_cost_override', e.target.value)}
