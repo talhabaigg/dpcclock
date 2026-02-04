@@ -1,3 +1,4 @@
+import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -142,6 +143,14 @@ type DrawingSet = {
     project?: Location;
 };
 
+type TilesInfo = {
+    baseUrl: string;
+    maxZoom: number;
+    width: number;
+    height: number;
+    tileSize: number;
+};
+
 type Drawing = {
     id: number;
     name: string;
@@ -178,6 +187,8 @@ type Drawing = {
     revision?: string | null;
     page_preview_s3_key?: string | null;
     page_preview_url?: string | null;
+    // Tile-based rendering info
+    tiles_info?: TilesInfo | null;
 };
 
 type PendingPoint = {
@@ -608,6 +619,10 @@ export default function QaStageDrawingShow() {
     const isPdf = hasPdfUrl || (!hasPreviewImage && ((drawing.file_type || '').toLowerCase().includes('pdf') || (drawing.file_name || '').toLowerCase().endsWith('.pdf')));
     const isImage = !isPdf && (hasPreviewImage || (drawing.file_type || '').toLowerCase().startsWith('image') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name || ''));
     const canPanZoom = isPdf || isImage;
+
+    // Check if Leaflet tiled viewer is available
+    const hasTiles = Boolean(drawing.tiles_info);
+    const useTiledViewer = hasTiles && !showCompareOverlay; // Fall back to canvas viewer for comparison mode
 
     // Get the URL to use for PDF loading
     const pdfUrl = drawing.pdf_url || drawing.file_url;
@@ -2061,6 +2076,33 @@ export default function QaStageDrawingShow() {
 
                 {/* Main Viewer - Fixed container to prevent overflow */}
                 <div className="relative flex-1 overflow-hidden">
+                    {/* Leaflet Tiled Viewer - used when tiles are available */}
+                    {useTiledViewer && drawing.tiles_info && (
+                        <LeafletDrawingViewer
+                            tiles={drawing.tiles_info}
+                            observations={serverObservations.map((obs) => ({
+                                ...obs,
+                                type: obs.type as 'defect' | 'observation',
+                            })) as LeafletObservation[]}
+                            selectedObservationIds={selectedObservationIds}
+                            viewMode={viewMode}
+                            onObservationClick={(obs) => {
+                                setEditingObservation(obs as Observation);
+                                setObservationType(obs.type);
+                                setDescription(obs.description);
+                                setDialogOpen(true);
+                            }}
+                            onMapClick={(x, y) => {
+                                if (viewMode !== 'select') return;
+                                setPendingPoint({ pageNumber: targetPageNumber, x, y });
+                                setDialogOpen(true);
+                            }}
+                            className="absolute inset-0"
+                        />
+                    )}
+
+                    {/* Canvas-based Viewer - used when tiles are not available or in comparison mode */}
+                    {!useTiledViewer && (
                     <div
                         ref={containerRef}
                         className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${alignmentTool.isAligning
@@ -2448,6 +2490,7 @@ export default function QaStageDrawingShow() {
                             />
                         )}
                     </div>
+                    )}
                 </div>
             </div>
 

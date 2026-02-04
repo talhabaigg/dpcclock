@@ -53,6 +53,13 @@ class QaStageDrawing extends Model
         'extracted_at',
         'created_by',
         'updated_by',
+        // Tile rendering columns for Leaflet viewer
+        'tiles_base_url',
+        'tiles_max_zoom',
+        'tiles_width',
+        'tiles_height',
+        'tile_size',
+        'tiles_status',
     ];
 
     protected $casts = [
@@ -68,9 +75,13 @@ class QaStageDrawing extends Model
         'confidence_title' => 'float',
         'confidence_revision' => 'float',
         'extracted_at' => 'datetime',
+        'tiles_max_zoom' => 'integer',
+        'tiles_width' => 'integer',
+        'tiles_height' => 'integer',
+        'tile_size' => 'integer',
     ];
 
-    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages', 'pdf_url', 'is_drawing_set_sheet'];
+    protected $appends = ['file_url', 'thumbnail_url', 'diff_image_url', 'display_name', 'total_pages', 'pdf_url', 'is_drawing_set_sheet', 'tiles_info'];
 
     // Workflow status constants
     const STATUS_DRAFT = 'draft';
@@ -421,5 +432,37 @@ class QaStageDrawing extends Model
     public static function determineOrientation(int $width, int $height): string
     {
         return $width >= $height ? 'landscape' : 'portrait';
+    }
+
+    /**
+     * Get tile information for Leaflet viewer.
+     * Returns null if tiles are not available.
+     */
+    public function getTilesInfoAttribute(): ?array
+    {
+        if ($this->tiles_status !== 'completed' || !$this->tiles_base_url) {
+            return null;
+        }
+
+        // Get the S3 URL for the tiles base path
+        $baseUrl = Storage::disk('s3')->url($this->tiles_base_url);
+
+        return [
+            'baseUrl' => $baseUrl,
+            'maxZoom' => $this->tiles_max_zoom ?? 5,
+            'width' => $this->tiles_width ?? 0,
+            'height' => $this->tiles_height ?? 0,
+            'tileSize' => $this->tile_size ?? 256,
+        ];
+    }
+
+    /**
+     * Check if tiles are available for this drawing.
+     */
+    public function hasTiles(): bool
+    {
+        return $this->tiles_status === 'completed'
+            && $this->tiles_base_url
+            && $this->tiles_max_zoom !== null;
     }
 }
