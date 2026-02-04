@@ -165,6 +165,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.manage-zones');
     Route::get('/kiosks/{kiosk}/toggleActive', [KioskController::class, 'toggleActive'])->name('kiosk.toggleActive')
         ->middleware('permission:kiosks.toggle-active');
+    Route::post('/kiosks/{kiosk}/toggle-allowance', [KioskController::class, 'toggleAllowanceSetting'])->name('kiosk.toggleAllowance')
+        ->middleware('permission:kiosks.edit');
     Route::post('/kiosks/{kiosk}/add-employees', [KioskController::class, 'addEmployeesToKiosk'])->name('kiosks.addEmployees')
         ->middleware('permission:kiosks.manage-employees');
     Route::post('/kiosks/manager/store', [KioskController::class, 'storeManager'])->name('kiosks.manager.store')

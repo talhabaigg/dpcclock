@@ -223,7 +223,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                             <div className="text-xs">Settings</div>
                         </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
                                 <Label>Enable for timesheets</Label>
@@ -231,12 +231,36 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
 
                             <Switch checked={kiosk.is_active} onCheckedChange={handleKioskActiveToggle} />
                         </div>
-                        {/* <div className="flex items-center justify-between">
+                        <div className="border-t pt-4">
+                            <Label className="text-sm font-semibold text-muted-foreground">Allowance Settings</Label>
+                        </div>
+                        <div className="flex items-center justify-between">
                             <div>
-                                <Label>Auto generate timesheets for events</Label>
+                                <Label>Laser Allowance</Label>
                             </div>
-                            <Switch />
-                        </div> */}
+                            <Switch
+                                checked={kiosk.laser_allowance_enabled}
+                                onCheckedChange={() => router.post(route('kiosk.toggleAllowance', kiosk.id), { type: 'laser' })}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <Label>Insulation Allowance</Label>
+                            </div>
+                            <Switch
+                                checked={kiosk.insulation_allowance_enabled}
+                                onCheckedChange={() => router.post(route('kiosk.toggleAllowance', kiosk.id), { type: 'insulation' })}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <Label>Setout Allowance</Label>
+                            </div>
+                            <Switch
+                                checked={kiosk.setout_allowance_enabled}
+                                onCheckedChange={() => router.post(route('kiosk.toggleAllowance', kiosk.id), { type: 'setout' })}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
                 <Card className="m-2 w-full">

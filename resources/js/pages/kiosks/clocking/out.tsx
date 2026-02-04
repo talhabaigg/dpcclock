@@ -27,6 +27,9 @@ interface Kiosk {
     name: string;
     eh_kiosk_id: string;
     default_end_time: string;
+    laser_allowance_enabled: boolean;
+    insulation_allowance_enabled: boolean;
+    setout_allowance_enabled: boolean;
 }
 
 interface TaskAllocation {
@@ -337,32 +340,44 @@ export default function Clockout() {
                                 </div>
 
                                 {/* Hours & Allowances - Side by side on mobile */}
-                                <div className="grid grid-cols-2 gap-4 sm:hidden">
+                                <div className={cn(
+                                    "grid gap-4 sm:hidden",
+                                    (kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) ? "grid-cols-2" : "grid-cols-1"
+                                )}>
                                     <div>
                                         <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
-                                    <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
-                                        <div className="flex h-[220px] flex-col justify-center gap-3">
-                                            <AllowanceToggle
-                                                label="Insulation"
-                                                index={index}
-                                                checked={task.insulation_allowance}
-                                                onToggle={toggleAllowance}
-                                            />
-                                            <AllowanceToggle
-                                                label="SetOut"
-                                                index={index}
-                                                checked={task.setout_allowance}
-                                                onToggle={toggleAllowance}
-                                            />
+                                    {(kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) && (
+                                        <div>
+                                            <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                            <div className="flex h-[220px] flex-col justify-center gap-3">
+                                                {kiosk.insulation_allowance_enabled && (
+                                                    <AllowanceToggle
+                                                        label="Insulation"
+                                                        index={index}
+                                                        checked={task.insulation_allowance}
+                                                        onToggle={toggleAllowance}
+                                                    />
+                                                )}
+                                                {kiosk.setout_allowance_enabled && (
+                                                    <AllowanceToggle
+                                                        label="SetOut"
+                                                        index={index}
+                                                        checked={task.setout_allowance}
+                                                        onToggle={toggleAllowance}
+                                                    />
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {/* Desktop layout - Single row */}
-                                <div className="hidden gap-4 sm:grid sm:grid-cols-4">
+                                <div className={cn(
+                                    "hidden gap-4 sm:grid",
+                                    (kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) ? "sm:grid-cols-4" : "sm:grid-cols-3"
+                                )}>
                                     <div>
                                         <Label className="mb-3 block text-sm font-semibold text-foreground">Level</Label>
                                         <LevelSelector
@@ -384,23 +399,29 @@ export default function Clockout() {
                                         <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
-                                    <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
-                                        <div className="flex h-[220px] flex-col justify-center gap-3">
-                                            <AllowanceToggle
-                                                label="Insulation"
-                                                index={index}
-                                                checked={task.insulation_allowance}
-                                                onToggle={toggleAllowance}
-                                            />
-                                            <AllowanceToggle
-                                                label="SetOut"
-                                                index={index}
-                                                checked={task.setout_allowance}
-                                                onToggle={toggleAllowance}
-                                            />
+                                    {(kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) && (
+                                        <div>
+                                            <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                            <div className="flex h-[220px] flex-col justify-center gap-3">
+                                                {kiosk.insulation_allowance_enabled && (
+                                                    <AllowanceToggle
+                                                        label="Insulation"
+                                                        index={index}
+                                                        checked={task.insulation_allowance}
+                                                        onToggle={toggleAllowance}
+                                                    />
+                                                )}
+                                                {kiosk.setout_allowance_enabled && (
+                                                    <AllowanceToggle
+                                                        label="SetOut"
+                                                        index={index}
+                                                        checked={task.setout_allowance}
+                                                        onToggle={toggleAllowance}
+                                                    />
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -438,40 +459,45 @@ export default function Clockout() {
 
                 {/* Footer Section */}
                 <div className="rounded-2xl border-2 bg-muted/30 p-4 sm:p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className={cn(
+                        "flex flex-wrap items-center gap-4",
+                        kiosk.laser_allowance_enabled ? "justify-between" : "justify-end"
+                    )}>
                         {/* Laser Allowance */}
-                        <button
-                            type="button"
-                            onClick={() => setLaserAllowance(!laserAllowance)}
-                            className={cn(
-                                'flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all',
-                                'touch-manipulation active:scale-[0.98]',
-                                laserAllowance
-                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                    : 'border-border bg-card hover:border-primary/30',
-                            )}
-                        >
-                            <div
+                        {kiosk.laser_allowance_enabled && (
+                            <button
+                                type="button"
+                                onClick={() => setLaserAllowance(!laserAllowance)}
                                 className={cn(
-                                    'flex h-6 w-6 items-center justify-center rounded border-2 transition-colors',
+                                    'flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all',
+                                    'touch-manipulation active:scale-[0.98]',
                                     laserAllowance
-                                        ? 'border-emerald-500 bg-emerald-500 text-white'
-                                        : 'border-muted-foreground/40 bg-background',
+                                        ? 'border-emerald-500 bg-emerald-500/10'
+                                        : 'border-border bg-card hover:border-primary/30',
                                 )}
                             >
-                                {laserAllowance && (
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                )}
-                            </div>
-                            <span className={cn(
-                                'text-base font-semibold',
-                                laserAllowance ? 'text-emerald-600' : 'text-foreground',
-                            )}>
-                                Laser Allowance
-                            </span>
-                        </button>
+                                <div
+                                    className={cn(
+                                        'flex h-6 w-6 items-center justify-center rounded border-2 transition-colors',
+                                        laserAllowance
+                                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                                            : 'border-muted-foreground/40 bg-background',
+                                    )}
+                                >
+                                    {laserAllowance && (
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <span className={cn(
+                                    'text-base font-semibold',
+                                    laserAllowance ? 'text-emerald-600' : 'text-foreground',
+                                )}>
+                                    Laser Allowance
+                                </span>
+                            </button>
+                        )}
 
                         {/* Hours Counter */}
                         <div className="flex items-center gap-3">

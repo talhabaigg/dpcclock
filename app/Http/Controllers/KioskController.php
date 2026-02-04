@@ -228,6 +228,19 @@ class KioskController extends Controller
         // Optionally, you can return a response or redirect
         return redirect()->back()->with('success', 'Kiosk timesheet enable settings updated successfully.');
     }
+
+    public function toggleAllowanceSetting(Request $request, Kiosk $kiosk)
+    {
+        $data = $request->validate([
+            'type' => 'required|in:laser,insulation,setout',
+        ]);
+
+        $field = $data['type'] . '_allowance_enabled';
+        $kiosk->$field = !$kiosk->$field;
+        $kiosk->save();
+
+        return redirect()->back()->with('success', ucfirst($data['type']) . ' allowance setting updated successfully.');
+    }
     /**
      * Remove the specified resource from storage.
      */

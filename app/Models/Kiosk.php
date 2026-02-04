@@ -14,6 +14,15 @@ class Kiosk extends Model
         'default_start_time',
         'default_end_time',
         'is_active',
+        'laser_allowance_enabled',
+        'insulation_allowance_enabled',
+        'setout_allowance_enabled',
+    ];
+
+    protected $casts = [
+        'laser_allowance_enabled' => 'boolean',
+        'insulation_allowance_enabled' => 'boolean',
+        'setout_allowance_enabled' => 'boolean',
     ];
 
     public function employees()
