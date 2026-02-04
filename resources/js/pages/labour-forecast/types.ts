@@ -161,8 +161,11 @@ export interface AllowanceType {
     id: number;
     name: string;
     code: string;
+    category: 'fares_travel' | 'site' | 'multistorey' | 'custom';
     description: string | null;
     default_rate: number | null;
+    default_rate_type: 'hourly' | 'daily' | 'weekly';
+    pay_category_id: number | null;
 }
 
 // ============================================================================

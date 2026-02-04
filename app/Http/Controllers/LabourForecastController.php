@@ -238,8 +238,11 @@ class LabourForecastController extends Controller
                 'id' => $type->id,
                 'name' => $type->name,
                 'code' => $type->code,
+                'category' => $type->category ?? 'custom',
                 'description' => $type->description,
                 'default_rate' => $type->default_rate,
+                'default_rate_type' => $type->default_rate_type ?? 'hourly',
+                'pay_category_id' => $type->pay_category_id,
             ]);
 
         // Get current user permissions for workflow buttons
@@ -601,18 +604,9 @@ class LabourForecastController extends Controller
             'allowances.*.rate' => 'required|numeric|min:0',
             'allowances.*.rate_type' => 'required|in:hourly,daily,weekly',
             'allowances.*.paid_to_rdo' => 'nullable|boolean',
-            'rdo_fares_travel' => 'nullable|boolean',
-            'rdo_site_allowance' => 'nullable|boolean',
-            'rdo_multistorey_allowance' => 'nullable|boolean',
         ]);
 
         DB::transaction(function () use ($template, $request) {
-            // Update RDO standard allowance flags
-            $template->update([
-                'rdo_fares_travel' => $request->input('rdo_fares_travel', true),
-                'rdo_site_allowance' => $request->input('rdo_site_allowance', false),
-                'rdo_multistorey_allowance' => $request->input('rdo_multistorey_allowance', false),
-            ]);
 
             // Get IDs of allowances being updated
             $allowanceIds = collect($request->allowances)

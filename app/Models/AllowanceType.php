@@ -10,8 +10,11 @@ class AllowanceType extends Model
     protected $fillable = [
         'name',
         'code',
+        'category',
         'description',
         'default_rate',
+        'default_rate_type',
+        'pay_category_id',
         'is_active',
         'sort_order',
     ];
@@ -20,7 +23,40 @@ class AllowanceType extends Model
         'default_rate' => 'decimal:2',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
+        'pay_category_id' => 'integer',
     ];
+
+    /**
+     * Check if this is a fares/travel allowance
+     */
+    public function isFaresTravel(): bool
+    {
+        return $this->category === 'fares_travel';
+    }
+
+    /**
+     * Check if this is a site allowance
+     */
+    public function isSite(): bool
+    {
+        return $this->category === 'site';
+    }
+
+    /**
+     * Check if this is a multistorey allowance
+     */
+    public function isMultistorey(): bool
+    {
+        return $this->category === 'multistorey';
+    }
+
+    /**
+     * Check if this is a custom allowance
+     */
+    public function isCustom(): bool
+    {
+        return $this->category === 'custom';
+    }
 
     public function locationTemplateAllowances(): HasMany
     {

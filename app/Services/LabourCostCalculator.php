@@ -69,7 +69,6 @@ class LabourCostCalculator
             'payRateTemplate.payCategories.payCategory',
             'customAllowances.allowanceType',
         ]);
-        $location->load('worktypes');
 
         $template = $config->payRateTemplate;
         if (!$template) {
@@ -79,8 +78,8 @@ class LabourCostCalculator
         // Get base hourly rate from "Permanent Ordinary Hours"
         $baseHourlyRate = $this->getBaseHourlyRate($template);
 
-        // Get allowances based on location worktypes
-        $allowances = $this->calculateAllowances($location, $template);
+        // Get allowances from explicitly configured template allowances
+        $allowances = $this->calculateAllowances($location, $template, $config);
 
         // Get custom allowances for this template config
         $customAllowances = $this->calculateCustomAllowances($config);
@@ -108,7 +107,10 @@ class LabourCostCalculator
      */
     public function calculateForLocation(Location $location): array
     {
-        $location->load(['worktypes', 'labourForecastTemplates.payRateTemplate.payCategories.payCategory']);
+        $location->load([
+            'labourForecastTemplates.payRateTemplate.payCategories.payCategory',
+            'labourForecastTemplates.customAllowances.allowanceType',
+        ]);
 
         $results = [];
         foreach ($location->labourForecastTemplates as $config) {
@@ -135,9 +137,13 @@ class LabourCostCalculator
     }
 
     /**
-     * Calculate allowances based on location worktypes and template pay categories
+     * Calculate allowances from explicitly configured template allowances
+     *
+     * This method reads allowances from the LocationTemplateAllowance records
+     * instead of auto-deriving from location worktypes. Allowances are categorized
+     * by their AllowanceType category: fares_travel, site, multistorey, custom.
      */
-    private function calculateAllowances(Location $location, PayRateTemplate $template): array
+    private function calculateAllowances(Location $location, PayRateTemplate $template, LocationPayRateTemplate $config): array
     {
         $allowances = [
             'fares_travel' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'daily'],
@@ -145,47 +151,43 @@ class LabourCostCalculator
             'multistorey' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'hourly'],
         ];
 
-        // Map worktypes to pay categories
-        foreach ($location->worktypes as $worktype) {
-            $worktypeName = strtolower($worktype->name);
+        // Read allowances from the configured custom allowances
+        // Each allowance has a category (fares_travel, site, multistorey, custom)
+        foreach ($config->customAllowances as $allowance) {
+            $category = $allowance->allowanceType->category ?? 'custom';
+            $rate = (float) $allowance->rate;
+            $rateType = $allowance->rate_type;
 
-            // Find matching pay category in template
-            foreach ($template->payCategories as $pc) {
-                $categoryName = $pc->payCategory?->name ?? $pc->pay_category_name;
-                if (!$categoryName) continue;
-
-                $categoryNameLower = strtolower($categoryName);
-                $rate = $pc->calculated_rate > 0 ? (float) $pc->calculated_rate : (float) $pc->user_supplied_rate;
-
-                // Match Fares and Travel
-                if ($this->matchesFaresTravel($worktypeName, $categoryNameLower)) {
+            // Map standard categories to the allowances structure
+            switch ($category) {
+                case 'fares_travel':
                     $allowances['fares_travel'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::DAYS_PER_WEEK,  // Daily rate × 5 days
-                        'name' => $categoryName,
-                        'type' => 'daily',
+                        'weekly' => $rateType === 'daily' ? $rate * self::DAYS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
 
-                // Match Site Allowance (Project size)
-                if ($this->matchesSiteAllowance($worktypeName, $categoryNameLower)) {
+                case 'site':
                     $allowances['site'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::HOURS_PER_WEEK,  // Hourly rate × 40 hours
-                        'name' => $categoryName,
-                        'type' => 'hourly',
+                        'weekly' => $rateType === 'hourly' ? $rate * self::HOURS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
 
-                // Match Multi-storey
-                if ($this->matchesMultistorey($worktypeName, $categoryNameLower)) {
+                case 'multistorey':
                     $allowances['multistorey'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::HOURS_PER_WEEK,  // Hourly rate × 40 hours
-                        'name' => $categoryName,
-                        'type' => 'hourly',
+                        'weekly' => $rateType === 'hourly' ? $rate * self::HOURS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
+
+                // 'custom' category is handled separately in calculateCustomAllowances
             }
         }
 
@@ -194,12 +196,19 @@ class LabourCostCalculator
 
     /**
      * Calculate custom allowances from template configuration
+     * Only returns allowances with category 'custom' (not fares_travel, site, or multistorey)
      */
     private function calculateCustomAllowances(LocationPayRateTemplate $config): array
     {
         $customAllowances = [];
 
         foreach ($config->customAllowances as $allowance) {
+            // Only include allowances with category 'custom'
+            $category = $allowance->allowanceType->category ?? 'custom';
+            if ($category !== 'custom') {
+                continue;
+            }
+
             $customAllowances[] = [
                 'type_id' => $allowance->allowance_type_id,
                 'name' => $allowance->allowanceType->name,
@@ -216,28 +225,28 @@ class LabourCostCalculator
     /**
      * Filter allowances for RDO hours
      * Only returns allowances that should be paid during RDO
-     * - Standard allowances: Configurable via template flags (rdo_fares_travel, rdo_site_allowance, rdo_multistorey_allowance)
-     * - Custom allowances: Only those with paid_to_rdo = true
+     * All allowances now use the paid_to_rdo flag on their configuration
      */
     private function calculateRdoAllowances(LocationPayRateTemplate $config, array $standardAllowances): array
     {
-        // Include standard allowances based on configuration flags
+        // Initialize standard allowances with zeros
         $rdoStandardAllowances = [
-            'fares_travel' => $config->rdo_fares_travel
-                ? $standardAllowances['fares_travel']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'daily'],
-            'site' => $config->rdo_site_allowance
-                ? $standardAllowances['site']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
-            'multistorey' => $config->rdo_multistorey_allowance
-                ? $standardAllowances['multistorey']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+            'fares_travel' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'daily'],
+            'site' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+            'multistorey' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
         ];
 
-        // Filter custom allowances where paid_to_rdo = true
+        // Filter allowances where paid_to_rdo = true
         $rdoCustomAllowances = [];
         foreach ($config->customAllowances as $allowance) {
-            if ($allowance->paid_to_rdo) {
+            if (!$allowance->paid_to_rdo) {
+                continue;
+            }
+
+            $category = $allowance->allowanceType->category ?? 'custom';
+
+            if ($category === 'custom') {
+                // Custom allowances go to the custom array
                 $rdoCustomAllowances[] = [
                     'type_id' => $allowance->allowance_type_id,
                     'name' => $allowance->allowanceType->name,
@@ -245,6 +254,9 @@ class LabourCostCalculator
                     'rate' => (float) $allowance->rate,
                     'rate_type' => $allowance->rate_type,
                 ];
+            } else {
+                // Standard categories (fares_travel, site, multistorey) go to standard array
+                $rdoStandardAllowances[$category] = $standardAllowances[$category];
             }
         }
 
