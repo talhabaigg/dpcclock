@@ -895,13 +895,17 @@ class LabourCostCalculator
         // TOTALS
         // ==========================================
 
+        // Check if leave markups should be job costed (defaults to false)
+        $leaveMarkupsJobCosted = $config?->leave_markups_job_costed ?? false;
+
         // Total cost includes:
         // - Worked hours wages (ordinary + overtime marked up)
-        // - Leave markups (accruals only, not wages)
+        // - Leave markups (only if leave_markups_job_costed is true)
         // - RDO accruals and oncosts (wages NOT included - paid from balance)
         // - Public Holiday wages, accruals, and oncosts (all included)
-        // - All oncosts (worked + leave + RDO + PH)
-        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsTotal
+        // - All oncosts (worked + leave + RDO + PH) - always included
+        $leaveMarkupsCost = $leaveMarkupsJobCosted ? $leaveMarkupsTotal : 0;
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsCost
             + $rdoAccrualsTotal  // RDO accruals only (wages NOT costed)
             + $phMarkedUp        // PH wages + accruals
             + $totalOncostsIncludingLeave;
@@ -979,15 +983,17 @@ class LabourCostCalculator
                 'marked_up' => round($overtimeMarkedUp, 2),
             ],
 
-            // Leave hours: wages paid from accruals (not job costed), but leave markups and oncosts ARE job costed
+            // Leave hours: wages paid from accruals (not job costed)
+            // Leave markups job costed only if toggle is enabled, oncosts always job costed
             'leave' => [
                 'hours' => round($leaveHours, 2),
                 'days' => round($leaveHours / 8, 2),
                 'gross_wages' => round($leaveGrossWages, 2), // Paid from accruals, NOT job costed
+                'leave_markups_job_costed' => $leaveMarkupsJobCosted,
                 'leave_markups' => [
                     'annual_leave_accrual' => round($leaveGrossWages * self::ANNUAL_LEAVE_ACCRUAL, 2),
                     'leave_loading' => round($leaveGrossWages * self::LEAVE_LOADING, 2),
-                    'total' => round($leaveMarkupsTotal, 2), // This IS job costed to 03-01
+                    'total' => round($leaveMarkupsTotal, 2), // Only job costed if leave_markups_job_costed is true
                 ],
                 'oncosts' => [
                     'items' => $leaveOncostDetails,
@@ -995,7 +1001,7 @@ class LabourCostCalculator
                     'percentage_total' => round($leavePercentageOncosts, 2),
                     'total' => round($leaveOncostsTotal, 2),
                 ],
-                'total_cost' => round($leaveMarkupsTotal + $leaveOncostsTotal, 2), // Leave markups + oncosts
+                'total_cost' => round($leaveMarkupsCost + $leaveOncostsTotal, 2), // Leave markups (if enabled) + oncosts
             ],
 
             // RDO hours: wages paid from balance (NOT job costed), allowances and accruals ARE job costed

@@ -68,10 +68,11 @@ interface CostBreakdown {
         hours: number;
         days: number;
         gross_wages: number; // Paid from accruals, NOT job costed
+        leave_markups_job_costed: boolean; // Whether leave markups are included in job costing
         leave_markups: {
             annual_leave_accrual: number;
             leave_loading: number;
-            total: number; // Job costed to 03-01
+            total: number; // Only job costed if leave_markups_job_costed is true
         };
         oncosts: {
             items: Array<{
@@ -87,7 +88,7 @@ interface CostBreakdown {
             percentage_total: number;
             total: number;
         };
-        total_cost: number; // Leave markups + oncosts
+        total_cost: number; // Leave markups (if enabled) + oncosts
     };
     rdo?: {
         hours: number;
@@ -366,11 +367,15 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                 };
             }
 
-            // Wages (Ordinary + Overtime + Leave Markups + RDO Accruals + PH Marked Up)
+            // Wages (Ordinary + Overtime + Leave Markups (if enabled) + RDO Accruals + PH Marked Up)
+            // Leave markups only included if leave_markups_job_costed is true
+            const leaveMarkupsAmount = breakdown.leave?.leave_markups_job_costed
+                ? (breakdown.leave?.leave_markups?.total || 0)
+                : 0;
             const wagesTotal =
                 (breakdown.ordinary?.marked_up || 0) +
                 (breakdown.overtime?.marked_up || 0) +
-                (breakdown.leave?.leave_markups?.total || 0) +
+                leaveMarkupsAmount +
                 (breakdown.rdo?.accruals?.total || 0) +
                 (breakdown.public_holiday_not_worked?.marked_up || 0);
             prefixTotals[prefix].wagesAmount += wagesTotal;
@@ -812,7 +817,9 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 {template.leave_hours.toFixed(1)} hrs / {template.cost_breakdown.leave.days.toFixed(1)} days
                                             </p>
                                             <p className="text-muted-foreground text-xs italic">
-                                                Wages paid from accruals (NOT job costed). Leave markups and oncosts ARE job costed.
+                                                Wages paid from accruals (NOT job costed). {template.cost_breakdown.leave.leave_markups_job_costed
+                                                    ? 'Leave markups and oncosts ARE job costed.'
+                                                    : 'Only oncosts ARE job costed (leave markups excluded).'}
                                             </p>
 
                                         <div className="space-y-1 text-sm">
@@ -824,30 +831,71 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 </span>
                                             </div>
 
-                                            {/* Leave Markups - Job costed to 03-01 */}
-                                            <div className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
-                                                Leave Markups (job costed to 03-01):
-                                            </div>
-                                            <div className="flex justify-between pl-4">
-                                                <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
-                                                <span className="font-medium">
-                                                    {formatCurrency(template.cost_breakdown.leave.leave_markups.annual_leave_accrual)}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between pl-4">
-                                                <span className="text-muted-foreground">Leave Loading (4.61%)</span>
-                                                <span className="font-medium">
-                                                    {formatCurrency(template.cost_breakdown.leave.leave_markups.leave_loading)}
-                                                </span>
-                                            </div>
-                                            <div className="border-border flex justify-between border-t pt-1 pl-4">
-                                                <span className="font-semibold">Leave Markups Subtotal</span>
-                                                <span className="font-semibold text-blue-600 dark:text-blue-400">
-                                                    {formatCurrency(template.cost_breakdown.leave.leave_markups.total)}
-                                                </span>
-                                            </div>
+                                            {/* Leave Markups - conditionally job costed based on toggle */}
+                                            {template.cost_breakdown.leave.leave_markups_job_costed ? (
+                                                <>
+                                                    <div className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+                                                        Leave Markups (job costed to 03-01):
+                                                    </div>
+                                                    <div className="flex justify-between pl-4">
+                                                        <span className="text-muted-foreground">Annual Leave Accrual (9.28%)</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(template.cost_breakdown.leave.leave_markups.annual_leave_accrual)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between pl-4">
+                                                        <span className="text-muted-foreground">Leave Loading (4.61%)</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(template.cost_breakdown.leave.leave_markups.leave_loading)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="border-border flex justify-between border-t pt-1 pl-4">
+                                                        <span className="font-semibold">Leave Markups Subtotal</span>
+                                                        <span className="font-semibold text-blue-600 dark:text-blue-400">
+                                                            {formatCurrency(template.cost_breakdown.leave.leave_markups.total)}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Separator and NOT job costed section */}
+                                                    <div className="my-3 flex items-center gap-2">
+                                                        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600"></div>
+                                                        <span className="text-xs font-medium text-slate-400">NOT JOB COSTED</span>
+                                                        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600"></div>
+                                                    </div>
+                                                    <div className="rounded bg-slate-50 p-2 dark:bg-slate-800/30">
+                                                        <div className="text-xs font-semibold text-slate-400">
+                                                            Leave Markups (NOT job costed):
+                                                        </div>
+                                                        <div className="flex justify-between pl-4">
+                                                            <span className="text-slate-400 line-through">Annual Leave Accrual (9.28%)</span>
+                                                            <span className="text-slate-400 line-through">
+                                                                {formatCurrency(template.cost_breakdown.leave.leave_markups.annual_leave_accrual)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between pl-4">
+                                                            <span className="text-slate-400 line-through">Leave Loading (4.61%)</span>
+                                                            <span className="text-slate-400 line-through">
+                                                                {formatCurrency(template.cost_breakdown.leave.leave_markups.leave_loading)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between pt-1 pl-4">
+                                                            <span className="text-slate-400 line-through">Leave Markups Subtotal</span>
+                                                            <span className="text-slate-400 line-through">
+                                                                {formatCurrency(template.cost_breakdown.leave.leave_markups.total)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="my-3 flex items-center gap-2">
+                                                        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600"></div>
+                                                        <span className="text-xs font-medium text-slate-400">JOB COSTED</span>
+                                                        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600"></div>
+                                                    </div>
+                                                </>
+                                            )}
 
-                                            {/* Leave Oncosts - Job costed */}
+                                            {/* Leave Oncosts - Always job costed */}
                                             <div className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-400">Oncosts (job costed):</div>
                                             {template.cost_breakdown.leave.oncosts.items.map((oncost, idx) => (
                                                 <div key={idx} className="flex justify-between pl-4">

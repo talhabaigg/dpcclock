@@ -141,6 +141,7 @@ class LabourForecastController extends Controller
                     'rdo_fares_travel' => $config->rdo_fares_travel ?? true,
                     'rdo_site_allowance' => $config->rdo_site_allowance ?? false,
                     'rdo_multistorey_allowance' => $config->rdo_multistorey_allowance ?? false,
+                    'leave_markups_job_costed' => $config->leave_markups_job_costed ?? false,
                     'cost_breakdown' => $costBreakdown,
                     'custom_allowances' => $config->customAllowances->map(fn ($a) => [
                         'id' => $a->id,
@@ -566,6 +567,7 @@ class LabourForecastController extends Controller
             'label' => 'nullable|string|max:255',
             'cost_code_prefix' => 'nullable|string|max:10',
             'overtime_enabled' => 'nullable|boolean',
+            'leave_markups_job_costed' => 'nullable|boolean',
         ]);
 
         $updateData = [];
@@ -580,6 +582,10 @@ class LabourForecastController extends Controller
 
         if ($request->has('overtime_enabled')) {
             $updateData['overtime_enabled'] = $request->boolean('overtime_enabled');
+        }
+
+        if ($request->has('leave_markups_job_costed')) {
+            $updateData['leave_markups_job_costed'] = $request->boolean('leave_markups_job_costed');
         }
 
         if (!empty($updateData)) {

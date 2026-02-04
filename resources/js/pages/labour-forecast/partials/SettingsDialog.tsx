@@ -111,6 +111,15 @@ export const SettingsDialog = ({
         );
     };
 
+    // Handle toggling leave markups job costed for a template
+    const handleToggleLeaveMarkupsJobCosted = (templateId: number, enabled: boolean) => {
+        router.put(
+            route('labour-forecast.update-template-label', { location: locationId, template: templateId }),
+            { leave_markups_job_costed: enabled },
+            { preserveScroll: true },
+        );
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -329,6 +338,29 @@ export const SettingsDialog = ({
                                                 />
                                                 <span className={`text-xs ${template.overtime_enabled ? 'text-orange-600 dark:text-orange-400' : 'text-slate-400'}`}>
                                                     {template.overtime_enabled ? 'Enabled' : 'Disabled'}
+                                                </span>
+                                            </div>
+                                            {/* Leave Markups Job Costed Toggle */}
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-help text-xs text-slate-500 underline decoration-dotted underline-offset-2">
+                                                            Leave Markups Job Costed:
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="max-w-xs">
+                                                        <p className="text-xs">
+                                                            When disabled (default), only oncosts are job costed for leave hours.
+                                                            When enabled, leave markups (annual leave accrual + leave loading) are also job costed.
+                                                        </p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                                <Switch
+                                                    checked={template.leave_markups_job_costed}
+                                                    onCheckedChange={(checked) => handleToggleLeaveMarkupsJobCosted(template.id, checked)}
+                                                />
+                                                <span className={`text-xs ${template.leave_markups_job_costed ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
+                                                    {template.leave_markups_job_costed ? 'Enabled' : 'Disabled'}
                                                 </span>
                                             </div>
                                         </div>

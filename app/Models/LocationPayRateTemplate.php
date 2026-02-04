@@ -22,6 +22,7 @@ class LocationPayRateTemplate extends Model
         'rdo_fares_travel',
         'rdo_site_allowance',
         'rdo_multistorey_allowance',
+        'leave_markups_job_costed',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class LocationPayRateTemplate extends Model
         'rdo_fares_travel' => 'boolean',
         'rdo_site_allowance' => 'boolean',
         'rdo_multistorey_allowance' => 'boolean',
+        'leave_markups_job_costed' => 'boolean',
     ];
 
     public function location(): BelongsTo

@@ -132,6 +132,7 @@ export interface ConfiguredTemplate {
     rdo_fares_travel: boolean;
     rdo_site_allowance: boolean;
     rdo_multistorey_allowance: boolean;
+    leave_markups_job_costed: boolean;
     cost_breakdown: CostBreakdown;
     custom_allowances?: CustomAllowance[];
 }
