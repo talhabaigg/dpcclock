@@ -88,7 +88,7 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                     <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>
                         {statusConfig.text}
                     </span>
-                    <div className="flex items-center gap-1 sm:gap-0.5" onClick={(e) => e.preventDefault()}>
+                    <div className="flex items-center gap-1 sm:gap-0.5" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                         <AddNoteButton requisition_id={requisition.id} />
 
                         {requisition.status === 'success' && (

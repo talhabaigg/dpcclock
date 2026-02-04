@@ -52,6 +52,9 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn() => $request->session()->get('success'),
                 'message' => fn() => $request->session()->get('message'),
                 'error' => fn() => $request->session()->get('error'),
+                'deletedItems' => fn() => $request->session()->get('deletedItems'),
+                'priceChanges' => fn() => $request->session()->get('priceChanges'),
+                'costCodeChanges' => fn() => $request->session()->get('costCodeChanges'),
             ],
             'ziggy' => fn(): array => [
                 ...(new Ziggy)->toArray(),

@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
+import { CostCodeSelector } from '../purchasing/costCodeSelector';
 import ActivitySheet from './Partials/activity-sheet';
 import OrderHistorySheet from './Partials/order-history-sheet';
 
@@ -196,18 +197,14 @@ export default function EditMaterialItem() {
                             onChange={(e) => form.setData('price_expiry_date', e.target.value)}
                         />
                         <Label>Cost Code</Label>
-                        <Select value={String(form.data.cost_code_id)} onValueChange={(value) => form.setData('cost_code_id', value)}>
-                            <SelectTrigger>
-                                {costCodes.find((cc) => cc.id.toString() === String(form.data.cost_code_id))?.code || 'Select a cost code'}
-                            </SelectTrigger>
-                            <SelectContent>
-                                {costCodes.map((costCode) => (
-                                    <SelectItem key={costCode.id} value={costCode.id.toString()}>
-                                        {costCode.code}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="rounded-md border">
+                            <CostCodeSelector
+                                value={String(form.data.cost_code_id)}
+                                onValueChange={(value) => form.setData('cost_code_id', value)}
+                                costCodes={costCodes}
+                                useIdAsValue={true}
+                            />
+                        </div>
                         <Label>Supplier</Label>
                         <Select
                             value={String(form.data.supplier_id)}

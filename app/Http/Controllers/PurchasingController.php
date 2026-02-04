@@ -336,6 +336,27 @@ class PurchasingController extends Controller
     {
         $originalRequisition = Requisition::with('lineItems')->findOrFail($id);
 
+        // Check which item codes still exist in MaterialItem table
+        $itemCodes = $originalRequisition->lineItems->pluck('code')->filter()->unique()->values();
+        $existingCodes = MaterialItem::whereIn('code', $itemCodes)->pluck('code')->toArray();
+        $deletedItems = [];
+        $priceChanges = [];
+        $costCodeChanges = [];
+        $validItemsCount = 0;
+
+        foreach ($originalRequisition->lineItems as $lineItem) {
+            if ($lineItem->code && !in_array($lineItem->code, $existingCodes)) {
+                $deletedItems[] = $lineItem->code . ' - ' . $lineItem->description;
+            } else {
+                $validItemsCount++;
+            }
+        }
+
+        // If all items have been deleted, don't allow copying
+        if ($validItemsCount === 0) {
+            return redirect()->route('requisition.show', $id)->with('error', 'Cannot duplicate this requisition. All items have been deleted from the system.');
+        }
+
         $newRequisition = $originalRequisition->replicate();
         $newRequisition->status = 'pending';
         $newRequisition->po_number = null; // Reset PO number
@@ -347,24 +368,72 @@ class PurchasingController extends Controller
         $locationId = $newRequisition->project_number;
 
         foreach ($originalRequisition->lineItems as $lineItem) {
+            // Skip items that no longer exist in MaterialItem table
+            if ($lineItem->code && !in_array($lineItem->code, $existingCodes)) {
+                continue;
+            }
+
             $newLineItem = $lineItem->replicate();
             $newLineItem->requisition_id = $newRequisition->id;
+
+            // Store original values for comparison
+            $originalUnitCost = $lineItem->unit_cost;
+            $originalCostCode = $lineItem->cost_code;
 
             // Refresh price from current project price lists
             if ($lineItem->code) {
                 $currentPrice = $this->getCurrentItemPrice($lineItem->code, $locationId);
+
+                // Get current cost code from MaterialItem
+                $materialItem = MaterialItem::where('code', $lineItem->code)->first();
+                $currentCostCode = $materialItem?->cost_code;
+
                 if ($currentPrice) {
                     // Item has project-specific pricing - use it
                     $newLineItem->unit_cost = $currentPrice['unit_cost'];
                     $newLineItem->total_cost = $currentPrice['unit_cost'] * $newLineItem->qty;
                     $newLineItem->price_list = $currentPrice['price_list'];
                     $newLineItem->is_locked = $currentPrice['is_locked'];
+
+                    // Track price change if different
+                    if (abs($originalUnitCost - $currentPrice['unit_cost']) > 0.0001) {
+                        $priceChanges[] = [
+                            'code' => $lineItem->code,
+                            'description' => $lineItem->description,
+                            'previous_price' => $originalUnitCost,
+                            'current_price' => $currentPrice['unit_cost'],
+                            'variance' => $currentPrice['unit_cost'] - $originalUnitCost,
+                        ];
+                    }
                 } else {
                     // No project pricing - set to $0 (no base prices)
                     $newLineItem->unit_cost = 0;
                     $newLineItem->total_cost = 0;
                     $newLineItem->price_list = null;
                     $newLineItem->is_locked = false;
+
+                    // Track price change to $0
+                    if ($originalUnitCost > 0) {
+                        $priceChanges[] = [
+                            'code' => $lineItem->code,
+                            'description' => $lineItem->description,
+                            'previous_price' => $originalUnitCost,
+                            'current_price' => 0,
+                            'variance' => -$originalUnitCost,
+                        ];
+                    }
+                }
+
+                // Track cost code change if different and material item has a cost code
+                if ($currentCostCode && $originalCostCode !== $currentCostCode) {
+                    $costCodeChanges[] = [
+                        'code' => $lineItem->code,
+                        'description' => $lineItem->description,
+                        'previous_cost_code' => $originalCostCode,
+                        'current_cost_code' => $currentCostCode,
+                    ];
+                    // Update the cost code to the current one
+                    $newLineItem->cost_code = $currentCostCode;
                 }
             } else {
                 // No item code - set to $0
@@ -377,7 +446,25 @@ class PurchasingController extends Controller
             $newLineItem->save();
         }
 
-        return redirect()->route('requisition.edit', $newRequisition->id)->with('success', 'Requisition copied successfully. Prices have been updated to current values.');
+        $successMessage = 'Requisition copied successfully.';
+        if (!empty($priceChanges) || !empty($costCodeChanges)) {
+            $successMessage .= ' Some items have been updated to current values.';
+        }
+        $flashData = ['success' => $successMessage];
+
+        if (!empty($deletedItems)) {
+            $flashData['deletedItems'] = $deletedItems;
+        }
+
+        if (!empty($priceChanges)) {
+            $flashData['priceChanges'] = $priceChanges;
+        }
+
+        if (!empty($costCodeChanges)) {
+            $flashData['costCodeChanges'] = $costCodeChanges;
+        }
+
+        return redirect()->route('requisition.edit', $newRequisition->id)->with($flashData);
     }
 
     /**

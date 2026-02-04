@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useForm } from '@inertiajs/react';
 import { Loader2, MessageSquarePlus, Send, X } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface AddNoteButtonProps {
     requisition_id: number;
@@ -32,6 +33,11 @@ const AddNoteButton = ({ requisition_id }: AddNoteButtonProps) => {
             onSuccess: () => {
                 reset('note');
                 setOpen(false);
+                toast.success('Note added successfully');
+            },
+            onError: (errors) => {
+                console.error('Error saving note:', errors);
+                toast.error('Failed to save note');
             },
         });
     };
@@ -51,6 +57,7 @@ const AddNoteButton = ({ requisition_id }: AddNoteButtonProps) => {
                     size="sm"
                     className="h-6 w-6 rounded text-slate-400 transition-colors hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/50 dark:hover:text-blue-400"
                     title="Add note"
+                    onClick={(e) => e.stopPropagation()}
                 >
                     <MessageSquarePlus className="h-3.5 w-3.5" />
                 </Button>

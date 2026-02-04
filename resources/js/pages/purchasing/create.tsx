@@ -1,6 +1,6 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { SearchSelect } from '@/components/search-select';
-// Alert components removed - using inline alert
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -111,6 +111,20 @@ type CreateRequisitionProps = {
         success: string;
         error: string;
         message: string;
+        deletedItems?: string[];
+        priceChanges?: {
+            code: string;
+            description: string;
+            previous_price: number;
+            current_price: number;
+            variance: number;
+        }[];
+        costCodeChanges?: {
+            code: string;
+            description: string;
+            previous_cost_code: string;
+            current_cost_code: string;
+        }[];
     };
 };
 export default function Create() {
@@ -132,6 +146,21 @@ export default function Create() {
         priceList: string;
         isLocked: boolean;
     }>({ open: false, itemCode: '', priceList: '', isLocked: false });
+
+    const [deletedItemsAlert, setDeletedItemsAlert] = useState<string[]>([]);
+    const [priceChangesAlert, setPriceChangesAlert] = useState<{
+        code: string;
+        description: string;
+        previous_price: number;
+        current_price: number;
+        variance: number;
+    }[]>([]);
+    const [costCodeChangesAlert, setCostCodeChangesAlert] = useState<{
+        code: string;
+        description: string;
+        previous_cost_code: string;
+        current_cost_code: string;
+    }[]>([]);
 
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
@@ -170,6 +199,7 @@ export default function Create() {
                 items: requisition.line_items || [],
             });
             setSelectedSupplier(String(requisition.supplier_number ?? ''));
+            setSelectedLocation(String(requisition.project_number ?? ''));
             setRowData(
                 (requisition.line_items || []).map((item, idx) => ({
                     code: item.code ?? '',
@@ -566,10 +596,22 @@ export default function Create() {
     useEffect(() => {
         if (!flash) return;
 
-        const { success, error, message } = flash;
+        const { success, error, message, deletedItems, priceChanges, costCodeChanges } = flash;
 
         if (success || error || message) {
             toast[success ? 'success' : error ? 'error' : 'info'](success || error || message);
+        }
+
+        if (deletedItems && deletedItems.length > 0) {
+            setDeletedItemsAlert(deletedItems);
+        }
+
+        if (priceChanges && priceChanges.length > 0) {
+            setPriceChangesAlert(priceChanges);
+        }
+
+        if (costCodeChanges && costCodeChanges.length > 0) {
+            setCostCodeChangesAlert(costCodeChanges);
         }
     }, [flash]);
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -615,7 +657,7 @@ export default function Create() {
             )}
 
             {/* HEADER - Compact but polished */}
-            <div className="relative border-b border-border/60 bg-gradient-to-r from-muted/40 via-background to-muted/30">
+            <div className="relative overflow-hidden border-b border-border/60 bg-gradient-to-r from-muted/40 via-background to-muted/30">
                 <div className="flex items-center justify-between px-4 py-4 md:px-6">
                     {/* Left - Icon + Title */}
                     <div className="flex items-center gap-3">
@@ -655,6 +697,139 @@ export default function Create() {
                             <X className="h-3 w-3" />
                         </Button>
                     </div>
+                )}
+
+                {/* Deleted Items Alert */}
+                {deletedItemsAlert.length > 0 && (
+                    <Alert variant="destructive" className="mx-2 mt-4 border-red-300 bg-red-50 sm:mx-4 md:mx-6 dark:border-red-900 dark:bg-red-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
+                        <AlertCircleIcon className="h-4 w-4 shrink-0" />
+                        <AlertTitle>Items No Longer Available</AlertTitle>
+                        <AlertDescription className="min-w-0 overflow-hidden">
+                            <p className="mb-2">The following items were removed because they no longer exist in the system:</p>
+                            <ul className="list-inside list-disc space-y-1">
+                                {deletedItemsAlert.map((item, index) => (
+                                    <li key={index} className="text-sm">{item}</li>
+                                ))}
+                            </ul>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-3 h-7 px-2 text-red-700 hover:bg-red-200/50 hover:text-red-900 dark:text-red-300"
+                                onClick={() => setDeletedItemsAlert([])}
+                            >
+                                Dismiss
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Price Changes Alert */}
+                {priceChangesAlert.length > 0 && (
+                    <Alert className="mx-2 mt-4 border-amber-300 bg-amber-50 sm:mx-4 md:mx-6 dark:border-amber-900 dark:bg-amber-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
+                        <AlertCircleIcon className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Prices Updated</AlertTitle>
+                        <AlertDescription className="min-w-0 overflow-hidden">
+                            <p className="mb-2 text-xs text-amber-700 sm:text-sm dark:text-amber-300">Items with updated prices:</p>
+                            {/* Mobile: Card layout */}
+                            <div className="space-y-2 sm:hidden">
+                                {priceChangesAlert.map((item, index) => (
+                                    <div key={index} className="rounded-md border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-amber-950/30">
+                                        <div className="mb-1 text-xs font-medium text-amber-900 dark:text-amber-100">{item.code}</div>
+                                        <div className="mb-1.5 truncate text-[10px] text-amber-600 dark:text-amber-400">{item.description}</div>
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-amber-500">Was:</span>
+                                                <span className="font-mono text-amber-700 dark:text-amber-300">${Number(item.previous_price).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-amber-500">Now:</span>
+                                                <span className="font-mono text-amber-700 dark:text-amber-300">${Number(item.current_price).toFixed(2)}</span>
+                                            </div>
+                                            <div className={`font-mono font-semibold ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                ({Number(item.variance) > 0 ? '+' : ''}{Number(item.variance).toFixed(2)})
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Desktop: Table layout */}
+                            <div className="hidden overflow-x-auto rounded-md border border-amber-200 sm:block dark:border-amber-800">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-amber-100 dark:bg-amber-900/50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium text-amber-800 dark:text-amber-200">Item</th>
+                                            <th className="px-3 py-2 text-right font-medium text-amber-800 dark:text-amber-200">Previous</th>
+                                            <th className="px-3 py-2 text-right font-medium text-amber-800 dark:text-amber-200">Current</th>
+                                            <th className="px-3 py-2 text-right font-medium text-amber-800 dark:text-amber-200">Variance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-amber-200 dark:divide-amber-800">
+                                        {priceChangesAlert.map((item, index) => (
+                                            <tr key={index} className="bg-white dark:bg-amber-950/30">
+                                                <td className="px-3 py-2">
+                                                    <div className="font-medium text-amber-900 dark:text-amber-100">{item.code}</div>
+                                                    <div className="max-w-[200px] truncate text-xs text-amber-600 dark:text-amber-400">{item.description}</div>
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-amber-700 dark:text-amber-300">
+                                                    ${Number(item.previous_price).toFixed(2)}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-amber-700 dark:text-amber-300">
+                                                    ${Number(item.current_price).toFixed(2)}
+                                                </td>
+                                                <td className={`whitespace-nowrap px-3 py-2 text-right font-mono font-semibold ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                    {Number(item.variance) > 0 ? '+' : ''}${Number(item.variance).toFixed(2)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2 h-6 px-2 text-xs text-amber-700 hover:bg-amber-200/50 hover:text-amber-900 dark:text-amber-300"
+                                onClick={() => setPriceChangesAlert([])}
+                            >
+                                Dismiss
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Cost Code Changes Alert */}
+                {costCodeChangesAlert.length > 0 && (
+                    <Alert className="mx-2 mt-4 border-blue-300 bg-blue-50 sm:mx-4 md:mx-6 dark:border-blue-900 dark:bg-blue-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
+                        <AlertCircleIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <AlertTitle className="text-blue-800 dark:text-blue-200">Cost Codes Updated</AlertTitle>
+                        <AlertDescription className="min-w-0 overflow-hidden">
+                            <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">Items with updated cost codes:</p>
+                            <div className="space-y-2">
+                                {costCodeChangesAlert.map((item, index) => (
+                                    <div key={index} className="rounded-md border border-blue-200 bg-white p-2 dark:border-blue-800 dark:bg-blue-950/30">
+                                        <div className="mb-1 text-xs font-medium text-blue-900 dark:text-blue-100">{item.code}</div>
+                                        <div className="mb-1.5 truncate text-[10px] text-blue-600 dark:text-blue-400">{item.description}</div>
+                                        <div className="flex items-center gap-2 text-[11px]">
+                                            <span className="text-blue-500">Was:</span>
+                                            <span className="font-mono text-blue-700 dark:text-blue-300">
+                                                {item.previous_cost_code || <span className="italic text-blue-400">None</span>}
+                                            </span>
+                                            <span className="text-blue-400">→</span>
+                                            <span className="text-blue-500">Now:</span>
+                                            <span className="font-mono font-semibold text-blue-800 dark:text-blue-200">{item.current_cost_code}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2 h-6 px-2 text-xs text-blue-700 hover:bg-blue-200/50 hover:text-blue-900 dark:text-blue-300"
+                                onClick={() => setCostCodeChangesAlert([])}
+                            >
+                                Dismiss
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
             </div>
 

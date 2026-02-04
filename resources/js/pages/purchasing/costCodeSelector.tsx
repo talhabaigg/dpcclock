@@ -17,20 +17,27 @@ interface CostCodeSelectorProps {
     value: string;
     onValueChange: (value: string) => void;
     costCodes: CostCode[];
+    useIdAsValue?: boolean;
 }
 
-export function CostCodeSelector({ value, onValueChange, costCodes }: CostCodeSelectorProps) {
+export function CostCodeSelector({ value, onValueChange, costCodes, useIdAsValue = false }: CostCodeSelectorProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    const filteredCostCodes = costCodes.filter((costCode) => `${costCode.code} ${costCode.description}`.toLowerCase().includes(search.toLowerCase()));
+    // Sort by code and filter by search
+    const filteredCostCodes = costCodes
+        .filter((costCode) => `${costCode.code} ${costCode.description}`.toLowerCase().includes(search.toLowerCase()))
+        .sort((a, b) => a.code.localeCompare(b.code));
+
+    const getValueKey = (costCode: CostCode) => useIdAsValue ? costCode.id.toString() : costCode.code;
+    const selectedCostCode = costCodes.find((costCode) => getValueKey(costCode) === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between border-0 bg-transparent hover:bg-transparent">
-                    {value && costCodes.find((costCode) => costCode.code === value)
-                        ? costCodes.find((costCode) => costCode.code === value)?.code
+                    {selectedCostCode
+                        ? `${selectedCostCode.code} - ${selectedCostCode.description}`
                         : 'Search Cost Code'}
                     <ChevronsUpDown className="opacity-50" />
                 </Button>
@@ -46,7 +53,7 @@ export function CostCodeSelector({ value, onValueChange, costCodes }: CostCodeSe
                                     key={costCode.id}
                                     value={`${costCode.code} ${costCode.description}`}
                                     onSelect={() => {
-                                        onValueChange(costCode.code);
+                                        onValueChange(getValueKey(costCode));
                                         setSearch('');
                                         setOpen(false);
                                     }}
@@ -55,7 +62,7 @@ export function CostCodeSelector({ value, onValueChange, costCodes }: CostCodeSe
                                         <span className="font-medium">{costCode.code}</span>
                                         <span className="text-muted-foreground text-xs text-wrap">{costCode.description}</span>
                                     </div>
-                                    <Check className={cn('ml-auto', value === costCode.code ? 'opacity-100' : 'opacity-0')} />
+                                    <Check className={cn('ml-auto', value === getValueKey(costCode) ? 'opacity-100' : 'opacity-0')} />
                                 </CommandItem>
                             ))}
                         </CommandGroup>
