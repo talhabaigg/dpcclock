@@ -524,9 +524,8 @@ const LabourForecastShow = ({
     // ========================================================================
     // DERIVED DATA: Summary calculations
     // ========================================================================
-    const { grandTotalCost, weeksWithCost } = useMemo(() => {
+    const grandTotalCost = useMemo(() => {
         let totalCost = 0;
-        let weeksWithActualCost = 0;
         weeks.forEach((week) => {
             const weekCost = configuredTemplates.reduce((sum, template) => {
                 const savedEntry = savedForecast?.entries?.[template.id];
@@ -540,9 +539,8 @@ const LabourForecastShow = ({
                 return sum + headcount * (template.cost_breakdown.total_weekly_cost || 0);
             }, 0);
             totalCost += weekCost;
-            if (weekCost > 0) weeksWithActualCost++;
         });
-        return { grandTotalCost: totalCost, weeksWithCost: weeksWithActualCost };
+        return totalCost;
     }, [rowData, weeks, configuredTemplates, savedForecast]);
 
     const grandTotalHeadcount = useMemo(() => {
@@ -887,10 +885,7 @@ const LabourForecastShow = ({
 
                         {grandTotalHeadcount > 0 && (
                             <SummaryCards
-                                grandTotalHeadcount={grandTotalHeadcount}
                                 grandTotalCost={grandTotalCost}
-                                weeksCount={weeks.length}
-                                weeksWithCost={weeksWithCost}
                                 remainingToForecast={remainingToForecast}
                                 isBudgetLoading={isBudgetLoading}
                             />
