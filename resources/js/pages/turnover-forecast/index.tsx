@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, Filter, HelpCircle } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Filter, HelpCircle, Printer } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { TurnoverPrintReport } from './TurnoverPrintReport';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 import { UnifiedForecastGrid, type ViewMode } from './components/UnifiedForecastGrid';
 import type { TurnoverRow } from './lib/data-transformer';
@@ -70,6 +71,7 @@ export default function TurnoverForecastIndex({
 
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
+    const [printReportOpen, setPrintReportOpen] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('revenue-only');
     const [gridHeight, setGridHeight] = useState(() => {
         try {
@@ -332,7 +334,12 @@ export default function TurnoverForecastIndex({
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
-                            <Button onClick={() => setReportDialogOpen(true)} variant="default" size="sm">
+                            <Button onClick={() => setPrintReportOpen(true)} variant="default" size="sm">
+                                <Printer className="mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Print Report</span>
+                                <span className="sm:hidden">Print</span>
+                            </Button>
+                            <Button onClick={() => setReportDialogOpen(true)} variant="outline" size="sm">
                                 <FileText className="mr-2 h-4 w-4" />
                                 <span className="hidden sm:inline">View Report</span>
                                 <span className="sm:hidden">Report</span>
@@ -973,6 +980,19 @@ export default function TurnoverForecastIndex({
                 lastActualMonth={lastActualMonth}
                 fyLabel={fyLabel}
                 allMonths={months}
+            />
+
+            {/* Print Report Dialog */}
+            <TurnoverPrintReport
+                open={printReportOpen}
+                onOpenChange={setPrintReportOpen}
+                data={filteredData}
+                months={filteredMonths}
+                lastActualMonth={lastActualMonth}
+                fyLabel={fyLabel}
+                monthlyTargets={monthlyTargets}
+                allMonths={months}
+                selectedFY={selectedFY}
             />
         </AppLayout>
     );
