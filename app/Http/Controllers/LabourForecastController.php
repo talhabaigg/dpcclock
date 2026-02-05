@@ -42,10 +42,10 @@ class LabourForecastController extends Controller
         // Get current month for forecast status
         $currentMonth = now()->startOfMonth();
 
-        // Calculate current week ending (next Sunday)
+        // Calculate current week ending (next Friday)
         $currentWeekEnding = now()->copy();
-        if ($currentWeekEnding->dayOfWeek !== 0) { // 0 = Sunday
-            $currentWeekEnding = $currentWeekEnding->next('Sunday');
+        if ($currentWeekEnding->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+            $currentWeekEnding = $currentWeekEnding->next('Friday');
         }
 
         // Get all forecasts for current month for these locations
@@ -790,10 +790,10 @@ class LabourForecastController extends Controller
             ? $projectEndDate->copy()
             : $startDate->copy()->addMonths(6)->endOfMonth();
 
-        // Find the first Sunday (week ending) on or after start date
+        // Find the first Friday (week ending) on or after start date
         $currentDate = $startDate->copy();
-        if ($currentDate->dayOfWeek !== 0) { // 0 = Sunday
-            $currentDate = $currentDate->next('Sunday');
+        if ($currentDate->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+            $currentDate = $currentDate->next('Friday');
         }
 
         $weekNum = 1;
@@ -804,7 +804,7 @@ class LabourForecastController extends Controller
                 'weekEnding' => $currentDate->format('Y-m-d'),
             ];
 
-            // Move to next week (next Sunday)
+            // Move to next week (next Friday)
             $currentDate = $currentDate->addWeek();
             $weekNum++;
         }
@@ -889,10 +889,10 @@ class LabourForecastController extends Controller
         if ($weekEndingParam) {
             $weekEnding = Carbon::parse($weekEndingParam);
         } else {
-            // Calculate current week ending (next Sunday)
+            // Calculate current week ending (next Friday)
             $weekEnding = now()->copy();
-            if ($weekEnding->dayOfWeek !== 0) { // 0 = Sunday
-                $weekEnding = $weekEnding->next('Sunday');
+            if ($weekEnding->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+                $weekEnding = $weekEnding->next('Friday');
             }
         }
 
