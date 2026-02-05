@@ -825,6 +825,7 @@ const LabourForecastShow = ({
                         locationId={location.id}
                         locationName={location.name}
                         weekEnding={selectedWeekForCost}
+                        forecastMonth={selectedMonth}
                     />
                 )}
             </div>

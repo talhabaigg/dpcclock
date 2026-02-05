@@ -12,6 +12,7 @@ interface CostBreakdownDialogProps {
     locationId: number;
     locationName: string;
     weekEnding?: string; // Optional: if not provided, uses current week
+    forecastMonth?: string; // Optional: specify which forecast to read from (YYYY-MM format)
 }
 
 interface CostBreakdown {
@@ -195,7 +196,7 @@ interface CostBreakdownData {
     templates: Template[];
 }
 
-export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationName, weekEnding }: CostBreakdownDialogProps) => {
+export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationName, weekEnding, forecastMonth }: CostBreakdownDialogProps) => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<CostBreakdownData | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -204,15 +205,17 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
         if (open && locationId) {
             fetchCostBreakdown();
         }
-    }, [open, locationId, weekEnding]);
+    }, [open, locationId, weekEnding, forecastMonth]);
 
     const fetchCostBreakdown = async () => {
         setLoading(true);
         setError(null);
         try {
-            const url = weekEnding
-                ? `/location/${locationId}/labour-forecast/cost-breakdown?week_ending=${weekEnding}`
-                : `/location/${locationId}/labour-forecast/cost-breakdown`;
+            const params = new URLSearchParams();
+            if (weekEnding) params.append('week_ending', weekEnding);
+            if (forecastMonth) params.append('forecast_month', forecastMonth);
+            const queryString = params.toString();
+            const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
             const response = await axios.get(url);
             console.log('Cost breakdown response:', response.data);
             setData(response.data);
@@ -809,7 +812,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 {/* Leave Hours Breakdown */}
                                 <div className="space-y-2">
                                     <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Leave Hours</h4>
-                                    {!(template.leave_hours > 0 && template.cost_breakdown.leave && template.cost_breakdown.leave.total_cost > 0) ? (
+                                    {!(template.leave_hours > 0 && template.cost_breakdown.leave) ? (
                                         <p className="text-muted-foreground text-sm italic">None</p>
                                     ) : (
                                         <div className="space-y-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
@@ -932,7 +935,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 {/* RDO Hours Breakdown */}
                                 <div className="space-y-2">
                                     <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-400">RDO Hours</h4>
-                                    {!(template.rdo_hours > 0 && template.cost_breakdown.rdo && template.cost_breakdown.rdo.total_cost > 0) ? (
+                                    {!(template.rdo_hours > 0 && template.cost_breakdown.rdo) ? (
                                         <p className="text-muted-foreground text-sm italic">None</p>
                                     ) : (
                                         <div className="space-y-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
@@ -1056,8 +1059,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
 
                                 {/* Public Holiday Not Worked Breakdown */}
                                 {template.public_holiday_not_worked_hours > 0 &&
-                                    template.cost_breakdown.public_holiday_not_worked &&
-                                    template.cost_breakdown.public_holiday_not_worked.total_cost > 0 && (
+                                    template.cost_breakdown.public_holiday_not_worked && (
                                         <div className="space-y-3 rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
                                             <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">
                                                 Public Holiday Not Worked ({template.public_holiday_not_worked_hours.toFixed(1)} hrs /{' '}

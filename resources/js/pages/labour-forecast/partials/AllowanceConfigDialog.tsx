@@ -30,8 +30,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { router } from '@inertiajs/react';
 import { Check, Info, Loader2, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { AllowanceConfigItem, AllowanceType, ConfiguredTemplate } from '../types';
+import type { AllowanceType, ConfiguredTemplate } from '../types';
 import { calculateAllowanceWeeklyCost, formatCurrency } from './utils';
+
+// Local type that allows empty rate_type for new allowances before user selects
+type LocalAllowanceConfigItem = {
+    allowance_type_id: number;
+    rate: number;
+    rate_type: 'hourly' | 'daily' | 'weekly' | '';
+    paid_to_rdo: boolean;
+};
 
 interface AllowanceConfigDialogProps {
     open: boolean;
@@ -57,7 +65,7 @@ export const AllowanceConfigDialog = ({
     locationId,
 }: AllowanceConfigDialogProps) => {
     // Local state
-    const [allowanceConfig, setAllowanceConfig] = useState<AllowanceConfigItem[]>([]);
+    const [allowanceConfig, setAllowanceConfig] = useState<LocalAllowanceConfigItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
     // Initialize state when template changes
@@ -100,7 +108,7 @@ export const AllowanceConfigDialog = ({
 
     // Group configured allowances by category
     const configuredByCategory = useMemo(() => {
-        const grouped: Record<string, Array<AllowanceConfigItem & { allowanceType: AllowanceType }>> = {
+        const grouped: Record<string, Array<LocalAllowanceConfigItem & { allowanceType: AllowanceType }>> = {
             fares_travel: [],
             site: [],
             multistorey: [],
@@ -127,13 +135,15 @@ export const AllowanceConfigDialog = ({
         return Object.values(allowancesByCategory).some((arr) => arr.length > 0);
     }, [allowancesByCategory]);
 
+    // Check if any allowances are incomplete (missing rate_type)
+    const hasIncompleteAllowances = useMemo(() => {
+        return allowanceConfig.some((a) => !a.rate_type);
+    }, [allowanceConfig]);
+
     // Handlers
     const handleAddAllowance = (allowanceTypeId: number) => {
         const allowanceType = allowanceTypes.find((t) => t.id === allowanceTypeId);
         if (!allowanceType) return;
-
-        // Use the default rate type from the allowance type
-        const defaultRateType = allowanceType.default_rate_type || 'hourly';
 
         // Fares/travel allowances default to paid_to_rdo = true
         const defaultPaidToRdo = allowanceType.category === 'fares_travel';
@@ -143,7 +153,7 @@ export const AllowanceConfigDialog = ({
             {
                 allowance_type_id: allowanceTypeId,
                 rate: allowanceType.default_rate || 0,
-                rate_type: defaultRateType,
+                rate_type: '', // Require user to select rate type
                 paid_to_rdo: defaultPaidToRdo,
             },
         ]);
@@ -159,7 +169,7 @@ export const AllowanceConfigDialog = ({
         );
     };
 
-    const handleUpdateAllowanceRateType = (allowanceTypeId: number, rate_type: 'hourly' | 'daily' | 'weekly') => {
+    const handleUpdateAllowanceRateType = (allowanceTypeId: number, rate_type: 'hourly' | 'daily' | 'weekly' | '') => {
         setAllowanceConfig((prev) =>
             prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate_type } : a))
         );
@@ -195,59 +205,71 @@ export const AllowanceConfigDialog = ({
 
     if (!template) return null;
 
-    const renderAllowanceItem = (config: AllowanceConfigItem & { allowanceType: AllowanceType }) => {
-        const weeklyCost = calculateAllowanceWeeklyCost(config.rate, config.rate_type);
+    const renderAllowanceItem = (config: LocalAllowanceConfigItem & { allowanceType: AllowanceType }) => {
+        const weeklyCost = config.rate_type ? calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly') : null;
 
         return (
             <div
                 key={config.allowance_type_id}
                 className="rounded-lg bg-white p-3 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
             >
-                <div className="flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{config.allowanceType.name}</div>
+                {/* Header row - Name and Remove button */}
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                        <div className="font-medium">{config.allowanceType.name}</div>
                         {config.allowanceType.description && (
-                            <div className="text-xs text-slate-500 truncate">{config.allowanceType.description}</div>
+                            <div className="text-xs text-slate-500">{config.allowanceType.description}</div>
                         )}
                     </div>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 p-0 text-red-500 hover:text-red-700"
+                        onClick={() => handleRemoveAllowance(config.allowance_type_id)}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className="flex items-center gap-1">
-                            <span className="text-sm text-slate-500">$</span>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={config.rate}
-                                onChange={(e) =>
-                                    handleUpdateAllowanceRate(
-                                        config.allowance_type_id,
-                                        parseFloat(e.target.value) || 0
-                                    )
-                                }
-                                className="h-8 w-20 text-right"
-                            />
-                        </div>
-
-                        <Select
-                            value={config.rate_type}
-                            onValueChange={(value) =>
-                                handleUpdateAllowanceRateType(
+                {/* Rate controls - responsive row */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1">
+                        <span className="text-sm text-slate-500">$</span>
+                        <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={config.rate}
+                            onChange={(e) =>
+                                handleUpdateAllowanceRate(
                                     config.allowance_type_id,
-                                    value as 'hourly' | 'daily' | 'weekly'
+                                    parseFloat(e.target.value) || 0
                                 )
                             }
-                        >
-                            <SelectTrigger className="h-8 w-24">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="hourly">/hour</SelectItem>
-                                <SelectItem value="daily">/day</SelectItem>
-                                <SelectItem value="weekly">/week</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            className="h-8 w-20 text-right"
+                        />
+                    </div>
 
+                    <Select
+                        value={config.rate_type || undefined}
+                        onValueChange={(value) =>
+                            handleUpdateAllowanceRateType(
+                                config.allowance_type_id,
+                                value as 'hourly' | 'daily' | 'weekly'
+                            )
+                        }
+                    >
+                        <SelectTrigger className={`h-8 w-28 ${!config.rate_type ? 'border-amber-400 dark:border-amber-600' : ''}`}>
+                            <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="hourly">/hour</SelectItem>
+                            <SelectItem value="daily">/day</SelectItem>
+                            <SelectItem value="weekly">/week</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {weeklyCost !== null ? (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="rounded bg-green-100 px-2 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
@@ -258,16 +280,11 @@ export const AllowanceConfigDialog = ({
                                 Weekly cost: {formatCurrency(config.rate)} x {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
                             </TooltipContent>
                         </Tooltip>
-
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => handleRemoveAllowance(config.allowance_type_id)}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    ) : (
+                        <div className="rounded bg-amber-100 px-2 py-1 text-sm font-medium text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                            Select rate type
+                        </div>
+                    )}
                 </div>
 
                 {/* RDO Option */}
@@ -305,25 +322,25 @@ export const AllowanceConfigDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Plus className="h-5 w-5" />
-                        Configure Allowances - {template.label}
+                        <Plus className="h-5 w-5 shrink-0" />
+                        <span className="truncate">Configure Allowances - {template.label}</span>
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4">
                     {/* Base template info */}
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="font-medium">{template.name}</h3>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <h3 className="font-medium truncate">{template.name}</h3>
                                 <p className="text-sm text-slate-500">
                                     Base Rate: {formatCurrency(template.hourly_rate)}/hr
                                 </p>
                             </div>
-                            <div className="text-right">
+                            <div className="sm:text-right">
                                 <p className="text-sm text-slate-500">Base Weekly Cost</p>
                                 <p className="text-lg font-semibold text-green-600">
                                     {formatCurrency(template.cost_breakdown.base_weekly_wages)}
@@ -466,23 +483,29 @@ export const AllowanceConfigDialog = ({
 
                     {/* Total Impact */}
                     {allowanceConfig.length > 0 && (
-                        <div className="rounded-lg border-2 border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                            <div className="flex items-center justify-between">
+                        <div className="rounded-lg border-2 border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h3 className="font-medium">Total Allowances</h3>
                                     <p className="text-sm text-slate-600 dark:text-slate-400">
                                         {allowanceConfig.length} allowance{allowanceConfig.length !== 1 ? 's' : ''} configured
                                     </p>
                                 </div>
-                                <div className="text-right">
+                                <div className="sm:text-right">
                                     <p className="text-2xl font-bold text-green-700 dark:text-green-400">
                                         +{formatCurrency(
                                             allowanceConfig.reduce((sum, config) => {
-                                                return sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type);
+                                                if (!config.rate_type) return sum;
+                                                return sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly');
                                             }, 0)
                                         )}
                                     </p>
                                     <p className="text-xs text-slate-500">per worker per week</p>
+                                    {hasIncompleteAllowances && (
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                            Select rate type for all allowances to save
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -493,7 +516,7 @@ export const AllowanceConfigDialog = ({
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={isSaving}>
+                    <Button onClick={handleSave} disabled={isSaving || hasIncompleteAllowances}>
                         {isSaving ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

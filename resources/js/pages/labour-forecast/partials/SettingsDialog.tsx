@@ -124,11 +124,11 @@ export const SettingsDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Settings className="h-5 w-5" />
-                        Configure Pay Rate Templates
+                        <Settings className="h-5 w-5 shrink-0" />
+                        <span className="truncate">Configure Pay Rate Templates</span>
                     </DialogTitle>
                 </DialogHeader>
 
@@ -319,18 +319,18 @@ export const SettingsDialog = ({
                                 {configuredTemplates.map((template) => (
                                     <div
                                         key={template.id}
-                                        className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                                        className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
                                     >
-                                        {/* Header Row - Name, Rate, Cost, Actions */}
-                                        <div className="flex items-start justify-between gap-4">
+                                        {/* Header Row - Name and Actions */}
+                                        <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0 flex-1">
                                                 {editingLabel?.id === template.id ? (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         <Input
                                                             value={editingLabel.label}
                                                             onChange={(e) => setEditingLabel({ ...editingLabel, label: e.target.value })}
                                                             placeholder="Custom label"
-                                                            className="h-8"
+                                                            className="h-8 min-w-[120px] flex-1"
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') handleUpdateLabel();
                                                                 if (e.key === 'Escape') setEditingLabel(null);
@@ -350,58 +350,12 @@ export const SettingsDialog = ({
                                                 )}
                                             </div>
 
-                                            {/* Rate & Cost Badges */}
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <div className="text-right">
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Hourly Rate</p>
-                                                    <p className="font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(template.hourly_rate)}</p>
-                                                </div>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <div className="cursor-help rounded-lg bg-green-50 px-3 py-1.5 text-right dark:bg-green-900/30">
-                                                            <p className="text-xs text-green-600 dark:text-green-400">Weekly Cost</p>
-                                                            <p className="font-bold text-green-700 dark:text-green-300">{formatCurrency(template.cost_breakdown.total_weekly_cost)}</p>
-                                                        </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="bottom" className="max-w-xs">
-                                                        <div className="space-y-1 text-xs">
-                                                            <div className="flex justify-between gap-4">
-                                                                <span>Base Wages ({template.cost_breakdown.hours_per_week}hrs)</span>
-                                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</span>
-                                                            </div>
-                                                            {template.cost_breakdown.allowances.total > 0 && (
-                                                                <div className="flex justify-between gap-4">
-                                                                    <span>+ Allowances</span>
-                                                                    <span className="font-medium">{formatCurrency(template.cost_breakdown.allowances.total)}</span>
-                                                                </div>
-                                                            )}
-                                                            <div className="flex justify-between gap-4">
-                                                                <span>+ Leave Accruals</span>
-                                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.leave_markups.annual_leave_amount + template.cost_breakdown.leave_markups.leave_loading_amount)}</span>
-                                                            </div>
-                                                            <div className="flex justify-between gap-4">
-                                                                <span>+ Super</span>
-                                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.super)}</span>
-                                                            </div>
-                                                            <div className="flex justify-between gap-4">
-                                                                <span>+ On-Costs</span>
-                                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.on_costs.total)}</span>
-                                                            </div>
-                                                            <div className="flex justify-between gap-4 border-t border-slate-600 pt-1 font-semibold text-green-400">
-                                                                <span>Total Weekly Cost</span>
-                                                                <span>{formatCurrency(template.cost_breakdown.total_weekly_cost)}</span>
-                                                            </div>
-                                                        </div>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </div>
-
-                                            {/* Action Buttons */}
+                                            {/* Action Buttons - Always visible on right */}
                                             {!editingLabel && !editingCostCode && (
                                                 <div className="flex items-center gap-0.5 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-600 dark:bg-slate-700">
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50" onClick={() => onOpenCostBreakdown(template)}>
+                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50" onClick={() => onOpenCostBreakdown(template)}>
                                                                 <Calculator className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
@@ -409,7 +363,7 @@ export const SettingsDialog = ({
                                                     </Tooltip>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50" onClick={() => onOpenAllowanceDialog(template)}>
+                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-500 hover:text-green-700 hover:bg-green-50" onClick={() => onOpenAllowanceDialog(template)}>
                                                                 <Plus className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
@@ -417,7 +371,7 @@ export const SettingsDialog = ({
                                                     </Tooltip>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" onClick={() => setEditingLabel({ id: template.id, label: template.label })}>
+                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" onClick={() => setEditingLabel({ id: template.id, label: template.label })}>
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
@@ -425,7 +379,7 @@ export const SettingsDialog = ({
                                                     </Tooltip>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleRemoveTemplate(template.id)}>
+                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleRemoveTemplate(template.id)}>
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
@@ -433,6 +387,52 @@ export const SettingsDialog = ({
                                                     </Tooltip>
                                                 </div>
                                             )}
+                                        </div>
+
+                                        {/* Rate & Cost Badges - Separate row for better mobile layout */}
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            <div className="rounded-md bg-slate-100 px-2 py-1 dark:bg-slate-700">
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">Rate: </span>
+                                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(template.hourly_rate)}/hr</span>
+                                            </div>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <div className="cursor-help rounded-md bg-green-50 px-2 py-1 dark:bg-green-900/30">
+                                                        <span className="text-xs text-green-600 dark:text-green-400">Weekly: </span>
+                                                        <span className="text-sm font-bold text-green-700 dark:text-green-300">{formatCurrency(template.cost_breakdown.total_weekly_cost)}</span>
+                                                    </div>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="bottom" className="max-w-xs">
+                                                    <div className="space-y-1 text-xs">
+                                                        <div className="flex justify-between gap-4">
+                                                            <span>Base Wages ({template.cost_breakdown.hours_per_week}hrs)</span>
+                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</span>
+                                                        </div>
+                                                        {template.cost_breakdown.allowances.total > 0 && (
+                                                            <div className="flex justify-between gap-4">
+                                                                <span>+ Allowances</span>
+                                                                <span className="font-medium">{formatCurrency(template.cost_breakdown.allowances.total)}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between gap-4">
+                                                            <span>+ Leave Accruals</span>
+                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.leave_markups.annual_leave_amount + template.cost_breakdown.leave_markups.leave_loading_amount)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between gap-4">
+                                                            <span>+ Super</span>
+                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.super)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between gap-4">
+                                                            <span>+ On-Costs</span>
+                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.on_costs.total)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between gap-4 border-t border-slate-600 pt-1 font-semibold text-green-400">
+                                                            <span>Total Weekly Cost</span>
+                                                            <span>{formatCurrency(template.cost_breakdown.total_weekly_cost)}</span>
+                                                        </div>
+                                                    </div>
+                                                </TooltipContent>
+                                            </Tooltip>
                                         </div>
 
                                         {/* Allowances Row */}
@@ -454,13 +454,13 @@ export const SettingsDialog = ({
                                             </div>
                                         )}
 
-                                        {/* Settings Grid - Cost Code & Toggles */}
-                                        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 dark:border-slate-700 sm:grid-cols-3">
+                                        {/* Settings - Cost Code & Toggles */}
+                                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-3 dark:border-slate-700">
                                             {/* Cost Code */}
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Cost Code:</span>
                                                 {editingCostCode?.id === template.id ? (
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex flex-wrap items-center gap-1">
                                                         <Input
                                                             value={editingCostCode.costCodePrefix}
                                                             onChange={(e) => setEditingCostCode({ ...editingCostCode, costCodePrefix: e.target.value })}
@@ -478,9 +478,9 @@ export const SettingsDialog = ({
                                                 ) : (
                                                     <button
                                                         onClick={() => setEditingCostCode({ id: template.id, costCodePrefix: template.cost_code_prefix || '' })}
-                                                        className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-mono font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                                                        className="rounded-md bg-slate-100 px-2 py-1 text-xs font-mono font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
                                                     >
-                                                        {template.cost_code_prefix ? `${template.cost_code_prefix}-01` : 'Click to set'}
+                                                        {template.cost_code_prefix ? `${template.cost_code_prefix}-01` : 'Set'}
                                                     </button>
                                                 )}
                                             </div>

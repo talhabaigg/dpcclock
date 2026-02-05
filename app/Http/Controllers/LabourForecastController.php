@@ -896,23 +896,34 @@ class LabourForecastController extends Controller
             }
         }
 
-        // Get the month that contains this week for forecast lookup
-        $forecastMonth = $weekEnding->copy()->startOfMonth();
+        // Get optional forecast_month parameter to specify exactly which forecast to read from
+        $forecastMonthParam = $request->query('forecast_month');
 
-        // Try to find forecast for the month containing this week
-        $forecast = LabourForecast::where('location_id', $location->id)
-            ->where('forecast_month', $forecastMonth)
-            ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
-            ->first();
-
-        // If no forecast for that month, try to find ANY forecast that has this week
-        if (!$forecast) {
+        // If forecast_month is provided, use it directly (most reliable)
+        if ($forecastMonthParam) {
+            $forecastMonth = Carbon::parse($forecastMonthParam)->startOfMonth();
+            $forecast = LabourForecast::where('location_id', $location->id)
+                ->where('forecast_month', $forecastMonth)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->first();
+        } else {
+            // First, try to find a forecast that actually HAS an entry for this specific week
+            // This handles the case where week 6 of a February forecast falls in March
             $forecast = LabourForecast::where('location_id', $location->id)
                 ->whereHas('entries', function ($query) use ($weekEnding) {
                     $query->where('week_ending', $weekEnding->format('Y-m-d'));
                 })
                 ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
                 ->first();
+
+            // Fallback: If no forecast has this week's entry, try to find forecast for that month
+            if (!$forecast) {
+                $forecastMonth = $weekEnding->copy()->startOfMonth();
+                $forecast = LabourForecast::where('location_id', $location->id)
+                    ->where('forecast_month', $forecastMonth)
+                    ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                    ->first();
+            }
         }
 
         if (!$forecast) {
