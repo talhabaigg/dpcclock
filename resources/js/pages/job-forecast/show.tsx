@@ -1063,8 +1063,14 @@ const ShowJobForecastPage = ({
             const isActual = removeCurrentMonthFromDisplayMonths.includes(monthKey);
 
             // Get totals from pinned rows
-            const costTotal = pinnedBottomRowData[0]?.[monthKey];
-            const revenueTotal = pinnedBottomRevenueRowData[0]?.[monthKey];
+            // For current month forecast, check both regular and forecast_ prefixed fields
+            const isCurrentMonthForecast = !isActual && monthKey === currentMonth;
+            const costTotal = isCurrentMonthForecast
+                ? (pinnedBottomRowData[0]?.[`forecast_${monthKey}`] ?? pinnedBottomRowData[0]?.[monthKey])
+                : pinnedBottomRowData[0]?.[monthKey];
+            const revenueTotal = isCurrentMonthForecast
+                ? (pinnedBottomRevenueRowData[0]?.[`forecast_${monthKey}`] ?? pinnedBottomRevenueRowData[0]?.[monthKey])
+                : pinnedBottomRevenueRowData[0]?.[monthKey];
 
             return {
                 monthKey,
@@ -1075,7 +1081,7 @@ const ShowJobForecastPage = ({
                 revenueForecast: !isActual ? (revenueTotal ?? 0) : null,
             };
         });
-    }, [displayMonths, forecastMonths, pinnedBottomRowData, pinnedBottomRevenueRowData]);
+    }, [displayMonths, forecastMonths, pinnedBottomRowData, pinnedBottomRevenueRowData, currentMonth]);
 
     const totalCostBudget = useMemo(() => pinnedBottomRowData[0]?.budget || 0, [pinnedBottomRowData]);
     const totalRevenueBudget = useMemo(() => pinnedBottomRevenueRowData[0]?.contract_sum_to_date || 0, [pinnedBottomRevenueRowData]);
