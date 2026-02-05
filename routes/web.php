@@ -292,10 +292,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('material-items/{materialItem}', [MaterialItemController::class, 'update'])->name('material-items.update');
         Route::patch('material-items/{materialItem}/category', [MaterialItemController::class, 'updateCategory'])->name('material-items.update-category');
     });
-    Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
-        ->middleware('permission:materials.delete');
     Route::delete('material-items/delete-multiple', [MaterialItemController::class, 'destroyMultiple'])->name('material-items.destroyMultiple')
         ->middleware('permission:materials.bulk-delete');
+    Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
+        ->middleware('permission:materials.delete');
     Route::middleware('permission:materials.import')->group(function () {
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
