@@ -360,6 +360,7 @@ class PurchasingController extends Controller
         $newRequisition = $originalRequisition->replicate();
         $newRequisition->status = 'pending';
         $newRequisition->po_number = null; // Reset PO number
+        $newRequisition->premier_po_id = null; // Reset Premier PO ID - duplicate hasn't been sent yet
         $newRequisition->is_template = false; // Reset template status
         $newRequisition->created_at = now();
         $newRequisition->updated_at = now();
