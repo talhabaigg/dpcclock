@@ -181,6 +181,8 @@ const LabourForecastShow = ({
     // ========================================================================
     // STATE: Row Data (initialized from props and saved data)
     // ========================================================================
+    const HOURS_PER_HEADCOUNT = 40;
+
     const [rowData, setRowData] = useState<RowData[]>(() => {
         const rows: RowData[] = [];
         workTypes.forEach((wt) => {
@@ -200,6 +202,22 @@ const LabourForecastShow = ({
                 row[week.key] = getHeadcountFromSaved(savedWeekData);
             });
             rows.push(row);
+
+            // Ordinary Hours row (linked to headcount: 1 hc = 40 hours)
+            const ordinaryRow: RowData = {
+                id: `${wt.id}_ordinary`,
+                workType: 'Ordinary Hours',
+                hourlyRate: wt.hourlyRate,
+                isOrdinaryRow: true,
+                isChildRow: true,
+                parentTemplateId: wt.id,
+            };
+            weeks.forEach((week) => {
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                const headcount = getHeadcountFromSaved(savedWeekData);
+                ordinaryRow[week.key] = headcount * HOURS_PER_HEADCOUNT;
+            });
+            rows.push(ordinaryRow);
 
             // OT row (if enabled)
             if (wt.overtimeEnabled) {
@@ -278,6 +296,20 @@ const LabourForecastShow = ({
                     const row: RowData = { id: wt.id, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek, configId: wt.configId };
                     weeks.forEach((week) => { row[week.key] = 0; });
                     newRows.push(row);
+                }
+
+                // Ordinary Hours row (linked to headcount)
+                const existingOrdinaryRow = prevRows.find((r) => r.id === `${wt.id}_ordinary`);
+                const parentRow = newRows.find((r) => r.id === wt.id);
+                if (existingOrdinaryRow) {
+                    newRows.push({ ...existingOrdinaryRow, workType: 'Ordinary Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
+                } else {
+                    const ordinaryRow: RowData = { id: `${wt.id}_ordinary`, workType: 'Ordinary Hours', hourlyRate: wt.hourlyRate, isOrdinaryRow: true, isChildRow: true, parentTemplateId: wt.id };
+                    weeks.forEach((week) => {
+                        const headcount = parentRow ? Number(parentRow[week.key]) || 0 : 0;
+                        ordinaryRow[week.key] = headcount * HOURS_PER_HEADCOUNT;
+                    });
+                    newRows.push(ordinaryRow);
                 }
 
                 if (wt.overtimeEnabled) {
@@ -401,12 +433,16 @@ const LabourForecastShow = ({
     // DERIVED DATA: Row data with totals and cost row
     // ========================================================================
     const rowDataWithTotals = useMemo(() => {
-        const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
+        const headcountRows = rowData.filter((r) => !r.isOrdinaryRow && !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
 
         const totalRow: RowData = { id: 'total', workType: 'Total', isTotal: true };
         weeks.forEach((week) => {
             totalRow[week.key] = headcountRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
+
+        const ordinaryRows = rowData.filter((r) => r.isOrdinaryRow && !r.isTotal);
+        const totalOrdinaryRow: RowData = { id: 'total_ordinary', workType: 'Ordinary Hours', isTotal: true, isOrdinaryRow: true, isChildRow: true, parentTemplateId: 'total' };
+        weeks.forEach((week) => { totalOrdinaryRow[week.key] = ordinaryRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0); });
 
         const overtimeRows = rowData.filter((r) => r.isOvertimeRow && !r.isTotal);
         const totalOtRow: RowData = { id: 'total_ot', workType: 'OT Hours', isTotal: true, isOvertimeRow: true, isChildRow: true, parentTemplateId: 'total' };
@@ -428,6 +464,7 @@ const LabourForecastShow = ({
         weeks.forEach((week) => { costRow[week.key] = weeklyCosts[week.key] || 0; });
 
         const result = [...rowData, totalRow];
+        if (ordinaryRows.length > 0) result.push(totalOrdinaryRow);
         if (overtimeRows.length > 0) result.push(totalOtRow);
         if (leaveRows.length > 0) result.push(totalLeaveRow);
         if (rdoRows.length > 0) result.push(totalRdoRow);
@@ -542,9 +579,49 @@ const LabourForecastShow = ({
         });
     }, []);
 
+    const expandAllParents = useCallback(() => {
+        const allParentIds = new Set<string>();
+        workTypes.forEach((wt) => allParentIds.add(wt.id));
+        allParentIds.add('total');
+        setExpandedParents(allParentIds);
+    }, [workTypes]);
+
+    const collapseAllParents = useCallback(() => {
+        setExpandedParents(new Set());
+    }, []);
+
     const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
         if (event.data?.isTotal || event.data?.isCostRow) return;
-        setRowData((prevRows) => prevRows.map((row) => (row.id === event.data.id ? { ...row, [event.colDef.field!]: event.newValue } : row)));
+        const field = event.colDef.field!;
+        const newValue = Number(event.newValue) || 0;
+
+        setRowData((prevRows) => {
+            return prevRows.map((row) => {
+                // Update the edited row
+                if (row.id === event.data.id) {
+                    return { ...row, [field]: newValue };
+                }
+
+                // Bidirectional linking: headcount <-> ordinary hours
+                if (event.data?.isOrdinaryRow) {
+                    // Ordinary hours was edited -> update parent headcount
+                    const parentId = event.data.parentTemplateId;
+                    if (row.id === parentId) {
+                        const headcount = Math.round((newValue / HOURS_PER_HEADCOUNT) * 10) / 10; // 1 decimal precision
+                        return { ...row, [field]: headcount };
+                    }
+                } else if (!event.data?.isChildRow) {
+                    // Parent headcount was edited -> update ordinary hours row
+                    const ordinaryRowId = `${event.data.id}_ordinary`;
+                    if (row.id === ordinaryRowId) {
+                        const ordinaryHours = newValue * HOURS_PER_HEADCOUNT;
+                        return { ...row, [field]: ordinaryHours };
+                    }
+                }
+
+                return row;
+            });
+        });
         setHasUnsavedChanges(true);
     }, []);
 
@@ -554,12 +631,38 @@ const LabourForecastShow = ({
         const currentRow = rowData.find((r) => r.id === rowId);
         const value = currentRow ? Number(currentRow[selectedCell.field]) || 0 : 0;
         const endIndex = weeksToFill === 'all' ? weeks.length : Math.min(weekIndex + weeksToFill, weeks.length);
+
         setRowData((prevRows) =>
             prevRows.map((row) => {
-                if (row.id !== rowId) return row;
-                const updated = { ...row };
-                for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = value;
-                return updated;
+                // Update the selected row
+                if (row.id === rowId) {
+                    const updated = { ...row };
+                    for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = value;
+                    return updated;
+                }
+
+                // Bidirectional linking for fill operations
+                if (currentRow?.isOrdinaryRow) {
+                    // Ordinary hours was filled -> update parent headcount
+                    const parentId = currentRow.parentTemplateId;
+                    if (row.id === parentId) {
+                        const updated = { ...row };
+                        const headcount = Math.round((value / HOURS_PER_HEADCOUNT) * 10) / 10;
+                        for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = headcount;
+                        return updated;
+                    }
+                } else if (!currentRow?.isChildRow) {
+                    // Parent headcount was filled -> update ordinary hours row
+                    const ordinaryRowId = `${currentRow?.id}_ordinary`;
+                    if (row.id === ordinaryRowId) {
+                        const updated = { ...row };
+                        const ordinaryHours = value * HOURS_PER_HEADCOUNT;
+                        for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = ordinaryHours;
+                        return updated;
+                    }
+                }
+
+                return row;
             }),
         );
         setHasUnsavedChanges(true);
@@ -807,6 +910,8 @@ const LabourForecastShow = ({
                             selectedMonth={selectedMonth}
                             expandedParents={expandedParents}
                             onToggleExpand={toggleParentExpanded}
+                            onExpandAll={expandAllParents}
+                            onCollapseAll={collapseAllParents}
                             isCalculatingCosts={isCalculatingCosts}
                             selectedCell={selectedCell}
                             onCellSelected={setSelectedCell}

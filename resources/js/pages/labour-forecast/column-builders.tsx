@@ -166,7 +166,50 @@ interface ExpandCollapseProps {
     onToggleExpand: (parentId: string) => void;
     hasChildren: (parentId: string) => boolean;
     isCalculatingCosts?: boolean;
+    onExpandAll?: () => void;
+    onCollapseAll?: () => void;
+    isAllExpanded?: boolean;
 }
+
+// Custom header for Work Type column with expand/collapse all buttons
+const WorkTypeHeader = ({ onExpandAll, onCollapseAll, isAllExpanded }: { onExpandAll?: () => void; onCollapseAll?: () => void; isAllExpanded?: boolean }) => {
+    return (
+        <div className="flex w-full items-center justify-between">
+            <span>Work Type</span>
+            {onExpandAll && onCollapseAll && (
+                <div className="flex gap-1">
+                    {isAllExpanded ? (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onCollapseAll();
+                            }}
+                            className="rounded p-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-300"
+                            title="Collapse all"
+                        >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                            </svg>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onExpandAll();
+                            }}
+                            className="rounded p-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-300"
+                            title="Expand all"
+                        >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const buildLabourForecastShowColumnDefs = (
     weeks: Week[],
@@ -181,6 +224,13 @@ export const buildLabourForecastShowColumnDefs = (
             pinned: 'left',
             width: 200,
             editable: false,
+            headerComponent: () => (
+                <WorkTypeHeader
+                    onExpandAll={expandCollapseProps?.onExpandAll}
+                    onCollapseAll={expandCollapseProps?.onCollapseAll}
+                    isAllExpanded={expandCollapseProps?.isAllExpanded}
+                />
+            ),
             cellRenderer: (params: ValueGetterParams) => {
                 const data = params.data;
                 if (!data) return null;
@@ -188,13 +238,14 @@ export const buildLabourForecastShowColumnDefs = (
                 // For child rows (including total children), show indented with colored indicator
                 if (data.isChildRow) {
                     let colorClass = 'bg-slate-400';
-                    if (data.isOvertimeRow) colorClass = 'bg-orange-500';
+                    if (data.isOrdinaryRow) colorClass = 'bg-emerald-500';
+                    else if (data.isOvertimeRow) colorClass = 'bg-orange-500';
                     else if (data.isLeaveRow) colorClass = 'bg-blue-500';
                     else if (data.isRdoRow) colorClass = 'bg-purple-500';
                     else if (data.isPublicHolidayRow) colorClass = 'bg-indigo-500';
 
-                    // For total children, use bold styling
-                    const textClass = data.isTotal ? 'font-semibold' : 'italic';
+                    // For total children, use bold styling; for ordinary row use normal weight
+                    const textClass = data.isTotal ? 'font-semibold' : data.isOrdinaryRow ? 'font-medium' : 'italic';
 
                     return (
                         <div className="flex items-center pl-6">
@@ -248,12 +299,14 @@ export const buildLabourForecastShowColumnDefs = (
                 return <span>{data.workType}</span>;
             },
             cellClass: (params) => {
+                if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-emerald-700 dark:text-emerald-300';
                 if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal && params.data?.isLeaveRow) return 'font-bold text-blue-700 dark:text-blue-300';
                 if (params.data?.isTotal && params.data?.isRdoRow) return 'font-bold text-purple-700 dark:text-purple-300';
                 if (params.data?.isTotal && params.data?.isPublicHolidayRow) return 'font-bold text-indigo-700 dark:text-indigo-300';
                 if (params.data?.isTotal) return 'font-bold';
                 if (params.data?.isCostRow) return 'font-bold text-green-700 dark:text-green-300';
+                if (params.data?.isOrdinaryRow) return 'text-emerald-600 dark:text-emerald-400';
                 if (params.data?.isOvertimeRow) return 'text-orange-600 dark:text-orange-400';
                 if (params.data?.isLeaveRow) return 'text-blue-600 dark:text-blue-400';
                 if (params.data?.isRdoRow) return 'text-purple-600 dark:text-purple-400';
@@ -272,9 +325,11 @@ export const buildLabourForecastShowColumnDefs = (
             editable: (params) => !params.data?.isTotal && !params.data?.isCostRow,
             cellDataType: 'number',
             cellClass: (params) => {
+                if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-center text-emerald-700 dark:text-emerald-300';
                 if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold text-center';
                 if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
+                if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 font-medium';
                 if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
                 if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 italic';
                 if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400 italic';
@@ -284,10 +339,13 @@ export const buildLabourForecastShowColumnDefs = (
             valueParser: (params) => {
                 const val = Number(params.newValue);
                 if (isNaN(val)) return 0;
-                // Allow decimals for headcount (e.g., 0.4 for 2 days)
                 // For overtime rows, allow whole numbers only
                 if (params.data?.isOvertimeRow) {
                     return Math.max(0, Math.floor(val));
+                }
+                // For ordinary hours rows, allow whole numbers
+                if (params.data?.isOrdinaryRow) {
+                    return Math.max(0, Math.round(val));
                 }
                 // For headcount, allow 1 decimal place
                 return Math.max(0, Math.round(val * 10) / 10);
@@ -332,12 +390,14 @@ export const buildLabourForecastShowColumnDefs = (
         width: 120,
         editable: false,
         cellClass: (params) => {
+            if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-center text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30';
             if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30';
             if (params.data?.isTotal && params.data?.isLeaveRow) return 'font-bold text-center text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30';
             if (params.data?.isTotal && params.data?.isRdoRow) return 'font-bold text-center text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30';
             if (params.data?.isTotal && params.data?.isPublicHolidayRow) return 'font-bold text-center text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30';
             if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
             if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
+            if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 font-medium';
             if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20';
             if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20';
             if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20';
@@ -357,8 +417,8 @@ export const buildLabourForecastShowColumnDefs = (
                 return total;
             }
 
-            // For overtime, leave, RDO, or PH rows, just sum the hours directly
-            if (params.data.isOvertimeRow || params.data.isLeaveRow || params.data.isRdoRow || params.data.isPublicHolidayRow) {
+            // For ordinary, overtime, leave, RDO, or PH rows, just sum the hours directly
+            if (params.data.isOrdinaryRow || params.data.isOvertimeRow || params.data.isLeaveRow || params.data.isRdoRow || params.data.isPublicHolidayRow) {
                 let totalHours = 0;
                 currentMonthWeeks.forEach((week) => {
                     totalHours += Number(params.data[week.key]) || 0;
@@ -386,6 +446,9 @@ export const buildLabourForecastShowColumnDefs = (
             }
             if (params.data?.isCostRow) {
                 return formatCurrency(params.value || 0);
+            }
+            if (params.data?.isOrdinaryRow) {
+                return `${(params.value || 0).toLocaleString()} hrs`;
             }
             if (params.data?.isOvertimeRow) {
                 return `${(params.value || 0).toLocaleString()} OT hrs`;

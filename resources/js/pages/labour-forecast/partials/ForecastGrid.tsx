@@ -39,6 +39,8 @@ interface ForecastGridProps {
     selectedMonth: string;
     expandedParents: Set<string>;
     onToggleExpand: (parentId: string) => void;
+    onExpandAll: () => void;
+    onCollapseAll: () => void;
     isCalculatingCosts: boolean;
     // Cell selection for fill operations
     selectedCell: SelectedCell | null;
@@ -57,6 +59,8 @@ export const ForecastGrid = ({
     selectedMonth,
     expandedParents,
     onToggleExpand,
+    onExpandAll,
+    onCollapseAll,
     isCalculatingCosts,
     selectedCell,
     onCellSelected,
@@ -71,6 +75,9 @@ export const ForecastGrid = ({
 
     // Row class for total and cost row styling
     const getRowClass = useCallback((params: { data: RowData }) => {
+        if (params.data?.isTotal && params.data?.isOrdinaryRow) {
+            return 'bg-emerald-100 dark:bg-emerald-900/30 font-semibold text-emerald-700 dark:text-emerald-300';
+        }
         if (params.data?.isTotal && params.data?.isOvertimeRow) {
             return 'bg-orange-100 dark:bg-orange-900/30 font-semibold text-orange-700 dark:text-orange-300';
         }
@@ -89,17 +96,20 @@ export const ForecastGrid = ({
         if (params.data?.isCostRow) {
             return 'bg-green-50 dark:bg-green-900/20 font-semibold text-green-700 dark:text-green-300';
         }
+        if (params.data?.isOrdinaryRow) {
+            return 'bg-emerald-50/70 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 border-l-2 border-l-emerald-400';
+        }
         if (params.data?.isOvertimeRow) {
-            return 'bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300';
+            return 'bg-orange-50/70 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300 border-l-2 border-l-orange-400';
         }
         if (params.data?.isLeaveRow) {
-            return 'bg-blue-50 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300';
+            return 'bg-blue-50/70 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300 border-l-2 border-l-blue-400';
         }
         if (params.data?.isRdoRow) {
-            return 'bg-purple-50 dark:bg-purple-900/10 text-purple-700 dark:text-purple-300';
+            return 'bg-purple-50/70 dark:bg-purple-900/10 text-purple-700 dark:text-purple-300 border-l-2 border-l-purple-400';
         }
         if (params.data?.isPublicHolidayRow) {
-            return 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300';
+            return 'bg-indigo-50/70 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300 border-l-2 border-l-indigo-400';
         }
         return '';
     }, []);
@@ -205,6 +215,9 @@ export const ForecastGrid = ({
                         onToggleExpand,
                         hasChildren: hasChildRows,
                         isCalculatingCosts,
+                        onExpandAll,
+                        onCollapseAll,
+                        isAllExpanded: expandedParents.size > 0,
                     })}
                     onCellValueChanged={onCellValueChanged}
                     onCellClicked={onCellClicked}

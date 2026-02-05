@@ -256,6 +256,7 @@ export interface RowData {
     configId?: number;
     isTotal?: boolean;
     isCostRow?: boolean;
+    isOrdinaryRow?: boolean;
     isOvertimeRow?: boolean;
     isLeaveRow?: boolean;
     isRdoRow?: boolean;
