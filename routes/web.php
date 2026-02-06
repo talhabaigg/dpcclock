@@ -549,6 +549,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:qa-drawings.view');
     Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download')
         ->middleware('permission:qa-drawings.view');
+    Route::get('/qa-stage-drawings/{drawing}/file', [QaStageDrawingController::class, 'serveFile'])->name('qa-stage-drawings.file')
+        ->middleware('permission:qa-drawings.view');
+    Route::get('/qa-stage-drawings/{drawing}/thumbnail', [QaStageDrawingController::class, 'serveThumbnail'])->name('qa-stage-drawings.thumbnail')
+        ->middleware('permission:qa-drawings.view');
     Route::middleware('permission:qa-drawings.create')->group(function () {
         Route::post('/qa-stages/{qaStage}/drawings', [QaStageDrawingController::class, 'store'])->name('qa-stage-drawings.store');
         Route::post('/qa-stage-drawings/{drawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])->name('qa-stage-drawings.extract-metadata');

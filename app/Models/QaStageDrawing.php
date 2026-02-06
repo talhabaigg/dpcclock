@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class QaStageDrawing extends Model
 {
@@ -190,7 +191,7 @@ class QaStageDrawing extends Model
     {
         // Prefer the new DrawingFile relationship
         if ($this->drawing_file_id && $this->drawingFile) {
-            return $this->drawingFile->file_url;
+            return route('qa-stage-drawings.file', ['drawing' => $this->id]);
         }
 
         // For drawing set sheets, use the S3 page preview
@@ -198,12 +199,12 @@ class QaStageDrawing extends Model
             return route('drawing-sheets.preview', ['sheet' => $this->id]);
         }
 
-        // Fallback to legacy file_path
+        // Fallback to legacy file_path — use streaming endpoint
         if (! $this->file_path) {
             return null;
         }
 
-        return '/storage/'.$this->file_path;
+        return route('qa-stage-drawings.file', ['drawing' => $this->id]);
     }
 
     /**
@@ -221,15 +222,15 @@ class QaStageDrawing extends Model
         // For DrawingFile-based drawings, check if it's a PDF
         if ($this->drawing_file_id && $this->drawingFile) {
             if (str_contains($this->drawingFile->mime_type ?? '', 'pdf')) {
-                return $this->drawingFile->file_url;
+                return route('qa-stage-drawings.file', ['drawing' => $this->id]);
             }
 
             return null;
         }
 
-        // For legacy file_path, check if it's a PDF
+        // For legacy file_path, check if it's a PDF — use streaming endpoint
         if ($this->file_path && str_contains($this->file_type ?? '', 'pdf')) {
-            return '/storage/'.$this->file_path;
+            return route('qa-stage-drawings.file', ['drawing' => $this->id]);
         }
 
         return null;
@@ -304,8 +305,7 @@ class QaStageDrawing extends Model
             return null;
         }
 
-        // Use relative URL to avoid CORS issues when APP_URL doesn't match current host
-        return '/storage/'.$this->thumbnail_path;
+        return route('qa-stage-drawings.thumbnail', ['drawing' => $this->id]);
     }
 
     public function getDiffImageUrlAttribute()
@@ -314,7 +314,6 @@ class QaStageDrawing extends Model
             return null;
         }
 
-        // Use relative URL to avoid CORS issues when APP_URL doesn't match current host
         return '/storage/'.$this->diff_image_path;
     }
 
@@ -415,7 +414,8 @@ class QaStageDrawing extends Model
             return $this->thumbnail_url;
         }
 
-        return '/storage/'.$this->page_preview_s3_key;
+        // Page previews are on S3 — use the sheet preview streaming endpoint
+        return route('drawing-sheets.preview', ['sheet' => $this->id]);
     }
 
     /**

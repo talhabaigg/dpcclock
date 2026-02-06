@@ -204,13 +204,156 @@ class QaStageDrawingController extends Controller
             return redirect()->back()->with('error', 'No file associated with this drawing.');
         }
 
-        $path = Storage::disk('public')->path($storagePath);
+        // Try local public disk first, then S3
+        if (Storage::disk('public')->exists($storagePath)) {
+            $path = Storage::disk('public')->path($storagePath);
 
-        if (! file_exists($path)) {
-            return redirect()->back()->with('error', 'File not found.');
+            return response()->download($path, $fileName);
         }
 
-        return response()->download($path, $fileName);
+        if (Storage::disk('s3')->exists($storagePath)) {
+            $stream = Storage::disk('s3')->readStream($storagePath);
+            $size = Storage::disk('s3')->size($storagePath);
+            $mimeType = $drawing->drawingFile?->mime_type ?? $drawing->file_type ?? 'application/octet-stream';
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
+                ]
+            );
+        }
+
+        return redirect()->back()->with('error', 'File not found.');
+    }
+
+    /**
+     * Serve a drawing file inline (for PDF viewer / image display).
+     * Streams from local public disk or S3.
+     */
+    public function serveFile(QaStageDrawing $drawing)
+    {
+        $storagePath = $drawing->drawingFile?->storage_path ?? $drawing->file_path;
+        $fileName = $drawing->drawingFile?->original_name ?? $drawing->file_name ?? 'drawing.pdf';
+        $mimeType = $drawing->drawingFile?->mime_type ?? $drawing->file_type ?? 'application/pdf';
+
+        if (! $storagePath) {
+            abort(404, 'No file associated with this drawing.');
+        }
+
+        // Try local public disk first
+        if (Storage::disk('public')->exists($storagePath)) {
+            $stream = Storage::disk('public')->readStream($storagePath);
+            $size = Storage::disk('public')->size($storagePath);
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline; filename="'.$fileName.'"',
+                    'Cache-Control' => 'private, max-age=3600',
+                ]
+            );
+        }
+
+        // Try S3
+        if (Storage::disk('s3')->exists($storagePath)) {
+            $stream = Storage::disk('s3')->readStream($storagePath);
+            $size = Storage::disk('s3')->size($storagePath);
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline; filename="'.$fileName.'"',
+                    'Cache-Control' => 'private, max-age=3600',
+                ]
+            );
+        }
+
+        abort(404, 'File not found.');
+    }
+
+    /**
+     * Serve a drawing thumbnail inline.
+     */
+    public function serveThumbnail(QaStageDrawing $drawing)
+    {
+        $thumbnailPath = $drawing->thumbnail_path;
+
+        if (! $thumbnailPath) {
+            abort(404, 'No thumbnail available.');
+        }
+
+        // Try local public disk first
+        if (Storage::disk('public')->exists($thumbnailPath)) {
+            $stream = Storage::disk('public')->readStream($thumbnailPath);
+            $size = Storage::disk('public')->size($thumbnailPath);
+            $mimeType = Storage::disk('public')->mimeType($thumbnailPath) ?: 'image/png';
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]
+            );
+        }
+
+        // Try S3
+        if (Storage::disk('s3')->exists($thumbnailPath)) {
+            $stream = Storage::disk('s3')->readStream($thumbnailPath);
+            $size = Storage::disk('s3')->size($thumbnailPath);
+            $mimeType = Storage::disk('s3')->mimeType($thumbnailPath) ?: 'image/png';
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]
+            );
+        }
+
+        abort(404, 'Thumbnail not found.');
     }
 
     public function show(QaStageDrawing $drawing)
