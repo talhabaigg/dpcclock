@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\QaStageController;
 use App\Http\Controllers\Api\QaStageDrawingController;
 use App\Http\Controllers\Api\QaStageDrawingObservationController;
@@ -85,4 +86,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('qa-stage-drawings.confirm-metadata');
 
     Route::apiResource('qa-stage-drawing-observations', QaStageDrawingObservationController::class);
+
+    // Projects (SWCP + GRE locations) and project-level drawings
+    Route::get('projects', [ProjectDrawingController::class, 'projects'])
+        ->name('api.projects.index');
+    Route::get('projects/{project}/drawings', [ProjectDrawingController::class, 'index'])
+        ->name('api.projects.drawings.index');
+    Route::get('projects/{project}/drawings/{drawing}', [ProjectDrawingController::class, 'show'])
+        ->name('api.projects.drawings.show');
 });

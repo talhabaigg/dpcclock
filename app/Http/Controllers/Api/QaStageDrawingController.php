@@ -136,21 +136,71 @@ class QaStageDrawingController extends Controller
     {
         Log::info('File download requested', [
             'drawing_id' => $qaStageDrawing->id,
+            'drawing_set_id' => $qaStageDrawing->drawing_set_id,
+            'drawing_file_id' => $qaStageDrawing->drawing_file_id,
             'file_path' => $qaStageDrawing->file_path,
             'user_id' => $request->user()?->id,
         ]);
 
-        if (! Storage::disk('public')->exists($qaStageDrawing->file_path)) {
-            Log::error('File not found on disk', ['path' => $qaStageDrawing->file_path]);
+        // 1. DrawingSet-based (S3 PDF) — stream the original PDF from S3
+        if ($qaStageDrawing->drawing_set_id) {
+            $drawingSet = $qaStageDrawing->drawingSet;
+            if ($drawingSet && $drawingSet->original_pdf_s3_key) {
+                $stream = Storage::disk('s3')->readStream($drawingSet->original_pdf_s3_key);
+                if (! $stream) {
+                    return response()->json(['message' => 'Could not read PDF from storage.'], 404);
+                }
 
-            return response()->json(['message' => 'File not found.'], 404);
+                $size = Storage::disk('s3')->size($drawingSet->original_pdf_s3_key);
+                $filename = $drawingSet->original_filename ?? 'drawing.pdf';
+
+                return response()->stream(
+                    function () use ($stream) {
+                        fpassthru($stream);
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    },
+                    200,
+                    [
+                        'Content-Type' => 'application/pdf',
+                        'Content-Length' => $size,
+                        'Content-Disposition' => 'inline; filename="'.$filename.'"',
+                        'Cache-Control' => 'private, max-age=3600',
+                    ]
+                );
+            }
         }
 
-        return Storage::disk('public')->response(
-            $qaStageDrawing->file_path,
-            $qaStageDrawing->file_name,
-            ['Content-Type' => $qaStageDrawing->file_type]
-        );
+        // 2. DrawingFile-based — serve from public disk via storage_path
+        if ($qaStageDrawing->drawing_file_id) {
+            $drawingFile = $qaStageDrawing->drawingFile;
+            if ($drawingFile && $drawingFile->storage_path && Storage::disk('public')->exists($drawingFile->storage_path)) {
+                return Storage::disk('public')->response(
+                    $drawingFile->storage_path,
+                    $drawingFile->original_name,
+                    ['Content-Type' => $drawingFile->mime_type ?? 'application/octet-stream']
+                );
+            }
+        }
+
+        // 3. Legacy file_path — serve directly from public disk
+        if ($qaStageDrawing->file_path && Storage::disk('public')->exists($qaStageDrawing->file_path)) {
+            return Storage::disk('public')->response(
+                $qaStageDrawing->file_path,
+                $qaStageDrawing->file_name,
+                ['Content-Type' => $qaStageDrawing->file_type ?? 'application/octet-stream']
+            );
+        }
+
+        Log::error('File not found for drawing', [
+            'drawing_id' => $qaStageDrawing->id,
+            'drawing_set_id' => $qaStageDrawing->drawing_set_id,
+            'drawing_file_id' => $qaStageDrawing->drawing_file_id,
+            'file_path' => $qaStageDrawing->file_path,
+        ]);
+
+        return response()->json(['message' => 'File not found.'], 404);
     }
 
     /**
