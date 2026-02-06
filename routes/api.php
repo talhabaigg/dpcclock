@@ -52,7 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
         ->name('requisition.updateStatusFromPowerAutomate');
 
-    Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
+    Route::post('/chat', [ChatController::class, 'handle'])->name('api.chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream']);
 
     Route::post('/logout', function (Request $request) {
