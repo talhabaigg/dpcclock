@@ -8,18 +8,16 @@ use App\Models\Location;
 use App\Models\Variation;
 use App\Services\GetCompanyCodeService;
 use App\Services\PremierAuthenticationService;
-use App\Services\VariationService;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class VariationController extends Controller
 {
     public function locationVariations(Location $location)
     {
         $location->load('variations.lineItems');
-
 
         foreach ($location->variations as $variation) {
             $location->total_variation_cost = $variation->lineItems->sum('total_cost');
@@ -30,7 +28,6 @@ class VariationController extends Controller
             $variation->total_variation_cost = $variation->lineItems->sum('total_cost');
             $variation->total_variation_revenue = $variation->lineItems->sum('revenue');
         }
-
 
         return Inertia::render('variation/location-variations', [
             'location' => $location,
@@ -43,6 +40,7 @@ class VariationController extends Controller
 
         return redirect()->back()->with('success', 'Variation sync job has been queued. Changes will appear shortly.');
     }
+
     public function index()
     {
         $variations = Variation::with('lineItems', 'location')->get();
@@ -51,6 +49,7 @@ class VariationController extends Controller
             $variation->total_cost = $variation->lineItems->sum('total_cost');
             $variation->total_revenue = $variation->lineItems->sum('revenue');
         }
+
         // Logic to retrieve variations
         return Inertia::render('variation/index', [
             'variations' => $variations,
@@ -61,13 +60,12 @@ class VariationController extends Controller
     {
         $user = auth()->user();
         $locationsQuery = Location::with([
-            'costCodes.costType'
+            'costCodes.costType',
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
                 ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
         });
-
 
         if ($user->hasRole('manager')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
@@ -77,8 +75,8 @@ class VariationController extends Controller
         $locations = $locationsQuery->get();
         // dd($locations);
 
-
         $costCodes = CostCode::with('costType')->orderBy('code')->get();
+
         // Logic to show the create variation form
         return Inertia::render('variation/create', [
             'locations' => $locations,
@@ -91,7 +89,7 @@ class VariationController extends Controller
         $variation = Variation::with('lineItems', 'location')->findOrFail($id);
         $user = auth()->user();
         $locationsQuery = Location::with([
-            'costCodes.costType'
+            'costCodes.costType',
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
                 ->orWhere('eh_parent_id', 1249093)
@@ -103,6 +101,7 @@ class VariationController extends Controller
         }
         $locations = $locationsQuery->get();
         $costCodes = CostCode::with('costType')->orderBy('code')->get();
+
         return Inertia::render('variation/create', [
             'locations' => $locations,
             'costCodes' => $costCodes,
@@ -129,7 +128,6 @@ class VariationController extends Controller
             'line_items.*.total_cost' => 'required|numeric|min:0',
             'line_items.*.revenue' => 'required|numeric|min:0',
         ]);
-
 
         $variation = Variation::create([
             'location_id' => $validated['location_id'],
@@ -219,7 +217,7 @@ class VariationController extends Controller
     {
 
         $variation = Variation::with('lineItems')->findOrFail($id);
-        $companyService = new GetCompanyCodeService();
+        $companyService = new GetCompanyCodeService;
         $companyCode = $companyService->getCompanyCode($variation->location->eh_parent_id);
 
         // CSV Header
@@ -247,20 +245,20 @@ class VariationController extends Controller
             'Subcontract',
             'PO',
             'Memo',
-            'RFI'
+            'RFI',
         ];
 
         foreach ($variation->lineItems as $lineItem) {
             $csvData[] = [
                 $companyCode,                           // Company Code (fill if needed)
-                $variation->location->external_id ?? '',// Job Number
+                $variation->location->external_id ?? '', // Job Number
                 $variation->co_number,        // CO Number
                 $variation->description,      // Description
                 $variation->co_date,          // CO Date
                 '',                           // Internal CO
                 '',                           // Extra Days
                 $lineItem->line_number,       // Line
-                '="' . $lineItem->cost_item . '"',         // Cost Item
+                '="'.$lineItem->cost_item.'"',         // Cost Item
                 $lineItem->cost_type,
                 '',                             // Department
                 '',                           // Location
@@ -274,7 +272,7 @@ class VariationController extends Controller
                 '',                           // Subcontract
                 '',                           // PO
                 '',                           // Memo
-                ''                            // RFI
+                '',                            // RFI
             ];
         }
 
@@ -321,7 +319,7 @@ class VariationController extends Controller
 
     public function sendToPremier(Variation $variation)
     {
-        $authService = new PremierAuthenticationService();
+        $authService = new PremierAuthenticationService;
         $token = $authService->getAccessToken();
         $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
         $base_url = env('PREMIER_SWAGGER_API_URL');
@@ -351,17 +349,19 @@ class VariationController extends Controller
 
         $response = Http::withToken($token)
             ->acceptJson()
-            ->post($base_url . '/api/ChangeOrder/CreateChangeOrders', $data);
+            ->post($base_url.'/api/ChangeOrder/CreateChangeOrders', $data);
         if ($response->successful()) {
-            $variation->status = "sent";
+            $variation->status = 'sent';
             $variation->save();
             Log::info('Variation sent to Premier successfully.', $response->json());
+
             return redirect()->back()->with('success', 'Variation sent to Premier successfully.');
         } else {
             Log::error('Failed to send variation to Premier.', [
                 'response' => $response->
-                    json()
+                    json(),
             ]);
+
             return redirect()->back()->with('error', 'Failed to send variation to Premier.');
         }
     }
@@ -369,7 +369,7 @@ class VariationController extends Controller
     public function duplicate(Variation $variation)
     {
         $newVariation = $variation->replicate();
-        $newVariation->co_number = $variation->co_number . '-COPY';
+        $newVariation->co_number = $variation->co_number.'-COPY';
         $newVariation->status = 'pending';
         $newVariation->save();
 
@@ -381,5 +381,4 @@ class VariationController extends Controller
 
         return redirect()->route('variations.index')->with('success', 'Variation duplicated successfully.');
     }
-
 }

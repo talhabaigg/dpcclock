@@ -244,8 +244,8 @@ export default function Clockout() {
             <div className="mb-6 w-full max-w-5xl">
                 <div className="mb-4 flex items-center justify-between">
                     <div>
-                        <h2 className="text-xl font-bold text-foreground sm:text-2xl">Clock Out</h2>
-                        <p className="text-sm text-muted-foreground">{employee.name}</p>
+                        <h2 className="text-foreground text-xl font-bold sm:text-2xl">Clock Out</h2>
+                        <p className="text-muted-foreground text-sm">{employee.name}</p>
                     </div>
                     <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-600">
                         <Clock className="h-4 w-4" />
@@ -256,8 +256,8 @@ export default function Clockout() {
                 </div>
 
                 {/* End Time Selection */}
-                <div className="rounded-2xl border-2 bg-card p-4 sm:p-6">
-                    <Label className="mb-4 block text-sm font-semibold text-foreground">Select End Time</Label>
+                <div className="bg-card rounded-2xl border-2 p-4 sm:p-6">
+                    <Label className="text-foreground mb-4 block text-sm font-semibold">Select End Time</Label>
                     <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4">
                         {AvailableEndTimes().map((time) => {
                             const isSelected = selectedEndTime === time;
@@ -288,14 +288,14 @@ export default function Clockout() {
                     <div
                         key={index}
                         className={cn(
-                            'rounded-2xl border-2 bg-card p-4 sm:p-6 transition-all',
+                            'bg-card rounded-2xl border-2 p-4 transition-all sm:p-6',
                             task.hours > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border',
                         )}
                     >
                         <div className="mb-4 flex items-center justify-between">
-                            <span className="text-sm font-semibold text-foreground">Task {index + 1}</span>
+                            <span className="text-foreground text-sm font-semibold">Task {index + 1}</span>
                             {task.hours > 0 && (
-                                <Badge className="bg-emerald-500 text-white text-sm px-3 py-1">
+                                <Badge className="bg-emerald-500 px-3 py-1 text-sm text-white">
                                     {task.hours} {task.hours === 1 ? 'hour' : 'hours'}
                                 </Badge>
                             )}
@@ -303,7 +303,7 @@ export default function Clockout() {
 
                         {task.hours > 0 ? (
                             <div
-                                className="flex flex-col gap-4 cursor-pointer sm:flex-row sm:items-center"
+                                className="flex cursor-pointer flex-col gap-4 sm:flex-row sm:items-center"
                                 onClick={() => updateTaskAllocation(index, 'hours', 0)}
                             >
                                 <div className="flex-1">
@@ -320,7 +320,7 @@ export default function Clockout() {
 
                                 {/* Level - Full width on mobile */}
                                 <div className="sm:hidden">
-                                    <Label className="mb-3 block text-sm font-semibold text-foreground">Level</Label>
+                                    <Label className="text-foreground mb-3 block text-sm font-semibold">Level</Label>
                                     <LevelSelector
                                         levels={Object.keys(groupedLocations)}
                                         selectedLevel={task.level}
@@ -330,7 +330,7 @@ export default function Clockout() {
 
                                 {/* Activity - Full width on mobile */}
                                 <div className="sm:hidden">
-                                    <Label className="mb-3 block text-sm font-semibold text-foreground">Activity</Label>
+                                    <Label className="text-foreground mb-3 block text-sm font-semibold">Activity</Label>
                                     <ActivitySelector
                                         task={task}
                                         groupedLocations={groupedLocations}
@@ -340,17 +340,19 @@ export default function Clockout() {
                                 </div>
 
                                 {/* Hours & Allowances - Side by side on mobile */}
-                                <div className={cn(
-                                    "grid gap-4 sm:hidden",
-                                    (kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) ? "grid-cols-2" : "grid-cols-1"
-                                )}>
+                                <div
+                                    className={cn(
+                                        'grid gap-4 sm:hidden',
+                                        kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled ? 'grid-cols-2' : 'grid-cols-1',
+                                    )}
+                                >
                                     <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
+                                        <Label className="text-foreground mb-3 block text-sm font-semibold">Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
                                     {(kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) && (
                                         <div>
-                                            <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                            <Label className="text-foreground mb-3 block text-sm font-semibold">Allowances</Label>
                                             <div className="flex h-[220px] flex-col justify-center gap-3">
                                                 {kiosk.insulation_allowance_enabled && (
                                                     <AllowanceToggle
@@ -374,12 +376,14 @@ export default function Clockout() {
                                 </div>
 
                                 {/* Desktop layout - Single row */}
-                                <div className={cn(
-                                    "hidden gap-4 sm:grid",
-                                    (kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) ? "sm:grid-cols-4" : "sm:grid-cols-3"
-                                )}>
+                                <div
+                                    className={cn(
+                                        'hidden gap-4 sm:grid',
+                                        kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled ? 'sm:grid-cols-4' : 'sm:grid-cols-3',
+                                    )}
+                                >
                                     <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Level</Label>
+                                        <Label className="text-foreground mb-3 block text-sm font-semibold">Level</Label>
                                         <LevelSelector
                                             levels={Object.keys(groupedLocations)}
                                             selectedLevel={task.level}
@@ -387,7 +391,7 @@ export default function Clockout() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Activity</Label>
+                                        <Label className="text-foreground mb-3 block text-sm font-semibold">Activity</Label>
                                         <ActivitySelector
                                             task={task}
                                             groupedLocations={groupedLocations}
@@ -396,12 +400,12 @@ export default function Clockout() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="mb-3 block text-sm font-semibold text-foreground">Hours</Label>
+                                        <Label className="text-foreground mb-3 block text-sm font-semibold">Hours</Label>
                                         <HourSelector task={task} index={index} updateTaskAllocation={updateTaskAllocation} />
                                     </div>
                                     {(kiosk.insulation_allowance_enabled || kiosk.setout_allowance_enabled) && (
                                         <div>
-                                            <Label className="mb-3 block text-sm font-semibold text-foreground">Allowances</Label>
+                                            <Label className="text-foreground mb-3 block text-sm font-semibold">Allowances</Label>
                                             <div className="flex h-[220px] flex-col justify-center gap-3">
                                                 {kiosk.insulation_allowance_enabled && (
                                                     <AllowanceToggle
@@ -434,10 +438,7 @@ export default function Clockout() {
                         type="button"
                         variant="outline"
                         onClick={addTaskAllocation}
-                        className={cn(
-                            'h-12 gap-2 px-5 text-base font-semibold',
-                            'touch-manipulation active:scale-[0.98]',
-                        )}
+                        className={cn('h-12 gap-2 px-5 text-base font-semibold', 'touch-manipulation active:scale-[0.98]')}
                     >
                         <Plus className="h-5 w-5" />
                         Add Task
@@ -447,10 +448,7 @@ export default function Clockout() {
                         variant="ghost"
                         onClick={() => setTaskAllocations(taskAllocations.slice(0, -1))}
                         disabled={taskAllocations.length <= 1}
-                        className={cn(
-                            'h-12 gap-2 px-5 text-base font-semibold text-muted-foreground',
-                            'touch-manipulation active:scale-[0.98]',
-                        )}
+                        className={cn('text-muted-foreground h-12 gap-2 px-5 text-base font-semibold', 'touch-manipulation active:scale-[0.98]')}
                     >
                         <Minus className="h-5 w-5" />
                         Remove
@@ -458,11 +456,8 @@ export default function Clockout() {
                 </div>
 
                 {/* Footer Section */}
-                <div className="rounded-2xl border-2 bg-muted/30 p-4 sm:p-6">
-                    <div className={cn(
-                        "flex flex-wrap items-center gap-4",
-                        kiosk.laser_allowance_enabled ? "justify-between" : "justify-end"
-                    )}>
+                <div className="bg-muted/30 rounded-2xl border-2 p-4 sm:p-6">
+                    <div className={cn('flex flex-wrap items-center gap-4', kiosk.laser_allowance_enabled ? 'justify-between' : 'justify-end')}>
                         {/* Laser Allowance */}
                         {kiosk.laser_allowance_enabled && (
                             <button
@@ -471,17 +466,13 @@ export default function Clockout() {
                                 className={cn(
                                     'flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all',
                                     'touch-manipulation active:scale-[0.98]',
-                                    laserAllowance
-                                        ? 'border-emerald-500 bg-emerald-500/10'
-                                        : 'border-border bg-card hover:border-primary/30',
+                                    laserAllowance ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-card hover:border-primary/30',
                                 )}
                             >
                                 <div
                                     className={cn(
                                         'flex h-6 w-6 items-center justify-center rounded border-2 transition-colors',
-                                        laserAllowance
-                                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                                            : 'border-muted-foreground/40 bg-background',
+                                        laserAllowance ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-muted-foreground/40 bg-background',
                                     )}
                                 >
                                     {laserAllowance && (
@@ -490,10 +481,7 @@ export default function Clockout() {
                                         </svg>
                                     )}
                                 </div>
-                                <span className={cn(
-                                    'text-base font-semibold',
-                                    laserAllowance ? 'text-emerald-600' : 'text-foreground',
-                                )}>
+                                <span className={cn('text-base font-semibold', laserAllowance ? 'text-emerald-600' : 'text-foreground')}>
                                     Laser Allowance
                                 </span>
                             </button>
@@ -501,28 +489,26 @@ export default function Clockout() {
 
                         {/* Hours Counter */}
                         <div className="flex items-center gap-3">
-                            {hoursAllocated > hoursWorked && (
-                                <span className="text-sm font-semibold text-destructive">
-                                    Over allocated!
-                                </span>
-                            )}
+                            {hoursAllocated > hoursWorked && <span className="text-destructive text-sm font-semibold">Over allocated!</span>}
                             <div
                                 className={cn(
                                     'rounded-xl px-4 py-3 text-center',
-                                    hoursAllocated > hoursWorked && 'bg-destructive/10 border-2 border-destructive',
-                                    hoursAllocated === hoursWorked && 'bg-emerald-500/10 border-2 border-emerald-500',
-                                    hoursAllocated < hoursWorked && 'bg-amber-500/10 border-2 border-amber-500',
+                                    hoursAllocated > hoursWorked && 'bg-destructive/10 border-destructive border-2',
+                                    hoursAllocated === hoursWorked && 'border-2 border-emerald-500 bg-emerald-500/10',
+                                    hoursAllocated < hoursWorked && 'border-2 border-amber-500 bg-amber-500/10',
                                 )}
                             >
-                                <span className={cn(
-                                    'text-lg font-bold',
-                                    hoursAllocated > hoursWorked && 'text-destructive',
-                                    hoursAllocated === hoursWorked && 'text-emerald-600',
-                                    hoursAllocated < hoursWorked && 'text-amber-600',
-                                )}>
+                                <span
+                                    className={cn(
+                                        'text-lg font-bold',
+                                        hoursAllocated > hoursWorked && 'text-destructive',
+                                        hoursAllocated === hoursWorked && 'text-emerald-600',
+                                        hoursAllocated < hoursWorked && 'text-amber-600',
+                                    )}
+                                >
                                     {hoursAllocated} / {hoursWorked}
                                 </span>
-                                <span className="ml-1 text-sm font-medium text-muted-foreground">hours</span>
+                                <span className="text-muted-foreground ml-1 text-sm font-medium">hours</span>
                             </div>
                         </div>
                     </div>

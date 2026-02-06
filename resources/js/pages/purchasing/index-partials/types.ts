@@ -1,7 +1,7 @@
 export interface Requisition {
     line_items_sum_total_cost: any;
     id: number;
-    supplier: { name: string, code: string };
+    supplier: { name: string; code: string };
     location: { name: string } | null;
     status: string;
     po_number: string | null;
@@ -13,7 +13,7 @@ export interface Requisition {
     creator: { name: string } | null;
     created_at: string;
     notes?: { id: number; note: string; created_at: string; user: { name: string } }[];
-};
+}
 
 export interface RequisitionData {
     data: Requisition[];

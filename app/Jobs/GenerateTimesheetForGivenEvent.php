@@ -3,25 +3,23 @@
 namespace App\Jobs;
 
 use App\Models\Kiosk;
-use App\Models\TimesheetEvent;
-use App\Models\Worktype;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
-use Log;
-use Carbon\Carbon;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\RateLimiter;
+use Log;
 
 class GenerateTimesheetForGivenEvent implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, SerializesModels;
+    use InteractsWithQueue, Queueable, SerializesModels;
 
     protected int $kioskId;
-    protected $event;
-    protected $employees;
 
+    protected $event;
+
+    protected $employees;
 
     /**
      * Create a new job instance.
@@ -41,14 +39,16 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         $kiosk = Kiosk::where('eh_kiosk_id', $this->kioskId)->first();
         $kiosk->load('employees', 'location');
 
-        if (!$kiosk) {
+        if (! $kiosk) {
             Log::warning("Kiosk not found with ID: {$this->kioskId}");
+
             return;
         }
         $event = $this->event;
 
         if ($kiosk->location?->state !== strtoupper($event->state)) {
-            Log::warning('State mismatch ' . $kiosk->location?->state . ' != ' . strtoupper($event->state));
+            Log::warning('State mismatch '.$kiosk->location?->state.' != '.strtoupper($event->state));
+
             return;
         }
 
@@ -56,7 +56,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         $selected_employees = $this->employees->toArray();
 
         $kiosk->employees->each(function ($employee) use ($event, $kiosk, &$timesheets, $selected_employees) {
-            if (!in_array($employee->eh_employee_id, $selected_employees)) {
+            if (! in_array($employee->eh_employee_id, $selected_employees)) {
                 return;
             }
 
@@ -65,16 +65,16 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
             $entries = $this->generateTimesheet($employee, $event, $kiosk);
 
-            if (!empty($entries)) {
+            if (! empty($entries)) {
                 $timesheets = array_merge($timesheets, $entries);
             }
         });
 
-        Log::info('Generated Timesheets: ' . json_encode($timesheets, JSON_PRETTY_PRINT));
+        Log::info('Generated Timesheets: '.json_encode($timesheets, JSON_PRETTY_PRINT));
 
-        if (!empty($timesheets)) {
+        if (! empty($timesheets)) {
             $groupedTimesheets = $this->groupTimesheetsByEmployeeId($timesheets);
-            Log::info('Grouped Timesheets: ' . json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
+            Log::info('Grouped Timesheets: '.json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
 
             $timesheetChunks = array_chunk($groupedTimesheets, 100, true);
 
@@ -85,9 +85,9 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                 $chunkData = ['timesheets' => $chunk];
 
                 if ($this->sync($chunkData)) {
-                    Log::info('Timesheets synced successfully for event: ' . $event->title);
+                    Log::info('Timesheets synced successfully for event: '.$event->title);
                 } else {
-                    Log::error('Failed to sync timesheets for event: ' . $event->title);
+                    Log::error('Failed to sync timesheets for event: '.$event->title);
                 }
             }
         }
@@ -120,7 +120,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => 2471107, // Public Holiday
                     'shiftConditionIds' => [],
-                ]
+                ],
             ];
         }
 
@@ -130,8 +130,9 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         $rdoBalance = $this->getLeaveBalanceByEmployeeId($employee->eh_employee_id);
         // $rdoBalance = 4;
 
-        if (!$rdoBalance || $rdoBalance <= 0) {
+        if (! $rdoBalance || $rdoBalance <= 0) {
             Log::info("No RDO balance for employee {$employee->eh_employee_id}, skipping.");
+
             return [];
         }
 
@@ -144,7 +145,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => $rdoWorkTypeId,
                     'shiftConditionIds' => $shiftConditionIds,
-                ]
+                ],
             ];
         }
 
@@ -156,7 +157,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
         $rdoEnd = $fullShiftStart->copy()->addHours($rdoHours);
         $annualLeaveStart = $rdoEnd->copy();
         $annualLeaveEnd = $annualLeaveStart->copy()->addHours($annualLeaveHours);
-        if (!$top_up) {
+        if (! $top_up) {
             return [
                 [
                     'employeeId' => $employee->eh_employee_id,
@@ -165,7 +166,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => $rdoWorkTypeId,
                     'shiftConditionIds' => $shiftConditionIds,
-                ]
+                ],
             ];
         }
 
@@ -185,21 +186,21 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
                 'locationId' => $kiosk->eh_location_id,
                 'workTypeId' => $annualLeaveWorkTypeId,
                 'shiftConditionIds' => [],
-            ]
+            ],
         ];
     }
-
 
     private function groupTimesheetsByEmployeeId(array $timesheets): array
     {
         $grouped = [];
         foreach ($timesheets as $timesheet) {
             $employeeId = $timesheet['employeeId'];
-            if (!isset($grouped[$employeeId])) {
+            if (! isset($grouped[$employeeId])) {
                 $grouped[$employeeId] = [];
             }
             $grouped[$employeeId][] = $timesheet;
         }
+
         return $grouped;
     }
 
@@ -209,20 +210,22 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',
         ])
             // retry up to 5 times; start at 1.5s and grow x2 on each 429
             ->retry(5, 1500, function ($exception, $request) {
                 return optional($exception->response())->status() === 429;
             }, throw: false)
-            ->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+            ->post('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk', $chunkData);
 
         if ($response->successful()) {
-            Log::info('Timesheets synced successfully: ' . $response->body());
+            Log::info('Timesheets synced successfully: '.$response->body());
+
             return true;
         } else {
-            Log::info('Timesheets synced failed: ' . $response->body());
+            Log::info('Timesheets synced failed: '.$response->body());
+
             return false;
         }
     }
@@ -233,7 +236,7 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',
         ])
             ->retry(5, 1500, function ($exception, $request) {
@@ -248,10 +251,12 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
             return $accruedAmount ?: 0;
         } else {
-            Log::info('leave balance failed: ' . $response->body());
+            Log::info('leave balance failed: '.$response->body());
+
             return false;
         }
     }
+
     private function enforceRateLimit(): void
     {
         $key = 'kp-api-last-request';
@@ -264,6 +269,4 @@ class GenerateTimesheetForGivenEvent implements ShouldQueue
 
         cache([$key => microtime(true)], now()->addSeconds(1));
     }
-
-
 }

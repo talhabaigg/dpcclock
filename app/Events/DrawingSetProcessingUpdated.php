@@ -16,15 +16,25 @@ class DrawingSetProcessingUpdated implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets;
 
     public int $projectId;
+
     public int $drawingSetId;
+
     public string $status;
+
     public ?int $sheetId;
+
     public ?int $pageNumber;
+
     public ?string $extractionStatus;
+
     public ?string $drawingNumber;
+
     public ?string $drawingTitle;
+
     public ?string $revision;
+
     public array $stats;
+
     public ?string $thumbnailUrl;
 
     /**
@@ -61,7 +71,7 @@ class DrawingSetProcessingUpdated implements ShouldBroadcastNow
      */
     public function broadcastOn(): Channel
     {
-        return new Channel('drawing-sets.' . $this->projectId);
+        return new Channel('drawing-sets.'.$this->projectId);
     }
 
     /**

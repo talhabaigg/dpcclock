@@ -43,6 +43,7 @@ class DrawingSetController extends Controller
             } else {
                 $drawingSet->thumbnail_url = null;
             }
+
             return $drawingSet;
         });
 
@@ -120,7 +121,7 @@ class DrawingSetController extends Controller
                 }
 
                 // Validate PDF header
-                if (!str_starts_with($fileContent, '%PDF-')) {
+                if (! str_starts_with($fileContent, '%PDF-')) {
                     throw new \RuntimeException('Invalid PDF file - does not have PDF header');
                 }
 
@@ -131,17 +132,17 @@ class DrawingSetController extends Controller
                 ]);
 
                 // Store PDF in S3
-                $s3Key = 'drawing-sets/' . $project->id . '/' . time() . '_' . $file->hashName();
+                $s3Key = 'drawing-sets/'.$project->id.'/'.time().'_'.$file->hashName();
                 $uploaded = Storage::disk('s3')->put($s3Key, $fileContent, [
                     'ContentType' => 'application/pdf',
                 ]);
 
-                if (!$uploaded) {
+                if (! $uploaded) {
                     throw new \RuntimeException('Failed to upload PDF to S3');
                 }
 
                 // Verify upload by checking file exists in S3
-                if (!Storage::disk('s3')->exists($s3Key)) {
+                if (! Storage::disk('s3')->exists($s3Key)) {
                     throw new \RuntimeException('PDF uploaded but not found in S3');
                 }
 
@@ -212,7 +213,7 @@ class DrawingSetController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to upload drawing set: ' . $e->getMessage(),
+                'message' => 'Failed to upload drawing set: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -228,7 +229,7 @@ class DrawingSetController extends Controller
         if ($pdfinfo) {
             $output = [];
             $returnCode = 0;
-            $command = escapeshellarg($pdfinfo) . ' ' . escapeshellarg($pdfPath) . ' 2>&1';
+            $command = escapeshellarg($pdfinfo).' '.escapeshellarg($pdfPath).' 2>&1';
             exec($command, $output, $returnCode);
 
             if ($returnCode === 0) {
@@ -243,8 +244,9 @@ class DrawingSetController extends Controller
         // Fallback: try Imagick
         if (extension_loaded('imagick')) {
             try {
-                $imagick = new \Imagick();
+                $imagick = new \Imagick;
                 $imagick->pingImage($pdfPath);
+
                 return $imagick->getNumberImages();
             } catch (\Exception $e) {
                 // Fall through to default
@@ -275,7 +277,7 @@ class DrawingSetController extends Controller
         $output = [];
         exec($checkCommand, $output, $returnCode);
 
-        if ($returnCode === 0 && !empty($output[0])) {
+        if ($returnCode === 0 && ! empty($output[0])) {
             return trim($output[0]);
         }
 
@@ -319,7 +321,7 @@ class DrawingSetController extends Controller
      */
     public function retryExtraction(Request $request, QaStageDrawing $sheet): JsonResponse
     {
-        if (!$sheet->drawing_set_id) {
+        if (! $sheet->drawing_set_id) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sheet is not part of a drawing set.',
@@ -481,8 +483,8 @@ class DrawingSetController extends Controller
         }
 
         $message = "Linked {$linkedCount} of {$unlinkedSheets->count()} sheets.";
-        if (!empty($errors)) {
-            $message .= " Errors: " . implode('; ', array_slice($errors, 0, 3));
+        if (! empty($errors)) {
+            $message .= ' Errors: '.implode('; ', array_slice($errors, 0, 3));
         }
 
         return response()->json([
@@ -528,7 +530,7 @@ class DrawingSetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete drawing set: ' . $e->getMessage(),
+                'message' => 'Failed to delete drawing set: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -538,7 +540,7 @@ class DrawingSetController extends Controller
      */
     public function sheetPreview(QaStageDrawing $sheet)
     {
-        if (!$sheet->page_preview_s3_key) {
+        if (! $sheet->page_preview_s3_key) {
             abort(404, 'No preview available');
         }
 
@@ -556,13 +558,14 @@ class DrawingSetController extends Controller
      */
     public function sheetThumbnail(QaStageDrawing $sheet)
     {
-        if (!$sheet->thumbnail_s3_key) {
+        if (! $sheet->thumbnail_s3_key) {
             // Fall back to full preview if no thumbnail
             if ($sheet->page_preview_s3_key) {
                 $url = Storage::disk('s3')->temporaryUrl(
                     $sheet->page_preview_s3_key,
                     now()->addMinutes(5)
                 );
+
                 return redirect($url);
             }
             abort(404, 'No thumbnail available');
@@ -583,14 +586,14 @@ class DrawingSetController extends Controller
      */
     public function servePdf(DrawingSet $drawingSet)
     {
-        if (!$drawingSet->original_pdf_s3_key) {
+        if (! $drawingSet->original_pdf_s3_key) {
             abort(404, 'No PDF available');
         }
 
         // Stream the PDF directly from S3 to avoid CORS issues
         $stream = Storage::disk('s3')->readStream($drawingSet->original_pdf_s3_key);
 
-        if (!$stream) {
+        if (! $stream) {
             abort(404, 'Could not read PDF from storage');
         }
 
@@ -608,7 +611,7 @@ class DrawingSetController extends Controller
             [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => $size,
-                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+                'Content-Disposition' => 'inline; filename="'.$filename.'"',
                 'Cache-Control' => 'private, max-age=3600',
             ]
         );
@@ -643,13 +646,13 @@ class DrawingSetController extends Controller
         $imagePathB = $getImagePath($sheetB);
 
         // Verify both sheets have preview images
-        if (!$imagePathA || !$imagePathB) {
+        if (! $imagePathA || ! $imagePathB) {
             return response()->json([
                 'success' => false,
-                'message' => 'Both sheets must have preview images to compare. Missing: ' .
-                    (!$imagePathA ? 'Sheet A' : '') .
-                    (!$imagePathA && !$imagePathB ? ' and ' : '') .
-                    (!$imagePathB ? 'Sheet B' : ''),
+                'message' => 'Both sheets must have preview images to compare. Missing: '.
+                    (! $imagePathA ? 'Sheet A' : '').
+                    (! $imagePathA && ! $imagePathB ? ' and ' : '').
+                    (! $imagePathB ? 'Sheet B' : ''),
             ], 422);
         }
 
@@ -659,7 +662,7 @@ class DrawingSetController extends Controller
         $imageA = $comparisonService->getImageDataUrl($imagePathA);
         $imageB = $comparisonService->getImageDataUrl($imagePathB);
 
-        if (!$imageA || !$imageB) {
+        if (! $imageA || ! $imageB) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load sheet images from storage.',
@@ -693,10 +696,10 @@ class DrawingSetController extends Controller
             $additionalPrompt
         );
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return response()->json([
                 'success' => false,
-                'message' => 'AI comparison failed: ' . ($result['error'] ?? 'Unknown error'),
+                'message' => 'AI comparison failed: '.($result['error'] ?? 'Unknown error'),
             ], 500);
         }
 
@@ -838,7 +841,7 @@ class DrawingSetController extends Controller
                     'bbox_width' => $bboxWidth,
                     'bbox_height' => $bboxHeight,
                     'type' => 'observation',
-                    'description' => "[{$change['type']}] {$change['description']}\n\nLocation: {$change['location']}" .
+                    'description' => "[{$change['type']}] {$change['description']}\n\nLocation: {$change['location']}".
                         ($change['reason'] ? "\n\nReason: {$change['reason']}" : ''),
                     'source' => 'ai_comparison',
                     'source_sheet_a_id' => $validated['sheet_a_id'],
@@ -862,7 +865,7 @@ class DrawingSetController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => count($createdObservations) . ' observations created from AI comparison',
+                'message' => count($createdObservations).' observations created from AI comparison',
                 'observations' => $createdObservations,
             ]);
         } catch (\Exception $e) {
@@ -873,7 +876,7 @@ class DrawingSetController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save observations: ' . $e->getMessage(),
+                'message' => 'Failed to save observations: '.$e->getMessage(),
             ], 500);
         }
     }

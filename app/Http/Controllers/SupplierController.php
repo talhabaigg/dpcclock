@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Models\Supplier;
 
 class SupplierController extends Controller
 {
@@ -23,9 +23,10 @@ class SupplierController extends Controller
             'suppliers' => Supplier::all(),
         ]);
     }
+
     public function download()
     {
-        $fileName = 'suppliers_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'suppliers_'.now()->format('Ymd_His').'.csv';
         $headers = ['name', 'code'];
         $suppliers = Supplier::select($headers)->get()->toArray();
 
@@ -39,6 +40,7 @@ class SupplierController extends Controller
             fclose($handle);
         }, $fileName);
     }
+
     public function upload(Request $request)
     {
         // Validate uploaded file

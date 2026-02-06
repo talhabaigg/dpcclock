@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff, PhoneOff, Sparkles } from 'lucide-react';
-import { useEffect, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useVoiceCall, VoiceCallStatus } from './use-voice-call';
 
 interface VoiceCallModalProps {
@@ -17,7 +17,7 @@ const statusMessages: Record<VoiceCallStatus, string> = {
     connecting: 'Connecting...',
     connected: 'Connected',
     listening: 'Listening...',
-    speaking: 'You\'re speaking',
+    speaking: "You're speaking",
     processing: 'Thinking...',
     error: 'Connection failed',
     disconnected: 'Call ended',
@@ -33,14 +33,14 @@ function SoundWave({ isActive, variant }: { isActive: boolean; variant: 'listeni
     };
 
     return (
-        <div className="flex items-center justify-center gap-1 h-12">
+        <div className="flex h-12 items-center justify-center gap-1">
             {Array.from({ length: barCount }).map((_, i) => (
                 <div
                     key={i}
                     className={cn(
                         'w-1 rounded-full transition-all duration-300',
                         isActive ? colors[variant] : 'bg-muted-foreground/30',
-                        isActive && 'voice-wave-bar'
+                        isActive && 'voice-wave-bar',
                     )}
                     style={{
                         height: isActive ? '100%' : '8px',
@@ -64,10 +64,7 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
         <div className="relative flex items-center justify-center">
             {/* Outer glow rings - smooth breathing animation */}
             <div
-                className={cn(
-                    'absolute rounded-full transition-all duration-1000 ease-in-out',
-                    isActive && 'voice-glow-outer'
-                )}
+                className={cn('absolute rounded-full transition-all duration-1000 ease-in-out', isActive && 'voice-glow-outer')}
                 style={{
                     width: 200,
                     height: 200,
@@ -83,10 +80,7 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
 
             {/* Middle ring */}
             <div
-                className={cn(
-                    'absolute rounded-full transition-all duration-700 ease-in-out',
-                    isActive && 'voice-glow-middle'
-                )}
+                className={cn('absolute rounded-full transition-all duration-700 ease-in-out', isActive && 'voice-glow-middle')}
                 style={{
                     width: 160,
                     height: 160,
@@ -105,12 +99,12 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
                 className={cn(
                     'relative flex size-28 items-center justify-center rounded-full shadow-2xl transition-all duration-500',
                     status === 'idle' && 'bg-gradient-to-br from-zinc-700 to-zinc-800',
-                    isConnecting && 'bg-gradient-to-br from-amber-500 to-orange-600 voice-orb-connecting',
+                    isConnecting && 'voice-orb-connecting bg-gradient-to-br from-amber-500 to-orange-600',
                     isListening && 'bg-gradient-to-br from-violet-500 to-purple-600',
                     isSpeaking && 'bg-gradient-to-br from-emerald-500 to-teal-600',
                     isProcessing && 'bg-gradient-to-br from-purple-500 to-pink-600',
                     status === 'error' && 'bg-gradient-to-br from-red-500 to-rose-600',
-                    status === 'disconnected' && 'bg-gradient-to-br from-zinc-600 to-zinc-700'
+                    status === 'disconnected' && 'bg-gradient-to-br from-zinc-600 to-zinc-700',
                 )}
             >
                 {/* Inner glow */}
@@ -119,7 +113,7 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
                         'absolute inset-2 rounded-full opacity-50 blur-md transition-all duration-500',
                         isListening && 'bg-violet-400',
                         isSpeaking && 'bg-emerald-400',
-                        isProcessing && 'bg-purple-400'
+                        isProcessing && 'bg-purple-400',
                     )}
                 />
 
@@ -127,13 +121,10 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
                 <div className="relative z-10">
                     {isProcessing ? (
                         <div className="flex items-center justify-center">
-                            <Sparkles className="size-10 text-white voice-sparkle" />
+                            <Sparkles className="voice-sparkle size-10 text-white" />
                         </div>
                     ) : (
-                        <SoundWave
-                            isActive={isListening || isSpeaking}
-                            variant={isSpeaking ? 'speaking' : 'listening'}
-                        />
+                        <SoundWave isActive={isListening || isSpeaking} variant={isSpeaking ? 'speaking' : 'listening'} />
                     )}
                 </div>
             </div>
@@ -142,16 +133,7 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
 }
 
 export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalProps) {
-    const {
-        status,
-        isConnected,
-        isMuted,
-        userTranscript,
-        aiResponse,
-        startCall,
-        endCall,
-        toggleMute,
-    } = useVoiceCall({
+    const { status, isConnected, isMuted, userTranscript, aiResponse, startCall, endCall, toggleMute } = useVoiceCall({
         onError: (error) => {
             console.error('Voice call error:', error);
         },
@@ -191,15 +173,15 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop with gradient */}
             <div
-                className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/90 to-background/95 backdrop-blur-md"
+                className="from-background/95 via-background/90 to-background/95 absolute inset-0 bg-gradient-to-b backdrop-blur-md"
                 onClick={handleClose}
             />
 
             {/* Modal */}
             <div
                 className={cn(
-                    'relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl border border-border/50 bg-card/80 p-8 shadow-2xl backdrop-blur-sm',
-                    className
+                    'border-border/50 bg-card/80 relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl border p-8 shadow-2xl backdrop-blur-sm',
+                    className,
                 )}
             >
                 {/* Header */}
@@ -217,8 +199,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                         status === 'processing' && 'text-purple-500',
                         status === 'connecting' && 'text-amber-500',
                         status === 'error' && 'text-red-500',
-                        (status === 'idle' || status === 'disconnected' || status === 'connected') &&
-                            'text-muted-foreground'
+                        (status === 'idle' || status === 'disconnected' || status === 'connected') && 'text-muted-foreground',
                     )}
                 >
                     {statusMessages[status]}
@@ -230,13 +211,11 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 </div>
 
                 {/* Live transcripts */}
-                <div className="mb-8 w-full min-h-[80px] space-y-3">
+                <div className="mb-8 min-h-[80px] w-full space-y-3">
                     {/* User transcript */}
                     {userTranscript && (
-                        <div className="rounded-2xl bg-muted/50 px-4 py-3 backdrop-blur-sm">
-                            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                                You
-                            </p>
+                        <div className="bg-muted/50 rounded-2xl px-4 py-3 backdrop-blur-sm">
+                            <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">You</p>
                             <p className="text-sm leading-relaxed">{userTranscript}</p>
                         </div>
                     )}
@@ -244,9 +223,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                     {/* AI response */}
                     {aiResponse && (
                         <div className="rounded-2xl bg-violet-500/10 px-4 py-3 backdrop-blur-sm">
-                            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-violet-500">
-                                AI Response
-                            </p>
+                            <p className="mb-1 text-[10px] font-medium tracking-wider text-violet-500 uppercase">AI Response</p>
                             <p className="text-sm leading-relaxed">{aiResponse}</p>
                         </div>
                     )}
@@ -262,7 +239,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                             'size-14 rounded-full border-2 transition-all duration-300',
                             isMuted
                                 ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                                : 'border-border hover:border-foreground/50 hover:bg-muted'
+                                : 'border-border hover:border-foreground/50 hover:bg-muted',
                         )}
                         onClick={toggleMute}
                         disabled={!isConnected}
@@ -273,7 +250,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                     {/* End call button */}
                     <Button
                         size="icon"
-                        className="size-16 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/25 transition-all duration-300 hover:bg-red-600 hover:shadow-red-500/40 hover:scale-105"
+                        className="size-16 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/25 transition-all duration-300 hover:scale-105 hover:bg-red-600 hover:shadow-red-500/40"
                         onClick={handleClose}
                     >
                         <PhoneOff className="size-7" />
@@ -281,10 +258,8 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 </div>
 
                 {/* Help text */}
-                <p className="mt-8 text-center text-xs text-muted-foreground/70">
-                    Press{' '}
-                    <kbd className="rounded-md bg-muted/80 px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd>{' '}
-                    to end call
+                <p className="text-muted-foreground/70 mt-8 text-center text-xs">
+                    Press <kbd className="bg-muted/80 rounded-md px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd> to end call
                 </p>
             </div>
 

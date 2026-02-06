@@ -77,11 +77,7 @@ const safeNumber = (value: number | null | undefined): number => {
 /**
  * Get the monthly value, preferring actuals over forecast
  */
-function getMonthlyValue(
-    actuals: MonthlyData | undefined,
-    forecast: MonthlyData | undefined,
-    month: string
-): { value: number; isActual: boolean } {
+function getMonthlyValue(actuals: MonthlyData | undefined, forecast: MonthlyData | undefined, month: string): { value: number; isActual: boolean } {
     const actualValue = safeNumber(actuals?.[month]);
     const forecastValue = safeNumber(forecast?.[month]);
 
@@ -98,7 +94,7 @@ export function transformToUnifiedRows(
     data: TurnoverRow[],
     months: string[],
     lastActualMonth: string | null,
-    viewMode: 'revenue-only' | 'expanded' | 'comparison'
+    viewMode: 'revenue-only' | 'expanded' | 'comparison',
 ): UnifiedRow[] {
     const rows: UnifiedRow[] = [];
 
@@ -132,11 +128,7 @@ export function transformToUnifiedRows(
 
         // Add monthly revenue values
         months.forEach((month) => {
-            const { value, isActual } = getMonthlyValue(
-                job.revenue_actuals,
-                job.revenue_forecast,
-                month
-            );
+            const { value, isActual } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
             (revenueRow as any)[`month_${month}`] = value;
             revenueRow.isActualMonth[month] = isActual;
         });
@@ -162,11 +154,7 @@ export function transformToUnifiedRows(
             };
 
             months.forEach((month) => {
-                const { value, isActual } = getMonthlyValue(
-                    job.cost_actuals,
-                    job.cost_forecast,
-                    month
-                );
+                const { value, isActual } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
                 (costRow as any)[`month_${month}`] = value;
                 costRow.isActualMonth[month] = isActual;
             });
@@ -206,12 +194,7 @@ export function transformToUnifiedRows(
 /**
  * Calculate total row for a given row type
  */
-export function calculateTotalRow(
-    rows: UnifiedRow[],
-    rowType: RowType,
-    months: string[],
-    label: string
-): UnifiedRow {
+export function calculateTotalRow(rows: UnifiedRow[], rowType: RowType, months: string[], label: string): UnifiedRow {
     const filteredRows = rows.filter((r) => r.rowType === rowType);
 
     const totalRow: UnifiedRow = {
@@ -251,11 +234,7 @@ export function calculateTotalRow(
 /**
  * Calculate labour requirement row based on revenue / $26,000 per worker
  */
-export function calculateLabourRow(
-    revenueRows: UnifiedRow[],
-    data: TurnoverRow[],
-    months: string[]
-): UnifiedRow {
+export function calculateLabourRow(revenueRows: UnifiedRow[], data: TurnoverRow[], months: string[]): UnifiedRow {
     const labourRow: UnifiedRow = {
         id: 'labour-requirement',
         rowType: 'labour',
@@ -299,11 +278,7 @@ export function calculateLabourRow(
 /**
  * Create target rows for the grid
  */
-export function createTargetRows(
-    data: TurnoverRow[],
-    months: string[],
-    monthlyTargets: Record<string, number>
-): UnifiedRow[] {
+export function createTargetRows(data: TurnoverRow[], months: string[], monthlyTargets: Record<string, number>): UnifiedRow[] {
     const targetRow: UnifiedRow = {
         id: 'target-row',
         rowType: 'target',

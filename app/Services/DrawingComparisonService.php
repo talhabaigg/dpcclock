@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Services\CVDrawingComparisonService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -10,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 class DrawingComparisonService
 {
     private string $apiKey;
+
     private string $model;
 
     public function __construct()
@@ -22,15 +22,15 @@ class DrawingComparisonService
     /**
      * Compare two drawing revisions and identify changes.
      *
-     * @param string $imageA Base64 or URL of first revision (older)
-     * @param string $imageB Base64 or URL of second revision (newer)
-     * @param string $context Optional context about the drawings (e.g., "walls and ceilings")
-     * @param string|null $additionalPrompt Optional additional instructions for refinement
+     * @param  string  $imageA  Base64 or URL of first revision (older)
+     * @param  string  $imageB  Base64 or URL of second revision (newer)
+     * @param  string  $context  Optional context about the drawings (e.g., "walls and ceilings")
+     * @param  string|null  $additionalPrompt  Optional additional instructions for refinement
      * @return array{success: bool, summary: string|null, changes: array, error: string|null}
      */
     public function compareRevisions(string $imageA, string $imageB, string $context = '', ?string $additionalPrompt = null): array
     {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             return [
                 'success' => false,
                 'summary' => null,
@@ -159,16 +159,17 @@ PROMPT;
                     'temperature' => 0.2, // Lower temperature for more consistent analysis
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('OpenAI comparison failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return [
                     'success' => false,
                     'summary' => null,
                     'changes' => [],
-                    'error' => 'OpenAI API error: ' . $response->status(),
+                    'error' => 'OpenAI API error: '.$response->status(),
                 ];
             }
 
@@ -183,7 +184,7 @@ PROMPT;
             // Parse the JSON response
             $parsed = $this->parseJsonResponse($content);
 
-            if (!$parsed) {
+            if (! $parsed) {
                 return [
                     'success' => true,
                     'summary' => $content, // Return raw text if JSON parsing fails
@@ -210,6 +211,7 @@ PROMPT;
             Log::error('DrawingComparisonService error', [
                 'error' => $e->getMessage(),
             ]);
+
             return [
                 'success' => false,
                 'summary' => null,
@@ -223,21 +225,21 @@ PROMPT;
      * Get image as base64 data URL from S3 key.
      * Optionally resizes the image to fit within max dimensions for AI analysis.
      *
-     * @param string $s3Key S3 key for the image
-     * @param int $maxDimension Max width/height in pixels (0 = no resize)
+     * @param  string  $s3Key  S3 key for the image
+     * @param  int  $maxDimension  Max width/height in pixels (0 = no resize)
      */
     public function getImageDataUrl(string $s3Key, int $maxDimension = 2048): ?string
     {
         try {
             $contents = Storage::disk('s3')->get($s3Key);
-            if (!$contents) {
+            if (! $contents) {
                 return null;
             }
 
             // Resize image if needed for AI analysis
             if ($maxDimension > 0) {
                 $contents = $this->resizeImageForAI($contents, $maxDimension);
-                if (!$contents) {
+                if (! $contents) {
                     return null;
                 }
             }
@@ -259,12 +261,13 @@ PROMPT;
                 'base64_size_kb' => round(strlen($base64Data) / 1024),
             ]);
 
-            return 'data:' . $mimeType . ';base64,' . $base64Data;
+            return 'data:'.$mimeType.';base64,'.$base64Data;
         } catch (\Exception $e) {
             Log::error('Failed to get image data URL', [
                 's3_key' => $s3Key,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -279,8 +282,9 @@ PROMPT;
         try {
             // Check image dimensions first without loading full image
             $imageInfo = @getimagesizefromstring($imageData);
-            if (!$imageInfo) {
+            if (! $imageInfo) {
                 Log::warning('Failed to get image info for resizing');
+
                 return $imageData;
             }
 
@@ -292,6 +296,7 @@ PROMPT;
                 Log::info('Image already within size limits, no resize needed', [
                     'dimensions' => "{$originalWidth}x{$originalHeight}",
                 ]);
+
                 return $imageData;
             }
 
@@ -316,8 +321,9 @@ PROMPT;
             // Free original data immediately after creating GD resource
             unset($imageData);
 
-            if (!$image) {
+            if (! $image) {
                 Log::warning('Failed to create image from string for resizing');
+
                 return null;
             }
 
@@ -353,6 +359,7 @@ PROMPT;
             return $output;
         } catch (\Exception $e) {
             Log::error('Failed to resize image', ['error' => $e->getMessage()]);
+
             return $imageData; // Return original on error
         }
     }
@@ -388,7 +395,7 @@ PROMPT;
     /**
      * Normalize AI change payloads to ensure coordinates are present and bounded.
      *
-     * @param array<int, array<string, mixed>> $changes
+     * @param  array<int, array<string, mixed>>  $changes
      * @return array<int, array<string, mixed>>
      */
     private function normalizeChanges(array $changes): array
@@ -423,7 +430,7 @@ PROMPT;
         $width = $coords['width'] ?? $coords['w'] ?? null;
         $height = $coords['height'] ?? $coords['h'] ?? null;
 
-        if (!is_numeric($x) || !is_numeric($y)) {
+        if (! is_numeric($x) || ! is_numeric($y)) {
             return null;
         }
 
@@ -481,7 +488,7 @@ PROMPT;
     {
         try {
             $contents = Storage::disk('s3')->get($s3Key);
-            if (!$contents) {
+            if (! $contents) {
                 return null;
             }
 
@@ -495,12 +502,13 @@ PROMPT;
                 'size_kb' => round(strlen($contents) / 1024),
             ]);
 
-            return 'data:' . $mimeType . ';base64,' . $base64Data;
+            return 'data:'.$mimeType.';base64,'.$base64Data;
         } catch (\Exception $e) {
             Log::error('Failed to get full res image', [
                 's3_key' => $s3Key,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -517,6 +525,7 @@ PROMPT;
                 's3_key' => $s3Key,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -524,17 +533,18 @@ PROMPT;
     /**
      * Crop a region from an image based on normalized bounding box.
      *
-     * @param string $imageData Raw image data
-     * @param array $boundingBox Normalized coords: x, y (center), width, height (0-1 range)
-     * @param float $paddingPercent Extra padding around the box (0.1 = 10%)
+     * @param  string  $imageData  Raw image data
+     * @param  array  $boundingBox  Normalized coords: x, y (center), width, height (0-1 range)
+     * @param  float  $paddingPercent  Extra padding around the box (0.1 = 10%)
      * @return string|null Cropped image as base64 data URL
      */
     public function cropImageRegion(string $imageData, array $boundingBox, float $paddingPercent = 0.1): ?string
     {
         try {
             $imageInfo = @getimagesizefromstring($imageData);
-            if (!$imageInfo) {
+            if (! $imageInfo) {
                 Log::warning('Failed to get image info for cropping');
+
                 return null;
             }
 
@@ -575,8 +585,9 @@ PROMPT;
 
             // Create image from data
             $image = @imagecreatefromstring($imageData);
-            if (!$image) {
+            if (! $image) {
                 Log::warning('Failed to create image for cropping');
+
                 return null;
             }
 
@@ -603,12 +614,13 @@ PROMPT;
             imagedestroy($cropped);
             $cropped = null; // Help GC
 
-            $result = 'data:image/jpeg;base64,' . base64_encode($output);
+            $result = 'data:image/jpeg;base64,'.base64_encode($output);
             unset($output); // Free output buffer
 
             return $result;
         } catch (\Exception $e) {
             Log::error('Failed to crop image region', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -616,13 +628,12 @@ PROMPT;
     /**
      * Two-pass comparison: overview first, then zoom into change areas.
      *
-     * @param string $imageA Resized image A (for Pass 1)
-     * @param string $imageB Resized image B (for Pass 1)
-     * @param string|null $rawImageA Full resolution raw image data A (for Pass 2 cropping)
-     * @param string|null $rawImageB Full resolution raw image data B (for Pass 2 cropping)
-     * @param string $context Trade context
-     * @param string|null $additionalPrompt User instructions
-     * @return array
+     * @param  string  $imageA  Resized image A (for Pass 1)
+     * @param  string  $imageB  Resized image B (for Pass 1)
+     * @param  string|null  $rawImageA  Full resolution raw image data A (for Pass 2 cropping)
+     * @param  string|null  $rawImageB  Full resolution raw image data B (for Pass 2 cropping)
+     * @param  string  $context  Trade context
+     * @param  string|null  $additionalPrompt  User instructions
      */
     public function compareRevisionsWithZoom(
         string $imageA,
@@ -632,7 +643,7 @@ PROMPT;
         string $context = '',
         ?string $additionalPrompt = null
     ): array {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             return [
                 'success' => false,
                 'summary' => null,
@@ -646,7 +657,7 @@ PROMPT;
 
         $pass1Result = $this->runPass1LocationDetection($imageA, $imageB, $context);
 
-        if (!$pass1Result['success']) {
+        if (! $pass1Result['success']) {
             return $pass1Result;
         }
 
@@ -654,6 +665,7 @@ PROMPT;
 
         if (empty($areasOfChange)) {
             Log::info('Pass 1 found no areas of change');
+
             return [
                 'success' => true,
                 'summary' => $pass1Result['summary'] ?? 'No significant changes detected between revisions.',
@@ -669,8 +681,9 @@ PROMPT;
         Log::info('Starting Pass 2 (detail analysis)', ['areas_count' => count($areasOfChange)]);
 
         // If we don't have raw images, fall back to single-pass result
-        if (!$rawImageA || !$rawImageB) {
+        if (! $rawImageA || ! $rawImageB) {
             Log::warning('No raw images for Pass 2, using Pass 1 results only');
+
             return $this->convertPass1ToFinalResult($pass1Result, $additionalPrompt);
         }
 
@@ -678,8 +691,9 @@ PROMPT;
 
         foreach ($areasOfChange as $index => $area) {
             $boundingBox = $area['bounding_box'] ?? null;
-            if (!$boundingBox) {
+            if (! $boundingBox) {
                 Log::warning('Area missing bounding box, skipping', ['area_id' => $area['area_id'] ?? $index]);
+
                 continue;
             }
 
@@ -687,9 +701,10 @@ PROMPT;
             $croppedA = $this->cropImageRegion($rawImageA, $boundingBox, 0.15);
             $croppedB = $this->cropImageRegion($rawImageB, $boundingBox, 0.15);
 
-            if (!$croppedA || !$croppedB) {
+            if (! $croppedA || ! $croppedB) {
                 Log::warning('Failed to crop region, using Pass 1 data', ['area_id' => $area['area_id'] ?? $index]);
                 $detailedChanges[] = $this->convertAreaToChange($area, $boundingBox);
+
                 continue;
             }
 
@@ -702,7 +717,7 @@ PROMPT;
                 $additionalPrompt
             );
 
-            if ($detailResult['success'] && !empty($detailResult['change'])) {
+            if ($detailResult['success'] && ! empty($detailResult['change'])) {
                 $change = $detailResult['change'];
                 // Use the bounding box center as the final coordinate
                 $change['coordinates'] = [
@@ -726,7 +741,7 @@ PROMPT;
             'changes' => $detailedChanges,
             'change_count' => count($detailedChanges),
             'confidence' => $pass1Result['confidence'] ?? 'medium',
-            'notes' => 'Two-pass analysis completed with detail zoom on ' . count($areasOfChange) . ' areas.',
+            'notes' => 'Two-pass analysis completed with detail zoom on '.count($areasOfChange).' areas.',
             'error' => null,
         ];
     }
@@ -796,9 +811,10 @@ PROMPT;
                     'temperature' => 0.1,
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('Pass 1 API failed', ['status' => $response->status()]);
-                return ['success' => false, 'error' => 'Pass 1 API error: ' . $response->status()];
+
+                return ['success' => false, 'error' => 'Pass 1 API error: '.$response->status()];
             }
 
             $data = $response->json();
@@ -811,7 +827,7 @@ PROMPT;
 
             $parsed = $this->parseJsonResponse($content);
 
-            if (!$parsed) {
+            if (! $parsed) {
                 return ['success' => false, 'error' => 'Failed to parse Pass 1 response'];
             }
 
@@ -824,6 +840,7 @@ PROMPT;
 
         } catch (\Exception $e) {
             Log::error('Pass 1 error', ['error' => $e->getMessage()]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -897,8 +914,9 @@ PROMPT;
                     'temperature' => 0.1,
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('Pass 2 API failed for area', ['hint' => $hintText]);
+
                 return ['success' => false];
             }
 
@@ -912,21 +930,21 @@ PROMPT;
 
             $parsed = $this->parseJsonResponse($content);
 
-            if (!$parsed) {
+            if (! $parsed) {
                 return ['success' => false];
             }
 
             // Build location from room_name if available
             $location = $parsed['location'] ?? $parsed['room_name'] ?? $hintText;
-            if (!empty($parsed['room_name']) && strpos($location, $parsed['room_name']) === false) {
-                $location = $parsed['room_name'] . ' - ' . $location;
+            if (! empty($parsed['room_name']) && strpos($location, $parsed['room_name']) === false) {
+                $location = $parsed['room_name'].' - '.$location;
             }
 
             return [
                 'success' => true,
                 'change' => [
                     'type' => $parsed['type'] ?? $areaHint['change_type_hint'] ?? 'modification',
-                    'description' => $parsed['description'] ?? 'Change detected in ' . $hintText,
+                    'description' => $parsed['description'] ?? 'Change detected in '.$hintText,
                     'location' => $location,
                     'impact' => $parsed['impact'] ?? 'medium',
                     'potential_change_order' => $parsed['potential_change_order'] ?? false,
@@ -936,6 +954,7 @@ PROMPT;
 
         } catch (\Exception $e) {
             Log::error('Pass 2 error', ['error' => $e->getMessage(), 'hint' => $hintText]);
+
             return ['success' => false];
         }
     }
@@ -947,7 +966,7 @@ PROMPT;
     {
         return [
             'type' => $area['change_type_hint'] ?? 'modification',
-            'description' => 'Change detected: ' . ($area['location_description'] ?? 'unspecified area'),
+            'description' => 'Change detected: '.($area['location_description'] ?? 'unspecified area'),
             'location' => $area['location_description'] ?? 'Unknown location',
             'impact' => 'medium',
             'potential_change_order' => false,
@@ -994,13 +1013,12 @@ PROMPT;
      *
      * This provides accurate locations (from CV) with intelligent descriptions (from AI).
      *
-     * @param string $imageA Base64 image A (older revision)
-     * @param string $imageB Base64 image B (newer revision)
-     * @param string|null $rawImageA Raw image data A for high-res cropping
-     * @param string|null $rawImageB Raw image data B for high-res cropping
-     * @param string $context Trade context
-     * @param string|null $additionalPrompt Additional user instructions
-     * @return array
+     * @param  string  $imageA  Base64 image A (older revision)
+     * @param  string  $imageB  Base64 image B (newer revision)
+     * @param  string|null  $rawImageA  Raw image data A for high-res cropping
+     * @param  string|null  $rawImageB  Raw image data B for high-res cropping
+     * @param  string  $context  Trade context
+     * @param  string|null  $additionalPrompt  Additional user instructions
      */
     public function compareRevisionsHybrid(
         string $imageA,
@@ -1011,10 +1029,11 @@ PROMPT;
         ?string $additionalPrompt = null
     ): array {
         // Check if CV service is available
-        $cvService = new CVDrawingComparisonService();
+        $cvService = new CVDrawingComparisonService;
 
-        if (!config('services.cv_comparison.enabled', true) || !$cvService->isHealthy()) {
+        if (! config('services.cv_comparison.enabled', true) || ! $cvService->isHealthy()) {
             Log::warning('CV service not available, falling back to AI-only comparison');
+
             return $this->compareRevisionsWithZoom($imageA, $imageB, $rawImageA, $rawImageB, $context, $additionalPrompt);
         }
 
@@ -1028,10 +1047,11 @@ PROMPT;
                 'dilate_iterations' => 3,
             ]);
 
-            if (!$cvResult['success']) {
+            if (! $cvResult['success']) {
                 Log::warning('CV detection failed, falling back to AI-only', [
                     'error' => $cvResult['error'] ?? 'Unknown error',
                 ]);
+
                 return $this->compareRevisionsWithZoom($imageA, $imageB, $rawImageA, $rawImageB, $context, $additionalPrompt);
             }
 
@@ -1064,15 +1084,15 @@ PROMPT;
             $changes = [];
             foreach ($cvRegions as $region) {
                 $boundingBox = $region['bounding_box'] ?? null;
-                if (!$boundingBox) {
+                if (! $boundingBox) {
                     continue;
                 }
 
                 $areaPercent = $region['area_percent'] ?? 0;
                 $changes[] = [
                     'type' => 'modification',
-                    'description' => "Change detected (area: " . number_format($areaPercent, 2) . "% of drawing)",
-                    'location' => 'Region #' . ($region['region_id'] ?? count($changes) + 1),
+                    'description' => 'Change detected (area: '.number_format($areaPercent, 2).'% of drawing)',
+                    'location' => 'Region #'.($region['region_id'] ?? count($changes) + 1),
                     'impact' => $areaPercent > 2 ? 'high' : ($areaPercent > 0.5 ? 'medium' : 'low'),
                     'potential_change_order' => $areaPercent > 1,
                     'reason' => null,
@@ -1091,9 +1111,9 @@ PROMPT;
             }
 
             // Simple summary without AI
-            $highImpact = count(array_filter($changes, fn($c) => $c['impact'] === 'high'));
-            $mediumImpact = count(array_filter($changes, fn($c) => $c['impact'] === 'medium'));
-            $summary = count($changes) . ' change(s) detected';
+            $highImpact = count(array_filter($changes, fn ($c) => $c['impact'] === 'high'));
+            $mediumImpact = count(array_filter($changes, fn ($c) => $c['impact'] === 'medium'));
+            $summary = count($changes).' change(s) detected';
             if ($highImpact > 0) {
                 $summary .= " ({$highImpact} high impact)";
             } elseif ($mediumImpact > 0) {
@@ -1116,6 +1136,7 @@ PROMPT;
 
         } catch (\Exception $e) {
             Log::error('CV comparison error', ['error' => $e->getMessage()]);
+
             return $this->compareRevisionsWithZoom($imageA, $imageB, $rawImageA, $rawImageB, $context, $additionalPrompt);
         }
     }
@@ -1123,10 +1144,10 @@ PROMPT;
     /**
      * Describe a specific observation/region using AI (on-demand).
      *
-     * @param string $imagePathA S3 path to image A
-     * @param string $imagePathB S3 path to image B
-     * @param array $boundingBox Normalized bounding box [x, y, width, height]
-     * @param string $context Trade context
+     * @param  string  $imagePathA  S3 path to image A
+     * @param  string  $imagePathB  S3 path to image B
+     * @param  array  $boundingBox  Normalized bounding box [x, y, width, height]
+     * @param  string  $context  Trade context
      * @return array AI description result
      */
     public function describeRegionWithAI(
@@ -1135,7 +1156,7 @@ PROMPT;
         array $boundingBox,
         string $context = ''
     ): array {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             return [
                 'success' => false,
                 'error' => 'OpenAI API key not configured.',
@@ -1150,8 +1171,9 @@ PROMPT;
             // Skip cropping to avoid memory issues with large images
             // Instead, send full resized images and tell AI where to look
             $imageA = $this->getImageDataUrl($imagePathA, 1536);
-            if (!$imageA) {
+            if (! $imageA) {
                 ini_set('memory_limit', $originalMemoryLimit);
+
                 return [
                     'success' => false,
                     'error' => 'Failed to load image A from storage.',
@@ -1159,9 +1181,10 @@ PROMPT;
             }
 
             $imageB = $this->getImageDataUrl($imagePathB, 1536);
-            if (!$imageB) {
+            if (! $imageB) {
                 unset($imageA);
                 ini_set('memory_limit', $originalMemoryLimit);
+
                 return [
                     'success' => false,
                     'error' => 'Failed to load image B from storage.',
@@ -1229,9 +1252,10 @@ PROMPT;
             // Free images after sending
             unset($imageA, $imageB);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('AI describe failed', ['status' => $response->status()]);
                 ini_set('memory_limit', $originalMemoryLimit);
+
                 return [
                     'success' => false,
                     'error' => 'AI request failed.',
@@ -1242,8 +1266,9 @@ PROMPT;
             $content = $data['choices'][0]['message']['content'] ?? '';
             $parsed = $this->parseJsonResponse($content);
 
-            if (!$parsed) {
+            if (! $parsed) {
                 ini_set('memory_limit', $originalMemoryLimit);
+
                 return [
                     'success' => false,
                     'error' => 'Failed to parse AI response.',
@@ -1267,9 +1292,10 @@ PROMPT;
         } catch (\Exception $e) {
             ini_set('memory_limit', $originalMemoryLimit);
             Log::error('AI describe error', ['error' => $e->getMessage()]);
+
             return [
                 'success' => false,
-                'error' => 'Failed to analyze region: ' . $e->getMessage(),
+                'error' => 'Failed to analyze region: '.$e->getMessage(),
             ];
         }
     }
@@ -1277,11 +1303,11 @@ PROMPT;
     /**
      * Classify a CV-detected region using AI.
      *
-     * @param array $region CV region data with bounding_box and pixel_coords
-     * @param string|null $rawImageA Raw image data for cropping
-     * @param string|null $rawImageB Raw image data for cropping
-     * @param string $context Trade context
-     * @param string|null $additionalPrompt Additional instructions
+     * @param  array  $region  CV region data with bounding_box and pixel_coords
+     * @param  string|null  $rawImageA  Raw image data for cropping
+     * @param  string|null  $rawImageB  Raw image data for cropping
+     * @param  string  $context  Trade context
+     * @param  string|null  $additionalPrompt  Additional instructions
      * @return array Classified change data
      */
     private function classifyRegionWithAI(
@@ -1299,7 +1325,7 @@ PROMPT;
         $defaultChange = [
             'type' => 'modification',
             'description' => "Change detected in region #{$region['region_id']} (area: {$areaPercent}% of drawing)",
-            'location' => 'Region ' . ($region['region_id'] ?? 'unknown'),
+            'location' => 'Region '.($region['region_id'] ?? 'unknown'),
             'impact' => $areaPercent > 2 ? 'high' : ($areaPercent > 0.5 ? 'medium' : 'low'),
             'potential_change_order' => $areaPercent > 1,
             'reason' => null,
@@ -1317,7 +1343,7 @@ PROMPT;
         ];
 
         // If no raw images for cropping, return default
-        if (!$rawImageA || !$rawImageB || !$this->apiKey) {
+        if (! $rawImageA || ! $rawImageB || ! $this->apiKey) {
             return $defaultChange;
         }
 
@@ -1326,7 +1352,7 @@ PROMPT;
             $croppedA = $this->cropImageRegion($rawImageA, $boundingBox, 0.2);
             $croppedB = $this->cropImageRegion($rawImageB, $boundingBox, 0.2);
 
-            if (!$croppedA || !$croppedB) {
+            if (! $croppedA || ! $croppedB) {
                 return $defaultChange;
             }
 
@@ -1384,8 +1410,9 @@ PROMPT;
                     'temperature' => 0.1,
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('AI classification failed for region', ['region_id' => $region['region_id']]);
+
                 return $defaultChange;
             }
 
@@ -1393,14 +1420,14 @@ PROMPT;
             $content = $data['choices'][0]['message']['content'] ?? '';
             $parsed = $this->parseJsonResponse($content);
 
-            if (!$parsed) {
+            if (! $parsed) {
                 return $defaultChange;
             }
 
             // Build location string
             $location = $parsed['location'] ?? $parsed['room_name'] ?? 'Unknown';
-            if (!empty($parsed['room_name']) && strpos($location, $parsed['room_name']) === false) {
-                $location = $parsed['room_name'] . ' - ' . $location;
+            if (! empty($parsed['room_name']) && strpos($location, $parsed['room_name']) === false) {
+                $location = $parsed['room_name'].' - '.$location;
             }
 
             return [
@@ -1421,6 +1448,7 @@ PROMPT;
                 'region_id' => $region['region_id'],
                 'error' => $e->getMessage(),
             ]);
+
             return $defaultChange;
         }
     }
@@ -1434,8 +1462,8 @@ PROMPT;
             return 'No significant changes detected between revisions.';
         }
 
-        if (!$this->apiKey) {
-            return count($changes) . ' change(s) detected between revisions.';
+        if (! $this->apiKey) {
+            return count($changes).' change(s) detected between revisions.';
         }
 
         try {
@@ -1467,12 +1495,13 @@ PROMPT;
 
             if ($response->successful()) {
                 $data = $response->json();
-                return trim($data['choices'][0]['message']['content'] ?? '') ?: count($changes) . ' change(s) detected.';
+
+                return trim($data['choices'][0]['message']['content'] ?? '') ?: count($changes).' change(s) detected.';
             }
         } catch (\Exception $e) {
             Log::warning('Summary generation failed', ['error' => $e->getMessage()]);
         }
 
-        return count($changes) . ' change(s) detected between revisions.';
+        return count($changes).' change(s) detected between revisions.';
     }
 }

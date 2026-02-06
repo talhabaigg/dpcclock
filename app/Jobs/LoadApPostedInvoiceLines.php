@@ -49,7 +49,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
         Log::info('LoadApPostedInvoiceLines: Job started');
 
         try {
-            $baseUrl = config('premier.api.base_url') . config('premier.endpoints.ap_posted_invoice_lines');
+            $baseUrl = config('premier.api.base_url').config('premier.endpoints.ap_posted_invoice_lines');
             $insertBatchSize = 100;
             $pageSize = 200;
             $skip = 0;
@@ -57,11 +57,11 @@ class LoadApPostedInvoiceLines implements ShouldQueue
             $isFirstBatch = true;
 
             do {
-                $url = $baseUrl . '?$top=' . $pageSize . '&$skip=' . $skip;
+                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
 
-                Log::info("LoadApPostedInvoiceLines: Fetching page", [
+                Log::info('LoadApPostedInvoiceLines: Fetching page', [
                     'skip' => $skip,
-                    'top' => $pageSize
+                    'top' => $pageSize,
                 ]);
 
                 $response = Http::timeout(config('premier.api.timeout', 300))
@@ -76,7 +76,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
                     ])
                     ->get($url);
 
-                if (!$response->successful()) {
+                if (! $response->successful()) {
                     throw new \RuntimeException(
                         "API request failed with status {$response->status()}: {$response->body()}"
                     );
@@ -85,14 +85,14 @@ class LoadApPostedInvoiceLines implements ShouldQueue
                 $json = $response->json();
                 unset($response);
 
-                if (!isset($json['d'])) {
+                if (! isset($json['d'])) {
                     throw new \RuntimeException('Invalid API response structure: missing "d" property');
                 }
 
                 $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
                 unset($json);
 
-                if (!is_array($rows)) {
+                if (! is_array($rows)) {
                     throw new \RuntimeException('Invalid API response: expected array of rows');
                 }
 
@@ -100,6 +100,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
 
                 if ($rowCount === 0 && $isFirstBatch) {
                     Log::warning('LoadApPostedInvoiceLines: ERP returned 0 rows, skipping database update');
+
                     return;
                 }
 
@@ -109,7 +110,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
 
                 Log::info('LoadApPostedInvoiceLines: Processing page', [
                     'rows' => $rowCount,
-                    'skip' => $skip
+                    'skip' => $skip,
                 ]);
 
                 if ($isFirstBatch) {
@@ -140,7 +141,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadApPostedInvoiceLines: Job completed successfully', [
                 'records_processed' => $totalProcessed,
-                'duration_seconds' => $duration
+                'duration_seconds' => $duration,
             ]);
 
         } catch (Throwable $e) {
@@ -228,7 +229,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
     {
         Log::error('LoadApPostedInvoiceLines: Job failed permanently after all retries', [
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
     }
 

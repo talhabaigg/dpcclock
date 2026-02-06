@@ -11,6 +11,6 @@ class TimesheetEvent extends Model
         'start',
         'end',
         'state',
-        'type'
+        'type',
     ];
 }

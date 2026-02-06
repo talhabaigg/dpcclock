@@ -6,7 +6,7 @@ export interface CostCode {
         waste_ratio: number;
         variation_ratio: number;
         prelim_type: string;
-    }
+    };
     cost_type?: {
         id: number;
         code: string;

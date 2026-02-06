@@ -48,7 +48,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
         Log::info('LoadJobReportByCostItemAndCostTypes: Job started');
 
         try {
-            $url = config('premier.api.base_url') . config('premier.endpoints.job_report_by_cost_item');
+            $url = config('premier.api.base_url').config('premier.endpoints.job_report_by_cost_item');
 
             $response = Http::timeout(config('premier.api.timeout', 300))
                 ->withBasicAuth(
@@ -62,7 +62,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
                 ])
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new \RuntimeException(
                     "API request failed with status {$response->status()}: {$response->body()}"
                 );
@@ -71,19 +71,20 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
             $json = $response->json();
 
             // Validate response structure
-            if (!isset($json['d'])) {
+            if (! isset($json['d'])) {
                 throw new \RuntimeException('Invalid API response structure: missing "d" property');
             }
 
             // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
             $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
 
-            if (!is_array($rows)) {
+            if (! is_array($rows)) {
                 throw new \RuntimeException('Invalid API response: expected array of rows');
             }
 
             if (count($rows) === 0) {
                 Log::warning('LoadJobReportByCostItemAndCostTypes: ERP returned 0 rows, skipping database update');
+
                 return;
             }
 
@@ -117,7 +118,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
                     $chunkNumber = $index + 1;
                     Log::info("LoadJobReportByCostItemAndCostTypes: Inserting chunk {$chunkNumber}", [
                         'rows' => count($chunk),
-                        'total_chunks' => count($chunks)
+                        'total_chunks' => count($chunks),
                     ]);
 
                     JobReportByCostItemAndCostType::insert($chunk);
@@ -127,7 +128,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobReportByCostItemAndCostTypes: Job completed successfully', [
                 'records_processed' => count($data),
-                'duration_seconds' => $duration
+                'duration_seconds' => $duration,
             ]);
 
         } catch (Throwable $e) {
@@ -148,7 +149,7 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
     {
         Log::error('LoadJobReportByCostItemAndCostTypes: Job failed permanently after all retries', [
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
 
         // Here you could send notifications to administrators

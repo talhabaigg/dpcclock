@@ -73,7 +73,7 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
             <DialogContent className="sm:max-w-md">
                 <DialogHeader className="text-center">
                     <DialogTitle className="flex items-center justify-center gap-2">
-                        <QrCode className="h-5 w-5 text-primary" />
+                        <QrCode className="text-primary h-5 w-5" />
                         Scan to Login
                     </DialogTitle>
                     <DialogDescription>Scan this QR code with your device to access this kiosk</DialogDescription>
@@ -81,39 +81,37 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
 
                 <div className="flex flex-col items-center gap-4 py-4">
                     {loading && !token ? (
-                        <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">Loading QR code...</p>
+                        <div className="bg-muted/30 flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border">
+                            <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+                            <p className="text-muted-foreground text-sm">Loading QR code...</p>
                         </div>
                     ) : error || !token ? (
-                        <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5">
-                            <ShieldAlert className="h-10 w-10 text-destructive/60" />
-                            <p className="text-center text-sm text-destructive">
-                                {error || "You don't have permission to retrieve the QR code."}
-                            </p>
+                        <div className="border-destructive/30 bg-destructive/5 flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl border">
+                            <ShieldAlert className="text-destructive/60 h-10 w-10" />
+                            <p className="text-destructive text-center text-sm">{error || "You don't have permission to retrieve the QR code."}</p>
                         </div>
                     ) : (
                         <>
                             {/* QR Code Container */}
                             <div
                                 className={cn(
-                                    'relative rounded-xl border-2 border-primary/20 bg-white p-4',
-                                    'shadow-lg shadow-primary/5',
+                                    'border-primary/20 relative rounded-xl border-2 bg-white p-4',
+                                    'shadow-primary/5 shadow-lg',
                                     loading && 'opacity-60',
                                 )}
                             >
                                 <QRCodeSVG value={kioskUrl} size={224} level="M" includeMargin={false} />
                                 {loading && (
                                     <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
-                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                        <Loader2 className="text-primary h-6 w-6 animate-spin" />
                                     </div>
                                 )}
                             </div>
 
                             {/* URL & Actions */}
                             <div className="w-full space-y-3">
-                                <div className="rounded-lg bg-muted/50 p-3">
-                                    <p className="break-all text-center text-xs text-muted-foreground">{kioskUrl}</p>
+                                <div className="bg-muted/50 rounded-lg p-3">
+                                    <p className="text-muted-foreground text-center text-xs break-all">{kioskUrl}</p>
                                 </div>
                                 <div className="flex gap-2">
                                     <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={copyToClipboard}>

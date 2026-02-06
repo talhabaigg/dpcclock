@@ -1,14 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -68,15 +61,7 @@ type FormEntry = {
     laser_allowance: boolean;
 };
 
-export default function EditTimesheetDialog({
-    isOpen,
-    onClose,
-    entries,
-    kiosks,
-    locations,
-    date,
-    onSuccess,
-}: EditTimesheetDialogProps) {
+export default function EditTimesheetDialog({ isOpen, onClose, entries, kiosks, locations, date, onSuccess }: EditTimesheetDialogProps) {
     const [formEntries, setFormEntries] = useState<FormEntry[]>([]);
     const [processing, setProcessing] = useState(false);
 
@@ -142,18 +127,11 @@ export default function EditTimesheetDialog({
     // Update location when level/activity changes
     const updateEntryLocation = (index: number, level: string, activity: string) => {
         const newLocation = activity ? `${level}-${activity}` : level;
-        setFormEntries((prev) =>
-            prev.map((entry, i) => (i === index ? { ...entry, level, activity, location: newLocation } : entry))
-        );
+        setFormEntries((prev) => prev.map((entry, i) => (i === index ? { ...entry, level, activity, location: newLocation } : entry)));
     };
 
     // Calculate hours worked
-    const calculateHoursWorked = (
-        clockInHour: string,
-        clockInMinute: string,
-        clockOutHour: string,
-        clockOutMinute: string
-    ): string => {
+    const calculateHoursWorked = (clockInHour: string, clockInMinute: string, clockOutHour: string, clockOutMinute: string): string => {
         if (!clockInHour || !clockOutHour) return '0';
         const inTime = new Date(0, 0, 0, +clockInHour, +clockInMinute);
         const outTime = new Date(0, 0, 0, +clockOutHour, +clockOutMinute);
@@ -174,12 +152,12 @@ export default function EditTimesheetDialog({
                         updated.clockInHour,
                         updated.clockInMinute,
                         updated.clockOutHour,
-                        updated.clockOutMinute
+                        updated.clockOutMinute,
                     );
                 }
 
                 return updated;
-            })
+            }),
         );
     };
 
@@ -192,7 +170,7 @@ export default function EditTimesheetDialog({
                     insulation_allowance: type === 'insulation' ? !entry.insulation_allowance : false,
                     setout_allowance: type === 'setout' ? !entry.setout_allowance : false,
                 };
-            })
+            }),
         );
     };
 
@@ -202,9 +180,7 @@ export default function EditTimesheetDialog({
             toast.warning('Laser Allowance can only be selected once.');
             return;
         }
-        setFormEntries((prev) =>
-            prev.map((entry, i) => (i === index ? { ...entry, laser_allowance: !entry.laser_allowance } : entry))
-        );
+        setFormEntries((prev) => prev.map((entry, i) => (i === index ? { ...entry, laser_allowance: !entry.laser_allowance } : entry)));
     };
 
     const addEntry = () => {
@@ -266,7 +242,7 @@ export default function EditTimesheetDialog({
                     setProcessing(false);
                     Object.values(errors).forEach((error) => toast.error(String(error)));
                 },
-            }
+            },
         );
     };
 
@@ -298,7 +274,7 @@ export default function EditTimesheetDialog({
                                 key={entry.id}
                                 className={cn(
                                     'rounded-xl border-2 p-4 transition-all',
-                                    isSynced ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-card'
+                                    isSynced ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-card',
                                 )}
                             >
                                 {/* Row Header */}
@@ -314,9 +290,7 @@ export default function EditTimesheetDialog({
                                                 {entry.status}
                                             </Badge>
                                         )}
-                                        {isSynced && (
-                                            <span className="text-xs text-muted-foreground">(locked)</span>
-                                        )}
+                                        {isSynced && <span className="text-muted-foreground text-xs">(locked)</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className="font-mono">
@@ -327,7 +301,7 @@ export default function EditTimesheetDialog({
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => removeEntry(index)}
-                                                className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                                                className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -339,7 +313,7 @@ export default function EditTimesheetDialog({
                                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                     {/* Start Time */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Start Time</Label>
+                                        <Label className="text-muted-foreground text-xs">Start Time</Label>
                                         <div className="flex gap-1">
                                             <Select
                                                 value={entry.clockInHour}
@@ -379,7 +353,7 @@ export default function EditTimesheetDialog({
 
                                     {/* End Time */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">End Time</Label>
+                                        <Label className="text-muted-foreground text-xs">End Time</Label>
                                         <div className="flex gap-1">
                                             <Select
                                                 value={entry.clockOutHour}
@@ -419,12 +393,8 @@ export default function EditTimesheetDialog({
 
                                     {/* Level */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Level</Label>
-                                        <Select
-                                            value={entry.level}
-                                            onValueChange={(v) => updateEntryLocation(index, v, '')}
-                                            disabled={isSynced}
-                                        >
+                                        <Label className="text-muted-foreground text-xs">Level</Label>
+                                        <Select value={entry.level} onValueChange={(v) => updateEntryLocation(index, v, '')} disabled={isSynced}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select level..." />
                                             </SelectTrigger>
@@ -447,7 +417,7 @@ export default function EditTimesheetDialog({
 
                                     {/* Activity */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Activity</Label>
+                                        <Label className="text-muted-foreground text-xs">Activity</Label>
                                         <Select
                                             value={entry.activity}
                                             onValueChange={(v) => updateEntryLocation(index, entry.level, v)}
@@ -482,7 +452,7 @@ export default function EditTimesheetDialog({
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                     {/* Kiosk */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Kiosk</Label>
+                                        <Label className="text-muted-foreground text-xs">Kiosk</Label>
                                         <Select
                                             value={entry.eh_kiosk_id ? String(entry.eh_kiosk_id) : ''}
                                             onValueChange={(v) => updateEntryField(index, 'eh_kiosk_id', Number(v))}
@@ -503,7 +473,7 @@ export default function EditTimesheetDialog({
 
                                     {/* Allowances */}
                                     <div className="col-span-3 space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Allowances</Label>
+                                        <Label className="text-muted-foreground text-xs">Allowances</Label>
                                         <div className="flex flex-wrap gap-4">
                                             <label className="flex cursor-pointer items-center gap-2">
                                                 <Checkbox

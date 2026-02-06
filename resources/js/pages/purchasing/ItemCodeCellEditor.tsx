@@ -92,52 +92,58 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
         }
     }, [highlightedIndex, items.length]);
 
-    const handleSelect = useCallback((itemId: string) => {
-        // Update ref synchronously so getValue() returns correct value
-        selectedValueRef.current = itemId;
-        // Call stopEditing synchronously like the original
-        stopEditing();
-    }, [stopEditing]);
+    const handleSelect = useCallback(
+        (itemId: string) => {
+            // Update ref synchronously so getValue() returns correct value
+            selectedValueRef.current = itemId;
+            // Call stopEditing synchronously like the original
+            stopEditing();
+        },
+        [stopEditing],
+    );
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                e.stopPropagation();
-                setHighlightedIndex((prev) => Math.min(prev + 1, items.length - 1));
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                e.stopPropagation();
-                setHighlightedIndex((prev) => Math.max(prev - 1, 0));
-                break;
-            case 'Enter':
-                e.preventDefault();
-                e.stopPropagation();
-                if (items[highlightedIndex]) {
-                    handleSelect(items[highlightedIndex].value);
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                e.stopPropagation();
-                stopEditing();
-                break;
-            case 'Tab':
-                // Match original behavior - only stopPropagation, let AG Grid handle navigation
-                e.stopPropagation();
-                if (items[highlightedIndex]) {
-                    handleSelect(items[highlightedIndex].value);
-                } else {
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setHighlightedIndex((prev) => Math.min(prev + 1, items.length - 1));
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (items[highlightedIndex]) {
+                        handleSelect(items[highlightedIndex].value);
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    e.stopPropagation();
                     stopEditing();
-                }
-                break;
-        }
-    }, [items, highlightedIndex, handleSelect, stopEditing]);
+                    break;
+                case 'Tab':
+                    // Match original behavior - only stopPropagation, let AG Grid handle navigation
+                    e.stopPropagation();
+                    if (items[highlightedIndex]) {
+                        handleSelect(items[highlightedIndex].value);
+                    } else {
+                        stopEditing();
+                    }
+                    break;
+            }
+        },
+        [items, highlightedIndex, handleSelect, stopEditing],
+    );
 
     if (!selectedSupplier) {
         return (
-            <div className="flex h-full items-center justify-center bg-popover px-3 py-2">
+            <div className="bg-popover flex h-full items-center justify-center px-3 py-2">
                 <span className="text-xs text-amber-600">Select supplier first</span>
             </div>
         );
@@ -145,23 +151,23 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
     if (!selectedLocation) {
         return (
-            <div className="flex h-full items-center justify-center bg-popover px-3 py-2">
+            <div className="bg-popover flex h-full items-center justify-center px-3 py-2">
                 <span className="text-xs text-amber-600">Select project first</span>
             </div>
         );
     }
 
     return (
-        <div ref={containerRef} className="w-[420px] overflow-hidden rounded-lg border bg-popover shadow-lg">
+        <div ref={containerRef} className="bg-popover w-[420px] overflow-hidden rounded-lg border shadow-lg">
             {/* Search Input */}
             <div className="flex items-center gap-2 border-b px-3 py-2">
-                <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="text-muted-foreground h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 <input
                     ref={inputRef}
                     type="text"
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
                     placeholder="Search by code or description..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -174,18 +180,18 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
             <div ref={listRef} className="max-h-[320px] overflow-y-auto p-1.5">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-8">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
+                            <Loader2 className="text-primary h-5 w-5 animate-spin" />
                         </div>
-                        <span className="text-sm text-muted-foreground">Searching items...</span>
+                        <span className="text-muted-foreground text-sm">Searching items...</span>
                     </div>
                 ) : items.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-6">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                            <Package className="h-5 w-5 text-muted-foreground" />
+                        <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-full">
+                            <Package className="text-muted-foreground h-5 w-5" />
                         </div>
-                        <span className="text-sm text-muted-foreground">No items found</span>
-                        <span className="text-xs text-muted-foreground/70">Try a different search term</span>
+                        <span className="text-muted-foreground text-sm">No items found</span>
+                        <span className="text-muted-foreground/70 text-xs">Try a different search term</span>
                     </div>
                 ) : (
                     items.map((item, index) => (
@@ -197,15 +203,15 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
                             className={cn(
                                 'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
                                 index === highlightedIndex && 'bg-accent',
-                                initialValue === item.value && 'bg-primary/5 ring-1 ring-primary/20',
+                                initialValue === item.value && 'bg-primary/5 ring-primary/20 ring-1',
                             )}
                         >
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5">
-                                <Package className="h-4 w-4 text-primary" />
+                            <div className="from-primary/20 to-primary/5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br">
+                                <Package className="text-primary h-4 w-4" />
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                                 <div className="flex items-center gap-2">
-                                    <span className="font-mono text-sm font-semibold text-foreground">{item.label}</span>
+                                    <span className="text-foreground font-mono text-sm font-semibold">{item.label}</span>
                                     {item.is_favourite && (
                                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
                                             <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
@@ -213,7 +219,7 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
                                         </span>
                                     )}
                                 </div>
-                                <span className="truncate text-xs text-muted-foreground">{item.description}</span>
+                                <span className="text-muted-foreground truncate text-xs">{item.description}</span>
                             </div>
                         </div>
                     ))

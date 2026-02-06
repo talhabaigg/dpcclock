@@ -234,7 +234,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 pointStyle: 'circle',
                 datalabels: true,
                 segment: {
-                    borderColor: (ctx: any) => processedData.costIsActual[ctx.p1DataIndex] ? COLORS.costActual : COLORS.costForecast,
+                    borderColor: (ctx: any) => (processedData.costIsActual[ctx.p1DataIndex] ? COLORS.costActual : COLORS.costForecast),
                     borderDash: (ctx: any) => (processedData.costIsActual[ctx.p1DataIndex] ? [] : [6, 4]),
                 },
             });
@@ -267,7 +267,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 pointStyle: 'circle',
                 datalabels: true,
                 segment: {
-                    borderColor: (ctx: any) => processedData.revenueIsActual[ctx.p1DataIndex] ? COLORS.revenueActual : COLORS.revenueForecast,
+                    borderColor: (ctx: any) => (processedData.revenueIsActual[ctx.p1DataIndex] ? COLORS.revenueActual : COLORS.revenueForecast),
                     borderDash: (ctx: any) => (processedData.revenueIsActual[ctx.p1DataIndex] ? [] : [6, 4]),
                 },
             });
@@ -300,7 +300,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 pointStyle: 'circle',
                 datalabels: true,
                 segment: {
-                    borderColor: (ctx: any) => processedData.marginIsActual[ctx.p1DataIndex] ? COLORS.marginActual : COLORS.marginForecast,
+                    borderColor: (ctx: any) => (processedData.marginIsActual[ctx.p1DataIndex] ? COLORS.marginActual : COLORS.marginForecast),
                     borderDash: (ctx: any) => (processedData.marginIsActual[ctx.p1DataIndex] ? [] : [6, 4]),
                 },
             });
@@ -320,7 +320,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 label: 'Cost',
                 data: processedData.costMonthlyValues,
                 backgroundColor: processedData.costIsActual.map((isActual) =>
-                    isActual ? COLORS.costActual : (isDark ? 'rgba(96, 165, 250, 0.6)' : 'rgba(59, 130, 246, 0.5)')
+                    isActual ? COLORS.costActual : isDark ? 'rgba(96, 165, 250, 0.6)' : 'rgba(59, 130, 246, 0.5)',
                 ),
                 borderColor: processedData.costIsActual.map((isActual) => (isActual ? COLORS.costActual : COLORS.costForecast)),
                 borderWidth: 2,
@@ -335,7 +335,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 label: 'Revenue',
                 data: processedData.revenueMonthlyValues,
                 backgroundColor: processedData.revenueIsActual.map((isActual) =>
-                    isActual ? COLORS.revenueActual : (isDark ? 'rgba(74, 222, 128, 0.6)' : 'rgba(34, 197, 94, 0.5)')
+                    isActual ? COLORS.revenueActual : isDark ? 'rgba(74, 222, 128, 0.6)' : 'rgba(34, 197, 94, 0.5)',
                 ),
                 borderColor: processedData.revenueIsActual.map((isActual) => (isActual ? COLORS.revenueActual : COLORS.revenueForecast)),
                 borderWidth: 2,
@@ -350,7 +350,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                 label: 'Margin',
                 data: processedData.marginMonthlyValues,
                 backgroundColor: processedData.marginIsActual.map((isActual) =>
-                    isActual ? COLORS.marginActual : (isDark ? 'rgba(167, 139, 250, 0.6)' : 'rgba(139, 92, 246, 0.5)')
+                    isActual ? COLORS.marginActual : isDark ? 'rgba(167, 139, 250, 0.6)' : 'rgba(139, 92, 246, 0.5)',
                 ),
                 borderColor: processedData.marginIsActual.map((isActual) => (isActual ? COLORS.marginActual : COLORS.marginForecast)),
                 borderWidth: 2,
@@ -699,11 +699,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                             className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                             title={focusedChart === 'cumulative' ? 'Show both charts' : 'Focus on this chart'}
                         >
-                            {focusedChart === 'cumulative' ? (
-                                <Minimize2 className="h-4 w-4" />
-                            ) : (
-                                <Maximize2 className="h-4 w-4" />
-                            )}
+                            {focusedChart === 'cumulative' ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                         </button>
                     </div>
                     <div className="min-h-0 flex-1">
@@ -731,11 +727,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
                             className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                             title={focusedChart === 'monthly' ? 'Show both charts' : 'Focus on this chart'}
                         >
-                            {focusedChart === 'monthly' ? (
-                                <Minimize2 className="h-4 w-4" />
-                            ) : (
-                                <Maximize2 className="h-4 w-4" />
-                            )}
+                            {focusedChart === 'monthly' ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                         </button>
                     </div>
                     <div className="min-h-0 flex-1">

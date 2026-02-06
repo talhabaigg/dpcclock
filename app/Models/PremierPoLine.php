@@ -55,7 +55,7 @@ class PremierPoLine extends Model
         $latestSync = static::where('premier_po_id', $premierPoId)
             ->max('synced_at');
 
-        if (!$latestSync) {
+        if (! $latestSync) {
             return true;
         }
 

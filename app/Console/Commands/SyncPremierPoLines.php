@@ -31,6 +31,7 @@ class SyncPremierPoLines extends Command
 
         // Default: sync stale data
         $staleMinutes = (int) ($this->option('stale') ?: 60);
+
         return $this->syncStale($staleMinutes);
     }
 
@@ -38,13 +39,15 @@ class SyncPremierPoLines extends Command
     {
         $requisition = \App\Models\Requisition::find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             $this->error("Requisition {$requisitionId} not found");
+
             return 1;
         }
 
-        if (!$requisition->premier_po_id) {
+        if (! $requisition->premier_po_id) {
             $this->error("Requisition {$requisitionId} has no Premier PO ID");
+
             return 1;
         }
 

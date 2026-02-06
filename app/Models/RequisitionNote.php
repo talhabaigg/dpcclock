@@ -14,6 +14,7 @@ class RequisitionNote extends Model
         'note',
         'created_by',
     ];
+
     public function requisition()
     {
         return $this->belongsTo(Requisition::class);

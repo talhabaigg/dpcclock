@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\JobCostDetail;
 use App\Models\JobSummary;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -50,7 +49,7 @@ class LoadJobSummaries implements ShouldQueue
         Log::info('LoadJobSummaries: Job started');
 
         try {
-            $url = config('premier.api.base_url') . config('premier.endpoints.job_summaries');
+            $url = config('premier.api.base_url').config('premier.endpoints.job_summaries');
 
             $response = Http::timeout(config('premier.api.timeout', 300))
                 ->withBasicAuth(
@@ -64,7 +63,7 @@ class LoadJobSummaries implements ShouldQueue
                 ])
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new \RuntimeException(
                     "API request failed with status {$response->status()}: {$response->body()}"
                 );
@@ -73,19 +72,20 @@ class LoadJobSummaries implements ShouldQueue
             $json = $response->json();
 
             // Validate response structure
-            if (!isset($json['d'])) {
+            if (! isset($json['d'])) {
                 throw new \RuntimeException('Invalid API response structure: missing "d" property');
             }
 
             // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
             $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
 
-            if (!is_array($rows)) {
+            if (! is_array($rows)) {
                 throw new \RuntimeException('Invalid API response: expected array of rows');
             }
 
             if (count($rows) === 0) {
                 Log::warning('LoadJobSummaries: ERP returned 0 rows, skipping database update');
+
                 return;
             }
 
@@ -95,9 +95,10 @@ class LoadJobSummaries implements ShouldQueue
             foreach ($rows as $r) {
                 // Helper to extract ms from OData date string
                 $extractMs = function ($dateStr) {
-                    if (!empty($dateStr) && preg_match('/\/Date\((\d+)\)\//', $dateStr, $m)) {
+                    if (! empty($dateStr) && preg_match('/\/Date\((\d+)\)\//', $dateStr, $m)) {
                         return (int) $m[1];
                     }
+
                     return null;
                 };
 
@@ -134,7 +135,7 @@ class LoadJobSummaries implements ShouldQueue
                     $chunkNumber = $index + 1;
                     Log::info("LoadJobSummaries: Inserting chunk {$chunkNumber}", [
                         'rows' => count($chunk),
-                        'total_chunks' => count($chunks)
+                        'total_chunks' => count($chunks),
                     ]);
 
                     JobSummary::insert($chunk);
@@ -144,7 +145,7 @@ class LoadJobSummaries implements ShouldQueue
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobSummaries: Job completed successfully', [
                 'records_processed' => count($data),
-                'duration_seconds' => $duration
+                'duration_seconds' => $duration,
             ]);
 
         } catch (Throwable $e) {
@@ -165,7 +166,7 @@ class LoadJobSummaries implements ShouldQueue
     {
         Log::error('LoadJobSummaries: Job failed permanently after all retries', [
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
 
         // Here you could send notifications to administrators

@@ -10,7 +10,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { oncostColumns, Oncost } from './columns';
+import { Oncost, oncostColumns } from './columns';
 import { DataTable } from './data-table';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -100,7 +100,7 @@ export default function OncostsIndex({ oncosts }: Props) {
 
         const data = {
             ...formData,
-            weekly_amount: formData.is_percentage ? 0 : (formData.weekly_amount ? parseFloat(formData.weekly_amount) : 0),
+            weekly_amount: formData.is_percentage ? 0 : formData.weekly_amount ? parseFloat(formData.weekly_amount) : 0,
             percentage_rate: formData.is_percentage && formData.percentage_rate ? parseFloat(formData.percentage_rate) / 100 : null,
         };
 
@@ -137,9 +137,7 @@ export default function OncostsIndex({ oncosts }: Props) {
     };
 
     // Calculate hourly rate preview
-    const hourlyRatePreview = formData.weekly_amount && !formData.is_percentage
-        ? (parseFloat(formData.weekly_amount) / 40).toFixed(4)
-        : null;
+    const hourlyRatePreview = formData.weekly_amount && !formData.is_percentage ? (parseFloat(formData.weekly_amount) / 40).toFixed(4) : null;
 
     // Check if selected oncost is a core oncost
     const isCore = selectedOncost && CORE_ONCOSTS.includes(selectedOncost.code);
@@ -154,11 +152,25 @@ export default function OncostsIndex({ oncosts }: Props) {
                 const isCoreOncost = CORE_ONCOSTS.includes(row.original.code);
                 return (
                     <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(row.original); }}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(row.original);
+                            }}
+                        >
                             <Pencil className="h-4 w-4" />
                         </Button>
                         {!isCoreOncost && (
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row.original); }}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteDialog(row.original);
+                                }}
+                            >
                                 <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
                         )}
@@ -181,9 +193,9 @@ export default function OncostsIndex({ oncosts }: Props) {
                 <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
                     <h3 className="font-medium text-blue-900 dark:text-blue-100">About Oncosts</h3>
                     <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
-                        Oncosts are additional employment costs calculated on top of base wages. Fixed oncosts are converted to hourly rates
-                        (weekly amount / 40 hours) for accurate calculation with decimal headcount and overtime. Percentage-based oncosts
-                        (like Payroll Tax) are calculated on the taxable wage base.
+                        Oncosts are additional employment costs calculated on top of base wages. Fixed oncosts are converted to hourly rates (weekly
+                        amount / 40 hours) for accurate calculation with decimal headcount and overtime. Percentage-based oncosts (like Payroll Tax)
+                        are calculated on the taxable wage base.
                     </p>
                 </div>
                 <DataTable columns={columnsWithActions} data={oncosts} onRowClick={openEditDialog} />
@@ -195,9 +207,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                     <DialogHeader>
                         <DialogTitle>{selectedOncost ? 'Edit Oncost' : 'Create Oncost'}</DialogTitle>
                         <DialogDescription>
-                            {selectedOncost
-                                ? 'Update the oncost details below.'
-                                : 'Enter the details for the new oncost.'}
+                            {selectedOncost ? 'Update the oncost details below.' : 'Enter the details for the new oncost.'}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
@@ -222,9 +232,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                                     required
                                     disabled={isCore}
                                 />
-                                {isCore && (
-                                    <p className="text-sm text-amber-600">Code cannot be changed for core oncosts</p>
-                                )}
+                                {isCore && <p className="text-sm text-amber-600">Code cannot be changed for core oncosts</p>}
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="description">Description</Label>
@@ -260,9 +268,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                                         placeholder="e.g. 4.95"
                                         required
                                     />
-                                    <p className="text-sm text-muted-foreground">
-                                        Applied to taxable wage base (marked-up wages + super)
-                                    </p>
+                                    <p className="text-muted-foreground text-sm">Applied to taxable wage base (marked-up wages + super)</p>
                                 </div>
                             ) : (
                                 <div className="grid gap-2">
@@ -278,9 +284,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                                         required
                                     />
                                     {hourlyRatePreview && (
-                                        <p className="text-sm text-muted-foreground">
-                                            Hourly rate: ${hourlyRatePreview}/hr (weekly / 40)
-                                        </p>
+                                        <p className="text-muted-foreground text-sm">Hourly rate: ${hourlyRatePreview}/hr (weekly / 40)</p>
                                     )}
                                 </div>
                             )}
@@ -293,7 +297,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                                 />
                                 <Label htmlFor="applies_to_overtime">Applies to overtime hours</Label>
                             </div>
-                            <p className="text-sm text-muted-foreground -mt-2">
+                            <p className="text-muted-foreground -mt-2 text-sm">
                                 If enabled, this oncost will be calculated for overtime hours as well as ordinary hours
                             </p>
 
@@ -335,9 +339,7 @@ export default function OncostsIndex({ oncosts }: Props) {
                 <DialogContent className="sm:max-w-[400px]">
                     <DialogHeader>
                         <DialogTitle>Delete Oncost</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to delete "{selectedOncost?.name}"? This action cannot be undone.
-                        </DialogDescription>
+                        <DialogDescription>Are you sure you want to delete "{selectedOncost?.name}"? This action cannot be undone.</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>

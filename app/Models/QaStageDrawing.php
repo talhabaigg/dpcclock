@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 
 class QaStageDrawing extends Model
 {
@@ -85,24 +84,33 @@ class QaStageDrawing extends Model
 
     // Workflow status constants
     const STATUS_DRAFT = 'draft';
+
     const STATUS_PROCESSING = 'processing';
+
     const STATUS_PENDING_REVIEW = 'pending_review';
+
     const STATUS_ACTIVE = 'active';
+
     const STATUS_SUPERSEDED = 'superseded';
+
     const STATUS_ARCHIVED = 'archived';
 
     // Extraction status constants
     const EXTRACTION_QUEUED = 'queued';
+
     const EXTRACTION_PROCESSING = 'processing';
+
     const EXTRACTION_SUCCESS = 'success';
+
     const EXTRACTION_NEEDS_REVIEW = 'needs_review';
+
     const EXTRACTION_FAILED = 'failed';
 
     protected static function booted()
     {
         static::creating(function ($model) {
             $model->created_by = auth()->id();
-            if (!$model->status) {
+            if (! $model->status) {
                 $model->status = self::STATUS_DRAFT;
             }
         });
@@ -191,10 +199,11 @@ class QaStageDrawing extends Model
         }
 
         // Fallback to legacy file_path
-        if (!$this->file_path) {
+        if (! $this->file_path) {
             return null;
         }
-        return '/storage/' . $this->file_path;
+
+        return '/storage/'.$this->file_path;
     }
 
     /**
@@ -214,12 +223,13 @@ class QaStageDrawing extends Model
             if (str_contains($this->drawingFile->mime_type ?? '', 'pdf')) {
                 return $this->drawingFile->file_url;
             }
+
             return null;
         }
 
         // For legacy file_path, check if it's a PDF
         if ($this->file_path && str_contains($this->file_type ?? '', 'pdf')) {
-            return '/storage/' . $this->file_path;
+            return '/storage/'.$this->file_path;
         }
 
         return null;
@@ -252,11 +262,12 @@ class QaStageDrawing extends Model
             if ($this->drawing_title) {
                 $parts[] = $this->drawing_title;
             }
-            if (!empty($parts)) {
+            if (! empty($parts)) {
                 return implode(' - ', $parts);
             }
+
             // Fallback to page number
-            return 'Page ' . ($this->page_number ?? '?');
+            return 'Page '.($this->page_number ?? '?');
         }
 
         // Legacy: use name with page number
@@ -265,6 +276,7 @@ class QaStageDrawing extends Model
         if ($totalPages > 1) {
             return "{$baseName} — Page {$this->page_number}";
         }
+
         return $baseName;
     }
 
@@ -288,26 +300,29 @@ class QaStageDrawing extends Model
 
     public function getThumbnailUrlAttribute()
     {
-        if (!$this->thumbnail_path) {
+        if (! $this->thumbnail_path) {
             return null;
         }
+
         // Use relative URL to avoid CORS issues when APP_URL doesn't match current host
-        return '/storage/' . $this->thumbnail_path;
+        return '/storage/'.$this->thumbnail_path;
     }
 
     public function getDiffImageUrlAttribute()
     {
-        if (!$this->diff_image_path) {
+        if (! $this->diff_image_path) {
             return null;
         }
+
         // Use relative URL to avoid CORS issues when APP_URL doesn't match current host
-        return '/storage/' . $this->diff_image_path;
+        return '/storage/'.$this->diff_image_path;
     }
 
     public function getDisplayRevisionAttribute(): string
     {
         $rev = $this->revision_number ?? '?';
         $date = $this->revision_date?->format('Y-m-d') ?? '';
+
         return $date ? "Rev {$rev} ({$date})" : "Rev {$rev}";
     }
 
@@ -361,7 +376,7 @@ class QaStageDrawing extends Model
      */
     public function getSiblingRevisions()
     {
-        if (!$this->drawing_sheet_id) {
+        if (! $this->drawing_sheet_id) {
             return collect([$this]);
         }
 
@@ -396,10 +411,11 @@ class QaStageDrawing extends Model
      */
     public function getPagePreviewUrlAttribute(): ?string
     {
-        if (!$this->page_preview_s3_key) {
+        if (! $this->page_preview_s3_key) {
             return $this->thumbnail_url;
         }
-        return '/storage/' . $this->page_preview_s3_key;
+
+        return '/storage/'.$this->page_preview_s3_key;
     }
 
     /**

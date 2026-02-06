@@ -40,8 +40,6 @@ class ListMaterial extends Tool
 
     /**
      * Execute the tool call.
-     *
-     * @return ToolResult|Generator
      */
     public function handle(array $arguments): ToolResult|Generator
     {
@@ -92,4 +90,3 @@ class ListMaterial extends Tool
         return response()->json($itemArray);
     }
 }
-

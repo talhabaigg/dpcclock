@@ -33,7 +33,7 @@ class PayRateTemplateController extends Controller
         $businessId = env('PAYROLL_BUSINESS_ID', '431152');
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/paycategory");
 
         if ($response->failed()) {
@@ -86,7 +86,7 @@ class PayRateTemplateController extends Controller
         $businessId = env('PAYROLL_BUSINESS_ID', '431152');
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/payratetemplate");
 
         if ($response->failed()) {

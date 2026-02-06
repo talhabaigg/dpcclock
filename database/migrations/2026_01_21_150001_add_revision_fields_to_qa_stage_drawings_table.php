@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Run the migrations.
      *
@@ -33,7 +34,7 @@ return new class extends Migration {
                 'pending_review',  // Waiting for user to confirm metadata
                 'active',          // Current active revision
                 'superseded',      // Replaced by newer revision
-                'archived'         // Manually archived
+                'archived',         // Manually archived
             ])->default('draft')->after('revision_notes');
 
             // Processing metadata

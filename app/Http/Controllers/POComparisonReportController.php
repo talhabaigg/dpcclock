@@ -5,18 +5,19 @@ namespace App\Http\Controllers;
 use App\Services\POComparisonReportService;
 use App\Services\POInsightsService;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class POComparisonReportController extends Controller
 {
     protected POComparisonReportService $reportService;
+
     protected POInsightsService $insightsService;
 
     public function __construct()
     {
-        $this->reportService = new POComparisonReportService();
-        $this->insightsService = new POInsightsService();
+        $this->reportService = new POComparisonReportService;
+        $this->insightsService = new POInsightsService;
     }
 
     /**
@@ -76,7 +77,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to generate report: ' . $e->getMessage(),
+                'error' => 'Failed to generate report: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -123,7 +124,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to generate insights: ' . $e->getMessage(),
+                'error' => 'Failed to generate insights: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -154,7 +155,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to process follow-up: ' . $e->getMessage(),
+                'error' => 'Failed to process follow-up: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -165,7 +166,7 @@ class POComparisonReportController extends Controller
     public function streamInsights(Request $request)
     {
         try {
-            if (!$request->has('summary_data')) {
+            if (! $request->has('summary_data')) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Summary data is required for streaming insights',
@@ -189,7 +190,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to stream insights: ' . $e->getMessage(),
+                'error' => 'Failed to stream insights: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -224,7 +225,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to stream follow-up: ' . $e->getMessage(),
+                'error' => 'Failed to stream follow-up: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -262,7 +263,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to refresh insights: ' . $e->getMessage(),
+                'error' => 'Failed to refresh insights: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -297,7 +298,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to check sync status: ' . $e->getMessage(),
+                'error' => 'Failed to check sync status: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -334,7 +335,7 @@ class POComparisonReportController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to queue sync jobs: ' . $e->getMessage(),
+                'error' => 'Failed to queue sync jobs: '.$e->getMessage(),
             ], 500);
         }
     }

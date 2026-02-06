@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use Inertia\Inertia;
-use Illuminate\Http\Request;
-use Spatie\Permission\Models\Role;
 use App\Models\Kiosk;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
     public function index()
     {
         $users = User::with(['roles.permissions'])->get();
+
         return Inertia::render('users/index', [
             'roles' => Role::all(),
             'users' => $users,
@@ -36,7 +37,7 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
             'roles' => 'required|string|exists:roles,id',
             'disable_kiosk_notifications' => 'boolean',
         ]);

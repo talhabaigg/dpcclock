@@ -24,7 +24,7 @@ const Dashboard = () => {
                     </div>
                 ) : (
                     <div className="flex h-full items-center justify-center">
-                        <div className="text-center text-muted-foreground">
+                        <div className="text-muted-foreground text-center">
                             <p className="text-lg font-medium">Welcome to the Dashboard</p>
                             <p className="mt-2 text-sm">Contact an administrator if you need access to AI features.</p>
                         </div>

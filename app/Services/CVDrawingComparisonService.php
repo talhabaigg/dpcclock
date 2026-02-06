@@ -52,6 +52,7 @@ class CVDrawingComparisonService
                 'url' => $this->serviceUrl,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -59,9 +60,9 @@ class CVDrawingComparisonService
     /**
      * Compare two drawing images using computer vision.
      *
-     * @param string $imageA Base64 encoded older revision (or data URL)
-     * @param string $imageB Base64 encoded newer revision (or data URL)
-     * @param array $config Optional configuration overrides
+     * @param  string  $imageA  Base64 encoded older revision (or data URL)
+     * @param  string  $imageB  Base64 encoded newer revision (or data URL)
+     * @param  array  $config  Optional configuration overrides
      * @return array Comparison results with regions and visualization
      */
     public function compare(string $imageA, string $imageB, array $config = []): array
@@ -76,7 +77,7 @@ class CVDrawingComparisonService
                     'config' => $config,
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('CV Comparison: Service returned error', [
                     'status' => $response->status(),
                     'body' => $response->body(),
@@ -84,7 +85,7 @@ class CVDrawingComparisonService
 
                 return [
                     'success' => false,
-                    'error' => 'CV service returned status ' . $response->status(),
+                    'error' => 'CV service returned status '.$response->status(),
                     'regions' => [],
                     'region_count' => 0,
                 ];
@@ -118,9 +119,9 @@ class CVDrawingComparisonService
     /**
      * Compare drawings from S3 storage paths.
      *
-     * @param string $pathA S3 path to older revision
-     * @param string $pathB S3 path to newer revision
-     * @param array $config Optional configuration overrides
+     * @param  string  $pathA  S3 path to older revision
+     * @param  string  $pathB  S3 path to newer revision
+     * @param  array  $config  Optional configuration overrides
      * @return array Comparison results
      */
     public function compareFromStorage(string $pathA, string $pathB, array $config = []): array
@@ -130,7 +131,7 @@ class CVDrawingComparisonService
             $imageA = $this->getImageAsBase64($pathA);
             $imageB = $this->getImageAsBase64($pathB);
 
-            if (!$imageA || !$imageB) {
+            if (! $imageA || ! $imageB) {
                 return [
                     'success' => false,
                     'error' => 'Failed to load one or both images from storage',
@@ -150,7 +151,7 @@ class CVDrawingComparisonService
 
             return [
                 'success' => false,
-                'error' => 'Failed to load images: ' . $e->getMessage(),
+                'error' => 'Failed to load images: '.$e->getMessage(),
                 'regions' => [],
                 'region_count' => 0,
             ];
@@ -160,9 +161,9 @@ class CVDrawingComparisonService
     /**
      * Crop a region from an image.
      *
-     * @param string $image Base64 encoded image
-     * @param array $boundingBox Normalized bounding box (x, y, width, height)
-     * @param float $padding Padding percentage (0.0 - 1.0)
+     * @param  string  $image  Base64 encoded image
+     * @param  array  $boundingBox  Normalized bounding box (x, y, width, height)
+     * @param  float  $padding  Padding percentage (0.0 - 1.0)
      * @return array Crop result with cropped_image
      */
     public function cropRegion(string $image, array $boundingBox, float $padding = 0.1): array
@@ -175,10 +176,10 @@ class CVDrawingComparisonService
                     'padding' => $padding,
                 ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
-                    'error' => 'Crop service returned status ' . $response->status(),
+                    'error' => 'Crop service returned status '.$response->status(),
                 ];
             }
 
@@ -204,21 +205,23 @@ class CVDrawingComparisonService
         try {
             $disk = Storage::disk('s3');
 
-            if (!$disk->exists($path)) {
+            if (! $disk->exists($path)) {
                 Log::warning('CV Comparison: Image not found in S3', ['path' => $path]);
+
                 return null;
             }
 
             $contents = $disk->get($path);
             $mimeType = $this->getMimeType($path);
 
-            return "data:{$mimeType};base64," . base64_encode($contents);
+            return "data:{$mimeType};base64,".base64_encode($contents);
 
         } catch (\Exception $e) {
             Log::error('CV Comparison: Failed to load image from S3', [
                 'path' => $path,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

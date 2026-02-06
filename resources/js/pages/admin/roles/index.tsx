@@ -2,15 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -128,15 +120,7 @@ export default function RolesIndex() {
 
     const allPermissions = Object.values(permissions).flat();
 
-    const PermissionCheckbox = ({
-        perm,
-        form,
-        idPrefix,
-    }: {
-        perm: Permission;
-        form: typeof createForm | typeof editForm;
-        idPrefix: string;
-    }) => (
+    const PermissionCheckbox = ({ perm, form, idPrefix }: { perm: Permission; form: typeof createForm | typeof editForm; idPrefix: string }) => (
         <div className="flex items-center space-x-2">
             <Checkbox
                 id={`${idPrefix}-${perm.id}`}
@@ -148,7 +132,7 @@ export default function RolesIndex() {
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                            <HelpCircle className="text-muted-foreground h-3 w-3" />
                         </TooltipTrigger>
                         <TooltipContent>
                             <p>{perm.description}</p>
@@ -199,21 +183,16 @@ export default function RolesIndex() {
             <div className="m-4 space-y-4">
                 {/* Flash Messages */}
                 {flash.success && (
-                    <div className="rounded-md bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                        {flash.success}
-                    </div>
+                    <div className="rounded-md bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
                 )}
-                {flash.error && (
-                    <div className="rounded-md bg-red-50 p-4 text-red-800 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
-                )}
+                {flash.error && <div className="rounded-md bg-red-50 p-4 text-red-800 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>}
 
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">Roles & Permissions</h1>
                         <p className="text-muted-foreground">
-                            Manage user roles and their permissions ({allPermissions.length} permissions across {categories.length}{' '}
-                            categories)
+                            Manage user roles and their permissions ({allPermissions.length} permissions across {categories.length} categories)
                         </p>
                     </div>
                     <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -239,9 +218,7 @@ export default function RolesIndex() {
                                             placeholder="e.g., supervisor"
                                             className="mt-1"
                                         />
-                                        {createForm.errors.name && (
-                                            <p className="mt-1 text-sm text-red-500">{createForm.errors.name}</p>
-                                        )}
+                                        {createForm.errors.name && <p className="mt-1 text-sm text-red-500">{createForm.errors.name}</p>}
                                     </div>
 
                                     <div>
@@ -336,7 +313,7 @@ export default function RolesIndex() {
                                 </div>
                             </div>
 
-                            <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="text-muted-foreground mt-4 flex items-center gap-4 text-sm">
                                 <div className="flex items-center gap-1">
                                     <Users className="h-4 w-4" />
                                     <span>{role.users_count} users</span>
@@ -368,13 +345,13 @@ export default function RolesIndex() {
                 <Card className="overflow-hidden">
                     <div className="border-b p-4">
                         <h2 className="text-lg font-semibold">Permission Matrix</h2>
-                        <p className="text-sm text-muted-foreground">Overview of all roles and their permissions</p>
+                        <p className="text-muted-foreground text-sm">Overview of all roles and their permissions</p>
                     </div>
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="sticky left-0 bg-background">Permission</TableHead>
+                                    <TableHead className="bg-background sticky left-0">Permission</TableHead>
                                     {roles.map((role) => (
                                         <TableHead key={role.id} className="text-center capitalize">
                                             {role.name}
@@ -386,21 +363,18 @@ export default function RolesIndex() {
                                 {categories.map((category) => (
                                     <>
                                         <TableRow key={`cat-${category}`} className="bg-muted/50">
-                                            <TableCell
-                                                colSpan={roles.length + 1}
-                                                className="sticky left-0 bg-muted/50 font-semibold"
-                                            >
+                                            <TableCell colSpan={roles.length + 1} className="bg-muted/50 sticky left-0 font-semibold">
                                                 {category}
                                             </TableCell>
                                         </TableRow>
                                         {permissions[category]?.map((perm) => (
                                             <TableRow key={perm.id}>
-                                                <TableCell className="sticky left-0 bg-background">
+                                                <TableCell className="bg-background sticky left-0">
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger className="flex items-center gap-1">
                                                                 <span className="font-medium">{perm.name}</span>
-                                                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                                <HelpCircle className="text-muted-foreground h-3 w-3" />
                                                             </TooltipTrigger>
                                                             <TooltipContent>
                                                                 <p>{perm.description}</p>
@@ -471,25 +445,14 @@ export default function RolesIndex() {
                                         >
                                             Select All
                                         </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => editForm.setData('permissions', [])}
-                                        >
+                                        <Button type="button" variant="outline" size="sm" onClick={() => editForm.setData('permissions', [])}>
                                             Clear All
                                         </Button>
                                     </div>
                                 </div>
                                 <div className="grid gap-4 md:grid-cols-2">
                                     {Object.entries(permissions).map(([category, perms]) => (
-                                        <PermissionCategorySection
-                                            key={category}
-                                            category={category}
-                                            perms={perms}
-                                            form={editForm}
-                                            idPrefix="edit"
-                                        />
+                                        <PermissionCategorySection key={category} category={category} perms={perms} form={editForm} idPrefix="edit" />
                                     ))}
                                 </div>
                             </div>

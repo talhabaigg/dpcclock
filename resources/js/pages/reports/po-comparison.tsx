@@ -6,17 +6,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
+import Echo from 'laravel-echo';
 import {
     AlertCircle,
     ArrowDownRight,
@@ -40,12 +41,11 @@ import {
     TrendingUp,
     User,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import Echo from 'laravel-echo';
 import Papa from 'papaparse';
 import Pusher from 'pusher-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
+import ReactMarkdown from 'react-markdown';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '/' },
@@ -274,34 +274,37 @@ export default function POComparisonReport() {
             setIsWsConnected(false);
         });
 
-        channel.listen('.sync.progress', (event: {
-            cached: number;
-            total: number;
-            missing: number;
-            stale: number;
-            needs_sync: number;
-            ready_percent: number;
-            last_synced_po: string | null;
-            status: string;
-        }) => {
-            console.log('[premier-sync] Received sync.progress event:', event);
-            setSyncStatus({
-                cached: event.cached,
-                total: event.total,
-                missing: event.missing,
-                stale: event.stale,
-                needs_sync: event.needs_sync,
-                ready_percent: event.ready_percent,
-            });
-            setLastSyncedPo(event.last_synced_po);
-            setIsSyncing(event.status === 'syncing');
+        channel.listen(
+            '.sync.progress',
+            (event: {
+                cached: number;
+                total: number;
+                missing: number;
+                stale: number;
+                needs_sync: number;
+                ready_percent: number;
+                last_synced_po: string | null;
+                status: string;
+            }) => {
+                console.log('[premier-sync] Received sync.progress event:', event);
+                setSyncStatus({
+                    cached: event.cached,
+                    total: event.total,
+                    missing: event.missing,
+                    stale: event.stale,
+                    needs_sync: event.needs_sync,
+                    ready_percent: event.ready_percent,
+                });
+                setLastSyncedPo(event.last_synced_po);
+                setIsSyncing(event.status === 'syncing');
 
-            if (event.status === 'completed') {
-                setSyncMessage('Sync completed');
-                // Clear message after 3 seconds
-                setTimeout(() => setSyncMessage(null), 3000);
-            }
-        });
+                if (event.status === 'completed') {
+                    setSyncMessage('Sync completed');
+                    // Clear message after 3 seconds
+                    setTimeout(() => setSyncMessage(null), 3000);
+                }
+            },
+        );
 
         return () => {
             channel.stopListening('.sync.progress');
@@ -319,7 +322,7 @@ export default function POComparisonReport() {
             const queryParams = new URLSearchParams(filters as Record<string, string>).toString();
             const response = await fetch(`/reports/po-comparison/data?${queryParams}`, {
                 headers: {
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
@@ -426,7 +429,7 @@ export default function POComparisonReport() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'text/event-stream',
+                    Accept: 'text/event-stream',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
@@ -463,22 +466,10 @@ export default function POComparisonReport() {
                     if (!event) continue;
 
                     if (event.type === 'delta' && event.data.delta) {
-                        setChatMessages(prev =>
-                            prev.map(m =>
-                                m.id === assistantId
-                                    ? { ...m, content: m.content + event.data.delta }
-                                    : m
-                            )
-                        );
+                        setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.data.delta } : m)));
                     } else if (event.type === 'done') {
                         setConversationId(event.data.conversation_id);
-                        setChatMessages(prev =>
-                            prev.map(m =>
-                                m.id === assistantId
-                                    ? { ...m, status: 'complete' as const }
-                                    : m
-                            )
-                        );
+                        setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m)));
                     } else if (event.type === 'error') {
                         throw new Error(event.data.error);
                     }
@@ -490,33 +481,21 @@ export default function POComparisonReport() {
                 const event = parseSSEEvent(buffer);
                 if (event?.type === 'done') {
                     setConversationId(event.data.conversation_id);
-                    setChatMessages(prev =>
-                        prev.map(m =>
-                            m.id === assistantId
-                                ? { ...m, status: 'complete' as const }
-                                : m
-                        )
-                    );
+                    setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m)));
                 }
             }
 
             // Mark complete if not already
-            setChatMessages(prev =>
-                prev.map(m =>
-                    m.id === assistantId && m.status === 'streaming'
-                        ? { ...m, status: 'complete' as const }
-                        : m
-                )
+            setChatMessages((prev) =>
+                prev.map((m) => (m.id === assistantId && m.status === 'streaming' ? { ...m, status: 'complete' as const } : m)),
             );
         } catch (err: any) {
             if (err.name === 'AbortError') return;
             setInsightsError(err.message || 'Failed to generate AI insights');
-            setChatMessages(prev =>
-                prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, content: m.content || 'Failed to generate insights.', status: 'error' as const }
-                        : m
-                )
+            setChatMessages((prev) =>
+                prev.map((m) =>
+                    m.id === assistantId ? { ...m, content: m.content || 'Failed to generate insights.', status: 'error' as const } : m,
+                ),
             );
         } finally {
             setInsightsLoading(false);
@@ -563,14 +542,14 @@ export default function POComparisonReport() {
             status: 'streaming',
         };
 
-        setChatMessages(prev => [...prev, userMessage, assistantMessage]);
+        setChatMessages((prev) => [...prev, userMessage, assistantMessage]);
 
         try {
             const response = await fetch('/reports/po-comparison/insights/follow-up/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'text/event-stream',
+                    Accept: 'text/event-stream',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
@@ -606,21 +585,9 @@ export default function POComparisonReport() {
                     if (!event) continue;
 
                     if (event.type === 'delta' && event.data.delta) {
-                        setChatMessages(prev =>
-                            prev.map(m =>
-                                m.id === assistantId
-                                    ? { ...m, content: m.content + event.data.delta }
-                                    : m
-                            )
-                        );
+                        setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.data.delta } : m)));
                     } else if (event.type === 'done') {
-                        setChatMessages(prev =>
-                            prev.map(m =>
-                                m.id === assistantId
-                                    ? { ...m, status: 'complete' as const }
-                                    : m
-                            )
-                        );
+                        setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m)));
                     } else if (event.type === 'error') {
                         throw new Error(event.data.error);
                     }
@@ -631,32 +598,18 @@ export default function POComparisonReport() {
             if (buffer.trim()) {
                 const event = parseSSEEvent(buffer);
                 if (event?.type === 'done') {
-                    setChatMessages(prev =>
-                        prev.map(m =>
-                            m.id === assistantId
-                                ? { ...m, status: 'complete' as const }
-                                : m
-                        )
-                    );
+                    setChatMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m)));
                 }
             }
 
             // Mark complete if not already
-            setChatMessages(prev =>
-                prev.map(m =>
-                    m.id === assistantId && m.status === 'streaming'
-                        ? { ...m, status: 'complete' as const }
-                        : m
-                )
+            setChatMessages((prev) =>
+                prev.map((m) => (m.id === assistantId && m.status === 'streaming' ? { ...m, status: 'complete' as const } : m)),
             );
         } catch (err: any) {
             if (err.name === 'AbortError') return;
-            setChatMessages(prev =>
-                prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, content: `Error: ${err.message}`, status: 'error' as const }
-                        : m
-                )
+            setChatMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: `Error: ${err.message}`, status: 'error' as const } : m)),
             );
         } finally {
             setFollowUpLoading(false);
@@ -676,7 +629,7 @@ export default function POComparisonReport() {
             const queryParams = new URLSearchParams(filters as Record<string, string>).toString();
             const response = await fetch(`/reports/po-comparison/sync-status?${queryParams}`, {
                 headers: {
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
@@ -704,7 +657,7 @@ export default function POComparisonReport() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
@@ -797,7 +750,7 @@ export default function POComparisonReport() {
             <Head title="PO Comparison Report" />
 
             {/* Print-only header */}
-            <div className="print-header hidden print:block print:mb-6">
+            <div className="print-header hidden print:mb-6 print:block">
                 <h1 className="text-2xl font-bold">PO Comparison Report</h1>
                 <p className="text-sm text-gray-600">Generated: {format(new Date(), 'dd MMMM yyyy, HH:mm')}</p>
                 {aggregate && (
@@ -921,12 +874,7 @@ export default function POComparisonReport() {
                             {/* Minimum Variance */}
                             <div className="space-y-2">
                                 <Label>Min Variance ($)</Label>
-                                <Input
-                                    type="number"
-                                    placeholder="e.g. 1000"
-                                    value={minVariance}
-                                    onChange={(e) => setMinVariance(e.target.value)}
-                                />
+                                <Input type="number" placeholder="e.g. 1000" value={minVariance} onChange={(e) => setMinVariance(e.target.value)} />
                             </div>
 
                             {/* Only Discrepancies Toggle */}
@@ -938,22 +886,19 @@ export default function POComparisonReport() {
 
                         {/* Sync Status Section */}
                         {syncStatus && (
-                            <div className="mt-4 pt-4 border-t space-y-3">
+                            <div className="mt-4 space-y-3 border-t pt-4">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="flex items-center gap-2">
                                             {isSyncing ? (
-                                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                                                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
                                             ) : (
-                                                <CloudDownload className="h-4 w-4 text-muted-foreground" />
+                                                <CloudDownload className="text-muted-foreground h-4 w-4" />
                                             )}
                                             <span className="text-sm font-medium">Premier Data Sync</span>
                                             <span
-                                                className={cn(
-                                                    "h-2 w-2 rounded-full",
-                                                    isWsConnected ? "bg-green-500" : "bg-red-500"
-                                                )}
-                                                title={isWsConnected ? "Real-time updates connected" : "Real-time updates disconnected"}
+                                                className={cn('h-2 w-2 rounded-full', isWsConnected ? 'bg-green-500' : 'bg-red-500')}
+                                                title={isWsConnected ? 'Real-time updates connected' : 'Real-time updates disconnected'}
                                             />
                                         </div>
                                         <div className="flex items-center gap-3 text-sm">
@@ -976,19 +921,10 @@ export default function POComparisonReport() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {syncMessage && (
-                                            <span className="text-sm text-muted-foreground">{syncMessage}</span>
-                                        )}
-                                        {lastSyncedPo && isSyncing && (
-                                            <span className="text-xs text-muted-foreground">Last: PO{lastSyncedPo}</span>
-                                        )}
+                                        {syncMessage && <span className="text-muted-foreground text-sm">{syncMessage}</span>}
+                                        {lastSyncedPo && isSyncing && <span className="text-muted-foreground text-xs">Last: PO{lastSyncedPo}</span>}
                                         {syncStatus.needs_sync > 0 && !isSyncing && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={queueSyncJobs}
-                                                disabled={syncQueueLoading}
-                                            >
+                                            <Button variant="outline" size="sm" onClick={queueSyncJobs} disabled={syncQueueLoading}>
                                                 {syncQueueLoading ? (
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                 ) : (
@@ -997,12 +933,7 @@ export default function POComparisonReport() {
                                                 Sync {syncStatus.needs_sync} POs
                                             </Button>
                                         )}
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={fetchSyncStatus}
-                                            disabled={syncStatusLoading || isSyncing}
-                                        >
+                                        <Button variant="ghost" size="sm" onClick={fetchSyncStatus} disabled={syncStatusLoading || isSyncing}>
                                             <RefreshCw className={cn('h-4 w-4', (syncStatusLoading || isSyncing) && 'animate-spin')} />
                                         </Button>
                                     </div>
@@ -1010,17 +941,15 @@ export default function POComparisonReport() {
 
                                 {/* Progress Bar */}
                                 <div className="flex items-center gap-3">
-                                    <Progress
-                                        value={syncStatus.ready_percent}
+                                    <Progress value={syncStatus.ready_percent} className={cn('h-2 flex-1', isSyncing && 'animate-pulse')} />
+                                    <span
                                         className={cn(
-                                            "flex-1 h-2",
-                                            isSyncing && "animate-pulse"
+                                            'min-w-[60px] text-right text-sm font-medium',
+                                            syncStatus.ready_percent === 100
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-amber-600 dark:text-amber-400',
                                         )}
-                                    />
-                                    <span className={cn(
-                                        "text-sm font-medium min-w-[60px] text-right",
-                                        syncStatus.ready_percent === 100 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
-                                    )}>
+                                    >
                                         {syncStatus.ready_percent}%
                                     </span>
                                 </div>
@@ -1045,7 +974,7 @@ export default function POComparisonReport() {
                             {[...Array(4)].map((_, i) => (
                                 <Card key={i}>
                                     <CardContent className="p-6">
-                                        <Skeleton className="h-4 w-24 mb-2" />
+                                        <Skeleton className="mb-2 h-4 w-24" />
                                         <Skeleton className="h-8 w-32" />
                                     </CardContent>
                                 </Card>
@@ -1063,13 +992,11 @@ export default function POComparisonReport() {
                 {!loading && aggregate && (
                     <>
                         {/* Action Bar - Hide on print */}
-                        <div className="flex justify-between items-center print:hidden">
-                            <p className="text-sm text-muted-foreground">
+                        <div className="flex items-center justify-between print:hidden">
+                            <p className="text-muted-foreground text-sm">
                                 Showing {reportData.length} purchase orders
                                 {aggregate.pos_with_variances > 0 && (
-                                    <span className="ml-2 text-amber-600">
-                                        ({aggregate.pos_with_variances} with variances)
-                                    </span>
+                                    <span className="ml-2 text-amber-600">({aggregate.pos_with_variances} with variances)</span>
                                 )}
                             </p>
                             <div className="flex gap-2">
@@ -1090,7 +1017,7 @@ export default function POComparisonReport() {
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Total POs</p>
+                                            <p className="text-muted-foreground text-sm">Total POs</p>
                                             <p className="text-2xl font-bold">{aggregate.total_pos}</p>
                                         </div>
                                         <FileText className="h-8 w-8 text-blue-500 opacity-50" />
@@ -1102,7 +1029,7 @@ export default function POComparisonReport() {
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Original Value</p>
+                                            <p className="text-muted-foreground text-sm">Original Value</p>
                                             <p className="text-2xl font-bold">{formatCurrency(aggregate.total_original_value)}</p>
                                         </div>
                                         <BarChart3 className="h-8 w-8 text-green-500 opacity-50" />
@@ -1114,7 +1041,7 @@ export default function POComparisonReport() {
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Current Value</p>
+                                            <p className="text-muted-foreground text-sm">Current Value</p>
                                             <p className="text-2xl font-bold">{formatCurrency(aggregate.total_premier_value)}</p>
                                         </div>
                                         <TrendingUp className="h-8 w-8 text-purple-500 opacity-50" />
@@ -1122,15 +1049,33 @@ export default function POComparisonReport() {
                                 </CardContent>
                             </Card>
 
-                            <Card className={cn('print:border print:shadow-none', aggregate.total_variance > 0 ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : aggregate.total_variance < 0 ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30' : '')}>
+                            <Card
+                                className={cn(
+                                    'print:border print:shadow-none',
+                                    aggregate.total_variance > 0
+                                        ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+                                        : aggregate.total_variance < 0
+                                          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
+                                          : '',
+                                )}
+                            >
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Total Variance</p>
-                                            <p className={cn('text-2xl font-bold', aggregate.total_variance > 0 ? 'text-amber-600' : aggregate.total_variance < 0 ? 'text-green-600' : '')}>
+                                            <p className="text-muted-foreground text-sm">Total Variance</p>
+                                            <p
+                                                className={cn(
+                                                    'text-2xl font-bold',
+                                                    aggregate.total_variance > 0
+                                                        ? 'text-amber-600'
+                                                        : aggregate.total_variance < 0
+                                                          ? 'text-green-600'
+                                                          : '',
+                                                )}
+                                            >
                                                 {formatCurrency(aggregate.total_variance)}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">{formatPercent(aggregate.variance_percent)}</p>
+                                            <p className="text-muted-foreground text-xs">{formatPercent(aggregate.variance_percent)}</p>
                                         </div>
                                         {aggregate.total_variance > 0 ? (
                                             <TrendingUp className="h-8 w-8 text-amber-500" />
@@ -1148,37 +1093,37 @@ export default function POComparisonReport() {
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-6 print:grid-cols-6">
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">Invoiced</p>
+                                    <p className="text-muted-foreground text-xs">Invoiced</p>
                                     <p className="text-lg font-semibold">{formatCurrency(aggregate.total_invoiced_value)}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">Items Unchanged</p>
+                                    <p className="text-muted-foreground text-xs">Items Unchanged</p>
                                     <p className="text-lg font-semibold text-green-600 dark:text-green-400">{aggregate.items_unchanged}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">Items Modified</p>
+                                    <p className="text-muted-foreground text-xs">Items Modified</p>
                                     <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.items_modified}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">Items Added</p>
+                                    <p className="text-muted-foreground text-xs">Items Added</p>
                                     <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">{aggregate.items_added}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">Items Removed</p>
+                                    <p className="text-muted-foreground text-xs">Items Removed</p>
                                     <p className="text-lg font-semibold text-red-600 dark:text-red-400">{aggregate.items_removed}</p>
                                 </CardContent>
                             </Card>
                             <Card className="print:border print:shadow-none">
                                 <CardContent className="p-3 text-center">
-                                    <p className="text-xs text-muted-foreground">POs with Issues</p>
+                                    <p className="text-muted-foreground text-xs">POs with Issues</p>
                                     <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.pos_with_variances}</p>
                                 </CardContent>
                             </Card>
@@ -1188,9 +1133,7 @@ export default function POComparisonReport() {
                         {aggregate.price_list_violations > 0 && (
                             <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/30 print:border print:bg-red-50">
                                 <AlertCircle className="h-5 w-5" />
-                                <AlertTitle className="text-lg font-bold">
-                                    Price List Violations Detected
-                                </AlertTitle>
+                                <AlertTitle className="text-lg font-bold">Price List Violations Detected</AlertTitle>
                                 <AlertDescription>
                                     <p className="mb-2">
                                         <strong>{aggregate.price_list_violations} item(s)</strong> with contracted price lists have pricing changes.
@@ -1249,7 +1192,9 @@ export default function POComparisonReport() {
                                                             <div className="flex items-center justify-between">
                                                                 <div>
                                                                     <CardTitle className="text-base">PO{po.po_number}</CardTitle>
-                                                                    <CardDescription>{po.location} | {po.supplier}</CardDescription>
+                                                                    <CardDescription>
+                                                                        {po.location} | {po.supplier}
+                                                                    </CardDescription>
                                                                 </div>
                                                                 <Badge variant="destructive">{po.violations.length} violation(s)</Badge>
                                                             </div>
@@ -1269,11 +1214,14 @@ export default function POComparisonReport() {
                                                                 <TableBody>
                                                                     {po.violations.map((v, vIdx) => (
                                                                         <TableRow key={vIdx} className="bg-red-50 dark:bg-red-950/30">
-                                                                            <TableCell className="font-medium max-w-[200px] truncate">
+                                                                            <TableCell className="max-w-[200px] truncate font-medium">
                                                                                 {v.description}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 text-xs">
+                                                                                <Badge
+                                                                                    variant="outline"
+                                                                                    className="bg-blue-50 text-xs text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                                                                                >
                                                                                     {v.price_list}
                                                                                 </Badge>
                                                                             </TableCell>
@@ -1284,14 +1232,17 @@ export default function POComparisonReport() {
                                                                                 {formatCurrency(v.current_unit_cost)}
                                                                             </TableCell>
                                                                             <TableCell className="text-right tabular-nums">
-                                                                                <span className={cn(
-                                                                                    'font-medium',
-                                                                                    v.difference > 0 ? 'text-red-600' : 'text-green-600'
-                                                                                )}>
-                                                                                    {v.difference > 0 ? '+' : ''}{formatCurrency(v.difference)}
+                                                                                <span
+                                                                                    className={cn(
+                                                                                        'font-medium',
+                                                                                        v.difference > 0 ? 'text-red-600' : 'text-green-600',
+                                                                                    )}
+                                                                                >
+                                                                                    {v.difference > 0 ? '+' : ''}
+                                                                                    {formatCurrency(v.difference)}
                                                                                 </span>
                                                                             </TableCell>
-                                                                            <TableCell className="text-right tabular-nums font-bold text-red-600">
+                                                                            <TableCell className="text-right font-bold text-red-600 tabular-nums">
                                                                                 {formatCurrency(v.total_impact)}
                                                                             </TableCell>
                                                                         </TableRow>
@@ -1334,7 +1285,7 @@ export default function POComparisonReport() {
                                                         <TableRow
                                                             key={item.requisition.id}
                                                             className={cn(
-                                                                'cursor-pointer hover:bg-muted/50',
+                                                                'hover:bg-muted/50 cursor-pointer',
                                                                 item.summary.has_discrepancies && 'bg-amber-50/50 dark:bg-amber-950/30',
                                                             )}
                                                             onClick={() => toggleRowExpand(item.requisition.id)}
@@ -1342,9 +1293,15 @@ export default function POComparisonReport() {
                                                             <TableCell className="font-medium">PO{item.requisition.po_number}</TableCell>
                                                             <TableCell className="max-w-[150px] truncate">{item.location?.name || 'N/A'}</TableCell>
                                                             <TableCell className="max-w-[150px] truncate">{item.supplier?.name || 'N/A'}</TableCell>
-                                                            <TableCell className="text-right tabular-nums">{formatCurrency(item.totals.original)}</TableCell>
-                                                            <TableCell className="text-right tabular-nums">{formatCurrency(item.totals.premier)}</TableCell>
-                                                            <TableCell className="text-right tabular-nums">{formatCurrency(item.totals.invoiced)}</TableCell>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(item.totals.original)}
+                                                            </TableCell>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(item.totals.premier)}
+                                                            </TableCell>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(item.totals.invoiced)}
+                                                            </TableCell>
                                                             <TableCell className="text-right">
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     {item.totals.variance > 0 ? (
@@ -1366,17 +1323,26 @@ export default function POComparisonReport() {
                                                             <TableCell className="text-center">
                                                                 <div className="flex items-center justify-center gap-1">
                                                                     {item.summary.modified_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="bg-amber-100 text-xs text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                                                                        >
                                                                             {item.summary.modified_count} mod
                                                                         </Badge>
                                                                     )}
                                                                     {item.summary.added_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="bg-blue-100 text-xs text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                                                                        >
                                                                             +{item.summary.added_count}
                                                                         </Badge>
                                                                     )}
                                                                     {item.summary.removed_count > 0 && (
-                                                                        <Badge variant="outline" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="bg-red-100 text-xs text-red-700 dark:bg-red-900/50 dark:text-red-300"
+                                                                        >
                                                                             -{item.summary.removed_count}
                                                                         </Badge>
                                                                     )}
@@ -1397,7 +1363,10 @@ export default function POComparisonReport() {
                             {/* Details Tab */}
                             <TabsContent value="details" className="space-y-4">
                                 {reportData.map((item) => (
-                                    <Card key={item.requisition.id} className={cn(item.summary.has_discrepancies && 'border-amber-200 dark:border-amber-800')}>
+                                    <Card
+                                        key={item.requisition.id}
+                                        className={cn(item.summary.has_discrepancies && 'border-amber-200 dark:border-amber-800')}
+                                    >
                                         <CardHeader className="pb-2">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -1407,7 +1376,7 @@ export default function POComparisonReport() {
                                                     </CardDescription>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-sm text-muted-foreground">Variance</p>
+                                                    <p className="text-muted-foreground text-sm">Variance</p>
                                                     <p
                                                         className={cn(
                                                             'text-lg font-bold',
@@ -1451,10 +1420,14 @@ export default function POComparisonReport() {
                                                                         variant="outline"
                                                                         className={cn(
                                                                             'text-xs',
-                                                                            line.status === 'unchanged' && 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-                                                                            line.status === 'modified' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
-                                                                            line.status === 'added' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-                                                                            line.status === 'removed' && 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+                                                                            line.status === 'unchanged' &&
+                                                                                'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+                                                                            line.status === 'modified' &&
+                                                                                'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+                                                                            line.status === 'added' &&
+                                                                                'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+                                                                            line.status === 'removed' &&
+                                                                                'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
                                                                         )}
                                                                     >
                                                                         {line.status}
@@ -1495,7 +1468,7 @@ export default function POComparisonReport() {
                                                         ))}
                                                         {item.comparison.length > 10 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                                                                <TableCell colSpan={9} className="text-muted-foreground text-center">
                                                                     ... and {item.comparison.length - 10} more items
                                                                 </TableCell>
                                                             </TableRow>
@@ -1510,7 +1483,7 @@ export default function POComparisonReport() {
 
                             {/* AI Insights Tab */}
                             <TabsContent value="insights" className="space-y-4">
-                                <Card className="flex flex-col h-[700px]">
+                                <Card className="flex h-[700px] flex-col">
                                     <CardHeader className="flex-shrink-0">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
@@ -1536,7 +1509,7 @@ export default function POComparisonReport() {
                                             Chat with AI about your procurement data. Ask follow-up questions to dive deeper.
                                         </CardDescription>
                                     </CardHeader>
-                                    <CardContent className="flex-1 flex flex-col overflow-hidden">
+                                    <CardContent className="flex flex-1 flex-col overflow-hidden">
                                         {insightsError && (
                                             <Alert variant="destructive" className="mb-4 flex-shrink-0">
                                                 <AlertCircle className="h-4 w-4" />
@@ -1546,29 +1519,23 @@ export default function POComparisonReport() {
                                         )}
 
                                         {/* Chat Messages Area */}
-                                        <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
-
+                                        <div className="mb-4 flex-1 space-y-4 overflow-y-auto pr-2">
                                             {chatMessages.length === 0 && !insightsLoading && !insightsError && (
-                                                <div className="text-center py-12">
-                                                    <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                                                <div className="py-12 text-center">
+                                                    <Brain className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
                                                     <p className="text-muted-foreground mb-2">Your AI Procurement Advisor</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Click "Start Analysis" to get insights on your PO data.<br />
+                                                    <p className="text-muted-foreground text-sm">
+                                                        Click "Start Analysis" to get insights on your PO data.
+                                                        <br />
                                                         You can ask follow-up questions to explore specific areas.
                                                     </p>
                                                 </div>
                                             )}
 
                                             {chatMessages.map((message) => (
-                                                <div
-                                                    key={message.id}
-                                                    className={cn(
-                                                        'flex gap-3',
-                                                        message.role === 'user' && 'justify-end'
-                                                    )}
-                                                >
+                                                <div key={message.id} className={cn('flex gap-3', message.role === 'user' && 'justify-end')}>
                                                     {message.role === 'assistant' && (
-                                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                                                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600">
                                                             <Sparkles className="h-4 w-4 text-white" />
                                                         </div>
                                                     )}
@@ -1576,17 +1543,17 @@ export default function POComparisonReport() {
                                                         className={cn(
                                                             'max-w-[85%] rounded-lg p-4',
                                                             message.role === 'assistant'
-                                                                ? 'bg-muted/30 border prose prose-sm max-w-none dark:prose-invert prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-purple-300 prose-blockquote:bg-purple-50 dark:prose-blockquote:bg-purple-950/30 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded'
+                                                                ? 'bg-muted/30 prose prose-sm dark:prose-invert prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-purple-300 prose-blockquote:bg-purple-50 dark:prose-blockquote:bg-purple-950/30 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded max-w-none border'
                                                                 : 'bg-primary text-primary-foreground',
-                                                            message.status === 'error' && 'border-destructive'
+                                                            message.status === 'error' && 'border-destructive',
                                                         )}
                                                     >
                                                         {message.role === 'assistant' ? (
                                                             message.status === 'streaming' && !message.content ? (
                                                                 <div className="space-y-3">
                                                                     <div className="flex items-center gap-2">
-                                                                        <Sparkles className="size-4 text-violet-500 animate-pulse" />
-                                                                        <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                                                                        <Sparkles className="size-4 animate-pulse text-violet-500" />
+                                                                        <span className="animate-pulse bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent">
                                                                             Thinking...
                                                                         </span>
                                                                     </div>
@@ -1609,8 +1576,8 @@ export default function POComparisonReport() {
                                                         )}
                                                     </div>
                                                     {message.role === 'user' && (
-                                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                                                            <User className="h-4 w-4 text-primary-foreground" />
+                                                        <div className="bg-primary flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                                                            <User className="text-primary-foreground h-4 w-4" />
                                                         </div>
                                                     )}
                                                 </div>
@@ -1620,19 +1587,20 @@ export default function POComparisonReport() {
                                         </div>
 
                                         {/* Follow-up Input - Styled like chat-input */}
-                                        {chatMessages.length > 0 && chatMessages.some(m => m.status === 'complete') && (
-                                            <div className="flex-shrink-0 pt-4 border-t">
+                                        {chatMessages.length > 0 && chatMessages.some((m) => m.status === 'complete') && (
+                                            <div className="flex-shrink-0 border-t pt-4">
                                                 <div className="group relative">
                                                     {/* Rainbow gradient border effect */}
                                                     <div
                                                         className="absolute -inset-[1px] rounded-2xl opacity-0 blur-sm transition-opacity duration-300 group-focus-within:opacity-60"
                                                         style={{
-                                                            background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
+                                                            background:
+                                                                'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
                                                             backgroundSize: '200% 100%',
                                                             animation: 'rainbow-shift 8s linear infinite',
                                                         }}
                                                     />
-                                                    <div className="relative flex items-center gap-3 rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm transition-all duration-200 group-focus-within:border-border group-focus-within:shadow-md">
+                                                    <div className="border-border/50 bg-card group-focus-within:border-border relative flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all duration-200 group-focus-within:shadow-md">
                                                         <input
                                                             type="text"
                                                             placeholder="Ask a follow-up question..."
@@ -1644,11 +1612,11 @@ export default function POComparisonReport() {
                                                                     askFollowUp();
                                                                 }
                                                             }}
-                                                            disabled={followUpLoading || chatMessages.some(m => m.status === 'streaming')}
-                                                            className="min-h-[24px] flex-1 bg-transparent text-base leading-relaxed outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            disabled={followUpLoading || chatMessages.some((m) => m.status === 'streaming')}
+                                                            className="placeholder:text-muted-foreground/60 min-h-[24px] flex-1 bg-transparent text-base leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                                         />
                                                         <div className="flex shrink-0 items-center">
-                                                            {(followUpLoading || chatMessages.some(m => m.status === 'streaming')) ? (
+                                                            {followUpLoading || chatMessages.some((m) => m.status === 'streaming') ? (
                                                                 <Button
                                                                     type="button"
                                                                     size="icon"
@@ -1665,8 +1633,8 @@ export default function POComparisonReport() {
                                                                     className={cn(
                                                                         'size-9 rounded-full transition-all',
                                                                         followUpQuestion.trim()
-                                                                            ? 'bg-foreground text-background shadow-md hover:bg-foreground/90 hover:scale-105'
-                                                                            : 'bg-muted text-muted-foreground cursor-not-allowed'
+                                                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-md hover:scale-105'
+                                                                            : 'bg-muted text-muted-foreground cursor-not-allowed',
                                                                     )}
                                                                     onClick={askFollowUp}
                                                                     disabled={!followUpQuestion.trim()}
@@ -1693,7 +1661,7 @@ export default function POComparisonReport() {
 
                         {/* Print-only detailed table */}
                         <div className="hidden print:block print:break-before-page">
-                            <h2 className="text-xl font-bold mb-4">Detailed Comparison</h2>
+                            <h2 className="mb-4 text-xl font-bold">Detailed Comparison</h2>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -1735,8 +1703,8 @@ export default function POComparisonReport() {
                 {!loading && !error && !hasSearched && (
                     <Card>
                         <CardContent className="p-12 text-center">
-                            <Filter className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                            <h3 className="text-lg font-medium mb-2">Select Filters to Generate Report</h3>
+                            <Filter className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+                            <h3 className="mb-2 text-lg font-medium">Select Filters to Generate Report</h3>
                             <p className="text-muted-foreground mb-4">
                                 Choose your filters above and click "Apply Filters" to generate the PO comparison report.
                             </p>
@@ -1752,8 +1720,8 @@ export default function POComparisonReport() {
                 {!loading && !error && hasSearched && reportData.length === 0 && (
                     <Card>
                         <CardContent className="p-12 text-center">
-                            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                            <h3 className="text-lg font-medium mb-2">No Purchase Orders Found</h3>
+                            <FileText className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+                            <h3 className="mb-2 text-lg font-medium">No Purchase Orders Found</h3>
                             <p className="text-muted-foreground">
                                 No purchase orders match your current filters, or there are no POs synced with Premier yet.
                             </p>

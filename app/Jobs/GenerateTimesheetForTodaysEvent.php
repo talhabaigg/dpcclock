@@ -4,21 +4,22 @@ namespace App\Jobs;
 
 use App\Models\Kiosk;
 use App\Models\TimesheetEvent;
-use App\Models\Worktype;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
-use Log;
-use Carbon\Carbon;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
+use Log;
 
 class GenerateTimesheetForTodaysEvent implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, SerializesModels;
+    use InteractsWithQueue, Queueable, SerializesModels;
 
     protected int $kioskId;
+
     protected $events;
+
     /**
      * Create a new job instance.
      */
@@ -34,38 +35,40 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
     public function handle(): void
     {
         $kiosk = Kiosk::find($this->kioskId)->load('employees', 'location');
-        if (!$kiosk) {
+        if (! $kiosk) {
             Log::warning("Kiosk not found with ID: {$this->kioskId}");
+
             return;
         }
 
         foreach ($this->events as $event) {
             if ($kiosk->location?->state !== strtoupper($event->state)) {
 
-                Log::warning('State mismatch ' . $kiosk->location?->state . ' != ' . strtoupper($event->state));
+                Log::warning('State mismatch '.$kiosk->location?->state.' != '.strtoupper($event->state));
+
                 continue;
             }
-            Log::info('Matching event found for kiosk: ' . $kiosk->name);
+            Log::info('Matching event found for kiosk: '.$kiosk->name);
             $timesheets = [];
             $kiosk->employees->each(function ($employee) use ($event, $kiosk, &$timesheets) {
                 $entries = $this->generateTimesheet($employee, $event, $kiosk);
 
-                if (!empty($entries)) {
+                if (! empty($entries)) {
                     $timesheets = array_merge($timesheets, $entries);
                 }
             });
         }
-        Log::info('Generated Timesheets: ' . json_encode($timesheets, JSON_PRETTY_PRINT));
-        if (!empty($timesheets)) {
+        Log::info('Generated Timesheets: '.json_encode($timesheets, JSON_PRETTY_PRINT));
+        if (! empty($timesheets)) {
             $groupedTimesheets = $this->groupTimesheetsByEmployeeId($timesheets);
-            Log::info('Grouped Timesheets: ' . json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
+            Log::info('Grouped Timesheets: '.json_encode($groupedTimesheets, JSON_PRETTY_PRINT));
             $timesheetChunks = array_chunk($groupedTimesheets, 100, true);
             foreach ($timesheetChunks as $chunk) {
                 $chunkData = ['timesheets' => $chunk];
                 if ($this->sync($chunkData)) {
-                    Log::info('Timesheets synced successfully for kiosk: ' . $kiosk->name);
+                    Log::info('Timesheets synced successfully for kiosk: '.$kiosk->name);
                 } else {
-                    Log::error('Failed to sync timesheets for kiosk: ' . $kiosk->name);
+                    Log::error('Failed to sync timesheets for kiosk: '.$kiosk->name);
                 }
             }
 
@@ -81,6 +84,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
         } else {
             // Halt the job if no events found for today
             Log::info('No events found for today');
+
             return [];
         }
     }
@@ -112,7 +116,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => 2471107, // Public Holiday
                     'shiftConditionIds' => [],
-                ]
+                ],
             ];
         }
 
@@ -122,8 +126,9 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
         $rdoBalance = $this->getLeaveBalanceByEmployeeId($employee->eh_employee_id);
         // $rdoBalance = 4;
 
-        if (!$rdoBalance || $rdoBalance <= 0) {
+        if (! $rdoBalance || $rdoBalance <= 0) {
             Log::info("No RDO balance for employee {$employee->eh_employee_id}, skipping.");
+
             return [];
         }
 
@@ -136,7 +141,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => $rdoWorkTypeId,
                     'shiftConditionIds' => $shiftConditionIds,
-                ]
+                ],
             ];
         }
 
@@ -148,7 +153,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
         $rdoEnd = $fullShiftStart->copy()->addHours($rdoHours);
         $annualLeaveStart = $rdoEnd->copy();
         $annualLeaveEnd = $annualLeaveStart->copy()->addHours($annualLeaveHours);
-        if (!$top_up) {
+        if (! $top_up) {
             return [
                 [
                     'employeeId' => $employee->eh_employee_id,
@@ -157,7 +162,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
                     'locationId' => $kiosk->eh_location_id,
                     'workTypeId' => $rdoWorkTypeId,
                     'shiftConditionIds' => $shiftConditionIds,
-                ]
+                ],
             ];
         }
 
@@ -177,21 +182,21 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
                 'locationId' => $kiosk->eh_location_id,
                 'workTypeId' => $annualLeaveWorkTypeId,
                 'shiftConditionIds' => [],
-            ]
+            ],
         ];
     }
-
 
     private function groupTimesheetsByEmployeeId(array $timesheets): array
     {
         $grouped = [];
         foreach ($timesheets as $timesheet) {
             $employeeId = $timesheet['employeeId'];
-            if (!isset($grouped[$employeeId])) {
+            if (! isset($grouped[$employeeId])) {
                 $grouped[$employeeId] = [];
             }
             $grouped[$employeeId][] = $timesheet;
         }
+
         return $grouped;
     }
 
@@ -200,17 +205,19 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
         $apiKey = env('PAYROLL_API_KEY');
         // Send POST request to the API with correct headers and JSON data
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+        ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk', $chunkData);
 
         // Check the status code
         if ($response->successful()) {
             // Request was successful (200 or 201)
-            Log::info('Timesheets synced successfully: ' . $response->body());
+            Log::info('Timesheets synced successfully: '.$response->body());
+
             return true;
         } else {
-            Log::info('Timesheets synced failed: ' . $response->body());
+            Log::info('Timesheets synced failed: '.$response->body());
+
             return false; // Request failed
         }
     }
@@ -219,10 +226,9 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/leavebalances");
-
 
         // Check the status code
         if ($response->successful()) {
@@ -230,15 +236,16 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
             $responseArray = json_decode($response->body(), true);
             $accruedAmount = collect($responseArray)
                 ->firstWhere('leaveCategoryId', operator: 1778521)['accruedAmount'] ?? null;
-            if (!$accruedAmount) {
+            if (! $accruedAmount) {
                 return 0;
             }
+
             return $accruedAmount;
         } else {
-            Log::info('leave balance failed: ' . $response->body());
+            Log::info('leave balance failed: '.$response->body());
+
             return false; // Request failed
         }
 
     }
-
 }

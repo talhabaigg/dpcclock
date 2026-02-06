@@ -1,13 +1,6 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Users,
-    Calculator,
-    Building2,
-    DollarSign,
-    Receipt,
-    Home,
-} from 'lucide-react';
+import { Building2, Calculator, DollarSign, Home, Receipt, Users } from 'lucide-react';
+import React from 'react';
 
 type PaymentRule = {
     icon: React.ReactNode;
@@ -24,7 +17,7 @@ type PaymentRule = {
 
 const PAYMENT_RULES: PaymentRule[] = [
     {
-        icon: <Users className="w-4 h-4" />,
+        icon: <Users className="h-4 w-4" />,
         title: 'Wages',
         description: '70% paid same month, 30% tax paid +1 month',
         colorScheme: {
@@ -36,7 +29,7 @@ const PAYMENT_RULES: PaymentRule[] = [
         },
     },
     {
-        icon: <Calculator className="w-4 h-4" />,
+        icon: <Calculator className="h-4 w-4" />,
         title: 'Oncosts',
         description: 'Paid +1 month (no GST)',
         colorScheme: {
@@ -48,7 +41,7 @@ const PAYMENT_RULES: PaymentRule[] = [
         },
     },
     {
-        icon: <Building2 className="w-4 h-4" />,
+        icon: <Building2 className="h-4 w-4" />,
         title: 'Vendor Costs',
         description: 'Paid +1 month, 10% GST included',
         colorScheme: {
@@ -60,7 +53,7 @@ const PAYMENT_RULES: PaymentRule[] = [
         },
     },
     {
-        icon: <DollarSign className="w-4 h-4" />,
+        icon: <DollarSign className="h-4 w-4" />,
         title: 'Revenue',
         description: 'Received +2 months, 10% GST collected',
         colorScheme: {
@@ -72,7 +65,7 @@ const PAYMENT_RULES: PaymentRule[] = [
         },
     },
     {
-        icon: <Receipt className="w-4 h-4" />,
+        icon: <Receipt className="h-4 w-4" />,
         title: 'GST Payable',
         description: 'Net GST due quarterly, paid month after quarter end',
         colorScheme: {
@@ -84,7 +77,7 @@ const PAYMENT_RULES: PaymentRule[] = [
         },
     },
     {
-        icon: <Home className="w-4 h-4" />,
+        icon: <Home className="h-4 w-4" />,
         title: 'General Transactions',
         description: 'Overheads, rent, subscriptions, and income items.',
         colorScheme: {
@@ -99,23 +92,14 @@ const PAYMENT_RULES: PaymentRule[] = [
 
 type PaymentRuleCardProps = PaymentRule;
 
-const PaymentRuleCard = ({
-    icon,
-    title,
-    description,
-    colorScheme,
-}: PaymentRuleCardProps) => (
-    <div
-        className={`flex items-start gap-3 p-3 rounded-lg ${colorScheme.bg} border ${colorScheme.border}`}
-    >
-        <div
-            className={`w-8 h-8 rounded-lg ${colorScheme.iconBg} flex items-center justify-center flex-shrink-0`}
-        >
+const PaymentRuleCard = ({ icon, title, description, colorScheme }: PaymentRuleCardProps) => (
+    <div className={`flex items-start gap-3 rounded-lg p-3 ${colorScheme.bg} border ${colorScheme.border}`}>
+        <div className={`h-8 w-8 rounded-lg ${colorScheme.iconBg} flex flex-shrink-0 items-center justify-center`}>
             <span className={colorScheme.iconColor}>{icon}</span>
         </div>
         <div>
             <span className={`font-medium ${colorScheme.titleColor}`}>{title}</span>
-            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">{description}</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>
         </div>
     </div>
 );
@@ -126,7 +110,7 @@ export const PaymentRulesLegend = () => (
             <CardTitle className="text-sm">Payment Timing Rules</CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 lg:grid-cols-3">
                 {PAYMENT_RULES.map((rule, index) => (
                     <PaymentRuleCard key={index} {...rule} />
                 ))}

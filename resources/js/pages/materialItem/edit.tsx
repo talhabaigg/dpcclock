@@ -9,8 +9,8 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { toast } from 'sonner';
-import { CostCode } from '../purchasing/types';
 import { CostCodeSelector } from '../purchasing/costCodeSelector';
+import { CostCode } from '../purchasing/types';
 import ActivitySheet from './Partials/activity-sheet';
 import OrderHistorySheet from './Partials/order-history-sheet';
 
@@ -191,11 +191,7 @@ export default function EditMaterialItem() {
                             }}
                         />
                         <Label>Price Expiry Date</Label>
-                        <Input
-                            type="date"
-                            value={form.data.price_expiry_date}
-                            onChange={(e) => form.setData('price_expiry_date', e.target.value)}
-                        />
+                        <Input type="date" value={form.data.price_expiry_date} onChange={(e) => form.setData('price_expiry_date', e.target.value)} />
                         <Label>Cost Code</Label>
                         <div className="rounded-md border">
                             <CostCodeSelector

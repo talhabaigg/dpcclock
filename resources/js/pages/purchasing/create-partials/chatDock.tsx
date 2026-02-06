@@ -18,13 +18,13 @@ export function ChatDock({ enableVoice = false }: ChatDockProps) {
         <div
             className={cn(
                 'fixed bottom-0 z-50 transition-all duration-300 ease-in-out',
-                isExpanded ? 'right-4 left-4 md:left-auto md:w-[600px]' : 'right-4 w-[400px]'
+                isExpanded ? 'right-4 left-4 md:left-auto md:w-[600px]' : 'right-4 w-[400px]',
             )}
         >
             <div
                 className={cn(
                     'bg-background flex flex-col rounded-t-xl border border-b-0 shadow-2xl transition-all duration-300 ease-in-out',
-                    isOpen ? (isExpanded ? 'h-[700px]' : 'h-[550px]') : 'h-11'
+                    isOpen ? (isExpanded ? 'h-[700px]' : 'h-[550px]') : 'h-11',
                 )}
             >
                 {/* Header */}
@@ -62,7 +62,7 @@ export function ChatDock({ enableVoice = false }: ChatDockProps) {
                 <div
                     className={cn(
                         'min-h-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out',
-                        isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
+                        isOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
                     )}
                     style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
                 >

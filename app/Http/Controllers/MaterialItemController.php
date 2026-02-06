@@ -3,21 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Exports\MaterialItemExport;
+use App\Models\CostCode;
+use App\Models\Location;
 use App\Models\MaterialItem;
-use App\Models\MaterialItemPriceListUpload;
+use App\Models\Supplier;
+use App\Models\SupplierCategory;
 use Cache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-use App\Models\Supplier;
-use App\Models\SupplierCategory;
-use App\Models\CostCode;
-use App\Models\Location;
-use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Activitylog\Models\Activity;
-
 use Validator;
 
 class MaterialItemController extends Controller
@@ -92,7 +90,7 @@ class MaterialItemController extends Controller
      */
     public function edit(MaterialItem $materialItem)
     {
-        if (!$materialItem->exists) {
+        if (! $materialItem->exists) {
             return redirect()->route('material-items.index')->with('error', 'Material item not found.');
         }
         $item = $materialItem->load('costCode', 'supplier', 'supplierCategory', 'orderHistory.requisition.location');
@@ -109,6 +107,7 @@ class MaterialItemController extends Controller
 
         // dd($activities);
         $maxItems = MaterialItem::count();
+
         return Inertia::render('materialItem/edit', [
             'item' => $item,
             'costCodes' => CostCode::all(),
@@ -119,7 +118,6 @@ class MaterialItemController extends Controller
 
         ]);
     }
-
 
     public function next(MaterialItem $materialItem)
     {
@@ -157,6 +155,7 @@ class MaterialItemController extends Controller
         // If there are no items at all
         return redirect()->route('material-items.index')->with('success', 'No items available to edit.');
     }
+
     /**
      * Update the specified resource in storage.
      */
@@ -191,6 +190,7 @@ class MaterialItemController extends Controller
     public function destroy(MaterialItem $materialItem)
     {
         $materialItem->delete();
+
         return redirect()->route('material-items.index')->with('success', 'Material item deleted successfully.');
     }
 
@@ -202,6 +202,7 @@ class MaterialItemController extends Controller
         ])->validate()['ids'];
 
         MaterialItem::whereIn('id', $ids)->delete();
+
         return redirect()->route('material-items.index');
     }
 
@@ -227,9 +228,9 @@ class MaterialItemController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
-        $suppliers = Supplier::all()->keyBy(fn($s) => trim($s->code));
-        $costCodes = CostCode::all()->keyBy(fn($c) => trim($c->code));
-        $supplierCategories = SupplierCategory::all()->keyBy(fn($c) => trim($c->code));
+        $suppliers = Supplier::all()->keyBy(fn ($s) => trim($s->code));
+        $costCodes = CostCode::all()->keyBy(fn ($c) => trim($c->code));
+        $supplierCategories = SupplierCategory::all()->keyBy(fn ($c) => trim($c->code));
         $file = fopen($request->file('file')->getRealPath(), 'r');
         $header = fgetcsv($file); // Skip header row
         $missingCostCodeRows = [];
@@ -246,15 +247,16 @@ class MaterialItemController extends Controller
             $supplier = $suppliers->get($supplier_code);
             $costCode = $costCodes->get($costcode);
 
-            if (!$supplier || !$costCode) {
-                $row[4] = '="' . $row[4] . '"'; // prevent Excel from formatting costcode
+            if (! $supplier || ! $costCode) {
+                $row[4] = '="'.$row[4].'"'; // prevent Excel from formatting costcode
                 $missingCostCodeRows[] = $row;
+
                 continue;
             }
 
             // Parse expiry date if provided
             $parsedExpiryDate = null;
-            if (!empty($expiry_date)) {
+            if (! empty($expiry_date)) {
                 try {
                     $parsedExpiryDate = \Carbon\Carbon::parse($expiry_date)->format('Y-m-d');
                 } catch (\Exception $e) {
@@ -265,7 +267,7 @@ class MaterialItemController extends Controller
 
             // Find category by code (must also match supplier)
             $supplierCategoryId = null;
-            if (!empty($category_code)) {
+            if (! empty($category_code)) {
                 $category = $supplierCategories->get($category_code);
                 if ($category && $category->supplier_id === $supplier->id) {
                     $supplierCategoryId = $category->id;
@@ -285,8 +287,8 @@ class MaterialItemController extends Controller
         }
         fclose($file);
 
-        if (!empty($missingCostCodeRows)) {
-            $filename = 'missing_costcodes_' . now()->format('Ymd_His') . '.csv';
+        if (! empty($missingCostCodeRows)) {
+            $filename = 'missing_costcodes_'.now()->format('Ymd_His').'.csv';
             $filePath = storage_path("app/{$filename}");
 
             $handle = fopen($filePath, 'w');
@@ -303,9 +305,10 @@ class MaterialItemController extends Controller
 
     public function download()
     {
-        $fileName = 'material_items_' . now()->format('Ymd_His') . '.xlsx';
-        return Excel::download(new MaterialItemExport(), $fileName);
-        $fileName = 'material_items_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'material_items_'.now()->format('Ymd_His').'.xlsx';
+
+        return Excel::download(new MaterialItemExport, $fileName);
+        $fileName = 'material_items_'.now()->format('Ymd_His').'.csv';
         $filePath = storage_path("app/{$fileName}");
 
         $handle = fopen($filePath, 'w');
@@ -332,38 +335,39 @@ class MaterialItemController extends Controller
             'file' => 'required|file|mimes:csv,txt',
         ]);
 
-        $uploaded_fileName = 'location_pricing_upload_' . now()->format('Ymd_His') . '.csv';
+        $uploaded_fileName = 'location_pricing_upload_'.now()->format('Ymd_His').'.csv';
 
         Log::info('MaterialItemController: Starting location pricing upload', [
             'file_name' => $uploaded_fileName,
             'user_id' => auth()->id(),
-            'original_file_name' => $request->file('file')->getClientOriginalName()
+            'original_file_name' => $request->file('file')->getClientOriginalName(),
         ]);
 
         try {
             // Upload original file to S3
             $original_file_uploaded = Storage::disk('s3')->put(
-                'location_pricing/uploads/' . $uploaded_fileName,
+                'location_pricing/uploads/'.$uploaded_fileName,
                 file_get_contents($request->file('file')->getRealPath())
             );
 
-            if (!$original_file_uploaded) {
+            if (! $original_file_uploaded) {
                 Log::error('MaterialItemController: Failed to upload file to S3', [
-                    'file_name' => $uploaded_fileName
+                    'file_name' => $uploaded_fileName,
                 ]);
+
                 return back()->with('error', 'Failed to upload file to S3.');
             }
 
             Log::info('MaterialItemController: File uploaded to S3 successfully', [
                 'file_name' => $uploaded_fileName,
-                's3_path' => 'location_pricing/uploads/' . $uploaded_fileName
+                's3_path' => 'location_pricing/uploads/'.$uploaded_fileName,
             ]);
 
             // Save temporary local copy for job processing
-            $tempPath = storage_path('app/temp/' . $uploaded_fileName);
+            $tempPath = storage_path('app/temp/'.$uploaded_fileName);
 
             // Create temp directory if it doesn't exist
-            if (!file_exists(storage_path('app/temp'))) {
+            if (! file_exists(storage_path('app/temp'))) {
                 mkdir(storage_path('app/temp'), 0755, true);
             }
 
@@ -371,7 +375,7 @@ class MaterialItemController extends Controller
 
             Log::info('MaterialItemController: Dispatching UploadLocationPricingJob', [
                 'file_name' => $uploaded_fileName,
-                'temp_path' => $tempPath
+                'temp_path' => $tempPath,
             ]);
 
             // Dispatch the job
@@ -382,32 +386,33 @@ class MaterialItemController extends Controller
             );
 
             Log::info('MaterialItemController: Job dispatched successfully', [
-                'file_name' => $uploaded_fileName
+                'file_name' => $uploaded_fileName,
             ]);
 
-            return back()->with('success', "File uploaded successfully and is being processed. You will be notified when the import is complete.");
+            return back()->with('success', 'File uploaded successfully and is being processed. You will be notified when the import is complete.');
 
         } catch (\Exception $e) {
             Log::error('MaterialItemController: Error during upload', [
                 'file_name' => $uploaded_fileName,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            return back()->with('error', 'An error occurred during file upload: ' . $e->getMessage());
+            return back()->with('error', 'An error occurred during file upload: '.$e->getMessage());
         }
     }
 
     private function uploadFileToS3($filePath, $s3Path)
     {
         $uploaded = Storage::put($s3Path, file_get_contents($filePath));
+
         return $uploaded;
     }
 
     public function downloadLocationPricingListCSV($locationId)
     {
         $location = Location::findOrFail($locationId);
-        $fileName = 'location_pricing_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'location_pricing_'.$location->name.'_'.now()->format('Ymd_His').'.csv';
         $filePath = storage_path("app/{$fileName}");
 
         $handle = fopen($filePath, 'w');
@@ -434,7 +439,7 @@ class MaterialItemController extends Controller
     public function downloadLocationPricingListExcel($locationId)
     {
         $location = Location::findOrFail($locationId);
-        $fileName = 'location_pricing_' . $location->name . '_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'location_pricing_'.$location->name.'_'.now()->format('Ymd_His').'.xlsx';
         $filePath = storage_path("app/{$fileName}");
 
         $items = DB::table('location_item_pricing')
@@ -445,7 +450,7 @@ class MaterialItemController extends Controller
             ->get()
             ->toArray();
 
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Location Pricing');
 
@@ -459,11 +464,11 @@ class MaterialItemController extends Controller
         // Populate data
         $rowNumber = 2;
         foreach ($items as $item) {
-            $sheet->setCellValue('A' . $rowNumber, $location->external_id);
-            $sheet->setCellValue('B' . $rowNumber, $item->code);
-            $sheet->setCellValue('C' . $rowNumber, $item->unit_cost_override);
-            $sheet->setCellValue('D' . $rowNumber, $item->supplier_code);
-            $sheet->setCellValue('E' . $rowNumber, $item->is_locked ? 'true' : 'false');
+            $sheet->setCellValue('A'.$rowNumber, $location->external_id);
+            $sheet->setCellValue('B'.$rowNumber, $item->code);
+            $sheet->setCellValue('C'.$rowNumber, $item->unit_cost_override);
+            $sheet->setCellValue('D'.$rowNumber, $item->supplier_code);
+            $sheet->setCellValue('E'.$rowNumber, $item->is_locked ? 'true' : 'false');
             $rowNumber++;
         }
 
@@ -481,7 +486,7 @@ class MaterialItemController extends Controller
         $limit = min((int) $request->input('limit', 100), 10000); // Default 100, max 10000
 
         // Build cache key (unique per filter combination)
-        $cacheKey = "material_items:supplier_{$supplierId}:location_{$locationId}:limit_{$limit}:search_" . md5($search ?? '');
+        $cacheKey = "material_items:supplier_{$supplierId}:location_{$locationId}:limit_{$limit}:search_".md5($search ?? '');
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($supplierId, $locationId, $search, $limit) {
             $query = MaterialItem::query()
@@ -509,7 +514,7 @@ class MaterialItemController extends Controller
                     ->addSelect(DB::raw('CASE WHEN favs.id IS NULL THEN 0 ELSE 1 END as is_favourite'));
 
                 // Only apply ordering if search is NOT provided
-                if (!$search) {
+                if (! $search) {
                     $query->orderByDesc('is_favourite');
                 }
             }
@@ -518,19 +523,16 @@ class MaterialItemController extends Controller
         });
     }
 
-
-
-
     public function getMaterialItemById($id, $locationId)
     {
-        Log::info('Fetching material item with ID: ' . $id);
-        Log::info('Fetching location with ID: ' . $locationId);
+        Log::info('Fetching material item with ID: '.$id);
+        Log::info('Fetching location with ID: '.$locationId);
 
         // Fetch the item and its related cost code
         $item = MaterialItem::with('costCode')->find($id);
 
         // If no item is found, return 404 early
-        if (!$item) {
+        if (! $item) {
             return response()->json(['message' => 'Item not found'], 404);
         }
 
@@ -542,7 +544,7 @@ class MaterialItemController extends Controller
             ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override', 'location_item_pricing.is_locked')
             ->first();
 
-        Log::info('Location price fetched: ' . json_encode($location_price));
+        Log::info('Location price fetched: '.json_encode($location_price));
 
         // Check if base price is expired (only applies when no location price exists)
         $priceExpired = false;
@@ -568,21 +570,21 @@ class MaterialItemController extends Controller
         $itemArray['price_expiry_date'] = $priceExpiryDate;
         $itemArray['is_locked'] = $isLocked;
 
-        Log::info('Material item found: ' . json_encode($itemArray));
+        Log::info('Material item found: '.json_encode($itemArray));
 
         return response()->json($itemArray);
     }
 
     public function getMaterialItemByCode($code, $locationId)
     {
-        Log::info('Fetching material item with code: ' . $code);
-        Log::info('Fetching location with ID: ' . $locationId);
+        Log::info('Fetching material item with code: '.$code);
+        Log::info('Fetching location with ID: '.$locationId);
 
         // Fetch the item and its related cost code
         $item = MaterialItem::with('costCode')->where('code', $code)->first();
 
         // If no item is found, return 404 early
-        if (!$item) {
+        if (! $item) {
             return response()->json(['message' => 'Item not found'], 404);
         }
 
@@ -594,7 +596,7 @@ class MaterialItemController extends Controller
             ->select('locations.name as location_name', 'locations.id as location_id', 'location_item_pricing.unit_cost_override', 'location_item_pricing.is_locked')
             ->first();
 
-        Log::info('Location price fetched: ' . json_encode($location_price));
+        Log::info('Location price fetched: '.json_encode($location_price));
 
         // Check if base price is expired (only applies when no location price exists)
         $priceExpired = false;
@@ -620,7 +622,7 @@ class MaterialItemController extends Controller
         $itemArray['price_expiry_date'] = $priceExpiryDate;
         $itemArray['is_locked'] = $isLocked;
 
-        Log::info('Material item found: ' . json_encode($itemArray));
+        Log::info('Material item found: '.json_encode($itemArray));
 
         return response()->json($itemArray);
     }

@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Controllers\Settings\PasskeyController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
-use App\Http\Controllers\Settings\PasskeyController;
 use App\Notifications\TestPushNotification;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -36,6 +36,7 @@ Route::middleware('auth')->group(function () {
         ]);
         $user->admin_pin = Hash::make($data['new_pin']);
         $user->save();
+
         return redirect()->route('kiosk-admin-pin')->with('success', 'Kiosk Admin PIN updated successfully.');
     })->name('admin-kiosk-pin.update');
     Route::get('settings/appearance', function () {
@@ -50,14 +51,14 @@ Route::middleware('auth')->group(function () {
     Route::post('settings/notifications/test', function () {
         $user = auth()->user();
 
-        if (!$user->pushSubscriptions()->exists()) {
+        if (! $user->pushSubscriptions()->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'No push subscriptions found. Please enable notifications first.',
             ], 400);
         }
 
-        $user->notify(new TestPushNotification());
+        $user->notify(new TestPushNotification);
 
         return response()->json([
             'success' => true,

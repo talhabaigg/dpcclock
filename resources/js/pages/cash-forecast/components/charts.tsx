@@ -1,17 +1,8 @@
+import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js';
 import React from 'react';
-import {
-    BarElement,
-    CategoryScale,
-    Chart as ChartJS,
-    Legend,
-    LinearScale,
-    LineElement,
-    PointElement,
-    Tooltip,
-} from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
-import { formatCompactAmount } from '../utils';
 import type { ChartDataPoint, CumulativeDataPoint, WaterfallDataPoint } from '../types';
+import { formatCompactAmount } from '../utils';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
@@ -43,10 +34,7 @@ const ChartContainer = ({ height = 200, children, className = '' }: ChartContain
     const isFluid = typeof height === 'string';
 
     return (
-        <div
-            className={`w-full px-2 ${isFluid ? 'h-full' : ''} ${className}`}
-            style={isFluid ? { height: heightStyle } : undefined}
-        >
+        <div className={`w-full px-2 ${isFluid ? 'h-full' : ''} ${className}`} style={isFluid ? { height: heightStyle } : undefined}>
             <div style={{ height: isFluid ? '100%' : heightStyle }}>{children}</div>
         </div>
     );
@@ -59,7 +47,7 @@ type LegendItemProps = {
 
 const LegendItem = ({ color, label }: LegendItemProps) => (
     <div className="flex items-center gap-1.5">
-        <div className={`w-3 h-3 rounded`} style={{ backgroundColor: color }} />
+        <div className={`h-3 w-3 rounded`} style={{ backgroundColor: color }} />
         <span className="text-muted-foreground">{label}</span>
     </div>
 );
@@ -135,7 +123,7 @@ export const CashFlowBarChart = ({ data, height = 200, showLabels = true }: BarC
     return (
         <ChartContainer height={height}>
             <Bar data={chartData} options={chartOptions} />
-            <div className="flex justify-center gap-6 mt-4 text-xs">
+            <div className="mt-4 flex justify-center gap-6 text-xs">
                 <LegendItem color={COLORS.cashIn} label="Cash In" />
                 <LegendItem color={COLORS.cashOut} label="Cash Out" />
                 <LegendItem color={COLORS.netPositive} label="Net (+)" />
@@ -244,7 +232,7 @@ export const WaterfallChart = ({ data, height = 200 }: WaterfallChartProps) => {
             meta.data.forEach((bar: { x: number; y: number }, index: number) => {
                 const raw = dataset.data[index];
                 if (!raw) return;
-                const value = raw.isTotal ? raw.total ?? 0 : raw.delta ?? 0;
+                const value = raw.isTotal ? (raw.total ?? 0) : (raw.delta ?? 0);
                 const label = formatCompactAmount(value);
                 const y = bar.y - 6;
                 ctx.fillText(label, bar.x, y);
@@ -298,7 +286,7 @@ export const WaterfallChart = ({ data, height = 200 }: WaterfallChartProps) => {
                 callbacks: {
                     label(context: { label: string; raw: { isTotal?: boolean; total?: number; delta?: number } }) {
                         const raw = context.raw;
-                        const value = raw.isTotal ? raw.total ?? 0 : raw.delta ?? 0;
+                        const value = raw.isTotal ? (raw.total ?? 0) : (raw.delta ?? 0);
                         return `${context.label}: ${formatCompactAmount(value)}`;
                     },
                 },
@@ -325,17 +313,11 @@ export const WaterfallChart = ({ data, height = 200 }: WaterfallChartProps) => {
     const isFluid = typeof height === 'string';
 
     return (
-        <div
-            className={`w-full px-2 ${isFluid ? 'h-full flex flex-col' : ''}`}
-            style={isFluid ? { height: heightStyle } : undefined}
-        >
-            <div
-                style={{ height: isFluid ? '100%' : heightStyle }}
-                className={isFluid ? 'flex-1 min-h-0' : undefined}
-            >
+        <div className={`w-full px-2 ${isFluid ? 'flex h-full flex-col' : ''}`} style={isFluid ? { height: heightStyle } : undefined}>
+            <div style={{ height: isFluid ? '100%' : heightStyle }} className={isFluid ? 'min-h-0 flex-1' : undefined}>
                 <Bar data={chartData} options={chartOptions} plugins={[waterfallLabelsPlugin]} />
             </div>
-            <div className="flex justify-center gap-6 mt-3 text-xs">
+            <div className="mt-3 flex justify-center gap-6 text-xs">
                 <LegendItem color={COLORS.waterfallIncrease} label="Increase" />
                 <LegendItem color={COLORS.waterfallDecrease} label="Decrease" />
                 <LegendItem color={COLORS.waterfallTotal} label="Total" />

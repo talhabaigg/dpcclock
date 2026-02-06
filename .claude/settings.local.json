@@ -74,7 +74,9 @@
       "Bash(./vendor/bin/pint:*)",
       "Bash(npx stylelint:*)",
       "Bash(git log:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx prettier:*)",
+      "Bash(vendor\\\\bin\\\\pint:*)"
     ]
   }
 }

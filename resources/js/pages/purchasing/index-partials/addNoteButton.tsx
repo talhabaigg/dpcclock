@@ -63,7 +63,7 @@ const AddNoteButton = ({ requisition_id }: AddNoteButtonProps) => {
                 </Button>
             </DialogTrigger>
 
-            <DialogContent className="overflow-hidden border-slate-200 bg-white p-0 shadow-xl dark:border-slate-700 dark:bg-slate-900 sm:max-w-md">
+            <DialogContent className="overflow-hidden border-slate-200 bg-white p-0 shadow-xl sm:max-w-md dark:border-slate-700 dark:bg-slate-900">
                 {/* Header with gradient accent */}
                 <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-6 py-4 dark:border-slate-800 dark:from-blue-950/50 dark:to-slate-900">
                     <DialogHeader>

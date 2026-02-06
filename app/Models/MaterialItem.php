@@ -2,17 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Supplier;
-use App\Models\CostCode;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
 class MaterialItem extends Model
 {
-    use HasFactory, SoftDeletes, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'code',
@@ -30,6 +28,7 @@ class MaterialItem extends Model
     protected $casts = [
         'price_expiry_date' => 'date',
     ];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -37,6 +36,7 @@ class MaterialItem extends Model
             ->logFillable()  // Log changes on all fillable attributes
             ->useLogName('material_item'); // Optional: customize the log name
     }
+
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
@@ -68,6 +68,4 @@ class MaterialItem extends Model
     {
         return $this->hasMany(RequisitionLineItem::class, 'code', 'code');
     }
-
-
 }

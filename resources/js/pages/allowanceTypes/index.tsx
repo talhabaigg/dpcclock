@@ -10,7 +10,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { allowanceTypesColumns, AllowanceType } from './columns';
+import { AllowanceType, allowanceTypesColumns } from './columns';
 import { DataTable } from './data-table';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -131,10 +131,24 @@ export default function AllowanceTypesIndex({ allowanceTypes }: Props) {
             header: '',
             cell: ({ row }: { row: { original: AllowanceType } }) => (
                 <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(row.original); }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(row.original);
+                        }}
+                    >
                         <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row.original); }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteDialog(row.original);
+                        }}
+                    >
                         <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
                 </div>
@@ -161,9 +175,7 @@ export default function AllowanceTypesIndex({ allowanceTypes }: Props) {
                     <DialogHeader>
                         <DialogTitle>{selectedAllowance ? 'Edit Allowance Type' : 'Create Allowance Type'}</DialogTitle>
                         <DialogDescription>
-                            {selectedAllowance
-                                ? 'Update the allowance type details below.'
-                                : 'Enter the details for the new allowance type.'}
+                            {selectedAllowance ? 'Update the allowance type details below.' : 'Enter the details for the new allowance type.'}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
@@ -187,7 +199,7 @@ export default function AllowanceTypesIndex({ allowanceTypes }: Props) {
                                     placeholder="e.g. LEADING_HANDS"
                                     required
                                 />
-                                <p className="text-sm text-muted-foreground">Unique identifier, uppercase with underscores</p>
+                                <p className="text-muted-foreground text-sm">Unique identifier, uppercase with underscores</p>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="description">Description</Label>
@@ -210,7 +222,7 @@ export default function AllowanceTypesIndex({ allowanceTypes }: Props) {
                                     onChange={(e) => setFormData({ ...formData, default_rate: e.target.value })}
                                     placeholder="e.g. 1.42"
                                 />
-                                <p className="text-sm text-muted-foreground">Default hourly rate when adding this allowance</p>
+                                <p className="text-muted-foreground text-sm">Default hourly rate when adding this allowance</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">

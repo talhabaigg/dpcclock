@@ -21,16 +21,9 @@ export function StatsPill({ icon: Icon, label, value, variant = 'default', class
                 className,
             )}
         >
-            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-            {label && <span className="text-xs text-muted-foreground">{label}</span>}
-            <span
-                className={cn(
-                    'text-xs font-medium',
-                    variant === 'primary' && 'font-semibold text-primary',
-                )}
-            >
-                {value}
-            </span>
+            {Icon && <Icon className="text-muted-foreground h-3.5 w-3.5" />}
+            {label && <span className="text-muted-foreground text-xs">{label}</span>}
+            <span className={cn('text-xs font-medium', variant === 'primary' && 'text-primary font-semibold')}>{value}</span>
         </div>
     );
 }
@@ -45,15 +38,7 @@ export function CurrencyDisplay({ amount, size = 'md', className }: CurrencyDisp
     const formatted = amount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
-        <span
-            className={cn(
-                'font-bold text-primary',
-                size === 'sm' && 'text-xs',
-                size === 'md' && 'text-sm',
-                size === 'lg' && 'text-lg',
-                className,
-            )}
-        >
+        <span className={cn('text-primary font-bold', size === 'sm' && 'text-xs', size === 'md' && 'text-sm', size === 'lg' && 'text-lg', className)}>
             ${formatted}
         </span>
     );

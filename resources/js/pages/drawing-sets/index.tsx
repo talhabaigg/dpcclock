@@ -6,18 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import Echo from 'laravel-echo';
-import {
-    AlertCircle,
-    CheckCircle,
-    Clock,
-    Eye,
-    FileText,
-    Loader2,
-    Trash2,
-    Upload,
-    X,
-    XCircle,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Eye, FileText, Loader2, Trash2, Upload, X, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
@@ -122,7 +111,11 @@ const laneConfig = {
 const laneOrder: (keyof typeof laneConfig)[] = ['processing', 'queued', 'partial', 'success', 'failed'];
 
 export default function DrawingSetsIndex() {
-    const { project, drawingSets: initialDrawingSets, flash } = usePage<{
+    const {
+        project,
+        drawingSets: initialDrawingSets,
+        flash,
+    } = usePage<{
         project: Project;
         drawingSets: PaginatedDrawingSets;
         flash: { success?: string; error?: string };
@@ -191,7 +184,7 @@ export default function DrawingSetsIndex() {
                         };
                     }
                     return ds;
-                })
+                }),
             );
         });
 
@@ -203,9 +196,7 @@ export default function DrawingSetsIndex() {
     // Upload a single file
     const uploadFile = useCallback(
         async (file: File, index: number) => {
-            setUploadingFiles((prev) =>
-                prev.map((f, i) => (i === index ? { ...f, status: 'uploading' } : f))
-            );
+            setUploadingFiles((prev) => prev.map((f, i) => (i === index ? { ...f, status: 'uploading' } : f)));
 
             const formData = new FormData();
             formData.append('file', file);
@@ -215,8 +206,7 @@ export default function DrawingSetsIndex() {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRF-TOKEN':
-                            document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                     },
                 });
 
@@ -224,11 +214,7 @@ export default function DrawingSetsIndex() {
 
                 if (data.success) {
                     setUploadingFiles((prev) =>
-                        prev.map((f, i) =>
-                            i === index
-                                ? { ...f, status: 'success', progress: 100, drawingSetId: data.drawing_set?.id }
-                                : f
-                        )
+                        prev.map((f, i) => (i === index ? { ...f, status: 'success', progress: 100, drawingSetId: data.drawing_set?.id } : f)),
                     );
 
                     // Add to drawing sets list
@@ -247,19 +233,15 @@ export default function DrawingSetsIndex() {
 
                     toast.success(`${file.name} uploaded successfully`);
                 } else {
-                    setUploadingFiles((prev) =>
-                        prev.map((f, i) => (i === index ? { ...f, status: 'error', error: data.message } : f))
-                    );
+                    setUploadingFiles((prev) => prev.map((f, i) => (i === index ? { ...f, status: 'error', error: data.message } : f)));
                     toast.error(`${file.name}: ${data.message || 'Upload failed'}`);
                 }
             } catch {
-                setUploadingFiles((prev) =>
-                    prev.map((f, i) => (i === index ? { ...f, status: 'error', error: 'Upload failed' } : f))
-                );
+                setUploadingFiles((prev) => prev.map((f, i) => (i === index ? { ...f, status: 'error', error: 'Upload failed' } : f)));
                 toast.error(`${file.name}: Upload failed`);
             }
         },
-        [project.id]
+        [project.id],
     );
 
     const onDrop = useCallback(
@@ -290,7 +272,7 @@ export default function DrawingSetsIndex() {
                 uploadFile(file, startIndex + i);
             });
         },
-        [project.id, uploadFile, uploadingFiles.length]
+        [project.id, uploadFile, uploadingFiles.length],
     );
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -306,8 +288,7 @@ export default function DrawingSetsIndex() {
             const response = await fetch(`/drawing-sets/${id}`, {
                 method: 'DELETE',
                 headers: {
-                    'X-CSRF-TOKEN':
-                        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
             });
 
@@ -333,7 +314,7 @@ export default function DrawingSetsIndex() {
             acc[status] = drawingSets.filter((ds) => ds.status === status);
             return acc;
         },
-        {} as Record<string, DrawingSet[]>
+        {} as Record<string, DrawingSet[]>,
     );
 
     return (
@@ -362,15 +343,13 @@ export default function DrawingSetsIndex() {
                             <CardDescription>{drawingSets.length} drawing sets</CardDescription>
                         </div>
                     </CardHeader>
-                    <CardContent className="pb-3 pt-0">
+                    <CardContent className="pt-0 pb-3">
                         <div className="flex gap-4">
                             {/* Dropzone */}
                             <div
                                 {...getRootProps()}
                                 className={`flex flex-1 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors ${
-                                    isDragActive
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-muted-foreground/25 hover:border-primary/50'
+                                    isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
                                 }`}
                             >
                                 <input {...getInputProps()} />
@@ -384,25 +363,12 @@ export default function DrawingSetsIndex() {
                             {uploadingFiles.length > 0 && (
                                 <div className="flex max-w-md flex-1 flex-wrap gap-2">
                                     {uploadingFiles.slice(0, 4).map((upload, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center gap-2 rounded border bg-muted/50 px-2 py-1"
-                                        >
-                                            {upload.status === 'uploading' && (
-                                                <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                                            )}
-                                            {upload.status === 'success' && (
-                                                <CheckCircle className="h-3 w-3 text-green-500" />
-                                            )}
-                                            {upload.status === 'error' && (
-                                                <XCircle className="h-3 w-3 text-red-500" />
-                                            )}
-                                            {upload.status === 'pending' && (
-                                                <Clock className="h-3 w-3 text-gray-400" />
-                                            )}
-                                            <span className="max-w-[120px] truncate text-xs">
-                                                {upload.file.name}
-                                            </span>
+                                        <div key={index} className="bg-muted/50 flex items-center gap-2 rounded border px-2 py-1">
+                                            {upload.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+                                            {upload.status === 'success' && <CheckCircle className="h-3 w-3 text-green-500" />}
+                                            {upload.status === 'error' && <XCircle className="h-3 w-3 text-red-500" />}
+                                            {upload.status === 'pending' && <Clock className="h-3 w-3 text-gray-400" />}
+                                            <span className="max-w-[120px] truncate text-xs">{upload.file.name}</span>
                                             {(upload.status === 'success' || upload.status === 'error') && (
                                                 <button onClick={() => removeUploadingFile(index)}>
                                                     <X className="h-3 w-3 text-gray-400 hover:text-gray-600" />
@@ -411,9 +377,7 @@ export default function DrawingSetsIndex() {
                                         </div>
                                     ))}
                                     {uploadingFiles.length > 4 && (
-                                        <span className="text-muted-foreground text-xs">
-                                            +{uploadingFiles.length - 4} more
-                                        </span>
+                                        <span className="text-muted-foreground text-xs">+{uploadingFiles.length - 4} more</span>
                                     )}
                                 </div>
                             )}
@@ -429,26 +393,17 @@ export default function DrawingSetsIndex() {
                         const items = groupedByStatus[status] || [];
 
                         return (
-                            <div
-                                key={status}
-                                className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted/30"
-                            >
+                            <div key={status} className="bg-muted/30 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border">
                                 {/* Lane Header */}
-                                <div
-                                    className={`flex flex-shrink-0 items-center gap-2 rounded-t-lg px-3 py-2 ${config.headerBg}`}
-                                >
+                                <div className={`flex flex-shrink-0 items-center gap-2 rounded-t-lg px-3 py-2 ${config.headerBg}`}>
                                     <div className={`h-3 w-3 rounded ${config.color}`} />
                                     <StatusIcon
                                         className={`h-4 w-4 ${config.headerText} ${
                                             status === 'processing' && items.length > 0 ? 'animate-spin' : ''
                                         }`}
                                     />
-                                    <span className={`text-sm font-semibold ${config.headerText}`}>
-                                        {config.label}
-                                    </span>
-                                    <span className={`ml-auto text-sm font-medium ${config.headerText}`}>
-                                        {items.length}
-                                    </span>
+                                    <span className={`text-sm font-semibold ${config.headerText}`}>{config.label}</span>
+                                    <span className={`ml-auto text-sm font-medium ${config.headerText}`}>{items.length}</span>
                                 </div>
 
                                 {/* Lane Content */}
@@ -464,7 +419,7 @@ export default function DrawingSetsIndex() {
                                                 return (
                                                     <div
                                                         key={set.id}
-                                                        className="flex items-center gap-2 rounded border bg-card p-1.5 transition-colors hover:bg-accent"
+                                                        className="bg-card hover:bg-accent flex items-center gap-2 rounded border p-1.5 transition-colors"
                                                     >
                                                         {/* PDF Icon */}
                                                         {status === 'processing' ? (
@@ -474,18 +429,15 @@ export default function DrawingSetsIndex() {
                                                         )}
                                                         {/* Content */}
                                                         <div className="min-w-0 flex-1">
-                                                            <p
-                                                                className="truncate text-[11px] font-medium"
-                                                                title={set.original_filename}
-                                                            >
+                                                            <p className="truncate text-[11px] font-medium" title={set.original_filename}>
                                                                 {set.original_filename}
                                                             </p>
-                                                            <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-                                                                <span>{set.page_count} {set.page_count === 1 ? 'page' : 'pages'}</span>
-                                                                <span>•</span>
-                                                                <span className="text-green-600">
-                                                                    {set.successful_sheets_count} ok
+                                                            <div className="text-muted-foreground flex items-center gap-1.5 text-[9px]">
+                                                                <span>
+                                                                    {set.page_count} {set.page_count === 1 ? 'page' : 'pages'}
                                                                 </span>
+                                                                <span>•</span>
+                                                                <span className="text-green-600">{set.successful_sheets_count} ok</span>
                                                                 {set.sheets_needing_review_count > 0 && (
                                                                     <>
                                                                         <span>•</span>
@@ -498,11 +450,7 @@ export default function DrawingSetsIndex() {
                                                         </div>
                                                         {/* Actions */}
                                                         <Link href={`/drawing-sets/${set.id}`}>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-5 w-5 p-0"
-                                                            >
+                                                            <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
                                                                 <Eye className="h-3 w-3" />
                                                             </Button>
                                                         </Link>

@@ -4,13 +4,12 @@ use App\Http\Controllers\Api\QaStageController;
 use App\Http\Controllers\Api\QaStageDrawingController;
 use App\Http\Controllers\Api\QaStageDrawingObservationController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\PurchasingController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PurchasingController;
 use Illuminate\Validation\ValidationException;
-
 
 // Public authentication routes
 Route::post('/login', function (Request $request) {
@@ -46,22 +45,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('employee/updated', function (\Illuminate\Http\Request $request) {
         \Illuminate\Support\Facades\Log::info('Employee updated webhook received:', $request->all());
+
         return response()->json(['message' => 'Employee updated successfully']);
     });
 
     Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
-        ->name('requisition.updateStatusFromPowerAutomate');
+        ->name('api.requisition.updateStatusFromPowerAutomate');
 
-    Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
+    Route::post('/chat', [ChatController::class, 'handle'])->name('api.chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream']);
 
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Logged out successfully']);
     });
 
-    Route::apiResource('qa-stages', QaStageController::class);
-    Route::apiResource('qa-stage-drawings', QaStageDrawingController::class);
+    Route::apiResource('qa-stages', QaStageController::class)->names('api.qa-stages');
+    Route::apiResource('qa-stage-drawings', QaStageDrawingController::class)->names('api.qa-stage-drawings');
 
     // Drawing revision and comparison endpoints
     Route::get('qa-stage-drawings/{qaStageDrawing}/thumbnail', [QaStageDrawingController::class, 'thumbnail'])
@@ -79,7 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('qa-stage-drawings/{qaStageDrawing}/metadata', [QaStageDrawingController::class, 'metadata'])
         ->name('qa-stage-drawings.metadata');
     Route::post('qa-stage-drawings/{qaStageDrawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])
-        ->name('qa-stage-drawings.extract-metadata');
+        ->name('api.qa-stage-drawings.extract-metadata');
     Route::post('qa-stage-drawings/{qaStageDrawing}/confirm-metadata', [QaStageDrawingController::class, 'confirmMetadata'])
         ->name('qa-stage-drawings.confirm-metadata');
 

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { X, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { Bell, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const PROMPT_DISMISSED_KEY = 'push-notification-prompt-dismissed';
 const PROMPT_DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -52,18 +52,18 @@ export function PushNotificationPrompt() {
     }
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-300">
-            <div className="bg-card border rounded-lg shadow-lg p-4">
+        <div className="animate-in slide-in-from-bottom-4 fade-in fixed right-4 bottom-4 z-50 max-w-sm duration-300">
+            <div className="bg-card rounded-lg border p-4 shadow-lg">
                 <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 p-2 bg-primary/10 rounded-full">
-                        <Bell className="h-5 w-5 text-primary" />
+                    <div className="bg-primary/10 flex-shrink-0 rounded-full p-2">
+                        <Bell className="text-primary h-5 w-5" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm">Enable Push Notifications</h4>
-                        <p className="text-xs text-muted-foreground mt-1">
+                    <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-medium">Enable Push Notifications</h4>
+                        <p className="text-muted-foreground mt-1 text-xs">
                             Get notified about forecast updates, timesheet approvals, and more - even when the app is closed.
                         </p>
-                        <div className="flex gap-2 mt-3">
+                        <div className="mt-3 flex gap-2">
                             <Button size="sm" onClick={handleEnable} disabled={isLoading}>
                                 {isLoading ? 'Enabling...' : 'Enable'}
                             </Button>
@@ -72,12 +72,8 @@ export function PushNotificationPrompt() {
                             </Button>
                         </div>
                     </div>
-                    <button
-                        onClick={handleDismiss}
-                        className="flex-shrink-0 p-1 rounded-md hover:bg-muted transition-colors"
-                        aria-label="Dismiss"
-                    >
-                        <X className="h-4 w-4 text-muted-foreground" />
+                    <button onClick={handleDismiss} className="hover:bg-muted flex-shrink-0 rounded-md p-1 transition-colors" aria-label="Dismiss">
+                        <X className="text-muted-foreground h-4 w-4" />
                     </button>
                 </div>
             </div>

@@ -3,22 +3,19 @@
 namespace App\Jobs;
 
 use App\Models\Clock;
-use Illuminate\Bus\Queueable;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Queue\SerializesModels;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
 use App\Models\User;
 use App\Notifications\SyncedTimesheetsWithEH;
-
-
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class SyncTimesheetWithEH implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
 
     /**
      * Create a new job instance.
@@ -36,6 +33,7 @@ class SyncTimesheetWithEH implements ShouldQueue
         $clocks = $this->getClocksToSync();
         if ($clocks->isEmpty()) {
             Log::info('No clocks to sync with EH.');
+
             return;
         }
         [$timesheets, $clockMap] = $this->buildTimesheetPayload($clocks);
@@ -44,7 +42,7 @@ class SyncTimesheetWithEH implements ShouldQueue
             $chunkData = ['timesheets' => $chunk];
 
             $result = $this->sync($chunkData);
-            if (!$result) {
+            if (! $result) {
                 // Log::error('Failed to sync timesheets with EH.', [
                 //     'chunk' => $chunk,
                 //     'response' => $result,
@@ -53,7 +51,7 @@ class SyncTimesheetWithEH implements ShouldQueue
             }
 
             $this->markClocksAsSynced($chunk, $clockMap);
-            //User::role('admin')->first()?->notify(new SyncedTimesheetsWithEH());
+            // User::role('admin')->first()?->notify(new SyncedTimesheetsWithEH());
 
         }
     }
@@ -75,16 +73,17 @@ class SyncTimesheetWithEH implements ShouldQueue
         $clockMap = [];
 
         foreach ($clocks as $clock) {
-            if (!$clock->clock_out) {
+            if (! $clock->clock_out) {
                 continue;
             }
 
             // ✅ guard: ensure employee exists
-            if (!$clock->employee) {
+            if (! $clock->employee) {
                 Log::warning('Clock has no related employee; skipping.', [
                     'clock_id' => $clock->id,
                     'eh_employee_id' => $clock->eh_employee_id,
                 ]);
+
                 continue;
             }
 
@@ -111,12 +110,11 @@ class SyncTimesheetWithEH implements ShouldQueue
         return [$timesheets, $clockMap];
     }
 
-
     private function getShiftConditionIds($clock)
     {
         // location worktypes -> IDs (null-safe)
         $shiftConditionIds = $clock->location?->worktypes
-                ?->pluck('eh_worktype_id')->toArray() ?? [];
+            ?->pluck('eh_worktype_id')->toArray() ?? [];
 
         $zoneShiftConditionIds = [
             '1' => '2516899',
@@ -126,14 +124,14 @@ class SyncTimesheetWithEH implements ShouldQueue
 
         // ✅ null-safe chain for employee → kiosks → pivot → zone
         $zone = $clock->employee?->kiosks
-                ?->firstWhere('eh_kiosk_id', $clock->eh_kiosk_id)
+            ?->firstWhere('eh_kiosk_id', $clock->eh_kiosk_id)
             ?->pivot?->zone;
 
         if ($zone && isset($zoneShiftConditionIds[$zone])) {
             // remove any previously included zone codes first
             $shiftConditionIds = array_filter(
                 $shiftConditionIds,
-                fn($id) => !in_array($id, $zoneShiftConditionIds, true)
+                fn ($id) => ! in_array($id, $zoneShiftConditionIds, true)
             );
             $shiftConditionIds[] = $zoneShiftConditionIds[$zone];
         }
@@ -153,6 +151,7 @@ class SyncTimesheetWithEH implements ShouldQueue
 
         return array_values(array_unique($shiftConditionIds));
     }
+
     private function markClocksAsSynced(array $chunk, array $clockMap)
     {
         foreach (array_keys($chunk) as $employeeId) {
@@ -160,15 +159,16 @@ class SyncTimesheetWithEH implements ShouldQueue
             Clock::whereIn('id', $clockIds)->update(['status' => 'synced']);
         }
     }
+
     private function sync($chunkData): bool
     {
         $apiKey = env('PAYROLL_API_KEY');
         // Send POST request to the API with correct headers and JSON data
         Log::info(json_encode($chunkData, JSON_PRETTY_PRINT));
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+        ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk', $chunkData);
 
         // Check the status code
         if ($response->successful()) {
@@ -179,6 +179,7 @@ class SyncTimesheetWithEH implements ShouldQueue
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
+
             return false; // Request failed
         }
     }

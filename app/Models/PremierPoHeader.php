@@ -69,7 +69,7 @@ class PremierPoHeader extends Model
     {
         $header = static::where('premier_po_id', $premierPoId)->first();
 
-        if (!$header || !$header->synced_at) {
+        if (! $header || ! $header->synced_at) {
             return true; // No data or no sync timestamp = stale
         }
 

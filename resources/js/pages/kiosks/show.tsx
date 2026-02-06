@@ -92,12 +92,12 @@ export default function Kiosk() {
                 {/* Welcome Message */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-center">
-                        <div className="rounded-full bg-primary/10 p-4">
-                            <Clock className="h-12 w-12 text-primary" />
+                        <div className="bg-primary/10 rounded-full p-4">
+                            <Clock className="text-primary h-12 w-12" />
                         </div>
                     </div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Welcome to the Time Clock</h1>
-                    <p className="max-w-md text-muted-foreground">Select your name from the list and enter your PIN to clock in or out.</p>
+                    <h1 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">Welcome to the Time Clock</h1>
+                    <p className="text-muted-foreground max-w-md">Select your name from the list and enter your PIN to clock in or out.</p>
                 </div>
             </div>
         </KioskLayout>

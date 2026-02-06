@@ -1,17 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-    ArrowDown,
-    ArrowLeft,
-    ArrowRight,
-    ArrowUp,
-    Crosshair,
-    Layers,
-    RotateCcw,
-    RotateCw,
-    Undo2,
-    ZoomIn,
-    ZoomOut,
-} from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Layers, RotateCcw, RotateCw, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { AlignmentState } from '../alignment/useAlignmentTool';
 
 type AlignmentToolbarProps = {
@@ -63,18 +51,13 @@ export function AlignmentToolbar({
     // Scale amount (0.1% = 0.001)
     const SCALE_AMOUNT = 0.001;
     return (
-        <div className="flex items-center gap-3 rounded-md border px-3 py-2 bg-muted/30">
+        <div className="bg-muted/30 flex items-center gap-3 rounded-md border px-3 py-2">
             {/* Alignment buttons - shown when idle */}
             {state === 'idle' && (
                 <div className="flex items-center gap-1">
                     {/* Auto-align button for same-size drawings */}
                     {onAutoAlign && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onAutoAlign}
-                            title="Auto-align (for same-size drawings)"
-                        >
+                        <Button size="sm" variant="outline" onClick={onAutoAlign} title="Auto-align (for same-size drawings)">
                             <Layers className="mr-1 h-4 w-4" />
                             Auto
                         </Button>
@@ -113,61 +96,31 @@ export function AlignmentToolbar({
                             filled={state === 'picking_candidate_B' || state === 'aligned'}
                             active={state === 'picking_candidate_A'}
                         />
-                        <StepIndicator
-                            step={4}
-                            label="B"
-                            color="green"
-                            filled={state === 'aligned'}
-                            active={state === 'picking_candidate_B'}
-                        />
+                        <StepIndicator step={4} label="B" color="green" filled={state === 'aligned'} active={state === 'picking_candidate_B'} />
                     </div>
 
                     {/* Text status */}
-                    <span className="text-xs text-muted-foreground">{statusMessage}</span>
+                    <span className="text-muted-foreground text-xs">{statusMessage}</span>
                 </div>
             )}
 
             {/* Fine-tune controls when aligned */}
             {isAligned && onNudge && onRotate && onScale && (
-                <div className="flex items-center gap-2 border-l pl-3 ml-2">
+                <div className="ml-2 flex items-center gap-2 border-l pl-3">
                     {/* Position nudge */}
                     <div className="flex items-center gap-0.5" title="Nudge position">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => onNudge(-NUDGE_AMOUNT, 0)}
-                            title="Nudge left"
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onNudge(-NUDGE_AMOUNT, 0)} title="Nudge left">
                             <ArrowLeft className="h-3 w-3" />
                         </Button>
                         <div className="flex flex-col gap-0.5">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0"
-                                onClick={() => onNudge(0, -NUDGE_AMOUNT)}
-                                title="Nudge up"
-                            >
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onNudge(0, -NUDGE_AMOUNT)} title="Nudge up">
                                 <ArrowUp className="h-3 w-3" />
                             </Button>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0"
-                                onClick={() => onNudge(0, NUDGE_AMOUNT)}
-                                title="Nudge down"
-                            >
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onNudge(0, NUDGE_AMOUNT)} title="Nudge down">
                                 <ArrowDown className="h-3 w-3" />
                             </Button>
                         </div>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => onNudge(NUDGE_AMOUNT, 0)}
-                            title="Nudge right"
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onNudge(NUDGE_AMOUNT, 0)} title="Nudge right">
                             <ArrowRight className="h-3 w-3" />
                         </Button>
                     </div>
@@ -183,35 +136,17 @@ export function AlignmentToolbar({
                         >
                             <RotateCcw className="h-3 w-3" />
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => onRotate(ROTATE_AMOUNT)}
-                            title="Rotate clockwise"
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onRotate(ROTATE_AMOUNT)} title="Rotate clockwise">
                             <RotateCw className="h-3 w-3" />
                         </Button>
                     </div>
 
                     {/* Scale adjust */}
                     <div className="flex items-center gap-0.5 border-l pl-2" title="Adjust scale">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => onScale(-SCALE_AMOUNT)}
-                            title="Scale down"
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onScale(-SCALE_AMOUNT)} title="Scale down">
                             <ZoomOut className="h-3 w-3" />
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => onScale(SCALE_AMOUNT)}
-                            title="Scale up"
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onScale(SCALE_AMOUNT)} title="Scale up">
                             <ZoomIn className="h-3 w-3" />
                         </Button>
                     </div>
@@ -220,15 +155,9 @@ export function AlignmentToolbar({
 
             {/* Control buttons during alignment */}
             {(isAligning || isAligned) && (
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="ml-auto flex items-center gap-1">
                     {/* Undo button */}
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={onUndoLastPoint}
-                        disabled={!canUndo}
-                        title="Undo last point"
-                    >
+                    <Button size="sm" variant="ghost" onClick={onUndoLastPoint} disabled={!canUndo} title="Undo last point">
                         <Undo2 className="h-4 w-4" />
                     </Button>
 

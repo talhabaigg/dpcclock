@@ -132,6 +132,7 @@ export interface ConfiguredTemplate {
     rdo_fares_travel: boolean;
     rdo_site_allowance: boolean;
     rdo_multistorey_allowance: boolean;
+    leave_markups_job_costed: boolean;
     cost_breakdown: CostBreakdown;
     custom_allowances?: CustomAllowance[];
 }
@@ -161,8 +162,11 @@ export interface AllowanceType {
     id: number;
     name: string;
     code: string;
+    category: 'fares_travel' | 'site' | 'multistorey' | 'custom';
     description: string | null;
     default_rate: number | null;
+    default_rate_type: 'hourly' | 'daily' | 'weekly';
+    pay_category_id: number | null;
 }
 
 // ============================================================================
@@ -252,6 +256,7 @@ export interface RowData {
     configId?: number;
     isTotal?: boolean;
     isCostRow?: boolean;
+    isOrdinaryRow?: boolean;
     isOvertimeRow?: boolean;
     isLeaveRow?: boolean;
     isRdoRow?: boolean;

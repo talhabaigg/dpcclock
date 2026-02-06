@@ -4,15 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\LocationItemPriceHistory;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
 use App\Models\Worktype;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class LocationController extends Controller
 {
@@ -57,11 +54,11 @@ class LocationController extends Controller
     {
         $location->load([
             'worktypes',
-            'costCodes' => fn($query) => $query->orderByRaw('CAST(code AS UNSIGNED)'),
+            'costCodes' => fn ($query) => $query->orderByRaw('CAST(code AS UNSIGNED)'),
             'materialItems.supplier',
             'favouriteMaterials',
             'variations',
-            'requisitions' => fn($query) => $query->withSum('lineItems', 'total_cost'),
+            'requisitions' => fn ($query) => $query->withSum('lineItems', 'total_cost'),
         ]);
 
         // Load user names for material items updated_by
@@ -80,7 +77,7 @@ class LocationController extends Controller
 
         return Inertia::render('locations/show', [
             'location' => $location,
-            'monthlySpending' => $monthlySpending
+            'monthlySpending' => $monthlySpending,
         ]);
     }
 
@@ -100,6 +97,7 @@ class LocationController extends Controller
 
         return $monthlySpending;
     }
+
     /**
      * Show the form for editing the specified resource.
      */
@@ -130,17 +128,19 @@ class LocationController extends Controller
         // $apiKey = 'PAYROLL_API_KEY';
         $user = auth()->user();
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/location");
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
+        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/location');
 
         if ($response->failed()) {
-            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to connect to Employment Hero API. Message: ' . $response->body()));
+            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to connect to Employment Hero API. Message: '.$response->body()));
+
             return back()->with('error', 'Failed to connect to Employment Hero API.');
         }
 
         $locationData = $response->json();
-        if (!is_array($locationData) || empty($locationData)) {
-            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to fetch locations from Employment Hero. Message: ' . $response->body()));
+        if (! is_array($locationData) || empty($locationData)) {
+            $user->notify(new \App\Notifications\LocationSyncNotification('failed', 'Failed to fetch locations from Employment Hero. Message: '.$response->body()));
+
             return back()->with('error', 'Failed to fetch locations from Employment Hero.');
         }
 
@@ -172,7 +172,7 @@ class LocationController extends Controller
                     ]
                 );
 
-                if (!empty($loc['defaultShiftConditionIds']) && is_array($loc['defaultShiftConditionIds'])) {
+                if (! empty($loc['defaultShiftConditionIds']) && is_array($loc['defaultShiftConditionIds'])) {
                     $worktypeIds = Worktype::whereIn('eh_worktype_id', $loc['defaultShiftConditionIds'])
                         ->pluck('id')
                         ->all();
@@ -197,8 +197,6 @@ class LocationController extends Controller
         );
     }
 
-
-
     public function createSubLocation(Request $request)
     {
         $request->validate([
@@ -208,23 +206,21 @@ class LocationController extends Controller
         ]);
 
         $parentLocation = Location::find($request->location_id);
-        if (!$parentLocation) {
+        if (! $parentLocation) {
             return redirect()->back()->with('error', 'Parent location not found.');
         }
         $data = [
             'defaultShiftConditionIds' => $parentLocation->worktypes->pluck('eh_worktype_id')->toArray(),
             'country' => 'Australia',
-            'name' => $request->level . '-' . $request->activity,
+            'name' => $request->level.'-'.$request->activity,
             'parentId' => $parentLocation->eh_location_id,
             'state' => 'QLD',
             'source' => 'API - Portal',
             'isRollupReportingLocation' => true,
-            'externalId' => $parentLocation->external_id . '::' . $request->level . '-' . $request->activity,
+            'externalId' => $parentLocation->external_id.'::'.$request->level.'-'.$request->activity,
         ];
 
         $this->createEHLocation($data);
-
-
 
     }
 
@@ -232,11 +228,12 @@ class LocationController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/location", $data);
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
+        ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/location', $data);
 
         if ($response->successful()) {
             $this->sync();
+
             return redirect()->back()->with('success', 'Sub-location created successfully.');
         } else {
             return redirect()->back()->with('error', 'Failed to create sub-location.');
@@ -248,6 +245,7 @@ class LocationController extends Controller
     {
 
         \App\Jobs\LoadJobCostData::dispatch();
+
         return redirect()->back()->with('success', 'Job Cost Details loading initiated.');
     }
 
@@ -270,9 +268,10 @@ class LocationController extends Controller
         } catch (\Exception $e) {
             \Log::error('Failed to dispatch job data loading jobs', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            return redirect()->back()->with('error', 'Failed to initiate data download: ' . $e->getMessage());
+
+            return redirect()->back()->with('error', 'Failed to initiate data download: '.$e->getMessage());
         }
     }
 
@@ -324,7 +323,7 @@ class LocationController extends Controller
             );
         }
 
-        return back()->with('success', count($validated['items']) . ' material(s) attached to price list.');
+        return back()->with('success', count($validated['items']).' material(s) attached to price list.');
     }
 
     /**
@@ -340,12 +339,12 @@ class LocationController extends Controller
         // Check if the item exists in the pivot table
         $existing = $location->materialItems()->where('material_item_id', $materialItemId)->first();
 
-        if (!$existing) {
+        if (! $existing) {
             return back()->with('error', 'Material item not found in price list.');
         }
 
         // Check if the item is locked (cannot edit locked items)
-        if ($existing->pivot->is_locked && !$validated['is_locked']) {
+        if ($existing->pivot->is_locked && ! $validated['is_locked']) {
             // Allow unlocking, but check if user has permission (for now, allow it)
         }
 
@@ -378,7 +377,7 @@ class LocationController extends Controller
         // Get the current data before removing for history
         $existing = $location->materialItems()->where('material_item_id', $materialItemId)->first();
 
-        if (!$existing) {
+        if (! $existing) {
             return back()->with('error', 'Material item not found in price list.');
         }
 
@@ -457,5 +456,4 @@ class LocationController extends Controller
 
         return response()->json($history);
     }
-
 }

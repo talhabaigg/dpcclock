@@ -2,15 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Jobs\SyncKioskEmployees;
 use App\Models\Employee;
+use App\Models\Worktype;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-use App\Models\Worktype;
-use App\Models\Location;
-use App\Jobs\SyncKioskEmployees;
-use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class EmployeeController extends Controller
 {
@@ -27,13 +25,13 @@ class EmployeeController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/details");
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
+        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/employee/details');
 
         $employeeData = $response->json();
 
         // Filter only active employees (no endDate)
-        $employeeData = array_filter($employeeData, fn($employee) => empty($employee['endDate']));
+        $employeeData = array_filter($employeeData, fn ($employee) => empty($employee['endDate']));
 
         $apiEmployeeIds = [];
 
@@ -44,7 +42,7 @@ class EmployeeController extends Controller
             $employee = Employee::withTrashed()->updateOrCreate(
                 ['eh_employee_id' => $employeeInfo['id']],
                 [
-                    'name' => $employeeInfo['firstName'] . ' ' . $employeeInfo['surname'],
+                    'name' => $employeeInfo['firstName'].' '.$employeeInfo['surname'],
                     'external_id' => $employeeInfo['externalId'] ?? Str::uuid(),
                     'email' => $employeeInfo['emailAddress'] ?? null,
                     'pin' => 1234,
@@ -57,7 +55,7 @@ class EmployeeController extends Controller
             }
 
             // Sync worktypes if any
-            if (!empty($employeeInfo['workTypes'])) {
+            if (! empty($employeeInfo['workTypes'])) {
                 $workType = Worktype::where('name', $employeeInfo['workTypes'])->first();
                 if ($workType) {
                     $employee->worktypes()->sync([$workType->id]);
@@ -70,7 +68,7 @@ class EmployeeController extends Controller
             ->whereNull('deleted_at') // only active employees
             ->delete();
 
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             return response()->json([
                 'message' => 'Employees synced successfully from Employment Hero.',
             ], 200);
@@ -78,7 +76,6 @@ class EmployeeController extends Controller
 
         return redirect()->route('employees.index')->with('success', 'Employees synced successfully from Employment Hero.');
     }
-
 
     public function syncEmployeeWorktypes()
     {
@@ -93,7 +90,7 @@ class EmployeeController extends Controller
             $employeeId = $employee->eh_employee_id;
 
             $response = Http::withHeaders([
-                'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
+                'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
 
             $employeeData = $response->json();
@@ -114,23 +111,25 @@ class EmployeeController extends Controller
                         return true;
                     }
                 }
+
                 return false;
             });
 
-            if (!$filteredWorkType) {
+            if (! $filteredWorkType) {
                 // Store all unmatchable workTypes
                 $missingWorkTypes[] = [
                     'employee_id' => $employeeId,
                     'searched_workTypes' => $workTypeString,
                     'reason' => 'No allowed code matched',
                 ];
+
                 continue;
             }
 
             // Lookup workType ID
             $workTypeId = WorkType::where('name', trim($filteredWorkType))->pluck('id')->first();
 
-            if (!empty($workTypeId)) {
+            if (! empty($workTypeId)) {
                 $employee->worktypes()->sync($workTypeId);
                 $employee->load('workTypes'); // Reload relationships
             } else {
@@ -142,7 +141,7 @@ class EmployeeController extends Controller
             }
         }
 
-        if (!empty($missingWorkTypes)) {
+        if (! empty($missingWorkTypes)) {
             dd($missingWorkTypes);
         }
 
@@ -159,7 +158,7 @@ class EmployeeController extends Controller
         // dd($employee);
         $employeeId = $employee->eh_employee_id;
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/unstructured/{$employeeId}");
 
         $employeeData = $response->json();
@@ -172,6 +171,7 @@ class EmployeeController extends Controller
                     return true;
                 }
             }
+
             return false;
         });
 
@@ -179,7 +179,6 @@ class EmployeeController extends Controller
 
         $employee->worktypes()->sync($workTypeId);
         $employee->load('workTypes'); // Reload relationships
-
 
     }
 
@@ -211,13 +210,11 @@ class EmployeeController extends Controller
     public function updateKioskEmployees()
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return redirect()->back()->with('error', 'You must be logged in to update kiosk employees.');
         }
         SyncKioskEmployees::dispatch($user->id);
 
-
         return redirect()->back()->with('success', 'Kiosk employees update job has been dispatched. You will be notified when it is complete.');
     }
-
 }

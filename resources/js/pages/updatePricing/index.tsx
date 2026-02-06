@@ -18,7 +18,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Loader2, Minus, RefreshCw } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -224,10 +224,7 @@ export default function UpdatePricing() {
 
                             <div className="space-y-2">
                                 <Label>Adjustment Type</Label>
-                                <Select
-                                    value={adjustmentType}
-                                    onValueChange={(value) => setAdjustmentType(value as 'percentage' | 'fixed')}
-                                >
+                                <Select value={adjustmentType} onValueChange={(value) => setAdjustmentType(value as 'percentage' | 'fixed')}>
                                     <SelectTrigger>{adjustmentType === 'percentage' ? 'Percentage (%)' : 'Fixed Amount ($)'}</SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="percentage">Percentage (%)</SelectItem>
@@ -347,9 +344,7 @@ export default function UpdatePricing() {
                             <strong>Category:</strong> {selectedCategory?.name || 'All Categories'}
                             <br />
                             <strong>Adjustment:</strong>{' '}
-                            {adjustmentType === 'percentage'
-                                ? `${adjustmentValue}%`
-                                : formatCurrency(parseFloat(adjustmentValue || '0'))}
+                            {adjustmentType === 'percentage' ? `${adjustmentValue}%` : formatCurrency(parseFloat(adjustmentValue || '0'))}
                             <br />
                             <br />
                             This action will be logged and cannot be automatically undone.

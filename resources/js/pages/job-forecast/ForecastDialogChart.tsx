@@ -88,27 +88,24 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
         closeEditBox();
     };
 
-    const meta = useMemo<ChartMeta[]>(
-        () => {
-            return data.map((d) => {
-                // If both actual and forecast exist (current month), prefer forecast for display
-                const hasForecast = d.forecast != null;
-                const hasActual = d.actual != null;
+    const meta = useMemo<ChartMeta[]>(() => {
+        return data.map((d) => {
+            // If both actual and forecast exist (current month), prefer forecast for display
+            const hasForecast = d.forecast != null;
+            const hasActual = d.actual != null;
 
-                // Use forecast if available, otherwise use actual
-                const y = hasForecast ? d.forecast : (hasActual ? d.actual : 0);
-                const isActual = !hasForecast && hasActual;
+            // Use forecast if available, otherwise use actual
+            const y = hasForecast ? d.forecast : hasActual ? d.actual : 0;
+            const isActual = !hasForecast && hasActual;
 
-                return {
-                    label: d.monthLabel,
-                    y: y ?? 0,
-                    is_actual: isActual,
-                    monthKey: d.monthKey,
-                };
-            });
-        },
-        [data, budget, viewMode],
-    );
+            return {
+                label: d.monthLabel,
+                y: y ?? 0,
+                is_actual: isActual,
+                monthKey: d.monthKey,
+            };
+        });
+    }, [data, budget, viewMode]);
 
     // Calculate cumulative values for percent view
     const cumulativeData = useMemo(() => {
@@ -119,24 +116,27 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
         });
     }, [meta]);
 
-    const getEditBoxInput = useCallback((index: number) => {
-        const m = meta[index];
-        if (!m) return null;
+    const getEditBoxInput = useCallback(
+        (index: number) => {
+            const m = meta[index];
+            if (!m) return null;
 
-        if (viewMode === 'cumulative-percent' && budget) {
-            const cumulativeAmount = cumulativeData[index] ?? 0;
-            const percent = (cumulativeAmount / budget) * 100;
+            if (viewMode === 'cumulative-percent' && budget) {
+                const cumulativeAmount = cumulativeData[index] ?? 0;
+                const percent = (cumulativeAmount / budget) * 100;
+                return {
+                    value: String(Math.round(percent * 10) / 10),
+                    inputMode: 'percent' as const,
+                };
+            }
+
             return {
-                value: String(Math.round(percent * 10) / 10),
-                inputMode: 'percent' as const,
+                value: String(Math.round(m.y)),
+                inputMode: 'amount' as const,
             };
-        }
-
-        return {
-            value: String(Math.round(m.y)),
-            inputMode: 'amount' as const,
-        };
-    }, [meta, viewMode, budget, cumulativeData]);
+        },
+        [meta, viewMode, budget, cumulativeData],
+    );
 
     useEffect(() => {
         if (!editBox || editBoxDirty) return;
@@ -449,7 +449,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
     return (
         <div
             ref={wrapRef}
-            className="relative h-full w-full min-h-[200px] rounded-lg bg-white p-3 dark:bg-slate-900 sm:min-h-[250px] sm:p-4"
+            className="relative h-full min-h-[200px] w-full rounded-lg bg-white p-3 sm:min-h-[250px] sm:p-4 dark:bg-slate-900"
             onPointerDown={() => {
                 if (editBox) closeEditBox();
             }}
@@ -474,7 +474,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                             <input
                                 autoFocus
                                 inputMode="numeric"
-                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-10 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-10 text-sm font-semibold text-slate-800 transition-all outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
                                 value={editBox.value}
                                 onChange={(e) => {
                                     setEditBoxDirty(true);
@@ -486,7 +486,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
                                 }}
                                 onBlur={commitEditBox}
                             />
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            <div className="absolute top-1/2 right-2 -translate-y-1/2">
                                 <span
                                     className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-bold ${
                                         editBox.inputMode === 'percent'

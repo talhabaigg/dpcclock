@@ -47,7 +47,7 @@ export default function EmployeeList({ employees, selectedEmployee, kioskId }: P
 
     if (employees.length === 0) {
         return (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
+            <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                 <Users className="h-10 w-10 opacity-40" />
                 <p className="text-sm">No employees found</p>
             </div>
@@ -60,18 +60,12 @@ export default function EmployeeList({ employees, selectedEmployee, kioskId }: P
                 {Object.entries(groupedEmployees).map(([letter, group]) => (
                     <div key={letter}>
                         {/* Letter Header */}
-                        <div
-                            className={cn(
-                                'sticky top-0 z-10 px-3 py-1.5',
-                                'bg-muted/80 backdrop-blur-sm',
-                                'border-b border-t border-border/50',
-                            )}
-                        >
-                            <span className="text-xs font-semibold uppercase text-muted-foreground">{letter}</span>
+                        <div className={cn('sticky top-0 z-10 px-3 py-1.5', 'bg-muted/80 backdrop-blur-sm', 'border-border/50 border-t border-b')}>
+                            <span className="text-muted-foreground text-xs font-semibold uppercase">{letter}</span>
                         </div>
 
                         {/* Employee Items */}
-                        <div className="divide-y divide-border/30">
+                        <div className="divide-border/30 divide-y">
                             {group.map((emp) => {
                                 const isSelected = selectedEmployee?.eh_employee_id === emp.eh_employee_id;
                                 return (

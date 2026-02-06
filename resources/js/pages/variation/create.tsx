@@ -1,17 +1,17 @@
 import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Plus, Trash2, Zap, Wrench, Package, FileText, AlertCircle, ClipboardList, ArrowLeft, Save, GripHorizontal } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ClipboardList, FileText, GripHorizontal, Package, Plus, Save, Trash2, Wrench, Zap } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CostCode } from '../purchasing/types';
-import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
 import VariationHeaderGrid, { VariationHeaderGridRef } from './partials/variationHeader/VariationHeaderGrid';
+import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -55,27 +55,27 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         date: variation ? variation.co_date : new Date().toISOString().split('T')[0],
         line_items: variation
             ? variation.line_items.map((item: any) => ({
-                line_number: item.line_number,
-                cost_item: item.cost_item,
-                cost_type: item.cost_type,
-                description: item.description,
-                qty: item.qty,
-                unit_cost: item.unit_cost,
-                total_cost: item.total_cost,
-                revenue: item.revenue,
-            }))
+                  line_number: item.line_number,
+                  cost_item: item.cost_item,
+                  cost_type: item.cost_type,
+                  description: item.description,
+                  qty: item.qty,
+                  unit_cost: item.unit_cost,
+                  total_cost: item.total_cost,
+                  revenue: item.revenue,
+              }))
             : [
-                {
-                    line_number: 1,
-                    cost_item: '',
-                    cost_type: '',
-                    description: '',
-                    qty: 1,
-                    unit_cost: 0,
-                    total_cost: 0,
-                    revenue: 0,
-                },
-            ],
+                  {
+                      line_number: 1,
+                      cost_item: '',
+                      cost_type: '',
+                      description: '',
+                      qty: 1,
+                      unit_cost: 0,
+                      total_cost: 0,
+                      revenue: 0,
+                  },
+              ],
     });
 
     const [selectedCount, setSelectedCount] = useState(0);
@@ -275,9 +275,9 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="min-h-screen min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-background dark:via-background dark:to-background">
+            <div className="dark:from-background dark:via-background dark:to-background min-h-screen min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50">
                 {/* Header Section */}
-                <div className="border-b border-slate-200/40 bg-white/70 px-3 py-4 backdrop-blur-xl sm:px-6 sm:py-6 md:px-8 dark:border-border dark:bg-background/70">
+                <div className="dark:border-border dark:bg-background/70 border-b border-slate-200/40 bg-white/70 px-3 py-4 backdrop-blur-xl sm:px-6 sm:py-6 md:px-8">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div>
                             <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-50">
@@ -295,14 +295,14 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
                     {/* Error Summary Banner */}
                     {Object.keys(errors).length > 0 && (
-                        <div className="mb-4 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
+                        <div className="border-destructive/50 bg-destructive/5 mb-4 rounded-xl border p-4">
                             <div className="mb-3 flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
-                                    <AlertCircle className="h-4 w-4 text-destructive" />
+                                <div className="bg-destructive/10 flex h-8 w-8 items-center justify-center rounded-lg">
+                                    <AlertCircle className="text-destructive h-4 w-4" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-destructive">Validation Errors</h3>
-                                    <p className="text-xs text-destructive/80">Please fix the following errors before submitting</p>
+                                    <h3 className="text-destructive text-sm font-semibold">Validation Errors</h3>
+                                    <p className="text-destructive/80 text-xs">Please fix the following errors before submitting</p>
                                 </div>
                             </div>
                             <ul className="space-y-1.5 pl-10">
@@ -311,17 +311,17 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                         const itemMatch = errorKey.match(/^line_items\.(\d+)\.(\w+)$/);
                                         if (itemMatch) {
                                             const lineNum = parseInt(itemMatch[1]) + 1;
-                                            const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                            const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                                             return `Line ${lineNum} - ${field}`;
                                         }
-                                        return errorKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                        return errorKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                                     };
 
                                     return (
                                         <li key={key} className="flex items-start gap-2 text-sm">
-                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                                            <span className="bg-destructive mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full" />
                                             <span>
-                                                <span className="font-medium text-destructive">{formatErrorKey(key)}:</span>{' '}
+                                                <span className="text-destructive font-medium">{formatErrorKey(key)}:</span>{' '}
                                                 <span className="text-destructive/90">{message as string}</span>
                                             </span>
                                         </li>
@@ -362,27 +362,27 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                 </div>
                                 <h3 className="text-base font-semibold sm:text-lg">Line Items</h3>
                                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                    {selectedCount > 0
-                                        ? `${selectedCount} selected`
-                                        : `${data.line_items.length} total`}
+                                    {selectedCount > 0 ? `${selectedCount} selected` : `${data.line_items.length} total`}
                                 </span>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
                                     <DialogTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg border-amber-200/60 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 gap-1.5 rounded-lg border-amber-200/60 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                        >
                                             <Zap className="h-3.5 w-3.5" />
                                             <span className="hidden sm:inline">Quick Gen</span>
                                         </Button>
                                     </DialogTrigger>
                                     <DialogContent className="sm:max-w-lg">
                                         <DialogHeader className="space-y-3">
-                                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 shadow-lg">
-                                                <Zap className="h-6 w-6 text-primary-foreground" />
+                                            <div className="from-primary to-primary/60 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br shadow-lg">
+                                                <Zap className="text-primary-foreground h-6 w-6" />
                                             </div>
-                                            <DialogTitle className="text-center text-xl">
-                                                Quick Generate
-                                            </DialogTitle>
+                                            <DialogTitle className="text-center text-xl">Quick Generate</DialogTitle>
                                             <DialogDescription className="text-center">
                                                 Automatically populate line items based on your base amount
                                             </DialogDescription>
@@ -392,7 +392,9 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                             {/* Amount Input Section */}
                                             <div className="space-y-3">
                                                 <label htmlFor="amount" className="flex items-center gap-2 text-sm font-semibold">
-                                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">1</span>
+                                                    <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
+                                                        1
+                                                    </span>
                                                     Enter Base Amount
                                                 </label>
                                                 <Input
@@ -402,30 +404,32 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                                     value={genAmount}
                                                     onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
                                                     placeholder="0.00"
-                                                    className="h-12 border-2 text-center text-lg font-medium focus-visible:border-primary"
+                                                    className="focus-visible:border-primary h-12 border-2 text-center text-lg font-medium"
                                                 />
                                             </div>
 
                                             {/* Divider */}
                                             <div className="relative">
                                                 <div className="absolute inset-0 flex items-center">
-                                                    <div className="w-full border-t border-muted"></div>
+                                                    <div className="border-muted w-full border-t"></div>
                                                 </div>
                                                 <div className="relative flex justify-center text-xs uppercase">
-                                                    <span className="bg-background px-2 font-medium text-muted-foreground">Choose Type</span>
+                                                    <span className="bg-background text-muted-foreground px-2 font-medium">Choose Type</span>
                                                 </div>
                                             </div>
 
                                             {/* Generation Options */}
                                             <div className="space-y-3">
                                                 <label className="flex items-center gap-2 text-sm font-semibold">
-                                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">2</span>
+                                                    <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
+                                                        2
+                                                    </span>
                                                     Select Generation Type
                                                 </label>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <button
                                                         onClick={generatePrelimLabour}
-                                                        className="group relative overflow-hidden rounded-lg border-2 border-muted bg-gradient-to-br from-blue-50/50 to-background p-4 text-left transition-all duration-200 hover:border-primary dark:from-blue-950/20 dark:to-background"
+                                                        className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-blue-50/50 p-4 text-left transition-all duration-200 dark:from-blue-950/20"
                                                     >
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
@@ -435,7 +439,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                                             </div>
                                                             <div>
                                                                 <div className="text-sm font-semibold">Labour</div>
-                                                                <div className="text-xs text-muted-foreground">Generate labour costs</div>
+                                                                <div className="text-muted-foreground text-xs">Generate labour costs</div>
                                                             </div>
                                                         </div>
                                                         <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
@@ -443,7 +447,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
 
                                                     <button
                                                         onClick={generatePrelimMaterial}
-                                                        className="group relative overflow-hidden rounded-lg border-2 border-muted bg-gradient-to-br from-purple-50/50 to-background p-4 text-left transition-all duration-200 hover:border-primary dark:from-purple-950/20 dark:to-background"
+                                                        className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-purple-50/50 p-4 text-left transition-all duration-200 dark:from-purple-950/20"
                                                     >
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
@@ -453,7 +457,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                                             </div>
                                                             <div>
                                                                 <div className="text-sm font-semibold">Material</div>
-                                                                <div className="text-xs text-muted-foreground">Generate material costs</div>
+                                                                <div className="text-muted-foreground text-xs">Generate material costs</div>
                                                             </div>
                                                         </div>
                                                         <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
@@ -465,7 +469,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                 </Dialog>
                                 <Button onClick={addRow} size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg">
                                     <Plus className="h-3.5 w-3.5" />
-                                    <span className="hidden xs:inline">Add Row</span>
+                                    <span className="xs:inline hidden">Add Row</span>
                                     <span className="xs:hidden">Add</span>
                                 </Button>
                                 <Button
@@ -473,7 +477,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                                     size="sm"
                                     variant="outline"
                                     disabled={selectedCount === 0}
-                                    className="h-9 gap-1.5 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                                    className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive h-9 gap-1.5 rounded-lg disabled:opacity-50"
                                 >
                                     <Trash2 className="h-3.5 w-3.5" />
                                     <span className="hidden sm:inline">Delete</span>
@@ -532,7 +536,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                             </Button>
                             <Button
                                 onClick={handleSubmit}
-                                className="h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-6 shadow-lg shadow-slate-900/20 ring-1 ring-slate-900/10 transition-all hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 sm:h-11 sm:w-auto sm:rounded-xl dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white"
+                                className="h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-6 shadow-lg ring-1 shadow-slate-900/20 ring-slate-900/10 transition-all hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 sm:h-11 sm:w-auto sm:rounded-xl dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white"
                             >
                                 <Save className="h-4 w-4" />
                                 {variation?.id ? 'Update Variation' : 'Create Variation'}

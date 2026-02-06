@@ -49,25 +49,25 @@ interface EditBox {
 
 // Color palette for multiple work types
 const WORK_TYPE_COLORS = [
-    { line: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' },   // Indigo
-    { line: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' },   // Amber
-    { line: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' },   // Emerald
-    { line: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' },    // Red
-    { line: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' },   // Violet
-    { line: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' },    // Cyan
-    { line: '#f97316', bg: 'rgba(249, 115, 22, 0.2)' },   // Orange
-    { line: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },   // Pink
+    { line: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' }, // Indigo
+    { line: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' }, // Amber
+    { line: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' }, // Emerald
+    { line: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' }, // Red
+    { line: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' }, // Violet
+    { line: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' }, // Cyan
+    { line: '#f97316', bg: 'rgba(249, 115, 22, 0.2)' }, // Orange
+    { line: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' }, // Pink
 ];
 
 const WORK_TYPE_COLORS_DARK = [
-    { line: '#818cf8', bg: 'rgba(129, 140, 248, 0.3)' },  // Indigo
-    { line: '#fbbf24', bg: 'rgba(251, 191, 36, 0.3)' },   // Amber
-    { line: '#34d399', bg: 'rgba(52, 211, 153, 0.3)' },   // Emerald
-    { line: '#f87171', bg: 'rgba(248, 113, 113, 0.3)' },  // Red
-    { line: '#a78bfa', bg: 'rgba(167, 139, 250, 0.3)' },  // Violet
-    { line: '#22d3ee', bg: 'rgba(34, 211, 238, 0.3)' },   // Cyan
-    { line: '#fb923c', bg: 'rgba(251, 146, 60, 0.3)' },   // Orange
-    { line: '#f472b6', bg: 'rgba(244, 114, 182, 0.3)' },  // Pink
+    { line: '#818cf8', bg: 'rgba(129, 140, 248, 0.3)' }, // Indigo
+    { line: '#fbbf24', bg: 'rgba(251, 191, 36, 0.3)' }, // Amber
+    { line: '#34d399', bg: 'rgba(52, 211, 153, 0.3)' }, // Emerald
+    { line: '#f87171', bg: 'rgba(248, 113, 113, 0.3)' }, // Red
+    { line: '#a78bfa', bg: 'rgba(167, 139, 250, 0.3)' }, // Violet
+    { line: '#22d3ee', bg: 'rgba(34, 211, 238, 0.3)' }, // Cyan
+    { line: '#fb923c', bg: 'rgba(251, 146, 60, 0.3)' }, // Orange
+    { line: '#f472b6', bg: 'rgba(244, 114, 182, 0.3)' }, // Pink
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -106,11 +106,14 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
         closeEditBox();
     };
 
-    const getEditBoxInput = useCallback((index: number) => {
-        const point = data[index];
-        if (!point) return null;
-        return String(Math.round(point.value));
-    }, [data]);
+    const getEditBoxInput = useCallback(
+        (index: number) => {
+            const point = data[index];
+            if (!point) return null;
+            return String(Math.round(point.value));
+        },
+        [data],
+    );
 
     useEffect(() => {
         if (!editBox || editBoxDirty) return;
@@ -338,7 +341,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     },
                 },
                 // Disable drag editing for multi-dataset view
-                 
+
                 dragData: (editable && !hasMultipleDatasets
                     ? {
                           round: 0,
@@ -364,46 +367,48 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     : false) as any,
             },
             // Disable click editing for multi-dataset view
-            onClick: !hasMultipleDatasets ? (_evt: any, elements: any[], chart: any) => {
-                if (!editable) return;
-                if (!elements?.length) return;
+            onClick: !hasMultipleDatasets
+                ? (_evt: any, elements: any[], chart: any) => {
+                      if (!editable) return;
+                      if (!elements?.length) return;
 
-                const idx = elements[0].index as number;
-                const point = data[idx];
-                if (!point) return;
+                      const idx = elements[0].index as number;
+                      const point = data[idx];
+                      if (!point) return;
 
-                const nextInput = getEditBoxInput(idx);
-                if (!nextInput) return;
+                      const nextInput = getEditBoxInput(idx);
+                      if (!nextInput) return;
 
-                const el = elements[0].element;
-                const px = el?.x ?? 0;
-                const py = el?.y ?? 0;
+                      const el = elements[0].element;
+                      const px = el?.x ?? 0;
+                      const py = el?.y ?? 0;
 
-                const canvas = chart?.canvas as HTMLCanvasElement | undefined;
-                const wrap = wrapRef.current;
+                      const canvas = chart?.canvas as HTMLCanvasElement | undefined;
+                      const wrap = wrapRef.current;
 
-                if (!canvas || !wrap) return;
+                      if (!canvas || !wrap) return;
 
-                const canvasRect = canvas.getBoundingClientRect();
-                const wrapRect = wrap.getBoundingClientRect();
+                      const canvasRect = canvas.getBoundingClientRect();
+                      const wrapRect = wrap.getBoundingClientRect();
 
-                let left = canvasRect.left - wrapRect.left + px + 10;
-                let top = canvasRect.top - wrapRect.top + py + 10;
+                      let left = canvasRect.left - wrapRect.left + px + 10;
+                      let top = canvasRect.top - wrapRect.top + py + 10;
 
-                const isSmallScreen = wrapRect.width < 400;
-                const boxW = isSmallScreen ? 200 : 240;
-                const boxH = isSmallScreen ? 100 : 140;
-                left = Math.max(4, Math.min(left, wrapRect.width - boxW - 4));
-                top = Math.max(4, Math.min(top, wrapRect.height - boxH - 4));
+                      const isSmallScreen = wrapRect.width < 400;
+                      const boxW = isSmallScreen ? 200 : 240;
+                      const boxH = isSmallScreen ? 100 : 140;
+                      left = Math.max(4, Math.min(left, wrapRect.width - boxW - 4));
+                      top = Math.max(4, Math.min(top, wrapRect.height - boxH - 4));
 
-                setEditBoxDirty(false);
-                setEditBox({
-                    left,
-                    top,
-                    index: idx,
-                    value: nextInput,
-                });
-            } : undefined,
+                      setEditBoxDirty(false);
+                      setEditBox({
+                          left,
+                          top,
+                          index: idx,
+                          value: nextInput,
+                      });
+                  }
+                : undefined,
             scales: {
                 x: {
                     grid: {
@@ -448,12 +453,17 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
     return (
         <div
             ref={wrapRef}
-            className="relative h-full w-full min-h-[180px] rounded-lg bg-white p-2 dark:bg-slate-900 sm:min-h-[250px] sm:p-4"
+            className="relative h-full min-h-[180px] w-full rounded-lg bg-white p-2 sm:min-h-[250px] sm:p-4 dark:bg-slate-900"
             onPointerDown={() => {
                 if (editBox) closeEditBox();
             }}
         >
-            <Line key={`chart-${isDark}-${editable}-${hasMultipleDatasets}`} data={chartData} options={options} plugins={hasMultipleDatasets ? [] : [dataLabelPlugin]} />
+            <Line
+                key={`chart-${isDark}-${editable}-${hasMultipleDatasets}`}
+                data={chartData}
+                options={options}
+                plugins={hasMultipleDatasets ? [] : [dataLabelPlugin]}
+            />
 
             {editBox && (
                 <div
@@ -472,7 +482,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                             <input
                                 autoFocus
                                 inputMode="numeric"
-                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-16 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-16 text-sm font-semibold text-slate-800 transition-all outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
                                 value={editBox.value}
                                 onChange={(e) => {
                                     setEditBoxDirty(true);
@@ -484,7 +494,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                                 }}
                                 onBlur={commitEditBox}
                             />
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            <div className="absolute top-1/2 right-2 -translate-y-1/2">
                                 <span className="inline-flex items-center rounded-md bg-indigo-100 px-1.5 py-0.5 text-xs font-bold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                                     HC
                                 </span>

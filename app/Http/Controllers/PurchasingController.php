@@ -2,34 +2,31 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Models\CostCode;
-use App\Services\GetCompanyCodeService;
-use App\Services\PremierAuthenticationService;
-use GeneratePONumberService;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use App\Models\Supplier;
 use App\Models\Location;
+use App\Models\MaterialItem;
 use App\Models\Requisition;
 use App\Models\RequisitionLineItem;
-use App\Models\MaterialItem;
-use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
-use Maatwebsite\Excel\Excel as ExcelFormat;
-use Illuminate\Support\Str;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Http;
-use App\Services\ExcelExportService;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use Spatie\Activitylog\Models\Activity;
-use Illuminate\Support\Facades\Log;
-use App\Services\POComparisonService;
-use App\Services\PremierPurchaseOrderService;
-use App\Notifications\RequisitionSentToOfficeNotification;
+use App\Models\Supplier;
 use App\Models\User;
+use App\Notifications\RequisitionSentToOfficeNotification;
+use App\Services\ExcelExportService;
+use App\Services\GetCompanyCodeService;
+use App\Services\POComparisonService;
+use App\Services\PremierAuthenticationService;
+use App\Services\PremierPurchaseOrderService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Maatwebsite\Excel\Excel as ExcelFormat;
+use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Activitylog\Models\Activity;
 
 class PurchasingController extends Controller
 {
@@ -56,15 +53,12 @@ class PurchasingController extends Controller
 
         $locations = $locationsQuery->get();
 
-
-
         return Inertia::render('purchasing/create', [
             'suppliers' => $suppliers,
             'locations' => $locations,
             'costCodes' => $costCodes,
         ]);
     }
-
 
     public function store(Request $request)
     {
@@ -131,7 +125,6 @@ class PurchasingController extends Controller
             ]);
         }
 
-
         // $messageBody = "New requisition order #{$requisition->id} has been submitted by {$requisition->creator->name} for supplier {$requisition->supplier->name} at {$requisition->location->name}.";
         // dd($messageBody);
         // $recipients = ['talha@superiorgroup.com.au', 'dominic.armitage@superiorgroup.com.au'];
@@ -156,10 +149,8 @@ class PurchasingController extends Controller
         //     return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send notification.');
         // }
 
-
         return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition created successfully.');
     }
-
 
     public function index(Request $request)
     {
@@ -170,7 +161,7 @@ class PurchasingController extends Controller
             ->withSum('lineItems', 'total_cost');
 
         // Apply permission-based filtering
-        if (!$user->hasPermissionTo('requisitions.view-all')) {
+        if (! $user->hasPermissionTo('requisitions.view-all')) {
             $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
             $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
             $query->whereIn('project_number', $location_ids);
@@ -245,7 +236,7 @@ class PurchasingController extends Controller
 
         // Get filter options for dropdowns
         $filterOptionsQuery = Requisition::query();
-        if (!$user->hasPermissionTo('requisitions.view-all')) {
+        if (! $user->hasPermissionTo('requisitions.view-all')) {
             $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
             $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
             $filterOptionsQuery->whereIn('project_number', $location_ids);
@@ -312,10 +303,9 @@ class PurchasingController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
-            'activities' => $activities
+            'activities' => $activities,
         ]);
     }
 
@@ -345,8 +335,8 @@ class PurchasingController extends Controller
         $validItemsCount = 0;
 
         foreach ($originalRequisition->lineItems as $lineItem) {
-            if ($lineItem->code && !in_array($lineItem->code, $existingCodes)) {
-                $deletedItems[] = $lineItem->code . ' - ' . $lineItem->description;
+            if ($lineItem->code && ! in_array($lineItem->code, $existingCodes)) {
+                $deletedItems[] = $lineItem->code.' - '.$lineItem->description;
             } else {
                 $validItemsCount++;
             }
@@ -360,6 +350,7 @@ class PurchasingController extends Controller
         $newRequisition = $originalRequisition->replicate();
         $newRequisition->status = 'pending';
         $newRequisition->po_number = null; // Reset PO number
+        $newRequisition->premier_po_id = null; // Reset Premier PO ID - duplicate hasn't been sent yet
         $newRequisition->is_template = false; // Reset template status
         $newRequisition->created_at = now();
         $newRequisition->updated_at = now();
@@ -369,7 +360,7 @@ class PurchasingController extends Controller
 
         foreach ($originalRequisition->lineItems as $lineItem) {
             // Skip items that no longer exist in MaterialItem table
-            if ($lineItem->code && !in_array($lineItem->code, $existingCodes)) {
+            if ($lineItem->code && ! in_array($lineItem->code, $existingCodes)) {
                 continue;
             }
 
@@ -447,20 +438,20 @@ class PurchasingController extends Controller
         }
 
         $successMessage = 'Requisition copied successfully.';
-        if (!empty($priceChanges) || !empty($costCodeChanges)) {
+        if (! empty($priceChanges) || ! empty($costCodeChanges)) {
             $successMessage .= ' Some items have been updated to current values.';
         }
         $flashData = ['success' => $successMessage];
 
-        if (!empty($deletedItems)) {
+        if (! empty($deletedItems)) {
             $flashData['deletedItems'] = $deletedItems;
         }
 
-        if (!empty($priceChanges)) {
+        if (! empty($priceChanges)) {
             $flashData['priceChanges'] = $priceChanges;
         }
 
-        if (!empty($costCodeChanges)) {
+        if (! empty($costCodeChanges)) {
             $flashData['costCodeChanges'] = $costCodeChanges;
         }
 
@@ -475,7 +466,7 @@ class PurchasingController extends Controller
     {
         $item = MaterialItem::where('code', $code)->first();
 
-        if (!$item) {
+        if (! $item) {
             return null;
         }
 
@@ -504,7 +495,7 @@ class PurchasingController extends Controller
         $requisition = Requisition::findOrFail($id);
         $wasTemplate = $requisition->is_template;
 
-        $requisition->is_template = !$wasTemplate;
+        $requisition->is_template = ! $wasTemplate;
         $requisition->save();
 
         $message = $requisition->is_template
@@ -529,7 +520,7 @@ class PurchasingController extends Controller
             $companyCodes = [
                 '1149031' => 'SWC',
                 '1198645' => 'GREEN',
-                '1249093' => 'SWCP'
+                '1249093' => 'SWCP',
             ];
             $companyCode = $companyCodes[$parentId] ?? null;
             $sequence = DB::table('po_num_sequence')->lockForUpdate()->where('company_code', $companyCode)->first();
@@ -550,12 +541,13 @@ class PurchasingController extends Controller
             return $poNumber; // ✅ Make sure to return the PO number
         });
     }
+
     public function process($id)
     {
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
-        $validateService = new \App\Services\ValidateRequisitionService();
-        $generatePONumberService = new \App\Services\GeneratePONumberService();
-        $requisitionService = new \App\Services\RequisitionService();
+        $validateService = new \App\Services\ValidateRequisitionService;
+        $generatePONumberService = new \App\Services\GeneratePONumberService;
+        $requisitionService = new \App\Services\RequisitionService;
         $status = $validateService->validateStatus($requisition);
         if ($status instanceof \Illuminate\Http\RedirectResponse) {
             return $status; // Stop processing and redirect
@@ -564,7 +556,7 @@ class PurchasingController extends Controller
         if ($cc instanceof \Illuminate\Http\RedirectResponse) {
             return $cc; // Stop processing and redirect
         }
-        if (!$requisition->po_number) {
+        if (! $requisition->po_number) {
             $next_num = $generatePONumberService->generate($requisition);
         }
 
@@ -573,7 +565,7 @@ class PurchasingController extends Controller
         $requisition->processed_by = auth()->id();
         $requisition->save();
 
-        $excelService = new ExcelExportService();
+        $excelService = new ExcelExportService;
         $fileName = $excelService->generateCsv($requisition);
         activity()
             ->performedOn($requisition)
@@ -600,16 +592,16 @@ class PurchasingController extends Controller
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
 
         // If status is office_review, user must have approve-pricing permission (backoffice only)
-        if ($requisition->status === 'office_review' && !auth()->user()->can('requisitions.approve-pricing')) {
+        if ($requisition->status === 'office_review' && ! auth()->user()->can('requisitions.approve-pricing')) {
             return redirect()->back()->with('error', 'You do not have permission to approve pricing and send from office review.');
         }
 
-        $validateService = new \App\Services\ValidateRequisitionService();
-        $generatePONumberService = new \App\Services\GeneratePONumberService();
-        $requisitionService = new \App\Services\RequisitionService();
+        $validateService = new \App\Services\ValidateRequisitionService;
+        $generatePONumberService = new \App\Services\GeneratePONumberService;
+        $requisitionService = new \App\Services\RequisitionService;
         $validateService->validateStatus($requisition);
         $validateService->validateCostCodes($requisition);
-        if (!$requisition->po_number) {
+        if (! $requisition->po_number) {
             $generatePONumberService->generate($requisition);
         }
 
@@ -618,18 +610,14 @@ class PurchasingController extends Controller
         $requisition->processed_by = auth()->id();
         $requisition->save();
 
-        $authService = new PremierAuthenticationService();
+        $authService = new PremierAuthenticationService;
         $token = $authService->getAccessToken();
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
-        $companyService = new GetCompanyCodeService();
+        $companyService = new GetCompanyCodeService;
         $companyCode = $companyService->getCompanyCode($parentId);
         $payload = $requisitionService->generateRequisitionPayload($requisition, $companyCode);
         $requisitionService->sendRequisitionToPremierViaAPI($requisition, $payload);
     }
-
-
-
-
 
     public function markSentToSupplier($id)
     {
@@ -642,6 +630,7 @@ class PurchasingController extends Controller
             ->event('sent to supplier')
             ->causedBy(auth()->user())
             ->log("Requisition #{$requisition->id} was marked as sent to supplier.");
+
         return redirect()->back()->with('success', 'Marked as sent from Premier to Supplier');
     }
 
@@ -675,7 +664,7 @@ class PurchasingController extends Controller
     {
         $requisition = Requisition::with('lineItems')->findOrFail($id);
 
-        if (!in_array($requisition->status, ['pending', 'failed', 'office_review'])) {
+        if (! in_array($requisition->status, ['pending', 'failed', 'office_review'])) {
             return redirect()->back()->with('error', 'Cannot refresh pricing for requisitions that have been sent.');
         }
 
@@ -730,7 +719,7 @@ class PurchasingController extends Controller
             || $requisition->status === 'failed'
             || ($requisition->status === 'office_review' && auth()->user()->can('requisitions.approve-pricing'));
 
-        if (!$canEdit) {
+        if (! $canEdit) {
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();
@@ -790,6 +779,7 @@ class PurchasingController extends Controller
 
         return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition updated.');
     }
+
     public function __invoke(Requisition $requisition)
     {
         $pdf = pdf::loadView('requisition.pdf', [
@@ -804,21 +794,23 @@ class PurchasingController extends Controller
             ->causedBy(auth()->user())
 
             ->log("Requisition #{$requisition->id} was printed.");
+
         return $pdf->download("{$fileName}.pdf");
     }
+
     public function excelImport(Requisition $requisition)
     {
         // Generate a unique file name with a UUID
         $uuid = Str::uuid();
 
-
         $fileName = sprintf('PO-%s-import.xlsx', $uuid);
 
         // Define the file path
-        $filePath = storage_path('app/public/' . $fileName);
+        $filePath = storage_path('app/public/'.$fileName);
 
         // Create and export an Excel file using a closure
-        $stored = Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection {
+        $stored = Excel::store(new class($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection
+        {
             protected $requisition;
 
             public function __construct($requisition)
@@ -829,7 +821,6 @@ class PurchasingController extends Controller
             public function collection()
             {
                 $requisition = Requisition::with(['lineItems', 'supplier'])->find($this->requisition->id);
-
 
                 // Prepare the header row
                 $headers = [
@@ -860,7 +851,7 @@ class PurchasingController extends Controller
                     'GL Division',
                     'GL SubAccount',
                     'Tax Group',
-                    'Discount %'
+                    'Discount %',
                 ];
 
                 // Initialize the collection with the header row
@@ -874,7 +865,7 @@ class PurchasingController extends Controller
 
                     // Format only if costcode is present
                     $formattedCostcode = $costcode
-                        ? substr($costcode, 0, 2) . '-' . substr($costcode, 2)
+                        ? substr($costcode, 0, 2).'-'.substr($costcode, 2)
                         : 'N/A'; // or '' or null depending on what you want in export
 
                     $row = [
@@ -891,7 +882,7 @@ class PurchasingController extends Controller
                         'Requested By' => $requisition->requested_by ?? 'N/A',
                         'Line' => $index + 1,
                         'Item Code' => '',
-                        'Line Description' => $lineItem->code . '-' . $lineItem->description ?? 'N/A',
+                        'Line Description' => $lineItem->code.'-'.$lineItem->description ?? 'N/A',
                         'Qty' => $lineItem->qty ?? 0,
                         'UofM' => ((float) $lineItem->qty != (int) $lineItem->qty) ? 'm' : 'EA',
 
@@ -906,7 +897,7 @@ class PurchasingController extends Controller
                         'GL Division' => '',
                         'GL SubAccount' => '',
                         'Tax Group' => 'GST',
-                        'Discount %' => ''
+                        'Discount %' => '',
                     ];
 
                     $rows->push($row);
@@ -916,11 +907,11 @@ class PurchasingController extends Controller
             }
         }, $fileName, 'public', ExcelFormat::XLSX);
 
-        if (!$stored) {
+        if (! $stored) {
             abort(500, 'Failed to store Excel file.');
         }
 
-        if (!file_exists($filePath)) {
+        if (! file_exists($filePath)) {
             Log::error("Excel file not found: {$filePath}");
             abort(404, 'Excel file not found.');
         }
@@ -940,7 +931,7 @@ class PurchasingController extends Controller
         }
 
         // Extract PO number
-        if (!preg_match('/PO-(\d{6})/', $fileName, $matches)) {
+        if (! preg_match('/PO-(\d{6})/', $fileName, $matches)) {
             return response()->json(['error' => 'PO number not found in file name'], 400);
         }
 
@@ -951,10 +942,10 @@ class PurchasingController extends Controller
             ->performedOn($requisition)
             ->causedBy(auth()->user())
             ->log("Requisition #{$requisition->id} was received in Premier");
-        if (!$requisition) {
+        if (! $requisition) {
             return response()->json([
                 'error' => 'Requisition not found',
-                'po_number' => $poNumber
+                'po_number' => $poNumber,
             ], 404);
         }
 
@@ -965,7 +956,7 @@ class PurchasingController extends Controller
             return response()->json([
                 'message' => 'Status updated successfully',
                 'po_number' => $poNumber,
-                'status' => $requisition->status
+                'status' => $requisition->status,
             ], 200);
         } else {
             $requisition->status = 'failed';
@@ -974,7 +965,7 @@ class PurchasingController extends Controller
             return response()->json([
                 'message' => 'Status not updated due to non-200 status code',
                 'po_number' => $poNumber,
-                'received_status' => $status
+                'received_status' => $status,
             ], 202);
         }
     }
@@ -989,7 +980,7 @@ class PurchasingController extends Controller
 
         return response()->json([
             'message' => 'received successfully',
-            'body' => $poNumber
+            'body' => $poNumber,
         ]);
     }
 
@@ -998,7 +989,7 @@ class PurchasingController extends Controller
 
         $location = Location::findOrFail($locationId);
 
-        $requisitionService = new \App\Services\RequisitionService();
+        $requisitionService = new \App\Services\RequisitionService;
         $purchaseOrders = $requisitionService->loadPurchaseOrderIdsForLocation($locationId);
 
         foreach ($purchaseOrders->json('Data') as $index => $po) {
@@ -1023,7 +1014,7 @@ class PurchasingController extends Controller
     {
         $requisition = Requisition::with('lineItems')->findOrFail($id);
 
-        if (!$requisition->premier_po_id) {
+        if (! $requisition->premier_po_id) {
             return response()->json([
                 'error' => 'This requisition has not been synced with Premier yet.',
                 'can_compare' => false,
@@ -1031,7 +1022,7 @@ class PurchasingController extends Controller
         }
 
         try {
-            $comparisonService = new POComparisonService();
+            $comparisonService = new POComparisonService;
             $comparison = $comparisonService->compare($requisition);
 
             return response()->json([
@@ -1045,7 +1036,7 @@ class PurchasingController extends Controller
             ]);
 
             return response()->json([
-                'error' => 'Failed to fetch comparison data: ' . $e->getMessage(),
+                'error' => 'Failed to fetch comparison data: '.$e->getMessage(),
                 'can_compare' => false,
             ], 500);
         }
@@ -1058,11 +1049,11 @@ class PurchasingController extends Controller
     {
         $requisition = Requisition::findOrFail($id);
 
-        if (!$requisition->premier_po_id) {
+        if (! $requisition->premier_po_id) {
             return response()->json(['error' => 'No Premier PO ID'], 400);
         }
 
-        $premierService = new PremierPurchaseOrderService();
+        $premierService = new PremierPurchaseOrderService;
         $premierService->clearCache($requisition->premier_po_id);
 
         return $this->getComparison($id);

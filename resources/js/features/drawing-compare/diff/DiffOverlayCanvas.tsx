@@ -25,14 +25,7 @@ type DiffOverlayCanvasProps = {
  * Renders the diff mask overlay on top of the drawing.
  * The mask canvas is rendered into a visible canvas element.
  */
-export function DiffOverlayCanvas({
-    diffCanvas,
-    visible,
-    opacity = 0.7,
-    className = '',
-    displayWidth,
-    displayHeight,
-}: DiffOverlayCanvasProps) {
+export function DiffOverlayCanvas({ diffCanvas, visible, opacity = 0.7, className = '', displayWidth, displayHeight }: DiffOverlayCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // Copy the diff canvas content to our visible canvas
@@ -67,7 +60,7 @@ export function DiffOverlayCanvas({
     return (
         <canvas
             ref={canvasRef}
-            className={`absolute left-0 top-0 pointer-events-none ${className}`}
+            className={`pointer-events-none absolute top-0 left-0 ${className}`}
             style={{
                 opacity,
                 width,

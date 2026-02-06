@@ -3,18 +3,20 @@
 namespace App\Services;
 
 use App\Models\Location;
+use App\Models\LocationPayRateTemplate;
 use App\Models\Oncost;
 use App\Models\PayRateTemplate;
-use App\Models\LocationPayRateTemplate;
 
 class LabourCostCalculator
 {
     // Constants
     const HOURS_PER_WEEK = 40;
+
     const DAYS_PER_WEEK = 5;
 
     // Leave accrual percentages
     const ANNUAL_LEAVE_ACCRUAL = 0.0928;  // 9.28%
+
     const LEAVE_LOADING = 0.0461;          // 4.61%
 
     // Overtime multiplier
@@ -31,6 +33,7 @@ class LabourCostCalculator
         if ($this->oncostsCache === null) {
             $this->oncostsCache = Oncost::active()->ordered()->get()->toArray();
         }
+
         return $this->oncostsCache;
     }
 
@@ -46,13 +49,13 @@ class LabourCostCalculator
     /**
      * Calculate cost breakdown with support for decimal headcount, overtime, leave, RDO, and public holidays
      *
-     * @param Location $location The location
-     * @param LocationPayRateTemplate $config The pay rate template configuration
-     * @param float $headcount Number of workers (can be decimal, e.g., 0.4 for 2 days)
-     * @param float $overtimeHours Total overtime hours
-     * @param float $leaveHours Total leave hours (for oncosts only - wages paid from accruals)
-     * @param float $rdoHours RDO hours (wages NOT costed, accruals and oncosts ARE costed)
-     * @param float $publicHolidayNotWorkedHours Public Holiday hours (all costed, no allowances)
+     * @param  Location  $location  The location
+     * @param  LocationPayRateTemplate  $config  The pay rate template configuration
+     * @param  float  $headcount  Number of workers (can be decimal, e.g., 0.4 for 2 days)
+     * @param  float  $overtimeHours  Total overtime hours
+     * @param  float  $leaveHours  Total leave hours (for oncosts only - wages paid from accruals)
+     * @param  float  $rdoHours  RDO hours (wages NOT costed, accruals and oncosts ARE costed)
+     * @param  float  $publicHolidayNotWorkedHours  Public Holiday hours (all costed, no allowances)
      * @return array Cost breakdown
      */
     public function calculateWithOvertime(
@@ -69,18 +72,17 @@ class LabourCostCalculator
             'payRateTemplate.payCategories.payCategory',
             'customAllowances.allowanceType',
         ]);
-        $location->load('worktypes');
 
         $template = $config->payRateTemplate;
-        if (!$template) {
+        if (! $template) {
             return $this->emptyBreakdown(null);
         }
 
         // Get base hourly rate from "Permanent Ordinary Hours"
         $baseHourlyRate = $this->getBaseHourlyRate($template);
 
-        // Get allowances based on location worktypes
-        $allowances = $this->calculateAllowances($location, $template);
+        // Get allowances from explicitly configured template allowances
+        $allowances = $this->calculateAllowances($location, $template, $config);
 
         // Get custom allowances for this template config
         $customAllowances = $this->calculateCustomAllowances($config);
@@ -108,7 +110,10 @@ class LabourCostCalculator
      */
     public function calculateForLocation(Location $location): array
     {
-        $location->load(['worktypes', 'labourForecastTemplates.payRateTemplate.payCategories.payCategory']);
+        $location->load([
+            'labourForecastTemplates.payRateTemplate.payCategories.payCategory',
+            'labourForecastTemplates.customAllowances.allowanceType',
+        ]);
 
         $results = [];
         foreach ($location->labourForecastTemplates as $config) {
@@ -131,13 +136,18 @@ class LabourCostCalculator
                     : (float) $pc->user_supplied_rate;
             }
         }
+
         return 0.0;
     }
 
     /**
-     * Calculate allowances based on location worktypes and template pay categories
+     * Calculate allowances from explicitly configured template allowances
+     *
+     * This method reads allowances from the LocationTemplateAllowance records
+     * instead of auto-deriving from location worktypes. Allowances are categorized
+     * by their AllowanceType category: fares_travel, site, multistorey, custom.
      */
-    private function calculateAllowances(Location $location, PayRateTemplate $template): array
+    private function calculateAllowances(Location $location, PayRateTemplate $template, LocationPayRateTemplate $config): array
     {
         $allowances = [
             'fares_travel' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'daily'],
@@ -145,47 +155,43 @@ class LabourCostCalculator
             'multistorey' => ['rate' => 0, 'weekly' => 0, 'name' => null, 'type' => 'hourly'],
         ];
 
-        // Map worktypes to pay categories
-        foreach ($location->worktypes as $worktype) {
-            $worktypeName = strtolower($worktype->name);
+        // Read allowances from the configured custom allowances
+        // Each allowance has a category (fares_travel, site, multistorey, custom)
+        foreach ($config->customAllowances as $allowance) {
+            $category = $allowance->allowanceType->category ?? 'custom';
+            $rate = (float) $allowance->rate;
+            $rateType = $allowance->rate_type;
 
-            // Find matching pay category in template
-            foreach ($template->payCategories as $pc) {
-                $categoryName = $pc->payCategory?->name ?? $pc->pay_category_name;
-                if (!$categoryName) continue;
-
-                $categoryNameLower = strtolower($categoryName);
-                $rate = $pc->calculated_rate > 0 ? (float) $pc->calculated_rate : (float) $pc->user_supplied_rate;
-
-                // Match Fares and Travel
-                if ($this->matchesFaresTravel($worktypeName, $categoryNameLower)) {
+            // Map standard categories to the allowances structure
+            switch ($category) {
+                case 'fares_travel':
                     $allowances['fares_travel'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::DAYS_PER_WEEK,  // Daily rate × 5 days
-                        'name' => $categoryName,
-                        'type' => 'daily',
+                        'weekly' => $rateType === 'daily' ? $rate * self::DAYS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
 
-                // Match Site Allowance (Project size)
-                if ($this->matchesSiteAllowance($worktypeName, $categoryNameLower)) {
+                case 'site':
                     $allowances['site'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::HOURS_PER_WEEK,  // Hourly rate × 40 hours
-                        'name' => $categoryName,
-                        'type' => 'hourly',
+                        'weekly' => $rateType === 'hourly' ? $rate * self::HOURS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
 
-                // Match Multi-storey
-                if ($this->matchesMultistorey($worktypeName, $categoryNameLower)) {
+                case 'multistorey':
                     $allowances['multistorey'] = [
                         'rate' => $rate,
-                        'weekly' => $rate * self::HOURS_PER_WEEK,  // Hourly rate × 40 hours
-                        'name' => $categoryName,
-                        'type' => 'hourly',
+                        'weekly' => $rateType === 'hourly' ? $rate * self::HOURS_PER_WEEK : $rate,
+                        'name' => $allowance->allowanceType->name,
+                        'type' => $rateType,
                     ];
-                }
+                    break;
+
+                    // 'custom' category is handled separately in calculateCustomAllowances
             }
         }
 
@@ -194,12 +200,19 @@ class LabourCostCalculator
 
     /**
      * Calculate custom allowances from template configuration
+     * Only returns allowances with category 'custom' (not fares_travel, site, or multistorey)
      */
     private function calculateCustomAllowances(LocationPayRateTemplate $config): array
     {
         $customAllowances = [];
 
         foreach ($config->customAllowances as $allowance) {
+            // Only include allowances with category 'custom'
+            $category = $allowance->allowanceType->category ?? 'custom';
+            if ($category !== 'custom') {
+                continue;
+            }
+
             $customAllowances[] = [
                 'type_id' => $allowance->allowance_type_id,
                 'name' => $allowance->allowanceType->name,
@@ -216,28 +229,28 @@ class LabourCostCalculator
     /**
      * Filter allowances for RDO hours
      * Only returns allowances that should be paid during RDO
-     * - Standard allowances: Configurable via template flags (rdo_fares_travel, rdo_site_allowance, rdo_multistorey_allowance)
-     * - Custom allowances: Only those with paid_to_rdo = true
+     * All allowances now use the paid_to_rdo flag on their configuration
      */
     private function calculateRdoAllowances(LocationPayRateTemplate $config, array $standardAllowances): array
     {
-        // Include standard allowances based on configuration flags
+        // Initialize standard allowances with zeros
         $rdoStandardAllowances = [
-            'fares_travel' => $config->rdo_fares_travel
-                ? $standardAllowances['fares_travel']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'daily'],
-            'site' => $config->rdo_site_allowance
-                ? $standardAllowances['site']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
-            'multistorey' => $config->rdo_multistorey_allowance
-                ? $standardAllowances['multistorey']
-                : ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+            'fares_travel' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'daily'],
+            'site' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
+            'multistorey' => ['rate' => 0, 'amount' => 0, 'name' => null, 'type' => 'hourly'],
         ];
 
-        // Filter custom allowances where paid_to_rdo = true
+        // Filter allowances where paid_to_rdo = true
         $rdoCustomAllowances = [];
         foreach ($config->customAllowances as $allowance) {
-            if ($allowance->paid_to_rdo) {
+            if (! $allowance->paid_to_rdo) {
+                continue;
+            }
+
+            $category = $allowance->allowanceType->category ?? 'custom';
+
+            if ($category === 'custom') {
+                // Custom allowances go to the custom array
                 $rdoCustomAllowances[] = [
                     'type_id' => $allowance->allowance_type_id,
                     'name' => $allowance->allowanceType->name,
@@ -245,6 +258,9 @@ class LabourCostCalculator
                     'rate' => (float) $allowance->rate,
                     'rate_type' => $allowance->rate_type,
                 ];
+            } else {
+                // Standard categories (fares_travel, site, multistorey) go to standard array
+                $rdoStandardAllowances[$category] = $standardAllowances[$category];
             }
         }
 
@@ -274,7 +290,7 @@ class LabourCostCalculator
         preg_match('/zone\s*(\d)/', $worktype, $worktypeZone);
         preg_match('/zone\s*(\d)/', $category, $categoryZone);
 
-        if (!empty($worktypeZone[1]) && !empty($categoryZone[1])) {
+        if (! empty($worktypeZone[1]) && ! empty($categoryZone[1])) {
             return $worktypeZone[1] === $categoryZone[1];
         }
 
@@ -301,10 +317,11 @@ class LabourCostCalculator
         preg_match('/\$[\d.]+[mb]?\s*[-–]\s*\$[\d.]+[mb]?|\$[\d.]+[mb]?\+?|<\s*\$[\d.]+[mb]?/i', $worktype, $worktypeRange);
         preg_match('/\$[\d.]+[mb]?\s*[-–]\s*\$[\d.]+[mb]?|\$[\d.]+[mb]?\+?|<\s*\$[\d.]+[mb]?/i', $category, $categoryRange);
 
-        if (!empty($worktypeRange[0]) && !empty($categoryRange[0])) {
+        if (! empty($worktypeRange[0]) && ! empty($categoryRange[0])) {
             // Normalize the ranges for comparison
             $worktypeNorm = preg_replace('/\s+/', '', strtolower($worktypeRange[0]));
             $categoryNorm = preg_replace('/\s+/', '', strtolower($categoryRange[0]));
+
             return $worktypeNorm === $categoryNorm;
         }
 
@@ -396,8 +413,8 @@ class LabourCostCalculator
         $bewt = self::BEWT_WEEKLY;
         $cipq = self::CIPQ_WEEKLY;
 
-        // Percentage-based on-costs (on marked-up wages + super)
-        $taxableBase = $markedUpWages + $super;
+        // Percentage-based on-costs (on gross wages + super)
+        $taxableBase = $grossWages + $super;
         $payrollTax = $taxableBase * self::PAYROLL_TAX_RATE;
         $workcover = $taxableBase * self::WORKCOVER_RATE;
 
@@ -530,7 +547,7 @@ class LabourCostCalculator
         $ordinaryCustomAllowances = 0;
         $customAllowanceDetails = [];
         foreach ($customAllowances as $allowance) {
-            $weekly = match($allowance['rate_type']) {
+            $weekly = match ($allowance['rate_type']) {
                 'hourly' => $allowance['rate'] * $ordinaryHours,
                 'daily' => $allowance['rate'] * self::DAYS_PER_WEEK * $headcount,
                 'weekly' => $allowance['rate'] * $headcount,
@@ -622,12 +639,12 @@ class LabourCostCalculator
         // Super is typically only on ordinary hours (OTE), not overtime
         $superOncost = collect($oncosts)->firstWhere('code', 'SUPER');
         $superAmount = 0;
-        if ($superOncost && !$superOncost['is_percentage']) {
+        if ($superOncost && ! $superOncost['is_percentage']) {
             $superAmount = (float) $superOncost['hourly_rate'] * $ordinaryHours;
         }
 
-        // Taxable base includes both ordinary and overtime marked up amounts + super
-        $taxableBase = $ordinaryMarkedUp + $overtimeMarkedUp + $superAmount;
+        // Taxable base = gross wages + allowances + super (not marked-up wages)
+        $taxableBase = $ordinaryGross + $overtimeGross + $superAmount;
 
         foreach ($oncosts as $oncost) {
             $amount = 0;
@@ -688,7 +705,7 @@ class LabourCostCalculator
             // Calculate fixed oncosts prorated by HOURS
             // Each fixed oncost has an hourly rate
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     $leaveAmount = (float) $oncost['hourly_rate'] * $leaveHours;
                     $leaveFixedOncosts += $leaveAmount;
 
@@ -702,18 +719,24 @@ class LabourCostCalculator
                 }
             }
 
-            // Calculate percentage oncosts on the gross wages paid from accruals
-            // Base for percentage oncosts is the gross wages (no super added for leave)
+            // Calculate percentage oncosts on the gross wages + super
+            // Super is calculated on leave hours at the same hourly rate as ordinary hours
+            $leaveSuperAmount = 0;
+            if ($superOncost && ! $superOncost['is_percentage']) {
+                $leaveSuperAmount = (float) $superOncost['hourly_rate'] * $leaveHours;
+            }
+            $leaveTaxableBase = $leaveGrossWages + $leaveSuperAmount;
+
             foreach ($oncosts as $oncost) {
                 if ($oncost['is_percentage']) {
-                    $leaveAmount = $leaveGrossWages * (float) $oncost['percentage_rate'];
+                    $leaveAmount = $leaveTaxableBase * (float) $oncost['percentage_rate'];
                     $leavePercentageOncosts += $leaveAmount;
 
                     $leaveOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($leaveGrossWages, 2),
+                        'base' => round($leaveTaxableBase, 2),
                         'amount' => round($leaveAmount, 2),
                     ];
                 }
@@ -752,7 +775,7 @@ class LabourCostCalculator
 
             // Calculate custom allowances for RDO hours (only those with paid_to_rdo = true)
             foreach ($rdoAllowanceData['custom'] as $allowance) {
-                $amount = match($allowance['rate_type']) {
+                $amount = match ($allowance['rate_type']) {
                     'hourly' => $allowance['rate'] * $rdoHours,
                     'daily' => $allowance['rate'] * $rdoDays,
                     'weekly' => $allowance['rate'], // Full weekly for RDO
@@ -785,7 +808,7 @@ class LabourCostCalculator
             $rdoOncostDetails = [];
 
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     // Fixed oncost: hourly rate × RDO hours
                     $amount = (float) $oncost['hourly_rate'] * $rdoHours;
                     $rdoFixedOncosts += $amount;
@@ -798,15 +821,21 @@ class LabourCostCalculator
                         'amount' => round($amount, 2),
                     ];
                 } else {
-                    // Percentage oncost on the accruals total
-                    $amount = $rdoAccrualsTotal * (float) $oncost['percentage_rate'];
+                    // Percentage oncost on accruals total + super
+                    $rdoSuperAmount = 0;
+                    if ($superOncost && ! $superOncost['is_percentage']) {
+                        $rdoSuperAmount = (float) $superOncost['hourly_rate'] * $rdoHours;
+                    }
+                    $rdoTaxableBase = $rdoAccrualsTotal + $rdoSuperAmount;
+
+                    $amount = $rdoTaxableBase * (float) $oncost['percentage_rate'];
                     $rdoPercentageOncosts += $amount;
 
                     $rdoOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($rdoAccrualsTotal, 2),
+                        'base' => round($rdoTaxableBase, 2),
                         'amount' => round($amount, 2),
                     ];
                 }
@@ -847,7 +876,7 @@ class LabourCostCalculator
             $phOncostDetails = [];
 
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     $amount = (float) $oncost['hourly_rate'] * $publicHolidayNotWorkedHours;
                     $phFixedOncosts += $amount;
 
@@ -859,15 +888,21 @@ class LabourCostCalculator
                         'amount' => round($amount, 2),
                     ];
                 } else {
-                    // Percentage oncost on marked up wages
-                    $amount = $phMarkedUp * (float) $oncost['percentage_rate'];
+                    // Percentage oncost on marked up wages + super
+                    $phSuperAmount = 0;
+                    if ($superOncost && ! $superOncost['is_percentage']) {
+                        $phSuperAmount = (float) $superOncost['hourly_rate'] * $publicHolidayNotWorkedHours;
+                    }
+                    $phTaxableBase = $phMarkedUp + $phSuperAmount;
+
+                    $amount = $phTaxableBase * (float) $oncost['percentage_rate'];
                     $phPercentageOncosts += $amount;
 
                     $phOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($phMarkedUp, 2),
+                        'base' => round($phTaxableBase, 2),
                         'amount' => round($amount, 2),
                     ];
                 }
@@ -883,13 +918,17 @@ class LabourCostCalculator
         // TOTALS
         // ==========================================
 
+        // Check if leave markups should be job costed (defaults to false)
+        $leaveMarkupsJobCosted = $config?->leave_markups_job_costed ?? false;
+
         // Total cost includes:
         // - Worked hours wages (ordinary + overtime marked up)
-        // - Leave markups (accruals only, not wages)
+        // - Leave markups (only if leave_markups_job_costed is true)
         // - RDO accruals and oncosts (wages NOT included - paid from balance)
         // - Public Holiday wages, accruals, and oncosts (all included)
-        // - All oncosts (worked + leave + RDO + PH)
-        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsTotal
+        // - All oncosts (worked + leave + RDO + PH) - always included
+        $leaveMarkupsCost = $leaveMarkupsJobCosted ? $leaveMarkupsTotal : 0;
+        $totalWeeklyCost = $ordinaryMarkedUp + $overtimeMarkedUp + $leaveMarkupsCost
             + $rdoAccrualsTotal  // RDO accruals only (wages NOT costed)
             + $phMarkedUp        // PH wages + accruals
             + $totalOncostsIncludingLeave;
@@ -967,15 +1006,17 @@ class LabourCostCalculator
                 'marked_up' => round($overtimeMarkedUp, 2),
             ],
 
-            // Leave hours: wages paid from accruals (not job costed), but leave markups and oncosts ARE job costed
+            // Leave hours: wages paid from accruals (not job costed)
+            // Leave markups job costed only if toggle is enabled, oncosts always job costed
             'leave' => [
                 'hours' => round($leaveHours, 2),
                 'days' => round($leaveHours / 8, 2),
                 'gross_wages' => round($leaveGrossWages, 2), // Paid from accruals, NOT job costed
+                'leave_markups_job_costed' => $leaveMarkupsJobCosted,
                 'leave_markups' => [
                     'annual_leave_accrual' => round($leaveGrossWages * self::ANNUAL_LEAVE_ACCRUAL, 2),
                     'leave_loading' => round($leaveGrossWages * self::LEAVE_LOADING, 2),
-                    'total' => round($leaveMarkupsTotal, 2), // This IS job costed to 03-01
+                    'total' => round($leaveMarkupsTotal, 2), // Only job costed if leave_markups_job_costed is true
                 ],
                 'oncosts' => [
                     'items' => $leaveOncostDetails,
@@ -983,7 +1024,7 @@ class LabourCostCalculator
                     'percentage_total' => round($leavePercentageOncosts, 2),
                     'total' => round($leaveOncostsTotal, 2),
                 ],
-                'total_cost' => round($leaveMarkupsTotal + $leaveOncostsTotal, 2), // Leave markups + oncosts
+                'total_cost' => round($leaveMarkupsCost + $leaveOncostsTotal, 2), // Leave markups (if enabled) + oncosts
             ],
 
             // RDO hours: wages paid from balance (NOT job costed), allowances and accruals ARE job costed

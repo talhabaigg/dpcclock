@@ -4,16 +4,14 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Response;
-use Spatie\OneTimePasswords\Notifications\OneTimePasswordNotification;
-use Spatie\OneTimePasswords\Enums\ConsumeOneTimePasswordResult;
-use App\Models\User;
-use Illuminate\Support\Facades\Cookie;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -41,7 +39,7 @@ class AuthenticatedSessionController extends Controller
 
         if ($user->two_factor_enabled) {
             // Check if this device is trusted for this user
-            if (!$this->isDeviceTrusted($request, $user->id)) {
+            if (! $this->isDeviceTrusted($request, $user->id)) {
                 $user->sendOneTimePassword();
                 session(['otp_user_id' => $user->id]);
                 Auth::logout();
@@ -60,7 +58,7 @@ class AuthenticatedSessionController extends Controller
     {
         $trustedUsers = $request->cookie('otp_trusted_device');
 
-        if (!$trustedUsers) {
+        if (! $trustedUsers) {
             return false;
         }
 
@@ -78,7 +76,7 @@ class AuthenticatedSessionController extends Controller
         $existingCookie = request()->cookie('otp_trusted_device');
         $trustedUserIds = $existingCookie ? explode(',', $existingCookie) : [];
 
-        if (!in_array((string) $userId, $trustedUserIds, true)) {
+        if (! in_array((string) $userId, $trustedUserIds, true)) {
             $trustedUserIds[] = (string) $userId;
         }
 
@@ -129,13 +127,13 @@ class AuthenticatedSessionController extends Controller
 
         $userId = session('otp_user_id');
 
-        if (!$userId) {
+        if (! $userId) {
             return redirect()->route('login')->withErrors(['otp' => 'User not found.']);
         }
 
         $user = User::find($userId);
 
-        if (!$user) {
+        if (! $user) {
             return redirect()->route('login')->withErrors(['otp' => 'User not found.']);
         }
 

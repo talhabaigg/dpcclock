@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use App\Models\Worktype;
+use Illuminate\Database\Eloquent\Model;
+
 class Employee extends Model
 {
     use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $fillable = [
         'eh_employee_id',
         'name',

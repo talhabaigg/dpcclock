@@ -1,46 +1,40 @@
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Settings, Maximize2, Clock, Receipt } from 'lucide-react';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import AppLayout from '@/layouts/app-layout';
+import { BreadcrumbItem } from '@/types';
+import { Head, Link, router } from '@inertiajs/react';
+import { Clock, Maximize2, Plus, Receipt, Settings } from 'lucide-react';
+import React, { useState } from 'react';
 
 // Local imports
-import type { CashForecastProps, GeneralCost } from './types';
-import { formatAmount, formatMonthHeader } from './utils';
-import { useCashForecastData, useWaterfallData } from './hooks';
-import { useCashInAdjustments, useCashOutAdjustments, useVendorPaymentDelays } from './hooks';
 import {
     CashFlowBarChart,
-    CumulativeLineChart,
-    WaterfallChart,
-    SummaryCardsGrid,
+    CashFlowSectionRow,
     CashFlowTableContainer,
     CashFlowTableHeader,
-    CashFlowSectionRow,
-    CostItemRow,
-    JobRow,
-    VendorRow,
-    VendorJobRow,
-    NetCashflowRow,
-    RunningBalanceRow,
-    SettingsModal,
-    GeneralCostsModal,
     CashInAdjustmentModal,
     CashOutAdjustmentModal,
-    VendorPaymentDelayModal,
+    CostItemRow,
+    CumulativeLineChart,
     FullscreenChartModal,
-    PaymentRulesLegend,
+    GeneralCostsModal,
     GstBreakdownModal,
+    JobRow,
+    NetCashflowRow,
+    PaymentRulesLegend,
+    RunningBalanceRow,
+    SettingsModal,
+    SummaryCardsGrid,
+    VendorJobRow,
+    VendorPaymentDelayModal,
+    VendorRow,
+    WaterfallChart,
 } from './components';
+import { useCashForecastData, useCashInAdjustments, useCashOutAdjustments, useVendorPaymentDelays, useWaterfallData } from './hooks';
+import type { CashForecastProps, GeneralCost } from './types';
+import { formatAmount, formatMonthHeader } from './utils';
 
 const ShowCashForecast = ({
     months,
@@ -110,19 +104,13 @@ const ShowCashForecast = ({
         costCodeDescriptions,
     });
 
-    const {
-        waterfallData,
-        waterfallStartMonth,
-        waterfallEndMonth,
-        waterfallMonthOptions,
-        setWaterfallStartMonth,
-        setWaterfallEndMonth,
-    } = useWaterfallData({
-        months,
-        startMonth: months[0]?.month ?? '',
-        endMonth: months[months.length - 1]?.month ?? '',
-        costTypeByCostItem,
-    });
+    const { waterfallData, waterfallStartMonth, waterfallEndMonth, waterfallMonthOptions, setWaterfallStartMonth, setWaterfallEndMonth } =
+        useWaterfallData({
+            months,
+            startMonth: months[0]?.month ?? '',
+            endMonth: months[months.length - 1]?.month ?? '',
+            costTypeByCostItem,
+        });
 
     // Cash adjustment hooks
     const cashInAdjustmentHook = useCashInAdjustments({
@@ -169,7 +157,7 @@ const ShowCashForecast = ({
                 gst_q3_pay_month: gstPayMonths.q3,
                 gst_q4_pay_month: gstPayMonths.q4,
             },
-            { preserveScroll: true }
+            { preserveScroll: true },
         );
         setShowSettings(false);
     };
@@ -193,7 +181,7 @@ const ShowCashForecast = ({
                         start_date: new Date().toISOString().split('T')[0],
                     });
                 },
-            }
+            },
         );
     };
 
@@ -275,45 +263,49 @@ const ShowCashForecast = ({
                         costCodeDescriptions={costCodeDescriptions}
                         cashOutSources={cashOutSources}
                     />
-                    {isExpanded && hasVendors && vendors.map((vendor) => (
-                        <React.Fragment key={`out-${costItemCode}-${vendor.vendor}`}>
-                            <VendorRow
-                                vendor={vendor.vendor}
-                                costItemCode={costItemCode}
-                                hasAdjustment={cashOutAdjustmentVendors.has(`${costItemCode}|${vendor.vendor}`)}
-                                onAdjust={() => cashOutAdjustmentHook.openModal('ALL', costItemCode, vendor.vendor)}
-                                months={months}
-                                total={vendor.total}
-                                currentMonth={currentMonth}
-                                source={vendor.source}
-                            />
-                            {vendor.jobs?.map((job) => (
-                                <VendorJobRow
-                                    key={`out-${costItemCode}-${vendor.vendor}-${job.jobNumber}`}
-                                    jobNumber={job.jobNumber}
+                    {isExpanded &&
+                        hasVendors &&
+                        vendors.map((vendor) => (
+                            <React.Fragment key={`out-${costItemCode}-${vendor.vendor}`}>
+                                <VendorRow
                                     vendor={vendor.vendor}
                                     costItemCode={costItemCode}
+                                    hasAdjustment={cashOutAdjustmentVendors.has(`${costItemCode}|${vendor.vendor}`)}
+                                    onAdjust={() => cashOutAdjustmentHook.openModal('ALL', costItemCode, vendor.vendor)}
                                     months={months}
-                                    total={job.total}
+                                    total={vendor.total}
                                     currentMonth={currentMonth}
+                                    source={vendor.source}
                                 />
-                            ))}
-                        </React.Fragment>
-                    ))}
-                    {isExpanded && !hasVendors && jobs.map((job) => (
-                        <JobRow
-                            key={`out-${costItemCode}-${job.jobNumber}`}
-                            jobNumber={job.jobNumber}
-                            hasAdjustment={false}
-                            onAdjust={() => cashOutAdjustmentHook.openModal(job.jobNumber, costItemCode, 'GL')}
-                            months={months}
-                            costItemCode={costItemCode}
-                            flowType="cash_out"
-                            total={job.total}
-                            currentMonth={currentMonth}
-                            cashOutSources={cashOutSources}
-                        />
-                    ))}
+                                {vendor.jobs?.map((job) => (
+                                    <VendorJobRow
+                                        key={`out-${costItemCode}-${vendor.vendor}-${job.jobNumber}`}
+                                        jobNumber={job.jobNumber}
+                                        vendor={vendor.vendor}
+                                        costItemCode={costItemCode}
+                                        months={months}
+                                        total={job.total}
+                                        currentMonth={currentMonth}
+                                    />
+                                ))}
+                            </React.Fragment>
+                        ))}
+                    {isExpanded &&
+                        !hasVendors &&
+                        jobs.map((job) => (
+                            <JobRow
+                                key={`out-${costItemCode}-${job.jobNumber}`}
+                                jobNumber={job.jobNumber}
+                                hasAdjustment={false}
+                                onAdjust={() => cashOutAdjustmentHook.openModal(job.jobNumber, costItemCode, 'GL')}
+                                months={months}
+                                costItemCode={costItemCode}
+                                flowType="cash_out"
+                                total={job.total}
+                                currentMonth={currentMonth}
+                                cashOutSources={cashOutSources}
+                            />
+                        ))}
                 </React.Fragment>
             );
         });
@@ -322,49 +314,40 @@ const ShowCashForecast = ({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashflow Forecast" />
-            <div className="p-4 sm:p-6 space-y-6 bg-background text-foreground min-h-screen">
+            <div className="bg-background text-foreground min-h-screen space-y-6 p-4 sm:p-6">
                 {/* Header */}
-                <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Cashflow Forecast</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            12-month rolling forecast with payment timing rules applied
-                        </p>
+                        <p className="text-muted-foreground mt-1 text-sm">12-month rolling forecast with payment timing rules applied</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="gap-2">
-                                    <Clock className="w-4 h-4" />
+                                    <Clock className="h-4 w-4" />
                                     Vendor Delays
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
                                 {vendorDelayHook.getVendors().map((vendor) => (
-                                    <DropdownMenuItem
-                                        key={vendor}
-                                        onClick={() => vendorDelayHook.openModal(vendor)}
-                                    >
+                                    <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
                                         {vendor}
                                     </DropdownMenuItem>
                                 ))}
-                                {vendorDelayHook.getVendors().length === 0 && (
-                                    <DropdownMenuItem disabled>
-                                        No vendors found
-                                    </DropdownMenuItem>
-                                )}
+                                {vendorDelayHook.getVendors().length === 0 && <DropdownMenuItem disabled>No vendors found</DropdownMenuItem>}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button onClick={() => setShowGstBreakdown(true)} variant="outline" className="gap-2">
-                            <Receipt className="w-4 h-4" />
+                            <Receipt className="h-4 w-4" />
                             GST Breakdown
                         </Button>
                         <Button onClick={() => setShowGeneralCosts(true)} variant="outline" className="gap-2">
-                            <Plus className="w-4 h-4" />
+                            <Plus className="h-4 w-4" />
                             General Transactions
                         </Button>
                         <Button onClick={() => setShowSettings(true)} className="gap-2">
-                            <Settings className="w-4 h-4" />
+                            <Settings className="h-4 w-4" />
                             Settings
                         </Button>
                     </div>
@@ -380,18 +363,13 @@ const ShowCashForecast = ({
                 />
 
                 {/* Charts Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     {/* Monthly Cash Flow Chart */}
                     <Card>
                         <CardHeader className="flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm">Monthly Cash Flow</CardTitle>
-                            <Button
-                                onClick={() => setShowFullscreenChart('bar')}
-                                variant="ghost"
-                                size="icon"
-                                title="Fullscreen"
-                            >
-                                <Maximize2 className="w-4 h-4" />
+                            <Button onClick={() => setShowFullscreenChart('bar')} variant="ghost" size="icon" title="Fullscreen">
+                                <Maximize2 className="h-4 w-4" />
                             </Button>
                         </CardHeader>
                         <CardContent>
@@ -403,18 +381,13 @@ const ShowCashForecast = ({
                     <Card>
                         <CardHeader className="flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm">Cumulative Cash Position</CardTitle>
-                            <Button
-                                onClick={() => setShowFullscreenChart('cumulative')}
-                                variant="ghost"
-                                size="icon"
-                                title="Fullscreen"
-                            >
-                                <Maximize2 className="w-4 h-4" />
+                            <Button onClick={() => setShowFullscreenChart('cumulative')} variant="ghost" size="icon" title="Fullscreen">
+                                <Maximize2 className="h-4 w-4" />
                             </Button>
                         </CardHeader>
                         <CardContent>
                             <CumulativeLineChart data={cumulativeData} height={200} startingBalance={startingBalance} />
-                            <div className="text-center mt-2">
+                            <div className="mt-2 text-center">
                                 <span className={`text-sm font-medium ${endingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     Ending: ${formatAmount(endingBalance)}
                                 </span>
@@ -431,13 +404,8 @@ const ShowCashForecast = ({
                                     <CardDescription>Summarized by cost type for the selected range</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Button
-                                        onClick={() => setShowFullscreenChart('waterfall')}
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Fullscreen"
-                                    >
-                                        <Maximize2 className="w-4 h-4" />
+                                    <Button onClick={() => setShowFullscreenChart('waterfall')} variant="ghost" size="icon" title="Fullscreen">
+                                        <Maximize2 className="h-4 w-4" />
                                     </Button>
                                     <Button variant="secondary" size="sm" asChild>
                                         <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
@@ -557,9 +525,7 @@ const ShowCashForecast = ({
                 jobNumber={cashInAdjustmentHook.modalState.jobNumber}
                 sourceMonth={cashInAdjustmentHook.modalState.sourceMonth}
                 sourceMonths={
-                    cashInAdjustmentHook.modalState.jobNumber
-                        ? cashInAdjustmentHook.getSourceMonths(cashInAdjustmentHook.modalState.jobNumber)
-                        : []
+                    cashInAdjustmentHook.modalState.jobNumber ? cashInAdjustmentHook.getSourceMonths(cashInAdjustmentHook.modalState.jobNumber) : []
                 }
                 splits={cashInAdjustmentHook.modalState.splits}
                 sourceAmount={cashInAdjustmentHook.sourceAmount}
@@ -585,13 +551,11 @@ const ShowCashForecast = ({
                 vendor={cashOutAdjustmentHook.modalState.vendor}
                 sourceMonth={cashOutAdjustmentHook.modalState.sourceMonth}
                 sourceMonths={
-                    cashOutAdjustmentHook.modalState.jobNumber &&
-                    cashOutAdjustmentHook.modalState.costItem &&
-                    cashOutAdjustmentHook.modalState.vendor
+                    cashOutAdjustmentHook.modalState.jobNumber && cashOutAdjustmentHook.modalState.costItem && cashOutAdjustmentHook.modalState.vendor
                         ? cashOutAdjustmentHook.getSourceMonths(
                               cashOutAdjustmentHook.modalState.jobNumber,
                               cashOutAdjustmentHook.modalState.costItem,
-                              cashOutAdjustmentHook.modalState.vendor
+                              cashOutAdjustmentHook.modalState.vendor,
                           )
                         : []
                 }
@@ -616,11 +580,7 @@ const ShowCashForecast = ({
                 }}
                 vendor={vendorDelayHook.modalState.vendor}
                 sourceMonth={vendorDelayHook.modalState.sourceMonth}
-                sourceMonths={
-                    vendorDelayHook.modalState.vendor
-                        ? vendorDelayHook.getSourceMonths(vendorDelayHook.modalState.vendor)
-                        : []
-                }
+                sourceMonths={vendorDelayHook.modalState.vendor ? vendorDelayHook.getSourceMonths(vendorDelayHook.modalState.vendor) : []}
                 splits={vendorDelayHook.modalState.splits}
                 sourceAmount={vendorDelayHook.sourceAmount}
                 splitTotal={vendorDelayHook.splitTotal}
@@ -655,11 +615,7 @@ const ShowCashForecast = ({
                 {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
             </FullscreenChartModal>
 
-            <GstBreakdownModal
-                open={showGstBreakdown}
-                onOpenChange={setShowGstBreakdown}
-                gstBreakdown={gstBreakdown}
-            />
+            <GstBreakdownModal open={showGstBreakdown} onOpenChange={setShowGstBreakdown} gstBreakdown={gstBreakdown} />
         </AppLayout>
     );
 };

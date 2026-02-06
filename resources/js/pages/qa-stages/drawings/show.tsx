@@ -225,29 +225,29 @@ export default function QaStageDrawingShow() {
     // Build breadcrumbs based on source
     const breadcrumbs: BreadcrumbItem[] = isFromDrawingSet
         ? [
-            { title: 'Projects', href: '/locations' },
-            {
-                title: project?.name || drawing.drawing_set?.project?.name || 'Project',
-                href: project?.id ? `/locations/${project.id}` : '/locations',
-            },
-            {
-                title: 'Drawing Sets',
-                href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
-            },
-            {
-                title: drawing.drawing_set?.original_filename || 'Drawing Set',
-                href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
-            },
-            { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-        ]
+              { title: 'Projects', href: '/locations' },
+              {
+                  title: project?.name || drawing.drawing_set?.project?.name || 'Project',
+                  href: project?.id ? `/locations/${project.id}` : '/locations',
+              },
+              {
+                  title: 'Drawing Sets',
+                  href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
+              },
+              {
+                  title: drawing.drawing_set?.original_filename || 'Drawing Set',
+                  href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
+              },
+              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+          ]
         : [
-            { title: 'QA Stages', href: '/qa-stages' },
-            {
-                title: drawing.qa_stage?.name || 'QA Stage',
-                href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
-            },
-            { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-        ];
+              { title: 'QA Stages', href: '/qa-stages' },
+              {
+                  title: drawing.qa_stage?.name || 'QA Stage',
+                  href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
+              },
+              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
+          ];
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
@@ -384,47 +384,52 @@ export default function QaStageDrawingShow() {
     });
 
     // Helper to signal base canvas render complete
-    const signalBaseRenderComplete = useCallback((renderedScale: number) => {
-        baseRenderedAtScaleRef.current = renderedScale;
+    const signalBaseRenderComplete = useCallback(
+        (renderedScale: number) => {
+            baseRenderedAtScaleRef.current = renderedScale;
 
-        // Clear any pending timer
-        if (renderCompleteTimerRef.current) {
-            clearTimeout(renderCompleteTimerRef.current);
-        }
-
-        // Wait a bit for candidate canvas to also finish rendering
-        renderCompleteTimerRef.current = setTimeout(() => {
-            // Only increment renderVersion if we're at the current scale
-            if (Math.abs(renderedScale - pdfScale) < 0.001) {
-                lastRenderedScaleRef.current = renderedScale;
-                setRenderVersion((v) => v + 1);
+            // Clear any pending timer
+            if (renderCompleteTimerRef.current) {
+                clearTimeout(renderCompleteTimerRef.current);
             }
-        }, 200); // Increased delay to allow candidate canvas to render
-    }, [pdfScale]);
 
-    // Helper to signal candidate canvas render complete
-    const signalCandidateRenderComplete = useCallback((renderedScale: number) => {
-        candidateRenderedAtScaleRef.current = renderedScale;
-
-        // Clear any pending timer
-        if (renderCompleteTimerRef.current) {
-            clearTimeout(renderCompleteTimerRef.current);
-        }
-
-        // Check if base has also rendered at this scale
-        const baseReady = baseRenderedAtScaleRef.current !== null &&
-            Math.abs(baseRenderedAtScaleRef.current - renderedScale) < 0.001;
-
-        if (baseReady && Math.abs(renderedScale - pdfScale) < 0.001) {
-            // Both canvases rendered at current scale - trigger diff after short delay
+            // Wait a bit for candidate canvas to also finish rendering
             renderCompleteTimerRef.current = setTimeout(() => {
+                // Only increment renderVersion if we're at the current scale
                 if (Math.abs(renderedScale - pdfScale) < 0.001) {
                     lastRenderedScaleRef.current = renderedScale;
                     setRenderVersion((v) => v + 1);
                 }
-            }, 100);
-        }
-    }, [pdfScale]);
+            }, 200); // Increased delay to allow candidate canvas to render
+        },
+        [pdfScale],
+    );
+
+    // Helper to signal candidate canvas render complete
+    const signalCandidateRenderComplete = useCallback(
+        (renderedScale: number) => {
+            candidateRenderedAtScaleRef.current = renderedScale;
+
+            // Clear any pending timer
+            if (renderCompleteTimerRef.current) {
+                clearTimeout(renderCompleteTimerRef.current);
+            }
+
+            // Check if base has also rendered at this scale
+            const baseReady = baseRenderedAtScaleRef.current !== null && Math.abs(baseRenderedAtScaleRef.current - renderedScale) < 0.001;
+
+            if (baseReady && Math.abs(renderedScale - pdfScale) < 0.001) {
+                // Both canvases rendered at current scale - trigger diff after short delay
+                renderCompleteTimerRef.current = setTimeout(() => {
+                    if (Math.abs(renderedScale - pdfScale) < 0.001) {
+                        lastRenderedScaleRef.current = renderedScale;
+                        setRenderVersion((v) => v + 1);
+                    }
+                }, 100);
+            }
+        },
+        [pdfScale],
+    );
 
     // Cleanup render complete timer on unmount
     useEffect(() => {
@@ -554,7 +559,7 @@ export default function QaStageDrawingShow() {
             }
             return false;
         },
-         
+
         [drawing.id], // Intentionally exclude alignmentTool to prevent loops
     );
 
@@ -585,7 +590,6 @@ export default function QaStageDrawingShow() {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-         
     }, [alignmentTool.isAligned, alignmentTool.transform.cssTransform, compareRevisionId]);
 
     // Load alignment when candidate revision changes
@@ -605,8 +609,8 @@ export default function QaStageDrawingShow() {
     // Determine if candidate is a PDF (check pdf_url first, then file_url)
     const candidateIsPdf = candidateRevision
         ? Boolean(candidateRevision.pdf_url) ||
-        (candidateRevision.file_url?.toLowerCase().endsWith('.pdf') ?? false) ||
-        (candidateRevision.file_path?.toLowerCase().endsWith('.pdf') ?? false)
+          (candidateRevision.file_url?.toLowerCase().endsWith('.pdf') ?? false) ||
+          (candidateRevision.file_path?.toLowerCase().endsWith('.pdf') ?? false)
         : false;
 
     // Get the candidate PDF URL
@@ -616,8 +620,14 @@ export default function QaStageDrawingShow() {
     // Priority: Use PDF if pdf_url is available (including for drawing set sheets with original PDF)
     const hasPdfUrl = Boolean(drawing.pdf_url);
     const hasPreviewImage = Boolean(drawing.page_preview_s3_key);
-    const isPdf = hasPdfUrl || (!hasPreviewImage && ((drawing.file_type || '').toLowerCase().includes('pdf') || (drawing.file_name || '').toLowerCase().endsWith('.pdf')));
-    const isImage = !isPdf && (hasPreviewImage || (drawing.file_type || '').toLowerCase().startsWith('image') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name || ''));
+    const isPdf =
+        hasPdfUrl ||
+        (!hasPreviewImage && ((drawing.file_type || '').toLowerCase().includes('pdf') || (drawing.file_name || '').toLowerCase().endsWith('.pdf')));
+    const isImage =
+        !isPdf &&
+        (hasPreviewImage ||
+            (drawing.file_type || '').toLowerCase().startsWith('image') ||
+            /\.(png|jpe?g|gif|webp|bmp)$/i.test(drawing.file_name || ''));
     const canPanZoom = isPdf || isImage;
 
     // Check if Leaflet tiled viewer is available
@@ -626,7 +636,6 @@ export default function QaStageDrawingShow() {
 
     // Get the URL to use for PDF loading
     const pdfUrl = drawing.pdf_url || drawing.file_url;
-
 
     // Handle alignment clicks on base layer
     const handleAlignmentBaseClick = useCallback(
@@ -825,7 +834,6 @@ export default function QaStageDrawingShow() {
             }, 100);
             return () => clearTimeout(timeoutId);
         }
-         
     }, [diffCanvasVersion, showCompareOverlay]);
 
     // Load and render candidate PDF for overlay comparison
@@ -913,8 +921,7 @@ export default function QaStageDrawingShow() {
             return;
         }
 
-        const totalHeight =
-            Object.values(pageSizes).reduce((sum, size) => sum + size.height, 0) + Math.max(0, pdfPageCount - 1) * PDF_PAGE_GAP_PX;
+        const totalHeight = Object.values(pageSizes).reduce((sum, size) => sum + size.height, 0) + Math.max(0, pdfPageCount - 1) * PDF_PAGE_GAP_PX;
         const maxWidth = Math.max(...Object.values(pageSizes).map((size) => size.width));
 
         const { clientWidth, clientHeight } = containerRef.current;
@@ -1061,7 +1068,7 @@ export default function QaStageDrawingShow() {
                 if (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX) {
                     didSelectDragRef.current = true;
                 }
-                setSelectionRect((prev) => prev ? { ...prev, currentX: x, currentY: y } : null);
+                setSelectionRect((prev) => (prev ? { ...prev, currentX: x, currentY: y } : null));
             }
             return;
         }
@@ -1087,12 +1094,8 @@ export default function QaStageDrawingShow() {
         if (!selectionRect || !containerRef.current) return [];
 
         // Get content dimensions
-        const contentWidth = isPdf
-            ? (pageSizes[1]?.width || 0)
-            : (baseImageSize?.width || 0) * pdfScale;
-        const contentHeight = isPdf
-            ? (pageSizes[1]?.height || 0)
-            : (baseImageSize?.height || 0) * pdfScale;
+        const contentWidth = isPdf ? pageSizes[1]?.width || 0 : (baseImageSize?.width || 0) * pdfScale;
+        const contentHeight = isPdf ? pageSizes[1]?.height || 0 : (baseImageSize?.height || 0) * pdfScale;
 
         if (contentWidth === 0 || contentHeight === 0) return [];
 
@@ -1403,9 +1406,7 @@ export default function QaStageDrawingShow() {
             }
 
             // Update local state with the new description
-            setServerObservations((prev) =>
-                prev.map((obs) => (obs.id === editingObservation.id ? data.observation : obs))
-            );
+            setServerObservations((prev) => prev.map((obs) => (obs.id === editingObservation.id ? data.observation : obs)));
             setEditingObservation(data.observation);
             setDescription(data.observation.description);
             toast.success('AI description generated.');
@@ -1442,7 +1443,7 @@ export default function QaStageDrawingShow() {
                         Accept: 'application/json',
                     },
                     credentials: 'same-origin',
-                })
+                }),
             );
 
             const results = await Promise.allSettled(deletePromises);
@@ -1453,7 +1454,7 @@ export default function QaStageDrawingShow() {
             const deletedIds = new Set(
                 aiObservations
                     .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
-                    .map((obs) => obs.id)
+                    .map((obs) => obs.id),
             );
             setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
 
@@ -1476,7 +1477,11 @@ export default function QaStageDrawingShow() {
             return;
         }
 
-        if (!confirm(`Are you sure you want to delete ${selectedObservationIds.size} selected observation${selectedObservationIds.size !== 1 ? 's' : ''}? This action cannot be undone.`)) {
+        if (
+            !confirm(
+                `Are you sure you want to delete ${selectedObservationIds.size} selected observation${selectedObservationIds.size !== 1 ? 's' : ''}? This action cannot be undone.`,
+            )
+        ) {
             return;
         }
 
@@ -1502,7 +1507,7 @@ export default function QaStageDrawingShow() {
                         Accept: 'application/json',
                     },
                     credentials: 'same-origin',
-                })
+                }),
             );
 
             const results = await Promise.allSettled(deletePromises);
@@ -1522,7 +1527,7 @@ export default function QaStageDrawingShow() {
             const deletedIds = new Set(
                 selectedObs
                     .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
-                    .map((obs) => obs.id)
+                    .map((obs) => obs.id),
             );
             setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
             setSelectedObservationIds(new Set());
@@ -1688,7 +1693,7 @@ export default function QaStageDrawingShow() {
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {/* Header Bar */}
-                <div className="flex shrink-0 items-center justify-between border-b bg-background px-4 py-2">
+                <div className="bg-background flex shrink-0 items-center justify-between border-b px-4 py-2">
                     <div className="flex items-center gap-3">
                         <Link href={drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages'}>
                             <Button variant="ghost" size="sm">
@@ -1696,8 +1701,8 @@ export default function QaStageDrawingShow() {
                             </Button>
                         </Link>
                         <div className="flex flex-col">
-                            <h1 className="text-sm font-semibold leading-tight">{drawing.name}</h1>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <h1 className="text-sm leading-tight font-semibold">{drawing.name}</h1>
+                            <div className="text-muted-foreground flex items-center gap-2 text-xs">
                                 <span>{drawing.qa_stage?.location?.name}</span>
                                 {drawing.revision_number && (
                                     <>
@@ -1768,7 +1773,7 @@ export default function QaStageDrawingShow() {
                             </Select>
                         )}
 
-                        <div className="h-4 w-px bg-border" />
+                        <div className="bg-border h-4 w-px" />
 
                         {/* Download button */}
                         <Button variant="ghost" size="sm" asChild>
@@ -1780,10 +1785,10 @@ export default function QaStageDrawingShow() {
                 </div>
 
                 {/* Toolbar */}
-                <div className="flex shrink-0 flex-wrap items-center gap-2 overflow-x-auto border-b bg-muted/30 px-4 py-2">
+                <div className="bg-muted/30 flex shrink-0 flex-wrap items-center gap-2 overflow-x-auto border-b px-4 py-2">
                     {/* View Mode */}
                     {canPanZoom && (
-                        <div className="flex items-center rounded-md border bg-background p-0.5">
+                        <div className="bg-background flex items-center rounded-md border p-0.5">
                             <Button
                                 type="button"
                                 size="sm"
@@ -1839,9 +1844,11 @@ export default function QaStageDrawingShow() {
                                             setPdfScale(clampedScale);
                                         }
                                     }}
-                                    className="h-7 w-14 rounded border bg-background px-1 pr-4 text-center text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                                    className="bg-background focus:ring-ring h-7 w-14 rounded border px-1 pr-4 text-center text-xs tabular-nums focus:ring-1 focus:outline-none disabled:opacity-50"
                                 />
-                                <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                                <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-xs">
+                                    %
+                                </span>
                             </div>
                             <Button
                                 type="button"
@@ -1872,13 +1879,13 @@ export default function QaStageDrawingShow() {
                         </div>
                     )}
 
-                    <div className="h-4 w-px bg-border" />
+                    <div className="bg-border h-4 w-px" />
 
                     {/* Compare Toggle */}
                     {canCompare && (
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
-                                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Layers className="text-muted-foreground h-3.5 w-3.5" />
                                 <Label htmlFor="compare-toggle" className="cursor-pointer text-xs">
                                     Compare
                                 </Label>
@@ -1921,7 +1928,7 @@ export default function QaStageDrawingShow() {
                                     )}
 
                                     <div className="flex items-center gap-1.5">
-                                        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <Eye className="text-muted-foreground h-3.5 w-3.5" />
                                         <Slider
                                             value={[overlayOpacity]}
                                             onValueChange={(values) => setOverlayOpacity(values[0])}
@@ -1930,12 +1937,12 @@ export default function QaStageDrawingShow() {
                                             step={5}
                                             className="w-20"
                                         />
-                                        <span className="w-7 text-xs tabular-nums text-muted-foreground">{overlayOpacity}%</span>
+                                        <span className="text-muted-foreground w-7 text-xs tabular-nums">{overlayOpacity}%</span>
                                     </div>
 
                                     {hasDiffImage && (
                                         <div className="flex items-center gap-1.5">
-                                            <GitCompare className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <GitCompare className="text-muted-foreground h-3.5 w-3.5" />
                                             <Label htmlFor="diff-mode" className="cursor-pointer text-xs">
                                                 Diff
                                             </Label>
@@ -1964,7 +1971,7 @@ export default function QaStageDrawingShow() {
                     {/* AI Compare Button */}
                     {revisions.length >= 2 && (
                         <>
-                            <div className="h-4 w-px bg-border" />
+                            <div className="bg-border h-4 w-px" />
                             <Button
                                 type="button"
                                 size="sm"
@@ -1990,7 +1997,7 @@ export default function QaStageDrawingShow() {
                     {/* Alignment Tool */}
                     {showCompareOverlay && candidatePdfUrl && (
                         <>
-                            <div className="h-4 w-px bg-border" />
+                            <div className="bg-border h-4 w-px" />
                             <AlignmentToolbar
                                 state={alignmentTool.state}
                                 statusMessage={alignmentTool.statusMessage}
@@ -2011,7 +2018,7 @@ export default function QaStageDrawingShow() {
                     {/* Diff Controls */}
                     {showCompareOverlay && candidatePdfUrl && (
                         <>
-                            <div className="h-4 w-px bg-border" />
+                            <div className="bg-border h-4 w-px" />
                             <DiffControls
                                 state={diffOverlay.state}
                                 isAligned={alignmentTool.isAligned}
@@ -2026,7 +2033,10 @@ export default function QaStageDrawingShow() {
                     {selectedObservationIds.size > 0 && (
                         <>
                             <div className="ml-auto" />
-                            <Badge variant="secondary" className="gap-1 bg-yellow-100 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            <Badge
+                                variant="secondary"
+                                className="gap-1 bg-yellow-100 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                            >
                                 {selectedObservationIds.size} selected
                             </Badge>
                             <Button
@@ -2042,7 +2052,7 @@ export default function QaStageDrawingShow() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                className="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
                                 onClick={handleClearSelection}
                                 title="Clear selection"
                             >
@@ -2067,7 +2077,9 @@ export default function QaStageDrawingShow() {
                                     disabled={bulkDeleting}
                                 >
                                     <Trash2 className="h-3 w-3" />
-                                    {bulkDeleting ? 'Deleting...' : `Delete ${serverObservations.filter((obs) => obs.source === 'ai_comparison').length} AI`}
+                                    {bulkDeleting
+                                        ? 'Deleting...'
+                                        : `Delete ${serverObservations.filter((obs) => obs.source === 'ai_comparison').length} AI`}
                                 </Button>
                             )}
                         </>
@@ -2105,14 +2117,15 @@ export default function QaStageDrawingShow() {
                     {!useTiledViewer && (
                     <div
                         ref={containerRef}
-                        className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${alignmentTool.isAligning
+                        className={`absolute inset-0 bg-neutral-100 dark:bg-neutral-900 ${
+                            alignmentTool.isAligning
                                 ? 'cursor-crosshair'
                                 : canPanZoom && viewMode === 'pan'
-                                    ? 'cursor-grab active:cursor-grabbing'
-                                    : canPanZoom && viewMode === 'select'
-                                        ? 'cursor-crosshair'
-                                        : ''
-                            }`}
+                                  ? 'cursor-grab active:cursor-grabbing'
+                                  : canPanZoom && viewMode === 'select'
+                                    ? 'cursor-crosshair'
+                                    : ''
+                        }`}
                         style={{
                             touchAction: canPanZoom ? 'none' : 'auto',
                             overscrollBehavior: canPanZoom ? 'contain' : 'auto',
@@ -2142,7 +2155,7 @@ export default function QaStageDrawingShow() {
                                                 onClick={handlePageClick(1)}
                                             >
                                                 {isPaged && (
-                                                    <div className="absolute left-3 top-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                                                    <div className="absolute top-3 left-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
                                                         {targetPageNumber} / {totalPages}
                                                     </div>
                                                 )}
@@ -2160,15 +2173,15 @@ export default function QaStageDrawingShow() {
                                                             candidateCanvasRef.current = el;
                                                             diffCandidateCanvasRef.current = el;
                                                         }}
-                                                        className="pointer-events-none absolute left-0 top-0"
+                                                        className="pointer-events-none absolute top-0 left-0"
                                                         style={{
                                                             opacity: diffOverlay.state.showDiff
                                                                 ? 0
                                                                 : alignmentTool.activeLayer === 'base'
-                                                                    ? 0
-                                                                    : alignmentTool.activeLayer === 'candidate'
-                                                                        ? 0.7
-                                                                        : overlayOpacity / 100,
+                                                                  ? 0
+                                                                  : alignmentTool.activeLayer === 'candidate'
+                                                                    ? 0.7
+                                                                    : overlayOpacity / 100,
                                                             display: candidatePdfLoaded ? 'block' : 'none',
                                                             transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                                             transformOrigin: 'top left',
@@ -2179,17 +2192,17 @@ export default function QaStageDrawingShow() {
                                                     <img
                                                         src={candidatePdfUrl}
                                                         alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
-                                                        className="pointer-events-none absolute left-0 top-0"
+                                                        className="pointer-events-none absolute top-0 left-0"
                                                         style={{
                                                             width: pageSize.width,
                                                             height: pageSize.height,
                                                             opacity: diffOverlay.state.showDiff
                                                                 ? 0
                                                                 : alignmentTool.activeLayer === 'base'
-                                                                    ? 0
-                                                                    : alignmentTool.activeLayer === 'candidate'
-                                                                        ? 0.7
-                                                                        : overlayOpacity / 100,
+                                                                  ? 0
+                                                                  : alignmentTool.activeLayer === 'candidate'
+                                                                    ? 0.7
+                                                                    : overlayOpacity / 100,
                                                             transform: alignmentTool.isAligned ? alignmentTool.transform.cssTransform : undefined,
                                                             transformOrigin: 'top left',
                                                         }}
@@ -2227,8 +2240,8 @@ export default function QaStageDrawingShow() {
                                                                     ? 'bg-violet-500 ring-2 ring-violet-500/30 border-2 border-dashed border-white'
                                                                     : 'bg-violet-600 ring-2 ring-violet-600/30'
                                                                 : obs.type === 'defect'
-                                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                                    : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                                                  ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                                  : 'bg-blue-500 ring-2 ring-blue-500/30';
                                                             const selectedClass = isSelected
                                                                 ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-transparent scale-125'
                                                                 : '';
@@ -2307,10 +2320,14 @@ export default function QaStageDrawingShow() {
                             ) : (
                                 <div
                                     className="relative"
-                                    style={baseImageSize ? {
-                                        width: baseImageSize.width * pdfScale,
-                                        height: baseImageSize.height * pdfScale,
-                                    } : undefined}
+                                    style={
+                                        baseImageSize
+                                            ? {
+                                                  width: baseImageSize.width * pdfScale,
+                                                  height: baseImageSize.height * pdfScale,
+                                              }
+                                            : undefined
+                                    }
                                     onClick={handlePageClick(1)}
                                 >
                                     <img
@@ -2318,10 +2335,14 @@ export default function QaStageDrawingShow() {
                                         src={imageUrl || ''}
                                         alt={displayName}
                                         className="block rounded-sm shadow-lg"
-                                        style={baseImageSize ? {
-                                            width: baseImageSize.width * pdfScale,
-                                            height: baseImageSize.height * pdfScale,
-                                        } : undefined}
+                                        style={
+                                            baseImageSize
+                                                ? {
+                                                      width: baseImageSize.width * pdfScale,
+                                                      height: baseImageSize.height * pdfScale,
+                                                  }
+                                                : undefined
+                                        }
                                         onLoad={(e) => {
                                             const img = e.currentTarget;
                                             setBaseImageSize({
@@ -2335,7 +2356,7 @@ export default function QaStageDrawingShow() {
                                             ref={candidateImageRef}
                                             src={candidatePdfUrl}
                                             alt={`Rev ${candidateRevision?.revision_number || '?'} overlay`}
-                                            className="pointer-events-none absolute left-0 top-0"
+                                            className="pointer-events-none absolute top-0 left-0"
                                             style={{
                                                 width: baseImageSize.width * pdfScale,
                                                 height: baseImageSize.height * pdfScale,
@@ -2352,14 +2373,16 @@ export default function QaStageDrawingShow() {
                                     )}
                                     {showCompareOverlay && candidatePdfUrl && candidateIsPdf && (
                                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
-                                            <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">PDF overlay not supported in image mode</span>
+                                            <span className="rounded bg-black/50 px-2 py-1 text-sm text-white">
+                                                PDF overlay not supported in image mode
+                                            </span>
                                         </div>
                                     )}
                                     {showCompareOverlay && !compareRevisionId && hasDiffImage && baseImageSize && (
                                         <img
                                             src={drawing.diff_image_url!}
                                             alt="Changes overlay"
-                                            className="pointer-events-none absolute left-0 top-0"
+                                            className="pointer-events-none absolute top-0 left-0"
                                             style={{
                                                 width: baseImageSize.width * pdfScale,
                                                 height: baseImageSize.height * pdfScale,
@@ -2382,8 +2405,8 @@ export default function QaStageDrawingShow() {
                                                     ? 'bg-violet-500 ring-2 ring-violet-500/30 border-2 border-dashed border-white'
                                                     : 'bg-violet-600 ring-2 ring-violet-600/30'
                                                 : obs.type === 'defect'
-                                                    ? 'bg-red-500 ring-2 ring-red-500/30'
-                                                    : 'bg-blue-500 ring-2 ring-blue-500/30';
+                                                  ? 'bg-red-500 ring-2 ring-red-500/30'
+                                                  : 'bg-blue-500 ring-2 ring-blue-500/30';
                                             const selectedClass = isSelected
                                                 ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-transparent scale-125'
                                                 : '';
@@ -2467,8 +2490,8 @@ export default function QaStageDrawingShow() {
                                     alignmentTool.activeLayer === 'candidate'
                                         ? candidateCanvasRef.current
                                         : isPdf
-                                            ? baseCanvasRef.current
-                                            : baseImageRef.current
+                                          ? baseCanvasRef.current
+                                          : baseImageRef.current
                                 }
                                 containerElement={containerRef.current}
                                 magnification={3}
@@ -2507,9 +2530,7 @@ export default function QaStageDrawingShow() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            {editingObservation?.source === 'ai_comparison' && (
-                                <Sparkles className="h-4 w-4 text-violet-500" />
-                            )}
+                            {editingObservation?.source === 'ai_comparison' && <Sparkles className="h-4 w-4 text-violet-500" />}
                             {editingObservation ? 'Edit Observation' : 'Add Observation'}
                         </DialogTitle>
                     </DialogHeader>
@@ -2523,9 +2544,13 @@ export default function QaStageDrawingShow() {
                                         AI-Generated Observation
                                     </span>
                                     {editingObservation.is_confirmed ? (
-                                        <Badge variant="default" className="bg-green-600 text-xs">Confirmed</Badge>
+                                        <Badge variant="default" className="bg-green-600 text-xs">
+                                            Confirmed
+                                        </Badge>
                                     ) : (
-                                        <Badge variant="outline" className="border-amber-500 text-xs text-amber-600">Unconfirmed</Badge>
+                                        <Badge variant="outline" className="border-amber-500 text-xs text-amber-600">
+                                            Unconfirmed
+                                        </Badge>
                                     )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -2539,7 +2564,13 @@ export default function QaStageDrawingShow() {
                                         <div>
                                             <span className="text-muted-foreground">Impact:</span>{' '}
                                             <Badge
-                                                variant={editingObservation.ai_impact === 'high' ? 'destructive' : editingObservation.ai_impact === 'medium' ? 'default' : 'secondary'}
+                                                variant={
+                                                    editingObservation.ai_impact === 'high'
+                                                        ? 'destructive'
+                                                        : editingObservation.ai_impact === 'medium'
+                                                          ? 'default'
+                                                          : 'secondary'
+                                                }
                                                 className="ml-1 text-[10px]"
                                             >
                                                 {editingObservation.ai_impact}
@@ -2548,13 +2579,14 @@ export default function QaStageDrawingShow() {
                                     )}
                                     {editingObservation.ai_location && (
                                         <div className="col-span-2">
-                                            <span className="text-muted-foreground">AI Location:</span>{' '}
-                                            <span>{editingObservation.ai_location}</span>
+                                            <span className="text-muted-foreground">AI Location:</span> <span>{editingObservation.ai_location}</span>
                                         </div>
                                     )}
                                     {editingObservation.potential_change_order && (
                                         <div className="col-span-2">
-                                            <Badge variant="destructive" className="text-[10px]">Potential Change Order</Badge>
+                                            <Badge variant="destructive" className="text-[10px]">
+                                                Potential Change Order
+                                            </Badge>
                                         </div>
                                     )}
                                 </div>
@@ -2618,7 +2650,7 @@ export default function QaStageDrawingShow() {
                                 }}
                             />
                             {photoFile && (
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <div className="text-muted-foreground flex items-center gap-2 text-xs">
                                     <Camera className="h-3.5 w-3.5" />
                                     {photoFile.name}
                                 </div>
@@ -2649,7 +2681,11 @@ export default function QaStageDrawingShow() {
                             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button size="sm" onClick={editingObservation ? handleUpdateObservation : handleCreateObservation} disabled={saving || deleting}>
+                            <Button
+                                size="sm"
+                                onClick={editingObservation ? handleUpdateObservation : handleCreateObservation}
+                                disabled={saving || deleting}
+                            >
                                 {saving ? 'Saving...' : editingObservation ? 'Update' : 'Save'}
                             </Button>
                         </div>
@@ -2701,11 +2737,7 @@ export default function QaStageDrawingShow() {
                             </div>
                         </div>
 
-                        <Button
-                            onClick={() => handleAICompare()}
-                            disabled={aiComparing || !aiCompareSheetA || !aiCompareSheetB}
-                            className="w-full"
-                        >
+                        <Button onClick={() => handleAICompare()} disabled={aiComparing || !aiCompareSheetA || !aiCompareSheetB} className="w-full">
                             {aiComparing ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2721,24 +2753,24 @@ export default function QaStageDrawingShow() {
 
                         {/* Results */}
                         {aiComparisonResult && (
-                            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                            <div className="bg-muted/30 space-y-4 rounded-lg border p-4">
                                 {aiComparisonResult.summary && (
                                     <div>
                                         <h4 className="mb-1 text-sm font-medium">Summary</h4>
-                                        <p className="text-sm text-muted-foreground">{aiComparisonResult.summary}</p>
+                                        <p className="text-muted-foreground text-sm">{aiComparisonResult.summary}</p>
                                     </div>
                                 )}
 
                                 {aiComparisonResult.confidence && (
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground">Confidence:</span>
+                                        <span className="text-muted-foreground text-xs">Confidence:</span>
                                         <Badge
                                             variant={
                                                 aiComparisonResult.confidence === 'high'
                                                     ? 'default'
                                                     : aiComparisonResult.confidence === 'medium'
-                                                        ? 'secondary'
-                                                        : 'outline'
+                                                      ? 'secondary'
+                                                      : 'outline'
                                             }
                                             className="text-xs"
                                         >
@@ -2753,9 +2785,7 @@ export default function QaStageDrawingShow() {
                                             <h4 className="text-sm font-medium">
                                                 Changes Detected ({aiComparisonResult.changes.length})
                                                 {selectedChanges.size > 0 && (
-                                                    <span className="ml-2 text-xs text-muted-foreground">
-                                                        ({selectedChanges.size} selected)
-                                                    </span>
+                                                    <span className="text-muted-foreground ml-2 text-xs">({selectedChanges.size} selected)</span>
                                                 )}
                                             </h4>
                                             <div className="flex gap-2">
@@ -2777,7 +2807,7 @@ export default function QaStageDrawingShow() {
                                             {aiComparisonResult.changes.map((change, index) => (
                                                 <div
                                                     key={index}
-                                                    className={`rounded border bg-background p-3 text-sm cursor-pointer transition-colors ${selectedChanges.has(index) ? 'border-primary bg-primary/5' : ''}`}
+                                                    className={`bg-background cursor-pointer rounded border p-3 text-sm transition-colors ${selectedChanges.has(index) ? 'border-primary bg-primary/5' : ''}`}
                                                     onClick={() => handleToggleChange(index)}
                                                 >
                                                     <div className="mb-1 flex items-center gap-2">
@@ -2795,8 +2825,8 @@ export default function QaStageDrawingShow() {
                                                                 change.impact === 'high'
                                                                     ? 'destructive'
                                                                     : change.impact === 'medium'
-                                                                        ? 'default'
-                                                                        : 'secondary'
+                                                                      ? 'default'
+                                                                      : 'secondary'
                                                             }
                                                             className="text-xs"
                                                         >
@@ -2808,14 +2838,14 @@ export default function QaStageDrawingShow() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="ml-6 text-muted-foreground">{change.description}</p>
+                                                    <p className="text-muted-foreground ml-6">{change.description}</p>
                                                     {change.location && (
-                                                        <p className="ml-6 mt-1 text-xs text-muted-foreground">
+                                                        <p className="text-muted-foreground mt-1 ml-6 text-xs">
                                                             <span className="font-medium">Location:</span> {change.location}
                                                         </p>
                                                     )}
                                                     {change.reason && (
-                                                        <p className="ml-6 mt-1 text-xs text-amber-600">
+                                                        <p className="mt-1 ml-6 text-xs text-amber-600">
                                                             <span className="font-medium">CO Reason:</span> {change.reason}
                                                         </p>
                                                     )}
@@ -2848,28 +2878,21 @@ export default function QaStageDrawingShow() {
                                 {aiComparisonResult.notes && (
                                     <div>
                                         <h4 className="mb-1 text-sm font-medium">Notes</h4>
-                                        <p className="text-xs text-muted-foreground">{aiComparisonResult.notes}</p>
+                                        <p className="text-muted-foreground text-xs">{aiComparisonResult.notes}</p>
                                     </div>
                                 )}
 
                                 {/* Regenerate Section */}
                                 <div className="border-t pt-4">
                                     <h4 className="mb-2 text-sm font-medium">Refine Analysis</h4>
-                                    <p className="mb-2 text-xs text-muted-foreground">
-                                        Add additional instructions to refine the AI analysis:
-                                    </p>
+                                    <p className="text-muted-foreground mb-2 text-xs">Add additional instructions to refine the AI analysis:</p>
                                     <Textarea
                                         value={customPrompt}
                                         onChange={(e) => setCustomPrompt(e.target.value)}
                                         placeholder="E.g., Focus more on dimensional changes, ignore annotation updates..."
                                         className="mb-2 min-h-[60px] text-sm"
                                     />
-                                    <Button
-                                        onClick={handleRegenerate}
-                                        disabled={aiComparing}
-                                        variant="outline"
-                                        className="w-full"
-                                    >
+                                    <Button onClick={handleRegenerate} disabled={aiComparing} variant="outline" className="w-full">
                                         {aiComparing ? (
                                             <>
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

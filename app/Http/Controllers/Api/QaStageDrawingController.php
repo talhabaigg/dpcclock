@@ -11,7 +11,6 @@ use App\Services\DrawingProcessingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth;
 
 class QaStageDrawingController extends Controller
 {
@@ -24,7 +23,7 @@ class QaStageDrawingController extends Controller
         }
 
         // By default, only show active revisions (not superseded/archived)
-        if (!$request->has('include_all_revisions')) {
+        if (! $request->has('include_all_revisions')) {
             $query->where(function ($q) {
                 $q->where('status', QaStageDrawing::STATUS_ACTIVE)
                     ->orWhereNull('status'); // Backward compatibility
@@ -52,22 +51,23 @@ class QaStageDrawingController extends Controller
 
         $file = $request->file('file');
         $fileName = $file->getClientOriginalName();
-        $directory = 'qa-drawings/' . $validated['qa_stage_id'];
+        $directory = 'qa-drawings/'.$validated['qa_stage_id'];
 
         try {
-            $filePath = $file->storeAs($directory, time() . '_' . $fileName, 'public');
+            $filePath = $file->storeAs($directory, time().'_'.$fileName, 'public');
 
-            if (!$filePath) {
+            if (! $filePath) {
                 Log::error('Failed to upload file', ['fileName' => $fileName]);
+
                 return response()->json(['message' => 'Failed to upload file.'], 500);
             }
 
             // Determine or create the drawing sheet
             $drawingSheet = null;
-            if (!empty($validated['drawing_sheet_id'])) {
+            if (! empty($validated['drawing_sheet_id'])) {
                 // Adding revision to existing sheet
                 $drawingSheet = DrawingSheet::find($validated['drawing_sheet_id']);
-            } elseif (!empty($validated['sheet_number'])) {
+            } elseif (! empty($validated['sheet_number'])) {
                 // Find or create sheet by sheet number
                 $drawingSheet = DrawingSheet::findOrCreateBySheetNumber(
                     $validated['qa_stage_id'],
@@ -109,7 +109,8 @@ class QaStageDrawingController extends Controller
             return response()->json($drawing, 201);
         } catch (\Exception $e) {
             Log::error('Upload error', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Failed to upload: ' . $e->getMessage()], 500);
+
+            return response()->json(['message' => 'Failed to upload: '.$e->getMessage()], 500);
         }
     }
 
@@ -139,8 +140,9 @@ class QaStageDrawingController extends Controller
             'user_id' => $request->user()?->id,
         ]);
 
-        if (!Storage::disk('public')->exists($qaStageDrawing->file_path)) {
+        if (! Storage::disk('public')->exists($qaStageDrawing->file_path)) {
             Log::error('File not found on disk', ['path' => $qaStageDrawing->file_path]);
+
             return response()->json(['message' => 'File not found.'], 404);
         }
 
@@ -156,7 +158,7 @@ class QaStageDrawingController extends Controller
      */
     public function thumbnail(QaStageDrawing $qaStageDrawing)
     {
-        if (!$qaStageDrawing->thumbnail_path || !Storage::disk('public')->exists($qaStageDrawing->thumbnail_path)) {
+        if (! $qaStageDrawing->thumbnail_path || ! Storage::disk('public')->exists($qaStageDrawing->thumbnail_path)) {
             // Return placeholder or 404
             return response()->json(['message' => 'Thumbnail not available.'], 404);
         }
@@ -173,7 +175,7 @@ class QaStageDrawingController extends Controller
      */
     public function diff(QaStageDrawing $qaStageDrawing)
     {
-        if (!$qaStageDrawing->diff_image_path || !Storage::disk('public')->exists($qaStageDrawing->diff_image_path)) {
+        if (! $qaStageDrawing->diff_image_path || ! Storage::disk('public')->exists($qaStageDrawing->diff_image_path)) {
             return response()->json(['message' => 'Diff image not available.'], 404);
         }
 
@@ -228,7 +230,7 @@ class QaStageDrawingController extends Controller
      */
     public function revisions(QaStageDrawing $qaStageDrawing)
     {
-        if (!$qaStageDrawing->drawing_sheet_id) {
+        if (! $qaStageDrawing->drawing_sheet_id) {
             return response()->json([
                 'sheet' => null,
                 'revisions' => [$qaStageDrawing],
@@ -263,9 +265,9 @@ class QaStageDrawingController extends Controller
             // Don't delete old file - it's part of revision history
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $directory = 'qa-drawings/' . $qaStageDrawing->qa_stage_id;
+            $directory = 'qa-drawings/'.$qaStageDrawing->qa_stage_id;
 
-            $filePath = $file->storeAs($directory, time() . '_' . $fileName, 'public');
+            $filePath = $file->storeAs($directory, time().'_'.$fileName, 'public');
 
             // Create new revision instead of updating
             $newDrawing = QaStageDrawing::create([
@@ -351,7 +353,7 @@ class QaStageDrawingController extends Controller
     {
         $result = $metadataService->extractMetadata($qaStageDrawing);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return response()->json([
                 'message' => 'Metadata extraction failed',
                 'error' => $result['error'] ?? 'Unknown error',
@@ -380,7 +382,7 @@ class QaStageDrawingController extends Controller
 
         $success = $metadataService->confirmMetadata($qaStageDrawing, $validated);
 
-        if (!$success) {
+        if (! $success) {
             return response()->json(['message' => 'Failed to confirm metadata'], 500);
         }
 
@@ -399,7 +401,7 @@ class QaStageDrawingController extends Controller
     {
         $extractedMetadata = $qaStageDrawing->ai_extracted_metadata;
 
-        if (!$extractedMetadata) {
+        if (! $extractedMetadata) {
             return response()->json([
                 'message' => 'No metadata has been extracted for this drawing',
                 'has_metadata' => false,

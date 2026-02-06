@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Clock;
 use App\Models\JobCostDetail;
 use App\Models\LabourForecast;
-use App\Models\LabourForecastEntry;
 use App\Models\Location;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -16,9 +15,9 @@ class LabourVarianceService
     /**
      * Get variance data comparing a target month's actuals against the baseline forecast
      *
-     * @param Location $location The location to analyze
-     * @param Carbon $targetMonth The month to get actuals for (e.g., January 2026)
-     * @param int|null $forecastId Optional specific forecast ID to compare against
+     * @param  Location  $location  The location to analyze
+     * @param  Carbon  $targetMonth  The month to get actuals for (e.g., January 2026)
+     * @param  int|null  $forecastId  Optional specific forecast ID to compare against
      * @return array Variance data including forecast, actuals, and calculated variances
      */
     public function getVarianceData(Location $location, Carbon $targetMonth, ?int $forecastId = null): array
@@ -31,7 +30,7 @@ class LabourVarianceService
                 ->with(['approver', 'creator', 'entries.template.payRateTemplate'])
                 ->first();
 
-            if (!$baselineForecast) {
+            if (! $baselineForecast) {
                 return [
                     'success' => false,
                     'error' => 'Forecast not found',
@@ -45,10 +44,10 @@ class LabourVarianceService
             $baselineForecast = $this->getBaselineForecast($location, $targetMonth);
         }
 
-        if (!$baselineForecast) {
+        if (! $baselineForecast) {
             return [
                 'success' => false,
-                'error' => 'No approved forecast found before ' . $targetMonth->format('F Y'),
+                'error' => 'No approved forecast found before '.$targetMonth->format('F Y'),
                 'baseline_forecast' => null,
                 'variances' => [],
                 'summary' => null,
@@ -61,7 +60,7 @@ class LabourVarianceService
         if ($forecastEntries->isEmpty()) {
             return [
                 'success' => false,
-                'error' => 'The ' . $baselineForecast->forecast_month->format('F Y') . ' forecast does not contain entries for ' . $targetMonth->format('F Y'),
+                'error' => 'The '.$baselineForecast->forecast_month->format('F Y').' forecast does not contain entries for '.$targetMonth->format('F Y'),
                 'baseline_forecast' => [
                     'id' => $baselineForecast->id,
                     'month' => $baselineForecast->forecast_month->format('F Y'),
@@ -79,6 +78,21 @@ class LabourVarianceService
 
         // Get leave hours from Clock records (leave hours where wages are from accrual but oncosts are job costed)
         $leaveHours = $this->getLeaveHours($location, $targetMonth);
+
+        // Debug: Log actual hours retrieved
+        \Log::info('[VARIANCE DEBUG] Actual hours retrieved', [
+            'location_id' => $location->id,
+            'location_name' => $location->name,
+            'eh_location_id' => $location->eh_location_id,
+            'target_month' => $targetMonth->format('Y-m'),
+            'actual_hours_count' => $actualHours->count(),
+            'actual_hours_data' => $actualHours->map(fn ($h) => [
+                'week_ending' => $h->week_ending,
+                'total_hours' => $h->total_hours,
+                'unique_employees' => $h->unique_employees,
+            ])->toArray(),
+            'leave_hours_count' => $leaveHours->count(),
+        ]);
 
         // Get actual costs from JobCostDetail
         $actualCosts = $this->getActualCosts($location, $targetMonth);
@@ -118,15 +132,38 @@ class LabourVarianceService
                 'location_eh_location_id' => $location->eh_location_id,
                 'all_location_ids' => $locationIds,
                 'cost_items_in_db' => $uniqueCostItems,
-                'actual_costs_by_week' => $actualCosts->map(fn($week) => $week->pluck('total_amount', 'cost_item'))->toArray(),
-                'actual_hours_by_week' => $actualHours->map(fn($week) => [
+                'actual_costs_by_week' => $actualCosts->map(fn ($week) => $week->pluck('total_amount', 'cost_item'))->toArray(),
+                'actual_hours_by_week' => $actualHours->map(fn ($week) => [
                     'total_hours' => round((float) $week->total_hours, 2),
                     'unique_employees' => $week->unique_employees,
                 ])->toArray(),
-                'leave_hours_by_week' => $leaveHours->map(fn($week) => [
+                'leave_hours_by_week' => $leaveHours->map(fn ($week) => [
                     'total_hours' => round((float) $week->total_hours, 2),
                     'unique_employees' => $week->unique_employees,
                 ])->toArray(),
+                // Debug: Raw clock counts without worktype filter
+                'raw_clocks_count' => Clock::whereIn('eh_location_id', $locationIds)
+                    ->where('status', 'processed')
+                    ->whereNotNull('clock_out')
+                    ->whereBetween('clock_out', [$targetMonth->copy()->startOfMonth(), $targetMonth->copy()->endOfMonth()])
+                    ->count(),
+                'raw_clocks_all_statuses' => Clock::whereIn('eh_location_id', $locationIds)
+                    ->whereNotNull('clock_out')
+                    ->whereBetween('clock_out', [$targetMonth->copy()->startOfMonth(), $targetMonth->copy()->endOfMonth()])
+                    ->selectRaw('status, COUNT(*) as count')
+                    ->groupBy('status')
+                    ->pluck('count', 'status')
+                    ->toArray(),
+                // Debug: Check if ANY clocks exist for this location (any date)
+                'total_clocks_for_location' => Clock::whereIn('eh_location_id', $locationIds)->count(),
+                // Debug: Sample of clock eh_location_ids in system
+                'sample_clock_location_ids' => Clock::whereNotNull('clock_out')
+                    ->whereBetween('clock_out', [$targetMonth->copy()->startOfMonth(), $targetMonth->copy()->endOfMonth()])
+                    ->select('eh_location_id')
+                    ->distinct()
+                    ->limit(20)
+                    ->pluck('eh_location_id')
+                    ->toArray(),
                 'hours_breakdown_by_worktype' => $hoursBreakdown,
             ],
         ];
@@ -214,13 +251,14 @@ class LabourVarianceService
         $locationIds = $this->getLocationIds($location);
 
         // Get clock records for leave worktypes only
-        $query = Clock::join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+        // Use LEFT JOIN to include clocks even if worktype not in worktypes table
+        $query = Clock::leftJoin('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
             ->whereIn('clocks.eh_location_id', $locationIds)
             ->where('clocks.status', 'processed')
             ->whereNotNull('clocks.clock_out')
             ->whereBetween('clocks.clock_out', [$startOfMonth, $endOfMonth]);
 
-        // Only include leave worktypes
+        // Only include leave worktypes (requires worktype to exist and match pattern)
         $query->where(function ($q) {
             foreach ($this->getLeaveWorktypePatterns() as $pattern) {
                 $q->orWhere('worktypes.name', 'LIKE', $pattern);
@@ -228,11 +266,11 @@ class LabourVarianceService
         });
 
         return $query->select([
-                DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(8 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
-                DB::raw('SUM(clocks.hours_worked) as total_hours'),
-                DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
-                DB::raw('COUNT(*) as clock_count'),
-            ])
+            DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(13 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
+            DB::raw('SUM(clocks.hours_worked) as total_hours'),
+            DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
+            DB::raw('COUNT(*) as clock_count'),
+        ])
             ->groupBy('week_ending')
             ->get()
             ->keyBy('week_ending');
@@ -251,27 +289,32 @@ class LabourVarianceService
         // Get all location IDs (main + sublocations)
         $locationIds = $this->getLocationIds($location);
 
-        // Get clock records and group by week ending (Sunday)
-        // Formula: MOD(8 - DAYOFWEEK(date), 7) gives days until next Sunday
-        // DAYOFWEEK returns 1=Sunday, 2=Monday, ..., 7=Saturday
+        // Get clock records and group by week ending (Friday to match timesheets)
+        // Formula: MOD(13 - DAYOFWEEK(date), 7) gives days until next Friday
+        // DAYOFWEEK returns 1=Sunday, 2=Monday, ..., 6=Friday, 7=Saturday
         // Only include processed clocks, exclude leave, RDO, and public holiday worktypes
-        $query = Clock::join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+        // Use LEFT JOIN so clocks without worktypes are still included (will be filtered if worktype name matches excluded patterns)
+        $query = Clock::leftJoin('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
             ->whereIn('clocks.eh_location_id', $locationIds)
             ->where('clocks.status', 'processed')
             ->whereNotNull('clocks.clock_out')
             ->whereBetween('clocks.clock_out', [$startOfMonth, $endOfMonth]);
 
-        // Exclude leave, RDO, public holiday worktypes
+        // Exclude leave, RDO, public holiday worktypes (only if worktype exists)
+        // Include clocks with no worktype match (NULL name) OR worktypes not matching excluded patterns
         foreach ($this->getExcludedWorktypePatterns() as $pattern) {
-            $query->where('worktypes.name', 'NOT LIKE', $pattern);
+            $query->where(function ($q) use ($pattern) {
+                $q->whereNull('worktypes.name')
+                    ->orWhere('worktypes.name', 'NOT LIKE', $pattern);
+            });
         }
 
         return $query->select([
-                DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(8 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
-                DB::raw('SUM(clocks.hours_worked) as total_hours'),
-                DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
-                DB::raw('COUNT(*) as clock_count'),
-            ])
+            DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(13 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
+            DB::raw('SUM(clocks.hours_worked) as total_hours'),
+            DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
+            DB::raw('COUNT(*) as clock_count'),
+        ])
             ->groupBy('week_ending')
             ->get()
             ->keyBy('week_ending');
@@ -290,14 +333,14 @@ class LabourVarianceService
         // Expand date range: include first week of next month to capture journals for last week of target month
         $queryEndDate = $endOfMonth->copy()->addDays(7);
 
-        // Get job cost details and group by week ending (Sunday)
-        // Formula: MOD(8 - DAYOFWEEK(date), 7) gives days until next Sunday
+        // Get job cost details and group by week ending (Friday to match timesheets)
+        // Formula: MOD(13 - DAYOFWEEK(date), 7) gives days until next Friday
         // Then subtract 7 days because journals are posted in the following week
         return JobCostDetail::where('job_number', $location->external_id)
             ->whereBetween('transaction_date', [$startOfMonth, $queryEndDate])
             ->select([
                 'cost_item',
-                DB::raw('DATE(DATE_SUB(DATE_ADD(transaction_date, INTERVAL MOD(8 - DAYOFWEEK(transaction_date), 7) DAY), INTERVAL 7 DAY)) as week_ending'),
+                DB::raw('DATE(DATE_SUB(DATE_ADD(transaction_date, INTERVAL MOD(13 - DAYOFWEEK(transaction_date), 7) DAY), INTERVAL 7 DAY)) as week_ending'),
                 DB::raw('SUM(amount) as total_amount'),
             ])
             ->groupBy('cost_item', 'week_ending')
@@ -334,7 +377,8 @@ class LabourVarianceService
         $locationIds = $this->getLocationIds($location);
 
         // Get ALL worktypes first (for debugging) - only processed clocks
-        $allWorktypes = Clock::join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+        // Use LEFT JOIN to include clocks without matching worktypes
+        $allWorktypes = Clock::leftJoin('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
             ->whereIn('clocks.eh_location_id', $locationIds)
             ->where('clocks.status', 'processed')
             ->whereNotNull('clocks.clock_out')
@@ -343,7 +387,7 @@ class LabourVarianceService
                 'worktypes.name as worktype_name',
                 'worktypes.eh_worktype_id',
                 'worktypes.eh_external_id',
-                DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(8 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
+                DB::raw('DATE(DATE_ADD(clocks.clock_out, INTERVAL MOD(13 - DAYOFWEEK(clocks.clock_out), 7) DAY)) as week_ending'),
                 DB::raw('SUM(clocks.hours_worked) as total_hours'),
                 DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as unique_employees'),
             ])
@@ -693,7 +737,7 @@ class LabourVarianceService
             $groupedOncosts = [];
             foreach ($allOncostItems as $item) {
                 $code = $item['code'];
-                if (!isset($groupedOncosts[$code])) {
+                if (! isset($groupedOncosts[$code])) {
                     $groupedOncosts[$code] = [
                         'code' => $code,
                         'name' => $item['name'],
@@ -778,7 +822,7 @@ class LabourVarianceService
             $groupedOncosts = [];
             foreach ($allOncostItems as $item) {
                 $code = $item['code'];
-                if (!isset($groupedOncosts[$code])) {
+                if (! isset($groupedOncosts[$code])) {
                     $groupedOncosts[$code] = [
                         'code' => $code,
                         'name' => $item['name'],
@@ -836,7 +880,6 @@ class LabourVarianceService
             }
         }
 
-
         return $breakdown;
     }
 
@@ -850,6 +893,7 @@ class LabourVarianceService
                 return (float) $costRecord->total_amount;
             }
         }
+
         return 0;
     }
 

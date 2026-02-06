@@ -104,7 +104,9 @@ export const ChartDialog = ({
                                         </TooltipTrigger>
                                         <TooltipContent side="bottom" className={breakdown ? 'max-w-xs' : ''}>
                                             <p className="font-medium">{category.name}</p>
-                                            {category.hourlyRate && <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr base</p>}
+                                            {category.hourlyRate && (
+                                                <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr base</p>
+                                            )}
                                             {breakdown && (
                                                 <div className="mt-2 space-y-0.5 border-t border-slate-600 pt-2 text-xs">
                                                     <div className="flex justify-between gap-3">

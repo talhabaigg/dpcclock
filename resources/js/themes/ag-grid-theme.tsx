@@ -49,12 +49,10 @@ export const shadcnTheme = themeQuartz.withParams({
     columnBorder: true,
     rowBorder: true,
     dataFontSize: 13,
-    fontFamily:
-        'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     foregroundColor: '#1e293b',
     headerBackgroundColor: '#f1f5f9',
-    headerFontFamily:
-        'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    headerFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     headerFontSize: 12,
     headerFontWeight: 600,
     headerTextColor: '#334155',

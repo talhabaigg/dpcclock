@@ -1,12 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { CheckCircle2, CircleX, Crop, FileImage, HelpCircle, Sparkles, Upload, Wand2 } from 'lucide-react';
 import { OpenAI } from 'openai';
@@ -149,7 +142,7 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
     }, [loading]);
 
     return (
-        <div className="group rounded-xl border border-border/60 bg-gradient-to-br from-violet-500/5 via-background to-purple-500/5 p-4 transition-all hover:border-violet-500/30 hover:shadow-md">
+        <div className="group border-border/60 via-background rounded-xl border bg-gradient-to-br from-violet-500/5 to-purple-500/5 p-4 transition-all hover:border-violet-500/30 hover:shadow-md">
             {/* Header */}
             <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -158,14 +151,14 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                     </div>
                     <div>
                         <h3 className="text-sm font-semibold">AI Quote Extractor</h3>
-                        <p className="text-xs text-muted-foreground">Upload a quotation image to extract line items</p>
+                        <p className="text-muted-foreground text-xs">Upload a quotation image to extract line items</p>
                     </div>
                 </div>
 
                 {/* How to Use Dialog */}
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-1.5">
                             <HelpCircle className="h-4 w-4" />
                             <span className="hidden sm:inline">How to use</span>
                         </Button>
@@ -176,9 +169,7 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                                 <Wand2 className="h-5 w-5 text-violet-500" />
                                 How to Use AI Quote Extractor
                             </DialogTitle>
-                            <DialogDescription>
-                                Follow these simple steps to extract line items from supplier quotes
-                            </DialogDescription>
+                            <DialogDescription>Follow these simple steps to extract line items from supplier quotes</DialogDescription>
                         </DialogHeader>
                         <div className="mt-4 space-y-6">
                             {/* Step 1 */}
@@ -188,11 +179,14 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">1</span>
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                                            1
+                                        </span>
                                         <h4 className="font-semibold">Crop Line Items from Quote</h4>
                                     </div>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Take a screenshot or crop the section of the supplier quote that contains the line items table. Include headers like code, description, qty, and price.
+                                    <p className="text-muted-foreground mt-1 text-sm">
+                                        Take a screenshot or crop the section of the supplier quote that contains the line items table. Include
+                                        headers like code, description, qty, and price.
                                     </p>
                                 </div>
                             </div>
@@ -204,10 +198,12 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">2</span>
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
+                                            2
+                                        </span>
                                         <h4 className="font-semibold">Upload File or Screenshot</h4>
                                     </div>
-                                    <p className="mt-1 text-sm text-muted-foreground">
+                                    <p className="text-muted-foreground mt-1 text-sm">
                                         Drag and drop your image into the upload area, or click to browse. Supported formats: PNG, JPG, JPEG.
                                     </p>
                                 </div>
@@ -220,11 +216,14 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">3</span>
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
+                                            3
+                                        </span>
                                         <h4 className="font-semibold">Verify Before Submitting</h4>
                                     </div>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Review the extracted data in the grid. AI may occasionally misread values - double-check quantities and prices before submitting your requisition.
+                                    <p className="text-muted-foreground mt-1 text-sm">
+                                        Review the extracted data in the grid. AI may occasionally misread values - double-check quantities and prices
+                                        before submitting your requisition.
                                     </p>
                                 </div>
                             </div>
@@ -232,7 +231,8 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                             {/* Tip */}
                             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                                 <p className="text-sm text-amber-700 dark:text-amber-300">
-                                    <strong>Tip:</strong> For best results, ensure the image is clear and the text is readable. Avoid blurry or low-resolution screenshots.
+                                    <strong>Tip:</strong> For best results, ensure the image is clear and the text is readable. Avoid blurry or
+                                    low-resolution screenshots.
                                 </p>
                             </div>
                         </div>
@@ -250,7 +250,7 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                     </div>
                     <span
                         key={loadingTextIndex}
-                        className={`text-sm font-medium text-violet-600 dark:text-violet-400 transition-all duration-300 ${
+                        className={`text-sm font-medium text-violet-600 transition-all duration-300 dark:text-violet-400 ${
                             animateOut ? '-translate-y-2 opacity-0' : 'translate-y-0 opacity-100'
                         }`}
                     >
@@ -270,27 +270,21 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                         />
                     ) : (
                         /* File Preview */
-                        <div className="flex items-center gap-4 rounded-lg border border-border/60 bg-card p-3">
-                            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-muted">
-                                <img
-                                    src={URL.createObjectURL(file)}
-                                    alt="Preview"
-                                    className="h-full w-full object-cover"
-                                />
+                        <div className="border-border/60 bg-card flex items-center gap-4 rounded-lg border p-3">
+                            <div className="bg-muted relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border">
+                                <img src={URL.createObjectURL(file)} alt="Preview" className="h-full w-full object-cover" />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                    <FileImage className="h-4 w-4 text-muted-foreground" />
+                                    <FileImage className="text-muted-foreground h-4 w-4" />
                                     <Label className="truncate text-sm font-medium">{file?.name}</Label>
                                 </div>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                    {(file.size / 1024).toFixed(1)} KB
-                                </p>
+                                <p className="text-muted-foreground mt-0.5 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
                             </div>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                className="text-muted-foreground hover:text-destructive h-8 w-8 shrink-0"
                                 onClick={() => setFile(null)}
                             >
                                 <CircleX className="h-4 w-4" />
@@ -303,12 +297,12 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                         <Button
                             onClick={() => extractLineItems(file, setPastingItems, projectId, setRowData, setLoading)}
                             disabled={!file}
-                            className="bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-500/20 transition-all hover:shadow-lg hover:shadow-violet-500/30 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none"
+                            className="disabled:from-muted disabled:to-muted disabled:text-muted-foreground bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-500/20 transition-all hover:shadow-lg hover:shadow-violet-500/30 disabled:shadow-none"
                         >
                             <Sparkles className="mr-1.5 h-4 w-4" />
                             Extract with AI
                         </Button>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             <span className="hidden sm:inline">AI features are experimental and may require verification</span>
                             <span className="sm:hidden">Results may require verification</span>
                         </p>

@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -191,9 +191,9 @@ export default function LocationShow() {
 
     const handleCsvSubmit = (mappedData: any) => {
         // Explicitly use header order to ensure CSV columns match expected order
-        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) =>
-            csvImportHeaders.map(header => row[header] ?? '').join(',')
-        ).join('\n')}`;
+        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData
+            .map((row: any) => csvImportHeaders.map((header) => row[header] ?? '').join(','))
+            .join('\n')}`;
         const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
         setSelectedFile(file);
         setShouldUploadAfterSet(true);
@@ -213,8 +213,8 @@ export default function LocationShow() {
     }, [flash.success]);
 
     const filteredMaterialItems = showLockedOnly
-        ? location.material_items?.filter(item => Boolean(item.pivot?.is_locked)) ?? []
-        : location.material_items ?? [];
+        ? (location.material_items?.filter((item) => Boolean(item.pivot?.is_locked)) ?? [])
+        : (location.material_items ?? []);
 
     const tabCounts = {
         sublocations: location.subLocations?.length || 0,
@@ -226,24 +226,20 @@ export default function LocationShow() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Location`} />
-            <LoadingDialog
-                open={open || isUploading}
-                setOpen={setOpen}
-                message={isUploading ? 'Uploading price list...' : 'Loading...'}
-            />
+            <LoadingDialog open={open || isUploading} setOpen={setOpen} message={isUploading ? 'Uploading price list...' : 'Loading...'} />
 
             <div className="flex flex-col gap-6 p-4 md:p-6">
                 {/* Page Header */}
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-1">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                <MapPin className="h-5 w-5 text-primary" />
+                            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg">
+                                <MapPin className="text-primary h-5 w-5" />
                             </div>
                             <div>
                                 <h1 className="text-2xl font-semibold tracking-tight">{location.name}</h1>
                                 <p className="text-muted-foreground text-sm">
-                                    Location ID: <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{location.eh_location_id}</code>
+                                    Location ID: <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{location.eh_location_id}</code>
                                 </p>
                             </div>
                         </div>
@@ -252,7 +248,7 @@ export default function LocationShow() {
                     {/* Quick Actions */}
                     <div className="flex flex-wrap items-center gap-2">
                         <Link href={`/location/${location.id}/job-data`} method="get">
-                            <Button variant="outline" className="gap-2 transition-all hover:border-primary/50">
+                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all">
                                 <RotateCcw className="h-4 w-4" />
                                 Load Job Cost
                             </Button>
@@ -321,41 +317,41 @@ export default function LocationShow() {
                 <div className="grid gap-6 lg:grid-cols-2">
                     {/* Location Details Card */}
                     <Card className="overflow-hidden">
-                        <CardHeader className="border-b bg-muted/30 pb-4">
+                        <CardHeader className="bg-muted/30 border-b pb-4">
                             <CardTitle className="flex items-center gap-2 text-base">
-                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                <Building2 className="text-muted-foreground h-4 w-4" />
                                 Location Details
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="divide-y">
-                                <div className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/30">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <Hash className="h-4 w-4" />
                                         Location ID
                                     </div>
-                                    <code className="rounded bg-muted px-2 py-1 font-mono text-sm">{location.eh_location_id}</code>
+                                    <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_location_id}</code>
                                 </div>
-                                <div className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/30">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <ExternalLink className="h-4 w-4" />
                                         External ID
                                     </div>
                                     {location.external_id ? (
-                                        <code className="rounded bg-muted px-2 py-1 font-mono text-sm">{location.external_id}</code>
+                                        <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.external_id}</code>
                                     ) : (
-                                        <span className="text-sm italic text-muted-foreground">Not set</span>
+                                        <span className="text-muted-foreground text-sm italic">Not set</span>
                                     )}
                                 </div>
-                                <div className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/30">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <Layers className="h-4 w-4" />
                                         Parent ID
                                     </div>
-                                    <code className="rounded bg-muted px-2 py-1 font-mono text-sm">{location.eh_parent_id}</code>
+                                    <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_parent_id}</code>
                                 </div>
-                                <div className="px-6 py-3 transition-colors hover:bg-muted/30">
-                                    <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="hover:bg-muted/30 px-6 py-3 transition-colors">
+                                    <div className="text-muted-foreground mb-2 flex items-center gap-2 text-sm">
                                         <Star className="h-4 w-4" />
                                         Shift Conditions
                                     </div>
@@ -371,7 +367,7 @@ export default function LocationShow() {
                                                     <TooltipProvider delayDuration={200}>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Badge variant="outline" className="cursor-pointer text-xs text-muted-foreground">
+                                                                <Badge variant="outline" className="text-muted-foreground cursor-pointer text-xs">
                                                                     +{location.worktypes.length - 3} more
                                                                 </Badge>
                                                             </TooltipTrigger>
@@ -390,7 +386,7 @@ export default function LocationShow() {
                                                 )}
                                             </>
                                         ) : (
-                                            <span className="text-sm italic text-muted-foreground">No shift conditions configured</span>
+                                            <span className="text-muted-foreground text-sm italic">No shift conditions configured</span>
                                         )}
                                     </div>
                                 </div>
@@ -414,7 +410,7 @@ export default function LocationShow() {
                             <FolderTree className="h-4 w-4" />
                             <span className="hidden sm:inline">Sub-locations</span>
                             <span className="sm:hidden">Subs</span>
-                            <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs tabular-nums">
+                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">
                                 {tabCounts.sublocations}
                             </span>
                         </TabsTrigger>
@@ -422,23 +418,19 @@ export default function LocationShow() {
                             <Code2 className="h-4 w-4" />
                             <span className="hidden sm:inline">Cost Codes</span>
                             <span className="sm:hidden">Codes</span>
-                            <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs tabular-nums">
-                                {tabCounts.costCodes}
-                            </span>
+                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">{tabCounts.costCodes}</span>
                         </TabsTrigger>
                         <TabsTrigger value="pricelist" className="gap-2">
                             <DollarSign className="h-4 w-4" />
                             <span className="hidden sm:inline">Price List</span>
                             <span className="sm:hidden">Prices</span>
-                            <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs tabular-nums">
-                                {tabCounts.pricelist}
-                            </span>
+                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">{tabCounts.pricelist}</span>
                         </TabsTrigger>
                         <TabsTrigger value="fav_materials" className="gap-2">
                             <Heart className="h-4 w-4" />
                             <span className="hidden sm:inline">Favorites</span>
                             <span className="sm:hidden">Favs</span>
-                            <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs tabular-nums">
+                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">
                                 {tabCounts.fav_materials}
                             </span>
                         </TabsTrigger>
@@ -447,11 +439,11 @@ export default function LocationShow() {
                     {/* Sub-locations Tab */}
                     <TabsContent value="sublocations" className="mt-4">
                         <Card className="overflow-hidden">
-                            <CardHeader className="border-b bg-muted/30 px-6 py-4">
+                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <CardTitle className="flex items-center gap-2 text-base">
-                                            <FolderTree className="h-4 w-4 text-muted-foreground" />
+                                            <FolderTree className="text-muted-foreground h-4 w-4" />
                                             Sub-locations
                                         </CardTitle>
                                         <CardDescription>{tabCounts.sublocations} sub-location(s) configured</CardDescription>
@@ -474,7 +466,7 @@ export default function LocationShow() {
                                             {location.subLocations.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={5} className="h-32 text-center">
-                                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                             <FolderTree className="h-8 w-8 opacity-40" />
                                                             <p>No sub-locations found</p>
                                                             <Button variant="outline" size="sm" onClick={() => setOpenDialog(true)}>
@@ -486,18 +478,18 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.subLocations.map((subLocation) => (
-                                                    <TableRow key={subLocation.id} className="group transition-colors hover:bg-muted/50">
-                                                        <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
+                                                    <TableRow key={subLocation.id} className="group hover:bg-muted/50 transition-colors">
+                                                        <TableCell className="text-muted-foreground pl-6 font-mono text-xs">
                                                             {subLocation.eh_location_id}
                                                         </TableCell>
                                                         <TableCell className="font-medium">{subLocation.name}</TableCell>
                                                         <TableCell>
                                                             {subLocation.external_id ? (
-                                                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                                                                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                                                                     {subLocation.external_id}
                                                                 </code>
                                                             ) : (
-                                                                <span className="text-sm italic text-muted-foreground">Not set</span>
+                                                                <span className="text-muted-foreground text-sm italic">Not set</span>
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
@@ -523,11 +515,11 @@ export default function LocationShow() {
                     {/* Cost Codes Tab */}
                     <TabsContent value="costCodes" className="mt-4">
                         <Card className="overflow-hidden">
-                            <CardHeader className="border-b bg-muted/30 px-6 py-4">
+                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <CardTitle className="flex items-center gap-2 text-base">
-                                            <Code2 className="h-4 w-4 text-muted-foreground" />
+                                            <Code2 className="text-muted-foreground h-4 w-4" />
                                             Cost Codes
                                         </CardTitle>
                                         <CardDescription>{tabCounts.costCodes} cost code(s) configured</CardDescription>
@@ -562,7 +554,7 @@ export default function LocationShow() {
                                             {location.cost_codes.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={3} className="h-32 text-center">
-                                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                             <Code2 className="h-8 w-8 opacity-40" />
                                                             <p>No cost codes available</p>
                                                             <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
@@ -576,9 +568,9 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.cost_codes.map((costCode) => (
-                                                    <TableRow key={costCode.id} className="group transition-colors hover:bg-muted/50">
+                                                    <TableRow key={costCode.id} className="group hover:bg-muted/50 transition-colors">
                                                         <TableCell className="pl-6">
-                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                 {costCode.code}
                                                             </code>
                                                         </TableCell>
@@ -588,7 +580,7 @@ export default function LocationShow() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="ghost"
-                                                                    className="h-8 w-8 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+                                                                    className="text-muted-foreground hover:text-destructive h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
@@ -607,23 +599,19 @@ export default function LocationShow() {
                     {/* Price List Tab */}
                     <TabsContent value="pricelist" className="mt-4">
                         <Card className="overflow-hidden">
-                            <CardHeader className="border-b bg-muted/30 px-6 py-4">
+                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <CardTitle className="flex items-center gap-2 text-base">
-                                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                            <DollarSign className="text-muted-foreground h-4 w-4" />
                                             Price List
                                         </CardTitle>
                                         <CardDescription>{tabCounts.pricelist} item(s) in price list</CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <div className="flex items-center gap-2 mr-2">
-                                            <Switch
-                                                id="show-locked"
-                                                checked={showLockedOnly}
-                                                onCheckedChange={setShowLockedOnly}
-                                            />
-                                            <Label htmlFor="show-locked" className="text-sm flex items-center gap-1 cursor-pointer">
+                                        <div className="mr-2 flex items-center gap-2">
+                                            <Switch id="show-locked" checked={showLockedOnly} onCheckedChange={setShowLockedOnly} />
+                                            <Label htmlFor="show-locked" className="flex cursor-pointer items-center gap-1 text-sm">
                                                 <Lock className="h-3.5 w-3.5" />
                                                 Locked Only
                                             </Label>
@@ -632,10 +620,7 @@ export default function LocationShow() {
                                             locationId={location.id}
                                             existingMaterialIds={location.material_items?.map((m) => m.id) ?? []}
                                         />
-                                        <LocationPriceHistoryDialog
-                                            locationId={location.id}
-                                            locationName={location.name}
-                                        />
+                                        <LocationPriceHistoryDialog locationId={location.id} locationName={location.name} />
                                         <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
                                         <a href={`/material-items/location/${location.id}/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
@@ -669,10 +654,12 @@ export default function LocationShow() {
                                             {filteredMaterialItems.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={6} className="h-32 text-center">
-                                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                             <Package className="h-8 w-8 opacity-40" />
                                                             <p>{showLockedOnly ? 'No locked items' : 'No price list available'}</p>
-                                                            <p className="text-xs">{showLockedOnly ? 'No items are currently locked' : 'Import a CSV to add items'}</p>
+                                                            <p className="text-xs">
+                                                                {showLockedOnly ? 'No items are currently locked' : 'Import a CSV to add items'}
+                                                            </p>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -684,12 +671,12 @@ export default function LocationShow() {
                                                             'group transition-colors',
                                                             item.pivot?.is_locked
                                                                 ? 'bg-amber-50/50 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
-                                                                : 'hover:bg-muted/50'
+                                                                : 'hover:bg-muted/50',
                                                         )}
                                                     >
                                                         <TableCell className="pl-6">
                                                             <div className="flex items-center gap-2">
-                                                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+                                                                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                     {item.code}
                                                                 </code>
                                                                 {item.pivot?.is_locked ? (
@@ -712,13 +699,14 @@ export default function LocationShow() {
                                                                     {item.supplier.code}
                                                                 </Badge>
                                                             ) : (
-                                                                <span className="text-sm italic text-muted-foreground">-</span>
+                                                                <span className="text-muted-foreground text-sm italic">-</span>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell className="max-w-md truncate text-muted-foreground">{item.description}</TableCell>
+                                                        <TableCell className="text-muted-foreground max-w-md truncate">{item.description}</TableCell>
                                                         <TableCell className="text-right">
                                                             <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                                                ${(() => {
+                                                                $
+                                                                {(() => {
                                                                     const num = Number(item.pivot?.unit_cost_override ?? 0);
                                                                     const formatted = num.toFixed(6).replace(/\.?0+$/, '');
                                                                     const decimals = formatted.includes('.') ? formatted.split('.')[1].length : 0;
@@ -731,13 +719,13 @@ export default function LocationShow() {
                                                                 <div className="flex flex-col">
                                                                     <span className="text-sm font-medium">{item.pivot.updated_by_name}</span>
                                                                     {item.pivot?.updated_at && (
-                                                                        <span className="text-xs text-muted-foreground">
+                                                                        <span className="text-muted-foreground text-xs">
                                                                             {new Date(item.pivot.updated_at).toLocaleDateString()}
                                                                         </span>
                                                                     )}
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-sm italic text-muted-foreground">-</span>
+                                                                <span className="text-muted-foreground text-sm italic">-</span>
                                                             )}
                                                         </TableCell>
                                                         <TableCell className="pr-6">
@@ -781,11 +769,11 @@ export default function LocationShow() {
                     {/* Favorite Materials Tab */}
                     <TabsContent value="fav_materials" className="mt-4">
                         <Card className="overflow-hidden">
-                            <CardHeader className="border-b bg-muted/30 px-6 py-4">
+                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <CardTitle className="flex items-center gap-2 text-base">
-                                            <Heart className="h-4 w-4 text-muted-foreground" />
+                                            <Heart className="text-muted-foreground h-4 w-4" />
                                             Favorite Materials
                                         </CardTitle>
                                         <CardDescription>{tabCounts.fav_materials} favorite material(s)</CardDescription>
@@ -814,7 +802,7 @@ export default function LocationShow() {
                                             {!location.favourite_materials || location.favourite_materials.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={2} className="h-32 text-center">
-                                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                             <Heart className="h-8 w-8 opacity-40" />
                                                             <p>No favorite materials</p>
                                                             <p className="text-xs">Import a CSV to add favorites</p>
@@ -823,13 +811,13 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.favourite_materials.map((item) => (
-                                                    <TableRow key={item.id} className="group transition-colors hover:bg-muted/50">
+                                                    <TableRow key={item.id} className="group hover:bg-muted/50 transition-colors">
                                                         <TableCell className="pl-6">
-                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                 {item.code}
                                                             </code>
                                                         </TableCell>
-                                                        <TableCell className="pr-6 text-muted-foreground">{item.description}</TableCell>
+                                                        <TableCell className="text-muted-foreground pr-6">{item.description}</TableCell>
                                                     </TableRow>
                                                 ))
                                             )}

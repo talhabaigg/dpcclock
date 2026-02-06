@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class JobReportByCostItemAndCostType extends Model
 {
     protected $table = 'job_report_by_cost_items_and_cost_types';
+
     protected $fillable = [
         'job_number',
         'cost_item',

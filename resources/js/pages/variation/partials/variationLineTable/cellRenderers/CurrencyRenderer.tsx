@@ -7,9 +7,5 @@ export const CurrencyRenderer = (props: CustomCellRendererProps) => {
     // Add green color for revenue field if cost_type is REV
     const isRevenue = props.colDef?.field === 'revenue' && props.data?.cost_type === 'REV';
 
-    return (
-        <div className={`flex h-full items-center justify-end ${isRevenue ? 'text-green-600 font-medium' : ''}`}>
-            {formatted}
-        </div>
-    );
+    return <div className={`flex h-full items-center justify-end ${isRevenue ? 'font-medium text-green-600' : ''}`}>{formatted}</div>;
 };

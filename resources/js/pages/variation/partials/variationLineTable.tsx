@@ -62,20 +62,18 @@ const MobileLineCard = ({
     return (
         <div
             className={cn(
-                'group relative rounded-lg border bg-card transition-all duration-200',
-                'hover:shadow-md hover:border-primary/20',
+                'group bg-card relative rounded-lg border transition-all duration-200',
+                'hover:border-primary/20 hover:shadow-md',
                 item.cost_type === 'REV' && 'border-l-4 border-l-green-500',
             )}
         >
             {/* Header - Always visible */}
-            <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-                    {item.line_number}
-                </div>
+            <div className="flex cursor-pointer items-center gap-3 p-4" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold">{item.line_number}</div>
 
-                <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.description || 'No description'}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{item.description || 'No description'}</p>
+                    <div className="mt-1 flex items-center gap-2">
                         {item.cost_item && (
                             <Badge variant="secondary" className="text-xs">
                                 {item.cost_item}
@@ -101,21 +99,17 @@ const MobileLineCard = ({
                 </div>
 
                 <div className="flex items-center gap-1">
-                    {isExpanded ? (
-                        <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                    ) : (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                    )}
+                    {isExpanded ? <ChevronUp className="text-muted-foreground h-5 w-5" /> : <ChevronDown className="text-muted-foreground h-5 w-5" />}
                 </div>
             </div>
 
             {/* Expandable Content */}
             {isExpanded && (
-                <div className="border-t bg-muted/30 p-4 space-y-4">
+                <div className="bg-muted/30 space-y-4 border-t p-4">
                     {/* Cost Item & Type Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cost Item</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Cost Item</Label>
                             <SearchSelectWithBadgeItem
                                 options={costCodes}
                                 value={item.cost_item}
@@ -124,7 +118,7 @@ const MobileLineCard = ({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cost Type</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Cost Type</Label>
                             <SearchSelect
                                 selectedOption={item.cost_type}
                                 onValueChange={(value) => updateField('cost_type', value)}
@@ -139,7 +133,7 @@ const MobileLineCard = ({
 
                     {/* Description */}
                     <div className="space-y-2">
-                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</Label>
+                        <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Description</Label>
                         <Textarea
                             placeholder="Enter line item description..."
                             className="min-h-[60px] resize-none"
@@ -149,9 +143,9 @@ const MobileLineCard = ({
                     </div>
 
                     {/* Numeric Fields Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Qty</Label>
                             <Input
                                 type="number"
                                 step="0.01"
@@ -162,9 +156,9 @@ const MobileLineCard = ({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unit Cost</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Unit Cost</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
                                 <Input
                                     type="number"
                                     step="0.01"
@@ -176,16 +170,16 @@ const MobileLineCard = ({
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Wastage</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Wastage</Label>
                             <div className="relative">
-                                <Input type="number" disabled value={item.waste_ratio || ''} className="pr-7 text-right bg-muted" />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+                                <Input type="number" disabled value={item.waste_ratio || ''} className="bg-muted pr-7 text-right" />
+                                <span className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2 text-sm">%</span>
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Cost</Label>
+                            <Label className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Total Cost</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
                                 <Input
                                     type="number"
                                     step="0.01"
@@ -200,18 +194,16 @@ const MobileLineCard = ({
 
                     {/* Revenue Field - Only for REV type */}
                     {item.cost_type === 'REV' && (
-                        <div className="space-y-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
-                            <Label className="text-xs font-medium text-green-700 dark:text-green-400 uppercase tracking-wide">
-                                Revenue
-                            </Label>
+                        <div className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950/20">
+                            <Label className="text-xs font-medium tracking-wide text-green-700 uppercase dark:text-green-400">Revenue</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 text-sm">$</span>
+                                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-sm text-green-600">$</span>
                                 <Input
                                     type="number"
                                     step="0.01"
                                     value={item.revenue}
                                     onChange={(e) => updateField('revenue', e.target.value)}
-                                    className="pl-7 text-right font-medium border-green-300 focus:border-green-500 focus:ring-green-500"
+                                    className="border-green-300 pl-7 text-right font-medium focus:border-green-500 focus:ring-green-500"
                                 />
                             </div>
                         </div>
@@ -219,14 +211,14 @@ const MobileLineCard = ({
 
                     {/* Delete Button */}
                     {onDeleteRow && data.line_items.length > 1 && (
-                        <div className="pt-2 border-t">
+                        <div className="border-t pt-2">
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
                                 onClick={() => onDeleteRow(index)}
                             >
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Trash2 className="mr-2 h-4 w-4" />
                                 Delete Line Item
                             </Button>
                         </div>
@@ -260,13 +252,10 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                     {data.line_items.map((item: any, index: number) => (
                         <TableRow
                             key={index}
-                            className={cn(
-                                'group transition-colors',
-                                item.cost_type === 'REV' && 'bg-green-50/50 dark:bg-green-950/10',
-                            )}
+                            className={cn('group transition-colors', item.cost_type === 'REV' && 'bg-green-50/50 dark:bg-green-950/10')}
                         >
                             <TableCell className="text-center">
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium mx-auto">
+                                <div className="bg-muted mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium">
                                     {item.line_number}
                                 </div>
                             </TableCell>
@@ -278,10 +267,8 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                                     onValueChange={(value) => {
                                         const newItems = [...data.line_items];
                                         newItems[index].cost_item = value;
-                                        newItems[index].cost_type =
-                                            costCodes.find((code) => code.code === value)?.cost_type?.code || '';
-                                        newItems[index].waste_ratio =
-                                            costCodes.find((code) => code.code === value)?.pivot?.waste_ratio || '';
+                                        newItems[index].cost_type = costCodes.find((code) => code.code === value)?.cost_type?.code || '';
+                                        newItems[index].waste_ratio = costCodes.find((code) => code.code === value)?.pivot?.waste_ratio || '';
                                         setData('line_items', newItems);
                                     }}
                                 />
@@ -304,7 +291,7 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                             <TableCell className="p-2">
                                 <Textarea
                                     placeholder="Description..."
-                                    className="min-h-[36px] h-9 py-2 resize-none text-sm"
+                                    className="h-9 min-h-[36px] resize-none py-2 text-sm"
                                     rows={1}
                                     value={item.description}
                                     onChange={(e) => {
@@ -331,7 +318,7 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                             </TableCell>
                             <TableCell className="p-2">
                                 <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <span className="text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2 text-xs">$</span>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -341,12 +328,9 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                                         onChange={(e) => {
                                             const newItems = [...data.line_items];
                                             newItems[index].unit_cost = e.target.value;
-                                            const wasteRatio = newItems[index].waste_ratio
-                                                ? parseFloat(newItems[index].waste_ratio) / 100
-                                                : 0;
+                                            const wasteRatio = newItems[index].waste_ratio ? parseFloat(newItems[index].waste_ratio) / 100 : 0;
                                             newItems[index].total_cost =
-                                                parseFloat(e.target.value) * item.qty +
-                                                parseFloat(e.target.value) * item.qty * wasteRatio;
+                                                parseFloat(e.target.value) * item.qty + parseFloat(e.target.value) * item.qty * wasteRatio;
                                             setData('line_items', newItems);
                                         }}
                                     />
@@ -357,15 +341,15 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                                     <Input
                                         type="number"
                                         disabled
-                                        className="w-20 pr-5 text-right text-sm bg-muted/50"
+                                        className="bg-muted/50 w-20 pr-5 text-right text-sm"
                                         value={item.waste_ratio || ''}
                                     />
-                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">%</span>
+                                    <span className="text-muted-foreground absolute top-1/2 right-2 -translate-y-1/2 text-xs">%</span>
                                 </div>
                             </TableCell>
                             <TableCell className="p-2">
                                 <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <span className="text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2 text-xs">$</span>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -382,7 +366,7 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                             </TableCell>
                             <TableCell className="p-2">
                                 <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-600 text-xs">$</span>
+                                    <span className="absolute top-1/2 left-2 -translate-y-1/2 text-xs text-green-600">$</span>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -390,7 +374,7 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                                         className={cn(
                                             'w-28 pl-5 text-right text-sm',
                                             item.cost_type === 'REV' &&
-                                                'border-green-300 bg-green-50 dark:bg-green-950/20 font-medium text-green-700 dark:text-green-400',
+                                                'border-green-300 bg-green-50 font-medium text-green-700 dark:bg-green-950/20 dark:text-green-400',
                                         )}
                                         value={item.revenue}
                                         onChange={(e) => {
@@ -406,7 +390,7 @@ const DesktopTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }: Vari
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
                                         onClick={() => onDeleteRow(index)}
                                         aria-label={`Delete line ${index + 1}`}
                                     >
@@ -426,7 +410,7 @@ const VariationLineTable = ({ data, costCodes, CostTypes, setData, onDeleteRow }
     return (
         <>
             {/* Mobile: Card Layout */}
-            <div className="lg:hidden space-y-3 p-4">
+            <div className="space-y-3 p-4 lg:hidden">
                 {data.line_items.map((item: any, index: number) => (
                     <MobileLineCard
                         key={index}

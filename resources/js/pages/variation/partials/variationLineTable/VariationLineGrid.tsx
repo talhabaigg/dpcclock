@@ -1,20 +1,12 @@
-import { AgGridReact } from 'ag-grid-react';
-import { useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
-import { CellValueChangedEvent } from 'ag-grid-community';
 import { CostCode } from '@/pages/purchasing/types';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
+import { AllCommunityModule, CellValueChangedEvent, ModuleRegistry } from 'ag-grid-community';
+import { AgGridReact } from 'ag-grid-react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
 import { createColumnDefs } from './columnDefs';
 import { getGridOptions, getRowStyle } from './gridConfig';
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
-import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
+import { CostType, LineItem, calculateTotalCost, getCostTypeFromCostCode, getNextLineNumber, getWasteRatioFromCostCode } from './utils';
 ModuleRegistry.registerModules([AllCommunityModule]);
-import {
-    LineItem,
-    CostType,
-    calculateTotalCost,
-    getWasteRatioFromCostCode,
-    getCostTypeFromCostCode,
-    getNextLineNumber,
-} from './utils';
 
 interface VariationLineGridProps {
     lineItems: LineItem[];
@@ -218,13 +210,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
 
         return (
             <div className="ag-theme-shadcn w-full" style={{ height: height || '500px', minHeight: '300px' }}>
-                <AgGridReact
-                    ref={gridRef}
-                    theme={appliedTheme}
-                    rowData={lineItems}
-                    columnDefs={columnDefs}
-                    {...gridOptions}
-                />
+                <AgGridReact ref={gridRef} theme={appliedTheme} rowData={lineItems} columnDefs={columnDefs} {...gridOptions} />
             </div>
         );
     },

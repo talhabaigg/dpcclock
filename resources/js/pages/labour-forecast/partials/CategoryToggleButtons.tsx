@@ -33,12 +33,7 @@ interface CategoryToggleButtonsProps {
     getCategoryBreakdown: (categoryId: string) => CostBreakdown | null;
 }
 
-export const CategoryToggleButtons = ({
-    selectedCategory,
-    onCategoryChange,
-    categoryOptions,
-    getCategoryBreakdown,
-}: CategoryToggleButtonsProps) => {
+export const CategoryToggleButtons = ({ selectedCategory, onCategoryChange, categoryOptions, getCategoryBreakdown }: CategoryToggleButtonsProps) => {
     return (
         <TooltipProvider delayDuration={300}>
             <div className="inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-lg bg-slate-200/80 p-0.5 sm:p-1 dark:bg-slate-700">

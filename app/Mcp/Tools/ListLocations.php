@@ -38,8 +38,6 @@ DESC;
 
     /**
      * Execute the tool call.
-     *
-     * @return ToolResult|Generator
      */
     public function handle(array $arguments): ToolResult|Generator
     {

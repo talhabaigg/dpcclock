@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -189,9 +189,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
     };
 
     const updatePricingConfig = (materialId: number, field: 'unit_cost_override' | 'is_locked', value: string | boolean) => {
-        setPricingConfigs((prev) =>
-            prev.map((config) => (config.material_item_id === materialId ? { ...config, [field]: value } : config))
-        );
+        setPricingConfigs((prev) => prev.map((config) => (config.material_item_id === materialId ? { ...config, [field]: value } : config)));
     };
 
     const selectedSupplier = suppliers.find((s) => s.id === Number(selectedSupplierId));
@@ -222,7 +220,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                     Add Materials
                 </Button>
             </DialogTrigger>
-            <DialogContent className="h-[calc(100vh-4rem)] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] overflow-hidden flex flex-col">
+            <DialogContent className="flex h-[calc(100vh-4rem)] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] flex-col overflow-hidden">
                 <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Add Materials to Price List</DialogTitle>
                     {/* Step Indicator */}
@@ -243,7 +241,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                                 isCompleted
                                                     ? 'bg-emerald-600 text-white'
                                                     : isActive
-                                                      ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                                                      ? 'bg-primary text-primary-foreground ring-primary/20 ring-4'
                                                       : 'bg-muted text-muted-foreground'
                                             }`}
                                         >
@@ -259,9 +257,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                     </div>
                                     {index < 3 && (
                                         <ChevronRight
-                                            className={`mx-3 h-4 w-4 ${
-                                                currentStage > step ? 'text-emerald-600' : 'text-muted-foreground/50'
-                                            }`}
+                                            className={`mx-3 h-4 w-4 ${currentStage > step ? 'text-emerald-600' : 'text-muted-foreground/50'}`}
                                         />
                                     )}
                                 </div>
@@ -270,15 +266,15 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-hidden min-h-0">
+                <div className="min-h-0 flex-1 overflow-hidden">
                     {/* Stage 1: Supplier Selection */}
                     {currentStage === 1 && (
-                        <div className="space-y-4 p-1 h-full">
+                        <div className="h-full space-y-4 p-1">
                             <div className="space-y-2">
                                 <Label htmlFor="supplier">Select a supplier</Label>
                                 {isLoadingSuppliers ? (
                                     <div className="flex items-center justify-center py-8">
-                                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
                                     </div>
                                 ) : (
                                     <Select value={selectedSupplierId || ''} onValueChange={setSelectedSupplierId}>
@@ -297,9 +293,9 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                 )}
                             </div>
                             {selectedSupplier && (
-                                <div className="rounded-lg border bg-muted/30 p-4">
+                                <div className="bg-muted/30 rounded-lg border p-4">
                                     <p className="text-sm font-medium">{selectedSupplier.name}</p>
-                                    <p className="text-xs text-muted-foreground">Supplier Code: {selectedSupplier.code}</p>
+                                    <p className="text-muted-foreground text-xs">Supplier Code: {selectedSupplier.code}</p>
                                 </div>
                             )}
                         </div>
@@ -307,9 +303,9 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
 
                     {/* Stage 2: Material Selection */}
                     {currentStage === 2 && (
-                        <div className="flex flex-col h-full gap-4">
+                        <div className="flex h-full flex-col gap-4">
                             <div className="relative flex-shrink-0">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                                 <Input
                                     placeholder="Search materials by code or description..."
                                     value={searchQuery}
@@ -317,48 +313,44 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                     className="pl-10"
                                 />
                             </div>
-                            <div className="flex items-center justify-between text-sm flex-shrink-0">
+                            <div className="flex flex-shrink-0 items-center justify-between text-sm">
                                 <span className="text-muted-foreground">
                                     {isLoadingMaterials ? 'Loading...' : `${materials.length} material(s) available`}
                                 </span>
                                 <Badge variant="secondary">{selectedMaterialIds.length} selected</Badge>
                             </div>
-                            <div className="flex-1 min-h-0 border rounded-lg overflow-auto">
+                            <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
                                 {isLoadingMaterials ? (
                                     <div className="flex items-center justify-center py-12">
-                                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
                                     </div>
                                 ) : materials.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                                        <Package className="h-8 w-8 mb-2 opacity-40" />
+                                    <div className="text-muted-foreground flex flex-col items-center justify-center py-12">
+                                        <Package className="mb-2 h-8 w-8 opacity-40" />
                                         <p className="text-sm">No materials found</p>
                                         <p className="text-xs">Try a different search term</p>
                                     </div>
                                 ) : (
-                                    <div className="p-2 space-y-1">
+                                    <div className="space-y-1 p-2">
                                         {materials.map((material) => {
                                             const isSelected = selectedMaterialIds.includes(material.id);
                                             return (
                                                 <Label
                                                     key={material.id}
-                                                    className={`flex w-full items-center justify-between gap-3 rounded-lg border p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
-                                                        isSelected
-                                                            ? 'border-blue-600 bg-blue-50 dark:border-blue-900 dark:bg-blue-950'
-                                                            : ''
+                                                    className={`hover:bg-accent/50 flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 transition-colors ${
+                                                        isSelected ? 'border-blue-600 bg-blue-50 dark:border-blue-900 dark:bg-blue-950' : ''
                                                     }`}
                                                 >
-                                                    <div className="grid gap-1 font-normal min-w-0 flex-1">
+                                                    <div className="grid min-w-0 flex-1 gap-1 font-normal">
                                                         <div className="flex items-center gap-2">
-                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                                                                {material.code}
-                                                            </code>
+                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{material.code}</code>
                                                             {!!material.is_favourite && (
                                                                 <Badge variant="outline" className="text-[10px]">
                                                                     Favorite
                                                                 </Badge>
                                                             )}
                                                         </div>
-                                                        <p className="text-sm text-muted-foreground truncate">{material.description}</p>
+                                                        <p className="text-muted-foreground truncate text-sm">{material.description}</p>
                                                         {material.unit_cost !== undefined && (
                                                             <p className="text-xs text-emerald-600 dark:text-emerald-400">
                                                                 Base price: ${Number(material.unit_cost).toFixed(2)}
@@ -381,11 +373,11 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
 
                     {/* Stage 3: Pricing Configuration */}
                     {currentStage === 3 && (
-                        <div className="flex flex-col h-full gap-4">
-                            <p className="text-sm text-muted-foreground flex-shrink-0">
+                        <div className="flex h-full flex-col gap-4">
+                            <p className="text-muted-foreground flex-shrink-0 text-sm">
                                 Set the project-specific price and lock status for each material.
                             </p>
-                            <div className="flex-1 min-h-0 border rounded-lg overflow-auto">
+                            <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -399,11 +391,9 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                         {pricingConfigs.map((config) => (
                                             <TableRow key={config.material_item_id}>
                                                 <TableCell>
-                                                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                                                        {config.code}
-                                                    </code>
+                                                    <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{config.code}</code>
                                                 </TableCell>
-                                                <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                                                <TableCell className="text-muted-foreground max-w-[200px] truncate text-sm">
                                                     {config.description}
                                                 </TableCell>
                                                 <TableCell>
@@ -436,25 +426,25 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
 
                     {/* Stage 4: Review & Confirm */}
                     {currentStage === 4 && (
-                        <div className="flex flex-col h-full gap-4">
-                            <div className="rounded-lg border bg-muted/30 p-4 space-y-2 flex-shrink-0">
+                        <div className="flex h-full flex-col gap-4">
+                            <div className="bg-muted/30 flex-shrink-0 space-y-2 rounded-lg border p-4">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Supplier</span>
+                                    <span className="text-muted-foreground text-sm">Supplier</span>
                                     <span className="font-medium">{selectedSupplier?.name}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Materials to add</span>
+                                    <span className="text-muted-foreground text-sm">Materials to add</span>
                                     <Badge>{pricingConfigs.length}</Badge>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Locked items</span>
+                                    <span className="text-muted-foreground text-sm">Locked items</span>
                                     <Badge variant="outline">
-                                        <Lock className="h-3 w-3 mr-1" />
+                                        <Lock className="mr-1 h-3 w-3" />
                                         {pricingConfigs.filter((c) => c.is_locked).length}
                                     </Badge>
                                 </div>
                             </div>
-                            <div className="flex-1 min-h-0 border rounded-lg overflow-auto">
+                            <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -468,26 +458,22 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                                         {pricingConfigs.map((config) => (
                                             <TableRow key={config.material_item_id}>
                                                 <TableCell>
-                                                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                                                        {config.code}
-                                                    </code>
+                                                    <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{config.code}</code>
                                                 </TableCell>
-                                                <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                                                <TableCell className="text-muted-foreground max-w-[200px] truncate text-sm">
                                                     {config.description}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">
                                                     ${formatPrice(config.unit_cost_override)}
                                                 </TableCell>
-                                                <TableCell>
-                                                    {config.is_locked && <Lock className="h-4 w-4 text-amber-500" />}
-                                                </TableCell>
+                                                <TableCell>{config.is_locked && <Lock className="h-4 w-4 text-amber-500" />}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
                             </div>
                             {pricingConfigs.some((c) => parseFloat(c.unit_cost_override) === 0) && (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200 flex-shrink-0">
+                                <div className="flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                                     Some items have a price of $0.00. Are you sure you want to continue?
                                 </div>
                             )}
@@ -498,7 +484,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                 <DialogFooter className="flex-shrink-0 gap-2 sm:gap-0">
                     {currentStage > 1 && (
                         <Button variant="outline" onClick={handleBack} disabled={form.processing}>
-                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            <ArrowLeft className="mr-2 h-4 w-4" />
                             Back
                         </Button>
                     )}
@@ -512,18 +498,18 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
                             }
                         >
                             Next
-                            <ArrowRight className="h-4 w-4 ml-2" />
+                            <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     ) : (
                         <Button onClick={handleSubmit} disabled={form.processing}>
                             {form.processing ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Adding...
                                 </>
                             ) : (
                                 <>
-                                    <Check className="h-4 w-4 mr-2" />
+                                    <Check className="mr-2 h-4 w-4" />
                                     Add {pricingConfigs.length} Material(s)
                                 </>
                             )}

@@ -168,7 +168,7 @@ class UpdatePricingController extends Controller
                 'category_id' => $categoryId,
             ]);
 
-            return redirect()->back()->with('error', 'Failed to update pricing: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to update pricing: '.$e->getMessage());
         }
     }
 }

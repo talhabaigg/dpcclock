@@ -49,7 +49,7 @@ class LoadJobCostData implements ShouldQueue
         Log::info('LoadJobCostDetails: Job started');
 
         try {
-            $url = config('premier.api.base_url') . config('premier.endpoints.job_cost_details');
+            $url = config('premier.api.base_url').config('premier.endpoints.job_cost_details');
 
             $response = Http::timeout(config('premier.api.timeout', 300))
                 ->withBasicAuth(
@@ -63,7 +63,7 @@ class LoadJobCostData implements ShouldQueue
                 ])
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new \RuntimeException(
                     "API request failed with status {$response->status()}: {$response->body()}"
                 );
@@ -72,19 +72,20 @@ class LoadJobCostData implements ShouldQueue
             $json = $response->json();
 
             // Validate response structure
-            if (!isset($json['d'])) {
+            if (! isset($json['d'])) {
                 throw new \RuntimeException('Invalid API response structure: missing "d" property');
             }
 
             // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
             $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
 
-            if (!is_array($rows)) {
+            if (! is_array($rows)) {
                 throw new \RuntimeException('Invalid API response: expected array of rows');
             }
 
             if (count($rows) === 0) {
                 Log::warning('LoadJobCostDetails: ERP returned 0 rows, skipping database update');
+
                 return;
             }
 
@@ -94,7 +95,7 @@ class LoadJobCostData implements ShouldQueue
             $data = [];
             foreach ($rows as $r) {
                 $ms = null;
-                if (!empty($r['Transaction_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Transaction_Date'], $m)) {
+                if (! empty($r['Transaction_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Transaction_Date'], $m)) {
                     $ms = (int) $m[1];
                 }
 
@@ -132,7 +133,7 @@ class LoadJobCostData implements ShouldQueue
                     $chunkNumber = $index + 1;
                     Log::info("LoadJobCostDetails: Inserting chunk {$chunkNumber}", [
                         'rows' => count($chunk),
-                        'total_chunks' => count($chunks)
+                        'total_chunks' => count($chunks),
                     ]);
 
                     JobCostDetail::insert($chunk);
@@ -142,7 +143,7 @@ class LoadJobCostData implements ShouldQueue
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobCostDetails: Job completed successfully', [
                 'records_processed' => count($data),
-                'duration_seconds' => $duration
+                'duration_seconds' => $duration,
             ]);
 
         } catch (Throwable $e) {
@@ -163,7 +164,7 @@ class LoadJobCostData implements ShouldQueue
     {
         Log::error('LoadJobCostDetails: Job failed permanently after all retries', [
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
 
         // Here you could send notifications to administrators

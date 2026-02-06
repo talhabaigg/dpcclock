@@ -23,8 +23,11 @@ class ChatController extends Controller
      * OpenAI API configuration
      */
     private const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
+
     private const DEFAULT_MODEL = 'gpt-4.1';
+
     private const MAX_MESSAGE_LENGTH = 10000;
+
     private const MAX_HISTORY_MESSAGES = 50;
 
     /**
@@ -34,7 +37,7 @@ class ChatController extends Controller
     {
         $key = config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: env('VITE_OPEN_AI_API_KEY');
 
-        if (!$key) {
+        if (! $key) {
             throw new \RuntimeException('OpenAI API key is not configured');
         }
 
@@ -141,7 +144,7 @@ INSTRUCTIONS;
     private function validateRequest(Request $request): array
     {
         return $request->validate([
-            'message' => ['required', 'string', 'max:' . self::MAX_MESSAGE_LENGTH],
+            'message' => ['required', 'string', 'max:'.self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
             'force_tool' => ['nullable', 'string', 'max:50'],
         ]);
@@ -154,7 +157,7 @@ INSTRUCTIONS;
     {
         $userId = auth()->id();
 
-        if (!$userId) {
+        if (! $userId) {
             throw new \RuntimeException('User must be authenticated to use chat');
         }
 
@@ -170,7 +173,7 @@ INSTRUCTIONS;
             ->orderBy('created_at')
             ->limit(self::MAX_HISTORY_MESSAGES)
             ->get()
-            ->map(fn($msg) => [
+            ->map(fn ($msg) => [
                 'role' => $msg->role,
                 'content' => $msg->message,
             ])
@@ -689,7 +692,8 @@ INSTRUCTIONS;
             };
         } catch (Throwable $e) {
             Log::error('Tool execution error', ['tool' => $name, 'error' => $e->getMessage()]);
-            return json_encode(['error' => "Failed to execute {$name}: " . $e->getMessage()]);
+
+            return json_encode(['error' => "Failed to execute {$name}: ".$e->getMessage()]);
         }
     }
 
@@ -704,7 +708,7 @@ INSTRUCTIONS;
             ->with(['creator', 'location', 'supplier', 'lineItems'])
             ->find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             return json_encode(['error' => "No requisition found with ID {$requisitionId}"]);
         }
 
@@ -728,7 +732,7 @@ INSTRUCTIONS;
                 'name' => $requisition->supplier->name,
             ] : null,
             'total' => (float) ($requisition->total ?? 0),
-            'lines' => $requisition->lineItems ? $requisition->lineItems->map(fn($line) => [
+            'lines' => $requisition->lineItems ? $requisition->lineItems->map(fn ($line) => [
                 'id' => $line->id,
                 'serial_number' => $line->serial_number ?? null,
                 'code' => $line->code ?? null,
@@ -751,31 +755,31 @@ INSTRUCTIONS;
     {
         $query = Requisition::query()->with(['location', 'supplier', 'creator', 'lineItems']);
 
-        if (!empty($arguments['status'])) {
+        if (! empty($arguments['status'])) {
             $query->where('status', $arguments['status']);
         }
 
-        if (!empty($arguments['location_id'])) {
+        if (! empty($arguments['location_id'])) {
             $query->where('project_number', $arguments['location_id']);
         }
 
-        if (!empty($arguments['supplier_id'])) {
+        if (! empty($arguments['supplier_id'])) {
             $query->where('supplier_number', $arguments['supplier_id']);
         }
 
-        if (!empty($arguments['po_number'])) {
-            $query->where('po_number', 'like', '%' . $arguments['po_number'] . '%');
+        if (! empty($arguments['po_number'])) {
+            $query->where('po_number', 'like', '%'.$arguments['po_number'].'%');
         }
 
-        if (!empty($arguments['date_from'])) {
+        if (! empty($arguments['date_from'])) {
             $query->whereDate('created_at', '>=', $arguments['date_from']);
         }
 
-        if (!empty($arguments['date_to'])) {
+        if (! empty($arguments['date_to'])) {
             $query->whereDate('created_at', '<=', $arguments['date_to']);
         }
 
-        if (!empty($arguments['search'])) {
+        if (! empty($arguments['search'])) {
             $search = $arguments['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('id', 'like', "%{$search}%")
@@ -789,7 +793,7 @@ INSTRUCTIONS;
 
         $requisitions = $query->orderBy('created_at', 'desc')->limit($limit)->get();
 
-        $results = $requisitions->map(fn($req) => [
+        $results = $requisitions->map(fn ($req) => [
             'id' => $req->id,
             'status' => $req->status,
             'po_number' => $req->po_number,
@@ -817,11 +821,11 @@ INSTRUCTIONS;
             ->whereDate('created_at', '>=', $dateFrom)
             ->whereDate('created_at', '<=', $dateTo);
 
-        if (!empty($arguments['location_id'])) {
+        if (! empty($arguments['location_id'])) {
             $query->where('project_number', $arguments['location_id']);
         }
 
-        if (!empty($arguments['supplier_id'])) {
+        if (! empty($arguments['supplier_id'])) {
             $query->where('supplier_number', $arguments['supplier_id']);
         }
 
@@ -832,8 +836,8 @@ INSTRUCTIONS;
             'total_requisitions' => $requisitions->count(),
             'by_status' => $requisitions->groupBy('status')->map->count()->toArray(),
             'total_value' => $requisitions->sum('total'),
-            'total_line_items' => $requisitions->sum(fn($r) => $r->lineItems->count()),
-            'requisitions' => $requisitions->map(fn($r) => [
+            'total_line_items' => $requisitions->sum(fn ($r) => $r->lineItems->count()),
+            'requisitions' => $requisitions->map(fn ($r) => [
                 'id' => $r->id,
                 'status' => $r->status,
                 'total' => (float) $r->total,
@@ -851,7 +855,7 @@ INSTRUCTIONS;
     {
         $query = Location::query();
 
-        if (!empty($arguments['search'])) {
+        if (! empty($arguments['search'])) {
             $search = $arguments['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -871,7 +875,7 @@ INSTRUCTIONS;
     {
         $query = Supplier::query();
 
-        if (!empty($arguments['search'])) {
+        if (! empty($arguments['search'])) {
             $search = $arguments['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -892,11 +896,11 @@ INSTRUCTIONS;
         $query = MaterialItem::query()->with('costCode');
         $locationId = $arguments['location_id'] ?? null;
 
-        if (!empty($arguments['supplier_id'])) {
+        if (! empty($arguments['supplier_id'])) {
             $query->where('supplier_id', $arguments['supplier_id']);
         }
 
-        if (!empty($arguments['search'])) {
+        if (! empty($arguments['search'])) {
             $search = $arguments['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('code', 'like', "%{$search}%")
@@ -917,7 +921,7 @@ INSTRUCTIONS;
                 ->toArray();
         }
 
-        $results = $materials->map(function ($item) use ($locationPrices, $locationId) {
+        $results = $materials->map(function ($item) use ($locationPrices) {
             $hasLocationPrice = isset($locationPrices[$item->id]);
             $unitCost = $hasLocationPrice ? $locationPrices[$item->id] : $item->unit_cost;
 
@@ -945,7 +949,7 @@ INSTRUCTIONS;
 
         $item = MaterialItem::with('costCode')->where('code', $materialCode)->first();
 
-        if (!$item) {
+        if (! $item) {
             return json_encode(['error' => "Material with code '{$materialCode}' not found"]);
         }
 
@@ -981,13 +985,13 @@ INSTRUCTIONS;
 
         // Validate location exists
         $location = Location::find($locationId);
-        if (!$location) {
+        if (! $location) {
             return json_encode(['error' => "Location with ID {$locationId} not found"]);
         }
 
         // Validate supplier exists
         $supplier = Supplier::find($supplierId);
-        if (!$supplier) {
+        if (! $supplier) {
             return json_encode(['error' => "Supplier with ID {$supplierId} not found"]);
         }
 
@@ -1098,7 +1102,7 @@ INSTRUCTIONS;
 
         $requisition = Requisition::with(['location', 'supplier', 'lineItems'])->find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             return json_encode(['error' => "Requisition with ID {$requisitionId} not found"]);
         }
 
@@ -1173,7 +1177,7 @@ INSTRUCTIONS;
 
         return json_encode([
             'success' => true,
-            'message' => count($createdLines) . ' line item(s) added',
+            'message' => count($createdLines).' line item(s) added',
             'requisition_id' => $requisition->id,
             'new_total' => (float) $requisition->total,
             'total_lines' => $requisition->lineItems->count(),
@@ -1190,7 +1194,7 @@ INSTRUCTIONS;
 
         $lineItem = RequisitionLineItem::with('requisition')->find($lineItemId);
 
-        if (!$lineItem) {
+        if (! $lineItem) {
             return json_encode(['error' => "Line item with ID {$lineItemId} not found"]);
         }
 
@@ -1245,7 +1249,7 @@ INSTRUCTIONS;
 
         $lineItem = RequisitionLineItem::with('requisition')->find($lineItemId);
 
-        if (!$lineItem) {
+        if (! $lineItem) {
             return json_encode(['error' => "Line item with ID {$lineItemId} not found"]);
         }
 
@@ -1283,7 +1287,7 @@ INSTRUCTIONS;
 
         $requisition = Requisition::find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             return json_encode(['error' => "Requisition with ID {$requisitionId} not found"]);
         }
 
@@ -1343,13 +1347,13 @@ INSTRUCTIONS;
         $requisitionId = (int) ($arguments['requisition_id'] ?? 0);
         $confirm = (bool) ($arguments['confirm'] ?? false);
 
-        if (!$confirm) {
+        if (! $confirm) {
             return json_encode(['error' => 'Deletion not confirmed. Set confirm to true to delete.']);
         }
 
         $requisition = Requisition::with('lineItems')->find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             return json_encode(['error' => "Requisition with ID {$requisitionId} not found"]);
         }
 
@@ -1381,11 +1385,11 @@ INSTRUCTIONS;
     {
         $query = JobSummary::query();
 
-        if (!empty($arguments['job_number'])) {
-            $query->where('job_number', 'like', '%' . $arguments['job_number'] . '%');
+        if (! empty($arguments['job_number'])) {
+            $query->where('job_number', 'like', '%'.$arguments['job_number'].'%');
         }
 
-        if (!empty($arguments['status'])) {
+        if (! empty($arguments['status'])) {
             $query->where('status', $arguments['status']);
         }
 
@@ -1398,7 +1402,7 @@ INSTRUCTIONS;
             return json_encode(['error' => 'No job summaries found matching the criteria']);
         }
 
-        $results = $jobs->map(fn($job) => [
+        $results = $jobs->map(fn ($job) => [
             'job_number' => $job->job_number,
             'company_code' => $job->company_code,
             'status' => $job->status,
@@ -1464,17 +1468,17 @@ INSTRUCTIONS;
         $style = $arguments['style'] ?? 'vivid';
 
         // Validate size
-        if (!in_array($size, ['1024x1024', '1792x1024', '1024x1792'])) {
+        if (! in_array($size, ['1024x1024', '1792x1024', '1024x1792'])) {
             $size = '1024x1024';
         }
 
         // Validate quality
-        if (!in_array($quality, ['standard', 'hd'])) {
+        if (! in_array($quality, ['standard', 'hd'])) {
             $quality = 'standard';
         }
 
         // Validate style
-        if (!in_array($style, ['vivid', 'natural'])) {
+        if (! in_array($style, ['vivid', 'natural'])) {
             $style = 'vivid';
         }
 
@@ -1498,7 +1502,8 @@ INSTRUCTIONS;
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
-                return json_encode(['error' => 'Failed to generate image: ' . ($response->json()['error']['message'] ?? 'Unknown error')]);
+
+                return json_encode(['error' => 'Failed to generate image: '.($response->json()['error']['message'] ?? 'Unknown error')]);
             }
 
             $result = $response->json();
@@ -1522,7 +1527,8 @@ INSTRUCTIONS;
 
         } catch (Throwable $e) {
             Log::error('Image generation error', ['error' => $e->getMessage()]);
-            return json_encode(['error' => 'Failed to generate image: ' . $e->getMessage()]);
+
+            return json_encode(['error' => 'Failed to generate image: '.$e->getMessage()]);
         }
     }
 
@@ -1673,7 +1679,7 @@ INSTRUCTIONS;
                         // Check for HTTP errors before trying to get stream
                         if ($response->failed()) {
                             Log::error('OpenAI API failed', ['status' => $response->status(), 'body' => $response->body()]);
-                            $this->sendSSEData(['error' => 'OpenAI API request failed: ' . $response->status()]);
+                            $this->sendSSEData(['error' => 'OpenAI API request failed: '.$response->status()]);
                             break;
                         }
 
@@ -1683,10 +1689,11 @@ INSTRUCTIONS;
                         $currentToolCall = null;
                         $needsToolExecution = false;
 
-                        while (!$stream->eof()) {
+                        while (! $stream->eof()) {
                             $chunk = $stream->read(1024);
                             if ($chunk === '' || $chunk === false) {
                                 usleep(20000);
+
                                 continue;
                             }
 
@@ -1707,7 +1714,7 @@ INSTRUCTIONS;
                                 }
 
                                 $event = json_decode($payload, true);
-                                if (!is_array($event)) {
+                                if (! is_array($event)) {
                                     continue;
                                 }
 
@@ -1801,7 +1808,7 @@ INSTRUCTIONS;
                                                 }
                                                 unset($tc);
 
-                                                if (!$found) {
+                                                if (! $found) {
                                                     $pendingToolCalls[] = [
                                                         'call_id' => $callId,
                                                         'name' => $name,
@@ -1818,7 +1825,7 @@ INSTRUCTIONS;
                         }
 
                         // If there are pending tool calls, execute them and continue
-                        if ($needsToolExecution && !empty($pendingToolCalls)) {
+                        if ($needsToolExecution && ! empty($pendingToolCalls)) {
                             Log::info('Executing tool calls', ['tools' => array_column($pendingToolCalls, 'name')]);
 
                             // Notify client that we're using tools
@@ -1867,7 +1874,7 @@ INSTRUCTIONS;
                         'line' => $e->getLine(),
                         'trace' => $e->getTraceAsString(),
                     ]);
-                    $this->sendSSEData(['error' => 'An error occurred: ' . $e->getMessage()]);
+                    $this->sendSSEData(['error' => 'An error occurred: '.$e->getMessage()]);
                 }
 
                 // Save the assistant message
@@ -1907,7 +1914,7 @@ INSTRUCTIONS;
      */
     private function extractAssistantMessage(array $result): string
     {
-        if (!isset($result['output']) || !is_array($result['output'])) {
+        if (! isset($result['output']) || ! is_array($result['output'])) {
             return 'I apologize, but I was unable to generate a response.';
         }
 
@@ -1947,7 +1954,7 @@ INSTRUCTIONS;
      */
     private function sendSSEData(array $data): void
     {
-        echo 'data: ' . json_encode($data) . "\n\n";
+        echo 'data: '.json_encode($data)."\n\n";
         $this->flushOutput();
     }
 
@@ -1957,7 +1964,7 @@ INSTRUCTIONS;
     private function sendSSEEvent(string $event, array $data): void
     {
         echo "event: {$event}\n";
-        echo 'data: ' . json_encode($data) . "\n\n";
+        echo 'data: '.json_encode($data)."\n\n";
         $this->flushOutput();
     }
 

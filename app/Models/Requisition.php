@@ -2,16 +2,16 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-use Spatie\Activitylog\LogOptions;
 class Requisition extends Model
 {
-    use HasFactory, SoftDeletes, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
+
     protected $fillable = [
         'project_number',
         'supplier_number',
@@ -51,6 +51,7 @@ class Requisition extends Model
             $requisition->deleted_by = null;
         });
     }
+
     public function lineItems()
     {
         return $this->hasMany(RequisitionLineItem::class);
@@ -85,6 +86,7 @@ class Requisition extends Model
     {
         return $this->belongsTo(User::class, 'processed_by', 'id');
     }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

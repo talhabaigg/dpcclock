@@ -61,10 +61,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     const clockedInCount = employees.filter((emp) => emp.clocked_in).length;
 
     return (
-        <div className={cn(
-            'flex h-screen flex-col bg-background',
-            adminMode && 'ring-2 ring-inset ring-amber-500/50',
-        )}>
+        <div className={cn('bg-background flex h-screen flex-col', adminMode && 'ring-2 ring-amber-500/50 ring-inset')}>
             {/* Admin Mode Banner */}
             {adminMode && (
                 <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-white shadow-md">
@@ -88,22 +85,15 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             )}
 
             {/* Top Bar */}
-            <header className={cn(
-                'flex h-16 w-full items-center justify-between border-b bg-card px-4 shadow-sm',
-                adminMode && 'border-amber-500/30',
-            )}>
+            <header
+                className={cn('bg-card flex h-16 w-full items-center justify-between border-b px-4 shadow-sm', adminMode && 'border-amber-500/30')}
+            >
                 <div className="flex items-center gap-3">
-                    <div className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-lg',
-                        adminMode ? 'bg-amber-500/10' : 'bg-primary/10',
-                    )}>
-                        <Monitor className={cn(
-                            'h-5 w-5',
-                            adminMode ? 'text-amber-600' : 'text-primary',
-                        )} />
+                    <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', adminMode ? 'bg-amber-500/10' : 'bg-primary/10')}>
+                        <Monitor className={cn('h-5 w-5', adminMode ? 'text-amber-600' : 'text-primary')} />
                     </div>
                     <div>
-                        <h2 className="font-semibold leading-tight">{kiosk.name}</h2>
+                        <h2 className="leading-tight font-semibold">{kiosk.name}</h2>
                     </div>
                 </div>
 
@@ -119,11 +109,11 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             {/* Layout container */}
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar - Employee List */}
-                <aside className="flex w-72 flex-shrink-0 flex-col overflow-hidden border-r bg-muted/30 sm:w-80 lg:w-96">
+                <aside className="bg-muted/30 flex w-72 flex-shrink-0 flex-col overflow-hidden border-r sm:w-80 lg:w-96">
                     {/* Kiosk Switcher */}
                     {kiosk.related_kiosks && kiosk.related_kiosks.length > 0 && (
                         <div className="border-b p-3">
-                            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs font-medium">
                                 <Monitor className="h-3.5 w-3.5" />
                                 Switch Kiosk
                             </div>
@@ -158,7 +148,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                     <div className="border-b p-3">
                         <EmployeeSearch value={search} onChange={setSearch} placeholder="Search employees..." />
                         <div className="mt-3 flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <div className="text-muted-foreground flex items-center gap-1.5">
                                 <Users className="h-3.5 w-3.5" />
                                 <span>{filteredEmployees.length} employees</span>
                             </div>
@@ -178,9 +168,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 </aside>
 
                 {/* Main content */}
-                <main className="hidden flex-1 overflow-y-auto bg-background p-4 sm:flex sm:items-center sm:justify-center">
-                    {children}
-                </main>
+                <main className="bg-background hidden flex-1 overflow-y-auto p-4 sm:flex sm:items-center sm:justify-center">{children}</main>
             </div>
 
             {/* Exit Admin Mode Dialog */}
@@ -191,9 +179,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             <LogOut className="h-8 w-8 text-amber-600" />
                         </div>
                         <DialogTitle className="text-center">Exit Admin Mode</DialogTitle>
-                        <DialogDescription className="text-center">
-                            Are you sure you want to exit admin mode?
-                        </DialogDescription>
+                        <DialogDescription className="text-center">Are you sure you want to exit admin mode?</DialogDescription>
                     </DialogHeader>
 
                     {isExiting ? (
@@ -202,8 +188,8 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                                 <LogOut className="h-8 w-8 animate-pulse text-amber-600" />
                             </div>
                             <div className="flex flex-col items-center gap-1">
-                                <span className="text-base font-semibold text-foreground">Exiting Admin Mode</span>
-                                <span className="text-sm text-muted-foreground">Please wait...</span>
+                                <span className="text-foreground text-base font-semibold">Exiting Admin Mode</span>
+                                <span className="text-muted-foreground text-sm">Please wait...</span>
                             </div>
                             <div className="flex gap-1.5">
                                 <div className="h-2 w-2 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.3s]" />
@@ -213,19 +199,11 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                         </div>
                     ) : (
                         <div className="flex flex-col gap-3 pt-4">
-                            <Button
-                                variant="destructive"
-                                className="w-full"
-                                onClick={handleExitAdminMode}
-                            >
+                            <Button variant="destructive" className="w-full" onClick={handleExitAdminMode}>
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Exit Admin Mode
                             </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => setExitAdminDialogOpen(false)}
-                            >
+                            <Button variant="outline" className="w-full" onClick={() => setExitAdminDialogOpen(false)}>
                                 Cancel
                             </Button>
                         </div>

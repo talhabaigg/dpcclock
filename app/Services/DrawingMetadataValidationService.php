@@ -19,7 +19,9 @@ class DrawingMetadataValidationService
      * These are configurable via config/services.php or environment variables.
      */
     private float $confidenceNumber;
+
     private float $confidenceTitle;
+
     private float $confidenceRevision;
 
     public function __construct()
@@ -36,8 +38,8 @@ class DrawingMetadataValidationService
     /**
      * Validate all extracted fields and determine if extraction passes.
      *
-     * @param array $fields Extracted fields with text and confidence
-     * @param bool $skipStrictChecks When true, use relaxed validation for user-mapped fields
+     * @param  array  $fields  Extracted fields with text and confidence
+     * @param  bool  $skipStrictChecks  When true, use relaxed validation for user-mapped fields
      * @return array{
      *     passes: bool,
      *     drawing_number: array{value: string|null, valid: bool, confidence: float, errors: array},
@@ -67,7 +69,7 @@ class DrawingMetadataValidationService
                   ($titleResult['valid'] || $revisionResult['valid']);
 
         // Allow pass with slightly lower confidence if validation is strong
-        if (!$passes && $numberResult['valid'] && $numberResult['confidence'] >= ($this->confidenceNumber - 0.10)) {
+        if (! $passes && $numberResult['valid'] && $numberResult['confidence'] >= ($this->confidenceNumber - 0.10)) {
             if (($titleResult['valid'] && $titleResult['confidence'] >= $this->confidenceTitle) ||
                 ($revisionResult['valid'] && $revisionResult['confidence'] >= $this->confidenceRevision)) {
                 $passes = true;
@@ -75,10 +77,10 @@ class DrawingMetadataValidationService
         }
 
         $overallErrors = [];
-        if (!$numberResult['valid']) {
+        if (! $numberResult['valid']) {
             $overallErrors[] = 'Invalid or missing drawing number';
         }
-        if (!$titleResult['valid'] && !$revisionResult['valid']) {
+        if (! $titleResult['valid'] && ! $revisionResult['valid']) {
             $overallErrors[] = 'Both title and revision are invalid or missing';
         }
 
@@ -98,7 +100,7 @@ class DrawingMetadataValidationService
      * and just verify we got some readable text. We skip pattern matching and confidence
      * thresholds since the user has confirmed the locations are correct.
      *
-     * @param array $fields Extracted fields with text and confidence
+     * @param  array  $fields  Extracted fields with text and confidence
      * @return array Validation result
      */
     private function validateRelaxed(array $fields): array
@@ -116,7 +118,7 @@ class DrawingMetadataValidationService
                     'value' => null,
                     'valid' => false,
                     'confidence' => $confidence,
-                    'errors' => [ucfirst(str_replace('_', ' ', $fieldName)) . ' is empty'],
+                    'errors' => [ucfirst(str_replace('_', ' ', $fieldName)).' is empty'],
                 ];
             } else {
                 // Normalize whitespace
@@ -161,7 +163,7 @@ class DrawingMetadataValidationService
         // Pass if we have at least a drawing number
         $passes = $results['drawing_number']['valid'] ?? false;
 
-        if (!$passes) {
+        if (! $passes) {
             $overallErrors[] = 'Missing drawing number';
         }
 
@@ -191,7 +193,7 @@ class DrawingMetadataValidationService
      * - SK01, SK-01 (sketch numbers)
      * - ABC 1234, ABC1234-01 (alphanumeric)
      *
-     * @param array $field {text: string, confidence: float}
+     * @param  array  $field  {text: string, confidence: float}
      * @return array{value: string|null, valid: bool, confidence: float, errors: array}
      */
     public function validateDrawingNumber(array $field): array
@@ -224,8 +226,8 @@ class DrawingMetadataValidationService
 
         // Reject common sheet sizes (A0, A1, A2, A3, A4, B0, B1, etc.)
         $sheetSizes = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'B0', 'B1', 'B2', 'B3', 'B4', 'B5',
-                       'ANSI A', 'ANSI B', 'ANSI C', 'ANSI D', 'ANSI E', 'ARCH A', 'ARCH B',
-                       'ARCH C', 'ARCH D', 'ARCH E', 'ARCH E1'];
+            'ANSI A', 'ANSI B', 'ANSI C', 'ANSI D', 'ANSI E', 'ARCH A', 'ARCH B',
+            'ARCH C', 'ARCH D', 'ARCH E', 'ARCH E1'];
         if (in_array(strtoupper($normalized), $sheetSizes)) {
             $errors[] = 'Value appears to be a sheet size, not a drawing number';
         }
@@ -256,7 +258,7 @@ class DrawingMetadataValidationService
             }
         }
 
-        if (!$matchesPattern && empty($errors)) {
+        if (! $matchesPattern && empty($errors)) {
             // Log for pattern improvement but don't reject outright
             Log::info('Drawing number format not recognized', ['value' => $normalized]);
             // Still accept if confidence is good - patterns may need expansion
@@ -280,8 +282,8 @@ class DrawingMetadataValidationService
      * - Not purely numeric
      * - Not same as drawing number (would indicate extraction error)
      *
-     * @param array $field {text: string, confidence: float}
-     * @param string|null $drawingNumber For duplicate detection
+     * @param  array  $field  {text: string, confidence: float}
+     * @param  string|null  $drawingNumber  For duplicate detection
      * @return array{value: string|null, valid: bool, confidence: float, errors: array}
      */
     public function validateTitle(array $field, ?string $drawingNumber = null): array
@@ -344,7 +346,7 @@ class DrawingMetadataValidationService
      * - Prefixed: P1, P2 (preliminary), C (for construction)
      * - With prefix to strip: REV A, REVISION 2, REV: B
      *
-     * @param array $field {text: string, confidence: float}
+     * @param  array  $field  {text: string, confidence: float}
      * @return array{value: string|null, valid: bool, confidence: float, errors: array}
      */
     public function validateRevision(array $field): array
@@ -400,7 +402,7 @@ class DrawingMetadataValidationService
             }
         }
 
-        if (!$matchesPattern) {
+        if (! $matchesPattern) {
             $errors[] = 'Revision format not recognized';
         }
 
@@ -417,7 +419,7 @@ class DrawingMetadataValidationService
     /**
      * Calculate a weighted overall confidence score.
      *
-     * @param array $validationResult Result from validate()
+     * @param  array  $validationResult  Result from validate()
      * @return float Weighted confidence 0-1
      */
     public function calculateOverallConfidence(array $validationResult): float

@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
 import axios from 'axios';
+import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { type BreadcrumbItem } from '@/types';
 
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
-import { Bell, BellOff, AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
+import { AlertCircle, Bell, BellOff, CheckCircle2, Loader2, Send } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -20,22 +20,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Notifications() {
-    const {
-        isSupported,
-        isSubscribed,
-        permission,
-        isLoading,
-        error,
-        subscribe,
-        unsubscribe,
-    } = usePushNotifications();
+    const { isSupported, isSubscribed, permission, isLoading, error, subscribe, unsubscribe } = usePushNotifications();
 
     const getStatusIcon = () => {
-        if (isLoading) return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />;
-        if (!isSupported) return <AlertCircle className="h-5 w-5 text-destructive" />;
-        if (permission === 'denied') return <BellOff className="h-5 w-5 text-destructive" />;
+        if (isLoading) return <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />;
+        if (!isSupported) return <AlertCircle className="text-destructive h-5 w-5" />;
+        if (permission === 'denied') return <BellOff className="text-destructive h-5 w-5" />;
         if (isSubscribed) return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-        return <Bell className="h-5 w-5 text-muted-foreground" />;
+        return <Bell className="text-muted-foreground h-5 w-5" />;
     };
 
     const getStatusText = () => {
@@ -80,10 +72,7 @@ export default function Notifications() {
 
             <SettingsLayout>
                 <div className="space-y-6">
-                    <HeadingSmall
-                        title="Notification settings"
-                        description="Manage how you receive notifications from the app"
-                    />
+                    <HeadingSmall title="Notification settings" description="Manage how you receive notifications from the app" />
 
                     <Card>
                         <CardHeader>
@@ -97,7 +86,7 @@ export default function Notifications() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {error && (
-                                <div className="flex items-center gap-2 text-sm text-destructive">
+                                <div className="text-destructive flex items-center gap-2 text-sm">
                                     <AlertCircle className="h-4 w-4" />
                                     {error}
                                 </div>
@@ -105,11 +94,7 @@ export default function Notifications() {
 
                             {isSupported && permission !== 'denied' && (
                                 <div className="flex flex-wrap gap-2">
-                                    <Button
-                                        onClick={handleToggle}
-                                        disabled={isLoading}
-                                        variant={isSubscribed ? 'outline' : 'default'}
-                                    >
+                                    <Button onClick={handleToggle} disabled={isLoading} variant={isSubscribed ? 'outline' : 'default'}>
                                         {isLoading ? (
                                             <>
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -129,11 +114,7 @@ export default function Notifications() {
                                     </Button>
 
                                     {isSubscribed && (
-                                        <Button
-                                            onClick={handleTestNotification}
-                                            disabled={isSendingTest}
-                                            variant="secondary"
-                                        >
+                                        <Button onClick={handleTestNotification} disabled={isSendingTest} variant="secondary">
                                             {isSendingTest ? (
                                                 <>
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -156,19 +137,15 @@ export default function Notifications() {
                                         testMessage.type === 'success' ? 'text-green-600' : 'text-destructive'
                                     }`}
                                 >
-                                    {testMessage.type === 'success' ? (
-                                        <CheckCircle2 className="h-4 w-4" />
-                                    ) : (
-                                        <AlertCircle className="h-4 w-4" />
-                                    )}
+                                    {testMessage.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                                     {testMessage.text}
                                 </div>
                             )}
 
                             {permission === 'denied' && (
-                                <div className="rounded-md bg-muted p-4 text-sm">
-                                    <p className="font-medium mb-2">How to enable notifications:</p>
-                                    <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                                <div className="bg-muted rounded-md p-4 text-sm">
+                                    <p className="mb-2 font-medium">How to enable notifications:</p>
+                                    <ol className="text-muted-foreground list-inside list-decimal space-y-1">
                                         <li>Click the lock/info icon in your browser's address bar</li>
                                         <li>Find "Notifications" in the permissions list</li>
                                         <li>Change the setting from "Block" to "Allow"</li>
@@ -177,9 +154,9 @@ export default function Notifications() {
                                 </div>
                             )}
 
-                            <div className="rounded-md bg-muted p-4 text-sm">
-                                <p className="font-medium mb-2">About Push Notifications</p>
-                                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                            <div className="bg-muted rounded-md p-4 text-sm">
+                                <p className="mb-2 font-medium">About Push Notifications</p>
+                                <ul className="text-muted-foreground list-inside list-disc space-y-1">
                                     <li>Receive real-time updates about job forecasts</li>
                                     <li>Get notified about timesheet approvals</li>
                                     <li>Stay updated on requisition status changes</li>

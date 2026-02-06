@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { shadcnTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
+import { shadcnDarkTheme, shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -755,9 +755,7 @@ const ShowJobForecastPage = ({
         }
 
         // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes
-            .filter((node) => node.data.is_orphaned)
-            .map((node) => node.data.cost_item as string);
+        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
         if (orphanedCostItems.length > 0) {
             setPendingOrphanedCostItemsToDelete((prev) => ({
                 ...prev,
@@ -790,9 +788,7 @@ const ShowJobForecastPage = ({
         }
 
         // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes
-            .filter((node) => node.data.is_orphaned)
-            .map((node) => node.data.cost_item as string);
+        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
         if (orphanedCostItems.length > 0) {
             setPendingOrphanedCostItemsToDelete((prev) => ({
                 ...prev,
@@ -1063,8 +1059,14 @@ const ShowJobForecastPage = ({
             const isActual = removeCurrentMonthFromDisplayMonths.includes(monthKey);
 
             // Get totals from pinned rows
-            const costTotal = pinnedBottomRowData[0]?.[monthKey];
-            const revenueTotal = pinnedBottomRevenueRowData[0]?.[monthKey];
+            // For current month forecast, check both regular and forecast_ prefixed fields
+            const isCurrentMonthForecast = !isActual && monthKey === currentMonth;
+            const costTotal = isCurrentMonthForecast
+                ? (pinnedBottomRowData[0]?.[`forecast_${monthKey}`] ?? pinnedBottomRowData[0]?.[monthKey])
+                : pinnedBottomRowData[0]?.[monthKey];
+            const revenueTotal = isCurrentMonthForecast
+                ? (pinnedBottomRevenueRowData[0]?.[`forecast_${monthKey}`] ?? pinnedBottomRevenueRowData[0]?.[monthKey])
+                : pinnedBottomRevenueRowData[0]?.[monthKey];
 
             return {
                 monthKey,
@@ -1075,7 +1077,7 @@ const ShowJobForecastPage = ({
                 revenueForecast: !isActual ? (revenueTotal ?? 0) : null,
             };
         });
-    }, [displayMonths, forecastMonths, pinnedBottomRowData, pinnedBottomRevenueRowData]);
+    }, [displayMonths, forecastMonths, pinnedBottomRowData, pinnedBottomRevenueRowData, currentMonth]);
 
     const totalCostBudget = useMemo(() => pinnedBottomRowData[0]?.budget || 0, [pinnedBottomRowData]);
     const totalRevenueBudget = useMemo(() => pinnedBottomRevenueRowData[0]?.contract_sum_to_date || 0, [pinnedBottomRevenueRowData]);

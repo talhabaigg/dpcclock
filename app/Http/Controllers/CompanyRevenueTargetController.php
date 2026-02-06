@@ -27,7 +27,7 @@ class CompanyRevenueTargetController extends Controller
         $months = [];
         $start = "{$fyYear}-07-01";
         for ($i = 0; $i < 12; $i++) {
-            $months[] = date('Y-m', strtotime($start . " +{$i} months"));
+            $months[] = date('Y-m', strtotime($start." +{$i} months"));
         }
 
         return $months;
@@ -39,7 +39,7 @@ class CompanyRevenueTargetController extends Controller
         for ($year = $currentFy - 5; $year <= $currentFy + 2; $year++) {
             $fys[] = [
                 'value' => (string) $year,
-                'label' => "FY{$year}-" . substr((string) ($year + 1), 2, 2),
+                'label' => "FY{$year}-".substr((string) ($year + 1), 2, 2),
             ];
         }
 

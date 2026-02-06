@@ -1,52 +1,52 @@
 <?php
 
+use App\Http\Controllers\AllowanceTypeController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\DrawingIndexController;
+use App\Http\Controllers\DrawingSetController;
+use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
-use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\KioskAuthController;
+use App\Http\Controllers\KioskController;
+use App\Http\Controllers\LabourForecastController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
+use App\Http\Controllers\MaterialItemController;
+use App\Http\Controllers\OncostController;
+use App\Http\Controllers\PayRateTemplateController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\POComparisonReportController;
+use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\QaStageController;
+use App\Http\Controllers\QaStageDrawingController;
+use App\Http\Controllers\QaStageDrawingObservationController;
 use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SupplierCategoryController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimesheetEventController;
-use App\Http\Controllers\VariationController;
-use App\Http\Controllers\QaStageController;
-use App\Http\Controllers\QaStageDrawingController;
-use App\Http\Controllers\QaStageDrawingObservationController;
-use App\Http\Controllers\DrawingSetController;
 use App\Http\Controllers\TitleBlockTemplateController;
-use App\Http\Controllers\DrawingIndexController;
+use App\Http\Controllers\TurnoverForecastController;
+use App\Http\Controllers\UpdatePricingController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VariationController;
+use App\Http\Controllers\VoiceCallController;
+use App\Http\Controllers\WorktypeController;
+use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Models\Employee;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\KioskController;
-use App\Http\Controllers\WorktypeController;
-use App\Http\Controllers\PurchasingController;
-use App\Http\Controllers\MaterialItemController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\SupplierCategoryController;
-use App\Http\Controllers\UpdatePricingController;
-use App\Http\Controllers\PushSubscriptionController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\LabourForecastController;
-use App\Http\Controllers\PayRateTemplateController;
-use App\Http\Controllers\VoiceCallController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\AllowanceTypeController;
-use App\Http\Controllers\OncostController;
-use App\Http\Controllers\POComparisonReportController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -55,6 +55,7 @@ Route::get('/', function () {
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
     $user->unreadNotifications->markAsRead();
+
     return redirect()->back();
 })->name('notifications.markAllRead');
 
@@ -64,6 +65,7 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
     if ($notification) {
         $notification->markAsRead();
     }
+
     return redirect()->back();
 })->name('notifications.markRead');
 
@@ -206,7 +208,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:timesheets.convert');
     Route::post('/timesheets-converter/upload', [ClockController::class, 'convertTimesheets'])->name('timesheets.converter.convert')
         ->middleware('permission:timesheets.convert');
-    Route::delete('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy')
+    Route::delete('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.delete')
         ->middleware('permission:clocks.delete');
 
     // ============================================
@@ -292,10 +294,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('material-items/{materialItem}', [MaterialItemController::class, 'update'])->name('material-items.update');
         Route::patch('material-items/{materialItem}/category', [MaterialItemController::class, 'updateCategory'])->name('material-items.update-category');
     });
-    Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
-        ->middleware('permission:materials.delete');
     Route::delete('material-items/delete-multiple', [MaterialItemController::class, 'destroyMultiple'])->name('material-items.destroyMultiple')
         ->middleware('permission:materials.bulk-delete');
+    Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
+        ->middleware('permission:materials.delete');
     Route::middleware('permission:materials.import')->group(function () {
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
@@ -410,7 +412,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // FORECASTING
     // ============================================
     Route::middleware('permission:forecast.view')->group(function () {
-        Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
+        Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobDataFromPremier');
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::get('/location/{location}/job-forecast/labour-costs', [JobForecastController::class, 'getLabourCostsForJobForecast'])->name('jobForecast.labourCosts');
         Route::get('/location/{location}/compare-forecast-actuals', [JobForecastController::class, 'compareForecast'])->name('forecast.compareForecast');
@@ -671,7 +673,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:materials.view');
 
     // PHP Limits (debug route)
-    Route::get('/php-limits', fn() => response()->json([
+    Route::get('/php-limits', fn () => response()->json([
         'sapi' => php_sapi_name(),
         'upload_max_filesize' => ini_get('upload_max_filesize'),
         'post_max_size' => ini_get('post_max_size'),
@@ -691,6 +693,7 @@ Route::middleware('kiosk.access')->group(function () {
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
         $kiosk = \App\Models\Kiosk::where('eh_kiosk_id', $kioskId)->first();
+
         return redirect()->route('kiosks.show', ['kiosk' => $kiosk?->id ?? $kioskId]);
     });
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskAuthController::class, 'validatePin'])->name('kiosk.validate-pin');
@@ -700,11 +703,12 @@ Route::middleware('kiosk.access')->group(function () {
 
 Route::get('/kiosk', function () {
     $employees = Employee::all();
+
     return Inertia::render('kiosks/show', [
         'employees' => $employees,
     ]);
 })->name('kiosk');
 
-require __DIR__ . '/settings.php';
-require __DIR__ . '/location.php';
-require __DIR__ . '/auth.php';
+require __DIR__.'/settings.php';
+require __DIR__.'/location.php';
+require __DIR__.'/auth.php';

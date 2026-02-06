@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class RequisitionHeaderTemplate extends Model
 {
     use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $fillable = [
         'location_id',
         'name',
@@ -17,10 +18,12 @@ class RequisitionHeaderTemplate extends Model
         'created_by',
         'updated_by',
     ];
+
     public function location()
     {
         return $this->belongsTo(Location::class, 'location_id', 'id');
     }
+
     protected static function booted()
     {
         static::creating(function ($requisition) {
@@ -39,6 +42,4 @@ class RequisitionHeaderTemplate extends Model
             $requisition->deleted_by = null;
         });
     }
-
-
 }

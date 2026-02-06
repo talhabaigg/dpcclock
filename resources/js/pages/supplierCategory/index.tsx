@@ -39,8 +39,7 @@ export default function SupplierCategoryList() {
     const filteredCategories = useMemo(() => {
         return categories.filter(
             (category) =>
-                category.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                category.name.toLowerCase().includes(searchQuery.toLowerCase()),
+                category.code.toLowerCase().includes(searchQuery.toLowerCase()) || category.name.toLowerCase().includes(searchQuery.toLowerCase()),
         );
     }, [categories, searchQuery]);
 

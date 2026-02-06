@@ -2,10 +2,9 @@
 
 namespace App\Services;
 
-use Aws\Textract\TextractClient;
 use Aws\Exception\AwsException;
+use Aws\Textract\TextractClient;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Service for extracting metadata from drawing images using AWS Textract.
@@ -45,8 +44,8 @@ class TextractService
     /**
      * Extract metadata from an image stored in S3.
      *
-     * @param string $s3Key The S3 key of the image to analyze
-     * @param string|null $bucket The S3 bucket (defaults to config)
+     * @param  string  $s3Key  The S3 key of the image to analyze
+     * @param  string|null  $bucket  The S3 bucket (defaults to config)
      * @return array{success: bool, fields: array, raw: array, error?: string}
      */
     public function extractFromS3(string $s3Key, ?string $bucket = null): array
@@ -63,7 +62,7 @@ class TextractService
                 ],
                 'FeatureTypes' => ['QUERIES'],
                 'QueriesConfig' => [
-                    'Queries' => array_map(fn($q) => [
+                    'Queries' => array_map(fn ($q) => [
                         'Text' => $q['text'],
                         'Alias' => $q['alias'],
                     ], self::QUERIES),
@@ -91,7 +90,7 @@ class TextractService
     /**
      * Extract metadata from image bytes (for local/cropped images).
      *
-     * @param string $imageBytes Raw image data
+     * @param  string  $imageBytes  Raw image data
      * @return array{success: bool, fields: array, raw: array, error?: string}
      */
     public function extractFromBytes(string $imageBytes): array
@@ -103,7 +102,7 @@ class TextractService
                 ],
                 'FeatureTypes' => ['QUERIES'],
                 'QueriesConfig' => [
-                    'Queries' => array_map(fn($q) => [
+                    'Queries' => array_map(fn ($q) => [
                         'Text' => $q['text'],
                         'Alias' => $q['alias'],
                     ], self::QUERIES),
@@ -130,7 +129,7 @@ class TextractService
     /**
      * Parse Textract response and extract field values with confidences.
      *
-     * @param array $response Raw Textract API response
+     * @param  array  $response  Raw Textract API response
      * @return array{success: bool, fields: array, raw: array}
      */
     private function parseTextractResponse(array $response): array
@@ -151,7 +150,7 @@ class TextractService
             }
 
             $alias = $block['Query']['Alias'] ?? null;
-            if (!$alias) {
+            if (! $alias) {
                 continue;
             }
 
@@ -203,7 +202,7 @@ class TextractService
      * Map multiple query aliases to standardized field names.
      * Prefers primary aliases and falls back to secondary ones.
      *
-     * @param array $queryResults Results keyed by alias
+     * @param  array  $queryResults  Results keyed by alias
      * @return array{drawing_number: array, drawing_title: array, revision: array}
      */
     private function mapQueryResultsToFields(array $queryResults): array
@@ -231,9 +230,9 @@ class TextractService
      * Select the best answer from multiple aliases.
      * Prefers results with higher confidence scores.
      *
-     * @param array $results All query results
-     * @param array $aliases Aliases to try in preference order
-     * @param string $fieldName Field name for logging
+     * @param  array  $results  All query results
+     * @param  array  $aliases  Aliases to try in preference order
+     * @param  string  $fieldName  Field name for logging
      * @return array{text: string, confidence: float, source_alias: string, boundingBox: array|null}
      */
     private function selectBestAnswer(array $results, array $aliases, string $fieldName): array
@@ -241,7 +240,7 @@ class TextractService
         $candidates = [];
 
         foreach ($aliases as $alias) {
-            if (!isset($results[$alias])) {
+            if (! isset($results[$alias])) {
                 continue;
             }
 
@@ -276,6 +275,7 @@ class TextractService
             if (abs($a['confidence'] - $b['confidence']) > 0.1) {
                 return $b['confidence'] <=> $a['confidence'];
             }
+
             // Otherwise prefer primary alias order
             return array_search($a['alias'], $aliases) <=> array_search($b['alias'], $aliases);
         });
@@ -305,7 +305,7 @@ class TextractService
      * bounding boxes. This allows users to select which text corresponds to
      * which field when the query-based extraction has low confidence.
      *
-     * @param string $imageBytes Raw image data
+     * @param  string  $imageBytes  Raw image data
      * @return array{success: bool, text_blocks: array, error?: string}
      */
     public function detectAllText(string $imageBytes): array
@@ -371,6 +371,7 @@ class TextractService
                 if ($yDiff < 0.02) {
                     $aX = $a['boundingBox']['x'] ?? 0;
                     $bX = $b['boundingBox']['x'] ?? 0;
+
                     return $aX <=> $bX;
                 }
 
@@ -403,7 +404,7 @@ class TextractService
      * this method joins all text found in the region. This is appropriate
      * when the user has drawn the exact area they want - we trust their selection.
      *
-     * @param string $imageBytes Cropped image data (already cropped to field region)
+     * @param  string  $imageBytes  Cropped image data (already cropped to field region)
      * @return array{success: bool, text: string, confidence: float, error?: string}
      */
     public function extractAllTextFromRegion(string $imageBytes): array
@@ -451,6 +452,7 @@ class TextractService
                 if ($yDiff < 0.05) { // Same line (within 5% vertical)
                     return $a['x'] <=> $b['x'];
                 }
+
                 return $a['y'] <=> $b['y'];
             });
 
@@ -466,7 +468,7 @@ class TextractService
             // Fallback: if LINE result looks like just a label (Issue:, Rev:, etc.)
             // look for single-character WORD blocks that might be the revision letter
             $looksLikeJustLabel = preg_match('/^(ISSUE|REV|REVISION|R)\s*[:.]?\s*$/i', $combinedText);
-            if ($looksLikeJustLabel && !empty($wordBlocks)) {
+            if ($looksLikeJustLabel && ! empty($wordBlocks)) {
                 // Find single-character words that look like revision letters
                 $revisionLetters = [];
                 foreach ($wordBlocks as $word) {
@@ -476,18 +478,18 @@ class TextractService
                     }
                 }
 
-                if (!empty($revisionLetters)) {
+                if (! empty($revisionLetters)) {
                     // Pick the one with highest confidence or rightmost position
-                    usort($revisionLetters, fn($a, $b) => $b['x'] <=> $a['x']);
+                    usort($revisionLetters, fn ($a, $b) => $b['x'] <=> $a['x']);
                     $revLetter = $revisionLetters[0];
 
                     Log::info('extractAllTextFromRegion: Found revision letter in WORD blocks', [
                         'label_text' => $combinedText,
                         'found_letter' => $revLetter['text'],
-                        'all_words' => array_map(fn($w) => $w['text'], $wordBlocks),
+                        'all_words' => array_map(fn ($w) => $w['text'], $wordBlocks),
                     ]);
 
-                    $combinedText = $combinedText . ' ' . $revLetter['text'];
+                    $combinedText = $combinedText.' '.$revLetter['text'];
                     $totalConfidence += $revLetter['confidence'];
                     $count++;
                     $avgConfidence = $totalConfidence / $count;
@@ -511,6 +513,7 @@ class TextractService
             Log::error('extractAllTextFromRegion failed', [
                 'error' => $e->getMessage(),
             ]);
+
             return [
                 'success' => false,
                 'text' => '',
@@ -528,9 +531,10 @@ class TextractService
      * located text block (since padding expands equally on all sides, the original
      * mapped text should be near the center).
      *
-     * @param string $imageBytes Cropped image data (already cropped to field region)
-     * @param array $region Normalized region info (for logging)
+     * @param  string  $imageBytes  Cropped image data (already cropped to field region)
+     * @param  array  $region  Normalized region info (for logging)
      * @return array{success: bool, text: string, confidence: float, error?: string}
+     *
      * @deprecated Use extractAllTextFromRegion instead for user-drawn regions
      */
     public function extractFromRegion(string $imageBytes, array $region): array
@@ -595,7 +599,7 @@ class TextractService
             }
 
             // Multiple text blocks - pick the one closest to center
-            usort($textBlocks, fn($a, $b) => $a['distFromCenter'] <=> $b['distFromCenter']);
+            usort($textBlocks, fn ($a, $b) => $a['distFromCenter'] <=> $b['distFromCenter']);
 
             $selected = $textBlocks[0];
 
@@ -603,7 +607,7 @@ class TextractService
                 'total_blocks' => count($textBlocks),
                 'selected_text' => $selected['text'],
                 'selected_dist' => $selected['distFromCenter'],
-                'all_texts' => array_map(fn($b) => [
+                'all_texts' => array_map(fn ($b) => [
                     'text' => $b['text'],
                     'dist' => round($b['distFromCenter'], 3),
                 ], $textBlocks),

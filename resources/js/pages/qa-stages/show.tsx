@@ -1,15 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -152,7 +144,7 @@ export default function QaStageShow() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                 },
                 credentials: 'same-origin',
@@ -188,7 +180,6 @@ export default function QaStageShow() {
                         Back to QA Stages
                     </Button>
                 </Link>
-
             </div>
 
             <div className="mx-2 mb-4 flex flex-col gap-4 sm:flex-row">
@@ -198,9 +189,7 @@ export default function QaStageShow() {
                             <h2 className="text-2xl font-bold">{qaStage.name}</h2>
                             <Badge variant="outline">{qaStage.location?.name}</Badge>
                         </div>
-                        <p className="text-muted-foreground text-sm">
-                            Created on {format(new Date(qaStage.created_at), 'dd MMM yyyy')}
-                        </p>
+                        <p className="text-muted-foreground text-sm">Created on {format(new Date(qaStage.created_at), 'dd MMM yyyy')}</p>
                     </div>
                 </Card>
             </div>
@@ -294,9 +283,7 @@ export default function QaStageShow() {
                             qaStage.drawings.map((drawing) => (
                                 <TableRow key={drawing.id}>
                                     <TableCell>{drawing.id}</TableCell>
-                                    <TableCell className="font-medium">
-                                        {drawing.display_name || drawing.name}
-                                    </TableCell>
+                                    <TableCell className="font-medium">{drawing.display_name || drawing.name}</TableCell>
                                     <TableCell>
                                         {drawing.total_pages > 1 ? (
                                             <Badge variant="outline">
@@ -306,9 +293,7 @@ export default function QaStageShow() {
                                             <span className="text-muted-foreground">1</span>
                                         )}
                                     </TableCell>
-                                    <TableCell>
-                                        {drawing.drawing_file?.original_name || drawing.file_name}
-                                    </TableCell>
+                                    <TableCell>{drawing.drawing_file?.original_name || drawing.file_name}</TableCell>
                                     <TableCell>
                                         <Badge variant="secondary">{drawing.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</Badge>
                                     </TableCell>

@@ -102,6 +102,8 @@ const LabourForecastShow = ({
     const [chartOpen, setChartOpen] = useState(false);
     const [weekCostBreakdownOpen, setWeekCostBreakdownOpen] = useState(false);
     const [selectedWeekForCost, setSelectedWeekForCost] = useState<string | null>(null);
+    const [monthlyCostBreakdownOpen, setMonthlyCostBreakdownOpen] = useState(false);
+    const [projectCostBreakdownOpen, setProjectCostBreakdownOpen] = useState(false);
 
     // ========================================================================
     // STATE: Workflow & Saving
@@ -181,6 +183,8 @@ const LabourForecastShow = ({
     // ========================================================================
     // STATE: Row Data (initialized from props and saved data)
     // ========================================================================
+    const HOURS_PER_HEADCOUNT = 40;
+
     const [rowData, setRowData] = useState<RowData[]>(() => {
         const rows: RowData[] = [];
         workTypes.forEach((wt) => {
@@ -200,6 +204,22 @@ const LabourForecastShow = ({
                 row[week.key] = getHeadcountFromSaved(savedWeekData);
             });
             rows.push(row);
+
+            // Ordinary Hours row (linked to headcount: 1 hc = 40 hours)
+            const ordinaryRow: RowData = {
+                id: `${wt.id}_ordinary`,
+                workType: 'Ordinary Hours',
+                hourlyRate: wt.hourlyRate,
+                isOrdinaryRow: true,
+                isChildRow: true,
+                parentTemplateId: wt.id,
+            };
+            weeks.forEach((week) => {
+                const savedWeekData = savedEntry?.weeks?.[week.weekEnding];
+                const headcount = getHeadcountFromSaved(savedWeekData);
+                ordinaryRow[week.key] = headcount * HOURS_PER_HEADCOUNT;
+            });
+            rows.push(ordinaryRow);
 
             // OT row (if enabled)
             if (wt.overtimeEnabled) {
@@ -273,20 +293,71 @@ const LabourForecastShow = ({
             workTypes.forEach((wt) => {
                 const existingRow = prevRows.find((r) => r.id === wt.id);
                 if (existingRow) {
-                    newRows.push({ ...existingRow, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek, configId: wt.configId });
+                    newRows.push({
+                        ...existingRow,
+                        workType: wt.name,
+                        hourlyRate: wt.hourlyRate,
+                        weeklyCost: wt.weeklyCost,
+                        hoursPerWeek: wt.hoursPerWeek,
+                        configId: wt.configId,
+                    });
                 } else {
-                    const row: RowData = { id: wt.id, workType: wt.name, hourlyRate: wt.hourlyRate, weeklyCost: wt.weeklyCost, hoursPerWeek: wt.hoursPerWeek, configId: wt.configId };
-                    weeks.forEach((week) => { row[week.key] = 0; });
+                    const row: RowData = {
+                        id: wt.id,
+                        workType: wt.name,
+                        hourlyRate: wt.hourlyRate,
+                        weeklyCost: wt.weeklyCost,
+                        hoursPerWeek: wt.hoursPerWeek,
+                        configId: wt.configId,
+                    };
+                    weeks.forEach((week) => {
+                        row[week.key] = 0;
+                    });
                     newRows.push(row);
+                }
+
+                // Ordinary Hours row (linked to headcount)
+                const existingOrdinaryRow = prevRows.find((r) => r.id === `${wt.id}_ordinary`);
+                const parentRow = newRows.find((r) => r.id === wt.id);
+                if (existingOrdinaryRow) {
+                    newRows.push({ ...existingOrdinaryRow, workType: 'Ordinary Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
+                } else {
+                    const ordinaryRow: RowData = {
+                        id: `${wt.id}_ordinary`,
+                        workType: 'Ordinary Hours',
+                        hourlyRate: wt.hourlyRate,
+                        isOrdinaryRow: true,
+                        isChildRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        const headcount = parentRow ? Number(parentRow[week.key]) || 0 : 0;
+                        ordinaryRow[week.key] = headcount * HOURS_PER_HEADCOUNT;
+                    });
+                    newRows.push(ordinaryRow);
                 }
 
                 if (wt.overtimeEnabled) {
                     const existingOtRow = prevRows.find((r) => r.id === `${wt.id}_ot`);
                     if (existingOtRow) {
-                        newRows.push({ ...existingOtRow, workType: 'OT Hours', hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null, isChildRow: true });
+                        newRows.push({
+                            ...existingOtRow,
+                            workType: 'OT Hours',
+                            hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
+                            isChildRow: true,
+                        });
                     } else {
-                        const otRow: RowData = { id: `${wt.id}_ot`, workType: 'OT Hours', hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null, isOvertimeRow: true, isChildRow: true, parentTemplateId: wt.id };
-                        weeks.forEach((week) => { otRow[week.key] = 0; });
+                        const otRow: RowData = {
+                            id: `${wt.id}_ot`,
+                            workType: 'OT Hours',
+                            hourlyRate: wt.hourlyRate ? wt.hourlyRate * 2 : null,
+                            isOvertimeRow: true,
+                            isChildRow: true,
+                            parentTemplateId: wt.id,
+                        };
+                        weeks.forEach((week) => {
+                            otRow[week.key] = 0;
+                        });
                         newRows.push(otRow);
                     }
                 }
@@ -295,8 +366,17 @@ const LabourForecastShow = ({
                 if (existingLeaveRow) {
                     newRows.push({ ...existingLeaveRow, workType: 'Leave Hours', isChildRow: true });
                 } else {
-                    const leaveRow: RowData = { id: `${wt.id}_leave`, workType: 'Leave Hours', hourlyRate: null, isLeaveRow: true, isChildRow: true, parentTemplateId: wt.id };
-                    weeks.forEach((week) => { leaveRow[week.key] = 0; });
+                    const leaveRow: RowData = {
+                        id: `${wt.id}_leave`,
+                        workType: 'Leave Hours',
+                        hourlyRate: null,
+                        isLeaveRow: true,
+                        isChildRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        leaveRow[week.key] = 0;
+                    });
                     newRows.push(leaveRow);
                 }
 
@@ -304,8 +384,17 @@ const LabourForecastShow = ({
                 if (existingRdoRow) {
                     newRows.push({ ...existingRdoRow, workType: 'RDO Hours', isChildRow: true });
                 } else {
-                    const rdoRow: RowData = { id: `${wt.id}_rdo`, workType: 'RDO Hours', hourlyRate: null, isRdoRow: true, isChildRow: true, parentTemplateId: wt.id };
-                    weeks.forEach((week) => { rdoRow[week.key] = 0; });
+                    const rdoRow: RowData = {
+                        id: `${wt.id}_rdo`,
+                        workType: 'RDO Hours',
+                        hourlyRate: null,
+                        isRdoRow: true,
+                        isChildRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        rdoRow[week.key] = 0;
+                    });
                     newRows.push(rdoRow);
                 }
 
@@ -313,8 +402,17 @@ const LabourForecastShow = ({
                 if (existingPhRow) {
                     newRows.push({ ...existingPhRow, workType: 'PH Not Worked Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
                 } else {
-                    const phRow: RowData = { id: `${wt.id}_ph`, workType: 'PH Not Worked Hours', hourlyRate: wt.hourlyRate, isPublicHolidayRow: true, isChildRow: true, parentTemplateId: wt.id };
-                    weeks.forEach((week) => { phRow[week.key] = 0; });
+                    const phRow: RowData = {
+                        id: `${wt.id}_ph`,
+                        workType: 'PH Not Worked Hours',
+                        hourlyRate: wt.hourlyRate,
+                        isPublicHolidayRow: true,
+                        isChildRow: true,
+                        parentTemplateId: wt.id,
+                    };
+                    weeks.forEach((week) => {
+                        phRow[week.key] = 0;
+                    });
                     newRows.push(phRow);
                 }
             });
@@ -349,13 +447,23 @@ const LabourForecastShow = ({
                             public_holiday_not_worked_hours: phRow ? Number(phRow[week.key]) || 0 : 0,
                         };
                     })
-                    .filter(t => t.template_id !== undefined && (t.headcount > 0 || t.overtime_hours > 0 || t.leave_hours > 0 || t.rdo_hours > 0 || t.public_holiday_not_worked_hours > 0));
+                    .filter(
+                        (t) =>
+                            t.template_id !== undefined &&
+                            (t.headcount > 0 ||
+                                t.overtime_hours > 0 ||
+                                t.leave_hours > 0 ||
+                                t.rdo_hours > 0 ||
+                                t.public_holiday_not_worked_hours > 0),
+                    );
                 return { week_key: week.key, templates };
             });
 
-            const weeksWithData = weeksData.filter(w => w.templates.length > 0);
+            const weeksWithData = weeksData.filter((w) => w.templates.length > 0);
             const newCosts: { [weekKey: string]: number } = {};
-            weeksData.forEach(w => { if (w.templates.length === 0) newCosts[w.week_key] = 0; });
+            weeksData.forEach((w) => {
+                if (w.templates.length === 0) newCosts[w.week_key] = 0;
+            });
 
             if (weeksWithData.length === 0) {
                 setWeeklyCosts(newCosts);
@@ -368,13 +476,15 @@ const LabourForecastShow = ({
                 setWeeklyCosts({ ...newCosts, ...response.data.costs });
             } catch (error) {
                 console.error('Failed to calculate costs batch', error);
-                setWeeklyCosts(prev => ({ ...prev, ...newCosts }));
+                setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
             } finally {
                 setIsCalculatingCosts(false);
             }
         }, 500);
 
-        return () => { if (costCalculationTimeoutRef.current) clearTimeout(costCalculationTimeoutRef.current); };
+        return () => {
+            if (costCalculationTimeoutRef.current) clearTimeout(costCalculationTimeoutRef.current);
+        };
     }, [rowData, weeks, location.id]);
 
     // ========================================================================
@@ -401,33 +511,85 @@ const LabourForecastShow = ({
     // DERIVED DATA: Row data with totals and cost row
     // ========================================================================
     const rowDataWithTotals = useMemo(() => {
-        const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
+        const headcountRows = rowData.filter((r) => !r.isOrdinaryRow && !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
 
         const totalRow: RowData = { id: 'total', workType: 'Total', isTotal: true };
         weeks.forEach((week) => {
             totalRow[week.key] = headcountRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
         });
 
+        const ordinaryRows = rowData.filter((r) => r.isOrdinaryRow && !r.isTotal);
+        const totalOrdinaryRow: RowData = {
+            id: 'total_ordinary',
+            workType: 'Ordinary Hours',
+            isTotal: true,
+            isOrdinaryRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        weeks.forEach((week) => {
+            totalOrdinaryRow[week.key] = ordinaryRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
+
         const overtimeRows = rowData.filter((r) => r.isOvertimeRow && !r.isTotal);
-        const totalOtRow: RowData = { id: 'total_ot', workType: 'OT Hours', isTotal: true, isOvertimeRow: true, isChildRow: true, parentTemplateId: 'total' };
-        weeks.forEach((week) => { totalOtRow[week.key] = overtimeRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0); });
+        const totalOtRow: RowData = {
+            id: 'total_ot',
+            workType: 'OT Hours',
+            isTotal: true,
+            isOvertimeRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        weeks.forEach((week) => {
+            totalOtRow[week.key] = overtimeRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
 
         const leaveRows = rowData.filter((r) => r.isLeaveRow && !r.isTotal);
-        const totalLeaveRow: RowData = { id: 'total_leave', workType: 'Leave Hours', isTotal: true, isLeaveRow: true, isChildRow: true, parentTemplateId: 'total' };
-        weeks.forEach((week) => { totalLeaveRow[week.key] = leaveRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0); });
+        const totalLeaveRow: RowData = {
+            id: 'total_leave',
+            workType: 'Leave Hours',
+            isTotal: true,
+            isLeaveRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        weeks.forEach((week) => {
+            totalLeaveRow[week.key] = leaveRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
 
         const rdoRows = rowData.filter((r) => r.isRdoRow && !r.isTotal);
-        const totalRdoRow: RowData = { id: 'total_rdo', workType: 'RDO Hours', isTotal: true, isRdoRow: true, isChildRow: true, parentTemplateId: 'total' };
-        weeks.forEach((week) => { totalRdoRow[week.key] = rdoRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0); });
+        const totalRdoRow: RowData = {
+            id: 'total_rdo',
+            workType: 'RDO Hours',
+            isTotal: true,
+            isRdoRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        weeks.forEach((week) => {
+            totalRdoRow[week.key] = rdoRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
 
         const phRows = rowData.filter((r) => r.isPublicHolidayRow && !r.isTotal);
-        const totalPhRow: RowData = { id: 'total_ph', workType: 'PH Not Worked Hours', isTotal: true, isPublicHolidayRow: true, isChildRow: true, parentTemplateId: 'total' };
-        weeks.forEach((week) => { totalPhRow[week.key] = phRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0); });
+        const totalPhRow: RowData = {
+            id: 'total_ph',
+            workType: 'PH Not Worked Hours',
+            isTotal: true,
+            isPublicHolidayRow: true,
+            isChildRow: true,
+            parentTemplateId: 'total',
+        };
+        weeks.forEach((week) => {
+            totalPhRow[week.key] = phRows.reduce((sum, row) => sum + (Number(row[week.key]) || 0), 0);
+        });
 
         const costRow: RowData = { id: 'cost', workType: 'Total Weekly Cost', isCostRow: true };
-        weeks.forEach((week) => { costRow[week.key] = weeklyCosts[week.key] || 0; });
+        weeks.forEach((week) => {
+            costRow[week.key] = weeklyCosts[week.key] || 0;
+        });
 
         const result = [...rowData, totalRow];
+        if (ordinaryRows.length > 0) result.push(totalOrdinaryRow);
         if (overtimeRows.length > 0) result.push(totalOtRow);
         if (leaveRows.length > 0) result.push(totalLeaveRow);
         if (rdoRows.length > 0) result.push(totalRdoRow);
@@ -487,9 +649,8 @@ const LabourForecastShow = ({
     // ========================================================================
     // DERIVED DATA: Summary calculations
     // ========================================================================
-    const { grandTotalCost, weeksWithCost } = useMemo(() => {
+    const grandTotalCost = useMemo(() => {
         let totalCost = 0;
-        let weeksWithActualCost = 0;
         weeks.forEach((week) => {
             const weekCost = configuredTemplates.reduce((sum, template) => {
                 const savedEntry = savedForecast?.entries?.[template.id];
@@ -503,9 +664,8 @@ const LabourForecastShow = ({
                 return sum + headcount * (template.cost_breakdown.total_weekly_cost || 0);
             }, 0);
             totalCost += weekCost;
-            if (weekCost > 0) weeksWithActualCost++;
         });
-        return { grandTotalCost: totalCost, weeksWithCost: weeksWithActualCost };
+        return totalCost;
     }, [rowData, weeks, configuredTemplates, savedForecast]);
 
     const grandTotalHeadcount = useMemo(() => {
@@ -542,48 +702,120 @@ const LabourForecastShow = ({
         });
     }, []);
 
+    const expandAllParents = useCallback(() => {
+        const allParentIds = new Set<string>();
+        workTypes.forEach((wt) => allParentIds.add(wt.id));
+        allParentIds.add('total');
+        setExpandedParents(allParentIds);
+    }, [workTypes]);
+
+    const collapseAllParents = useCallback(() => {
+        setExpandedParents(new Set());
+    }, []);
+
     const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
         if (event.data?.isTotal || event.data?.isCostRow) return;
-        setRowData((prevRows) => prevRows.map((row) => (row.id === event.data.id ? { ...row, [event.colDef.field!]: event.newValue } : row)));
+        const field = event.colDef.field!;
+        const newValue = Number(event.newValue) || 0;
+
+        setRowData((prevRows) => {
+            return prevRows.map((row) => {
+                // Update the edited row
+                if (row.id === event.data.id) {
+                    return { ...row, [field]: newValue };
+                }
+
+                // Bidirectional linking: headcount <-> ordinary hours
+                if (event.data?.isOrdinaryRow) {
+                    // Ordinary hours was edited -> update parent headcount
+                    const parentId = event.data.parentTemplateId;
+                    if (row.id === parentId) {
+                        const headcount = Math.round((newValue / HOURS_PER_HEADCOUNT) * 10) / 10; // 1 decimal precision
+                        return { ...row, [field]: headcount };
+                    }
+                } else if (!event.data?.isChildRow) {
+                    // Parent headcount was edited -> update ordinary hours row
+                    const ordinaryRowId = `${event.data.id}_ordinary`;
+                    if (row.id === ordinaryRowId) {
+                        const ordinaryHours = newValue * HOURS_PER_HEADCOUNT;
+                        return { ...row, [field]: ordinaryHours };
+                    }
+                }
+
+                return row;
+            });
+        });
         setHasUnsavedChanges(true);
     }, []);
 
-    const handleFillRight = useCallback((weeksToFill: number | 'all') => {
-        if (!selectedCell) return;
-        const { rowId, weekIndex } = selectedCell;
-        const currentRow = rowData.find((r) => r.id === rowId);
-        const value = currentRow ? Number(currentRow[selectedCell.field]) || 0 : 0;
-        const endIndex = weeksToFill === 'all' ? weeks.length : Math.min(weekIndex + weeksToFill, weeks.length);
-        setRowData((prevRows) =>
-            prevRows.map((row) => {
-                if (row.id !== rowId) return row;
-                const updated = { ...row };
-                for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = value;
-                return updated;
-            }),
-        );
-        setHasUnsavedChanges(true);
-    }, [selectedCell, weeks, rowData]);
+    const handleFillRight = useCallback(
+        (weeksToFill: number | 'all') => {
+            if (!selectedCell) return;
+            const { rowId, weekIndex } = selectedCell;
+            const currentRow = rowData.find((r) => r.id === rowId);
+            const value = currentRow ? Number(currentRow[selectedCell.field]) || 0 : 0;
+            const endIndex = weeksToFill === 'all' ? weeks.length : Math.min(weekIndex + weeksToFill, weeks.length);
+
+            setRowData((prevRows) =>
+                prevRows.map((row) => {
+                    // Update the selected row
+                    if (row.id === rowId) {
+                        const updated = { ...row };
+                        for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = value;
+                        return updated;
+                    }
+
+                    // Bidirectional linking for fill operations
+                    if (currentRow?.isOrdinaryRow) {
+                        // Ordinary hours was filled -> update parent headcount
+                        const parentId = currentRow.parentTemplateId;
+                        if (row.id === parentId) {
+                            const updated = { ...row };
+                            const headcount = Math.round((value / HOURS_PER_HEADCOUNT) * 10) / 10;
+                            for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = headcount;
+                            return updated;
+                        }
+                    } else if (!currentRow?.isChildRow) {
+                        // Parent headcount was filled -> update ordinary hours row
+                        const ordinaryRowId = `${currentRow?.id}_ordinary`;
+                        if (row.id === ordinaryRowId) {
+                            const updated = { ...row };
+                            const ordinaryHours = value * HOURS_PER_HEADCOUNT;
+                            for (let i = weekIndex; i < endIndex; i++) updated[weeks[i].key] = ordinaryHours;
+                            return updated;
+                        }
+                    }
+
+                    return row;
+                }),
+            );
+            setHasUnsavedChanges(true);
+        },
+        [selectedCell, weeks, rowData],
+    );
 
     // ========================================================================
     // HANDLERS: Chart editing
     // ========================================================================
-    const handleChartEdit = useCallback((weekKey: string, value: number) => {
-        if (selectedCategory === 'all') {
-            const currentTotal = rowData.reduce((sum, row) => sum + (Number(row[weekKey]) || 0), 0);
-            if (currentTotal === 0) {
-                const perType = Math.floor(value / workTypes.length);
-                const remainder = value % workTypes.length;
-                setRowData((prevRows) => prevRows.map((row, idx) => ({ ...row, [weekKey]: perType + (idx < remainder ? 1 : 0) })));
+    const handleChartEdit = useCallback(
+        (weekKey: string, value: number) => {
+            if (selectedCategory === 'all') {
+                const currentTotal = rowData.reduce((sum, row) => sum + (Number(row[weekKey]) || 0), 0);
+                if (currentTotal === 0) {
+                    const perType = Math.floor(value / workTypes.length);
+                    const remainder = value % workTypes.length;
+                    setRowData((prevRows) => prevRows.map((row, idx) => ({ ...row, [weekKey]: perType + (idx < remainder ? 1 : 0) })));
+                } else {
+                    const ratio = value / currentTotal;
+                    setRowData((prevRows) => prevRows.map((row) => ({ ...row, [weekKey]: Math.round((Number(row[weekKey]) || 0) * ratio) })));
+                }
             } else {
-                const ratio = value / currentTotal;
-                setRowData((prevRows) => prevRows.map((row) => ({ ...row, [weekKey]: Math.round((Number(row[weekKey]) || 0) * ratio) })));
+                setRowData((prevRows) => prevRows.map((row) => (row.id === selectedCategory ? { ...row, [weekKey]: value } : row)));
             }
-        } else {
-            setRowData((prevRows) => prevRows.map((row) => (row.id === selectedCategory ? { ...row, [weekKey]: value } : row)));
-        }
-        setHasUnsavedChanges(true);
-    }, [selectedCategory, rowData, workTypes.length]);
+            setHasUnsavedChanges(true);
+        },
+        [selectedCategory, rowData, workTypes.length],
+    );
 
     // ========================================================================
     // HANDLERS: Notes
@@ -620,7 +852,14 @@ const LabourForecastShow = ({
         router.post(
             route('labour-forecast.save', { location: location.id }),
             { entries, forecast_month: `${selectedMonth}-01`, notes },
-            { preserveScroll: true, onSuccess: () => { setHasUnsavedChanges(false); setIsSaving(false); }, onError: () => setIsSaving(false) },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setHasUnsavedChanges(false);
+                    setIsSaving(false);
+                },
+                onError: () => setIsSaving(false),
+            },
         );
     }, [isSaving, configuredTemplates, rowData, weeks, location.id, selectedMonth, notes]);
 
@@ -630,44 +869,84 @@ const LabourForecastShow = ({
     const handleSubmit = useCallback(() => {
         if (!savedForecast?.id || isSubmitting) return;
         setIsSubmitting(true);
-        router.post(route('labour-forecast.submit', { location: location.id, forecast: savedForecast.id }), {}, {
-            preserveScroll: true, onSuccess: () => setIsSubmitting(false), onError: () => setIsSubmitting(false),
-        });
+        router.post(
+            route('labour-forecast.submit', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
     }, [savedForecast?.id, location.id, isSubmitting]);
 
     const handleApprove = useCallback(() => {
         if (!savedForecast?.id || isSubmitting) return;
         setIsSubmitting(true);
-        router.post(route('labour-forecast.approve', { location: location.id, forecast: savedForecast.id }), {}, {
-            preserveScroll: true, onSuccess: () => setIsSubmitting(false), onError: () => setIsSubmitting(false),
-        });
+        router.post(
+            route('labour-forecast.approve', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
     }, [savedForecast?.id, location.id, isSubmitting]);
 
-    const handleReject = useCallback((reason: string) => {
-        if (!savedForecast?.id || isSubmitting) return;
-        setIsSubmitting(true);
-        router.post(route('labour-forecast.reject', { location: location.id, forecast: savedForecast.id }), { reason }, {
-            preserveScroll: true,
-            onSuccess: () => { setIsSubmitting(false); setRejectDialogOpen(false); },
-            onError: () => setIsSubmitting(false),
-        });
-    }, [savedForecast?.id, location.id, isSubmitting]);
+    const handleReject = useCallback(
+        (reason: string) => {
+            if (!savedForecast?.id || isSubmitting) return;
+            setIsSubmitting(true);
+            router.post(
+                route('labour-forecast.reject', { location: location.id, forecast: savedForecast.id }),
+                { reason },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setIsSubmitting(false);
+                        setRejectDialogOpen(false);
+                    },
+                    onError: () => setIsSubmitting(false),
+                },
+            );
+        },
+        [savedForecast?.id, location.id, isSubmitting],
+    );
 
     const handleRevertToDraft = useCallback(() => {
         if (!savedForecast?.id || isSubmitting) return;
         setIsSubmitting(true);
-        router.post(route('labour-forecast.revert', { location: location.id, forecast: savedForecast.id }), {}, {
-            preserveScroll: true, onSuccess: () => setIsSubmitting(false), onError: () => setIsSubmitting(false),
-        });
+        router.post(
+            route('labour-forecast.revert', { location: location.id, forecast: savedForecast.id }),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setIsSubmitting(false),
+                onError: () => setIsSubmitting(false),
+            },
+        );
     }, [savedForecast?.id, location.id, isSubmitting]);
 
     const handleCopyFromPrevious = useCallback(() => {
         if (isCopying) return;
-        if (!confirm('This will copy headcount data from the last approved forecast to all months from current month to project finish. Any unsaved changes will be lost. Continue?')) return;
+        if (
+            !confirm(
+                'This will copy headcount data from the last approved forecast to all months from current month to project finish. Any unsaved changes will be lost. Continue?',
+            )
+        )
+            return;
         setIsCopying(true);
-        router.post(route('labour-forecast.copy-previous', { location: location.id }) + `?month=${selectedMonth}`, {}, {
-            preserveScroll: true, preserveState: false, onSuccess: () => setIsCopying(false), onError: () => setIsCopying(false),
-        });
+        router.post(
+            route('labour-forecast.copy-previous', { location: location.id }) + `?month=${selectedMonth}`,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: false,
+                onSuccess: () => setIsCopying(false),
+                onError: () => setIsCopying(false),
+            },
+        );
     }, [location.id, selectedMonth, isCopying]);
 
     // ========================================================================
@@ -680,11 +959,14 @@ const LabourForecastShow = ({
         return category?.name || 'Labour';
     }, [categoryOptions, selectedCategory]);
 
-    const getCategoryBreakdown = useCallback((categoryId: string): CostBreakdown | null => {
-        if (categoryId === 'all') return null;
-        const template = configuredTemplates.find((t) => `template_${t.template_id}` === categoryId);
-        return template?.cost_breakdown || null;
-    }, [configuredTemplates]);
+    const getCategoryBreakdown = useCallback(
+        (categoryId: string): CostBreakdown | null => {
+            if (categoryId === 'all') return null;
+            const template = configuredTemplates.find((t) => `template_${t.template_id}` === categoryId);
+            return template?.cost_breakdown || null;
+        },
+        [configuredTemplates],
+    );
 
     // ========================================================================
     // RENDER
@@ -700,15 +982,17 @@ const LabourForecastShow = ({
                 locationWorktypes={locationWorktypes}
                 locationId={location.id}
                 flash={flash}
-                onOpenCostBreakdown={(template) => { setSelectedTemplateForCost(template); setCostBreakdownOpen(true); }}
-                onOpenAllowanceDialog={(template) => { setSelectedTemplateForAllowances(template); setAllowanceDialogOpen(true); }}
+                onOpenCostBreakdown={(template) => {
+                    setSelectedTemplateForCost(template);
+                    setCostBreakdownOpen(true);
+                }}
+                onOpenAllowanceDialog={(template) => {
+                    setSelectedTemplateForAllowances(template);
+                    setAllowanceDialogOpen(true);
+                }}
             />
 
-            <TemplateCostBreakdownDialog
-                open={costBreakdownOpen}
-                onOpenChange={setCostBreakdownOpen}
-                template={selectedTemplateForCost}
-            />
+            <TemplateCostBreakdownDialog open={costBreakdownOpen} onOpenChange={setCostBreakdownOpen} template={selectedTemplateForCost} />
 
             <AllowanceConfigDialog
                 open={allowanceDialogOpen}
@@ -718,12 +1002,7 @@ const LabourForecastShow = ({
                 locationId={location.id}
             />
 
-            <RejectionDialog
-                open={rejectDialogOpen}
-                onOpenChange={setRejectDialogOpen}
-                onReject={handleReject}
-                isSubmitting={isSubmitting}
-            />
+            <RejectionDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen} onReject={handleReject} isSubmitting={isSubmitting} />
 
             <ChartDialog
                 open={chartOpen}
@@ -784,12 +1063,10 @@ const LabourForecastShow = ({
 
                         {grandTotalHeadcount > 0 && (
                             <SummaryCards
-                                grandTotalHeadcount={grandTotalHeadcount}
                                 grandTotalCost={grandTotalCost}
-                                weeksCount={weeks.length}
-                                weeksWithCost={weeksWithCost}
                                 remainingToForecast={remainingToForecast}
                                 isBudgetLoading={isBudgetLoading}
+                                onCostClick={() => setProjectCostBreakdownOpen(true)}
                             />
                         )}
 
@@ -807,12 +1084,27 @@ const LabourForecastShow = ({
                             selectedMonth={selectedMonth}
                             expandedParents={expandedParents}
                             onToggleExpand={toggleParentExpanded}
+                            onExpandAll={expandAllParents}
+                            onCollapseAll={collapseAllParents}
                             isCalculatingCosts={isCalculatingCosts}
                             selectedCell={selectedCell}
                             onCellSelected={setSelectedCell}
                             onFillRight={handleFillRight}
                             onCellValueChanged={onCellValueChanged}
-                            onOpenWeekCostBreakdown={(weekEnding) => { setSelectedWeekForCost(weekEnding); setWeekCostBreakdownOpen(true); }}
+                            onOpenWeekCostBreakdown={(weekEnding) => {
+                                setSelectedWeekForCost(weekEnding);
+                                setWeekCostBreakdownOpen(true);
+                            }}
+                            onOpenMonthlyCostBreakdown={() => {
+                                // Open cost breakdown for the first week in the selected month
+                                const monthWeek = weeks.find((w) => w.weekEnding.substring(0, 7) === selectedMonth);
+                                if (monthWeek) {
+                                    setSelectedWeekForCost(monthWeek.weekEnding);
+                                } else if (weeks.length > 0) {
+                                    setSelectedWeekForCost(weeks[0].weekEnding);
+                                }
+                                setMonthlyCostBreakdownOpen(true);
+                            }}
                         />
                     </>
                 )}
@@ -825,8 +1117,29 @@ const LabourForecastShow = ({
                         locationId={location.id}
                         locationName={location.name}
                         weekEnding={selectedWeekForCost}
+                        forecastMonth={selectedMonth}
                     />
                 )}
+
+                {/* Monthly Cost Breakdown Dialog */}
+                <CostBreakdownDialog
+                    open={monthlyCostBreakdownOpen}
+                    onOpenChange={setMonthlyCostBreakdownOpen}
+                    locationId={location.id}
+                    locationName={location.name}
+                    forecastMonth={selectedMonth}
+                    aggregate="month"
+                />
+
+                {/* Project Total Cost Breakdown Dialog */}
+                <CostBreakdownDialog
+                    open={projectCostBreakdownOpen}
+                    onOpenChange={setProjectCostBreakdownOpen}
+                    locationId={location.id}
+                    locationName={location.name}
+                    forecastMonth={selectedMonth}
+                    aggregate="all"
+                />
             </div>
         </AppLayout>
     );

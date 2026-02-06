@@ -223,7 +223,7 @@ export default function UsersIndex() {
                                                     onValueChange={(value) => handleRoleChange(user, value)}
                                                     disabled={processing && data.userId === user.id}
                                                 >
-                                                    <SelectTrigger className="h-9 w-full min-w-[120px] max-w-[160px]">
+                                                    <SelectTrigger className="h-9 w-full max-w-[160px] min-w-[120px]">
                                                         {processing && data.userId === user.id ? (
                                                             <Loader2 className="h-4 w-4 animate-spin" />
                                                         ) : (
@@ -239,9 +239,7 @@ export default function UsersIndex() {
                                                     </SelectContent>
                                                 </Select>
                                             </TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                                {new Date(user.created_at).toLocaleDateString()}
-                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell">{new Date(user.created_at).toLocaleDateString()}</TableCell>
                                             <TableCell className="text-right">
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>

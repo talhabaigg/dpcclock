@@ -58,18 +58,18 @@ class LoadVariationsFromPremierJob implements ShouldQueue
         ]);
 
         try {
-            $authService = new PremierAuthenticationService();
+            $authService = new PremierAuthenticationService;
             $token = $authService->getAccessToken();
 
-            $companyService = new GetCompanyCodeService();
+            $companyService = new GetCompanyCodeService;
             $companyId = $companyService->getCompanyCode($this->location->eh_parent_id);
 
-            $variationService = new VariationService();
+            $variationService = new VariationService;
             $response = $variationService->getChangeOrders($this->location, $companyId, $token);
 
-            if (!$response->ok()) {
+            if (! $response->ok()) {
                 throw new \RuntimeException(
-                    'Failed to fetch variations from Premier: ' . json_encode($response->json())
+                    'Failed to fetch variations from Premier: '.json_encode($response->json())
                 );
             }
 

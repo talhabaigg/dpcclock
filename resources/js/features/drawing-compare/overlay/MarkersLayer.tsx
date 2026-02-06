@@ -1,5 +1,5 @@
-import { AlignmentData, AlignmentState } from '../alignment/useAlignmentTool';
 import { Point2D } from '../alignment/computeTransform';
+import { AlignmentData, AlignmentState } from '../alignment/useAlignmentTool';
 
 type MarkerProps = {
     point: Point2D;
@@ -21,7 +21,7 @@ function AlignmentMarker({ point, label, color, isActive = false }: MarkerProps)
 
     return (
         <div
-            className="absolute pointer-events-none"
+            className="pointer-events-none absolute"
             style={{
                 left: `${point.x * 100}%`,
                 top: `${point.y * 100}%`,
@@ -30,17 +30,17 @@ function AlignmentMarker({ point, label, color, isActive = false }: MarkerProps)
         >
             {/* Outer ring for visibility */}
             <div
-                className={`absolute w-8 h-8 rounded-full border-2 ${colorClasses[color]} opacity-30 ${pulseClass}`}
+                className={`absolute h-8 w-8 rounded-full border-2 ${colorClasses[color]} opacity-30 ${pulseClass}`}
                 style={{ transform: 'translate(-50%, -50%)' }}
             />
             {/* Inner marker */}
             <div
-                className={`absolute w-4 h-4 rounded-full ${colorClasses[color]} border-2 border-white shadow-lg ${pulseClass}`}
+                className={`absolute h-4 w-4 rounded-full ${colorClasses[color]} border-2 border-white shadow-lg ${pulseClass}`}
                 style={{ transform: 'translate(-50%, -50%)' }}
             />
             {/* Label */}
             <div
-                className={`absolute text-xs font-bold text-white px-1.5 py-0.5 rounded shadow-lg ${color === 'blue' ? 'bg-blue-600' : 'bg-green-600'}`}
+                className={`absolute rounded px-1.5 py-0.5 text-xs font-bold text-white shadow-lg ${color === 'blue' ? 'bg-blue-600' : 'bg-green-600'}`}
                 style={{
                     left: '12px',
                     top: '-6px',
@@ -82,7 +82,7 @@ function AlignmentLine({ from, to, color }: LineProps) {
         <>
             {/* Line using a rotated div */}
             <div
-                className="absolute pointer-events-none"
+                className="pointer-events-none absolute"
                 style={{
                     left: `${x1}%`,
                     top: `${y1}%`,
@@ -103,7 +103,7 @@ function AlignmentLine({ from, to, color }: LineProps) {
             />
             {/* Arrow head at point B */}
             <div
-                className="absolute pointer-events-none"
+                className="pointer-events-none absolute"
                 style={{
                     left: `${x2}%`,
                     top: `${y2}%`,
@@ -204,14 +204,10 @@ export function MarkersLayer({ points, state }: MarkersLayerProps) {
     }
 
     return (
-        <div className="absolute inset-0 pointer-events-none z-20">
+        <div className="pointer-events-none absolute inset-0 z-20">
             {/* Draw lines first (behind markers) */}
-            {hasBaseLine && (
-                <AlignmentLine from={points.baseA!} to={points.baseB!} color="blue" />
-            )}
-            {hasCandidateLine && (
-                <AlignmentLine from={points.candidateA!} to={points.candidateB!} color="green" />
-            )}
+            {hasBaseLine && <AlignmentLine from={points.baseA!} to={points.baseB!} color="blue" />}
+            {hasCandidateLine && <AlignmentLine from={points.candidateA!} to={points.candidateB!} color="green" />}
 
             {/* Draw markers on top */}
             {markers.map((marker, index) => (
@@ -236,7 +232,7 @@ export function CrosshairCursor({ visible, color }: CrosshairCursorProps) {
     const colorClass = color === 'blue' ? 'border-blue-500' : 'border-green-500';
 
     return (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden z-30">
+        <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
             <style>
                 {`
                     .alignment-crosshair {
@@ -251,7 +247,7 @@ export function CrosshairCursor({ visible, color }: CrosshairCursorProps) {
                 `}
             </style>
             <div
-                className={`absolute w-6 h-6 border-2 rounded-full ${colorClass} opacity-50`}
+                className={`absolute h-6 w-6 rounded-full border-2 ${colorClass} opacity-50`}
                 style={{
                     left: '50%',
                     top: '50%',

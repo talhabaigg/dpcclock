@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AllowanceType;
 use App\Models\JobCostDetail;
 use App\Models\JobReportByCostItemAndCostType;
-use App\Models\Location;
 use App\Models\JobSummary;
 use App\Models\LabourForecast;
 use App\Models\LabourForecastEntry;
+use App\Models\Location;
 use App\Models\LocationPayRateTemplate;
 use App\Models\LocationTemplateAllowance;
 use App\Models\PayRateTemplate;
@@ -33,7 +33,7 @@ class LabourForecastController extends Controller
         })->whereNotNull('external_id');
 
         // Filter by kiosk access if user is not admin or backoffice
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
@@ -42,10 +42,10 @@ class LabourForecastController extends Controller
         // Get current month for forecast status
         $currentMonth = now()->startOfMonth();
 
-        // Calculate current week ending (next Sunday)
+        // Calculate current week ending (next Friday)
         $currentWeekEnding = now()->copy();
-        if ($currentWeekEnding->dayOfWeek !== 0) { // 0 = Sunday
-            $currentWeekEnding = $currentWeekEnding->next('Sunday');
+        if ($currentWeekEnding->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+            $currentWeekEnding = $currentWeekEnding->next('Friday');
         }
 
         // Get all forecasts for current month for these locations
@@ -116,7 +116,7 @@ class LabourForecastController extends Controller
         $location->load('worktypes');
 
         // Initialize cost calculator
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
 
         // Get configured pay rate templates for this location
         $configuredTemplates = $location->labourForecastTemplates()
@@ -141,6 +141,7 @@ class LabourForecastController extends Controller
                     'rdo_fares_travel' => $config->rdo_fares_travel ?? true,
                     'rdo_site_allowance' => $config->rdo_site_allowance ?? false,
                     'rdo_multistorey_allowance' => $config->rdo_multistorey_allowance ?? false,
+                    'leave_markups_job_costed' => $config->leave_markups_job_costed ?? false,
                     'cost_breakdown' => $costBreakdown,
                     'custom_allowances' => $config->customAllowances->map(fn ($a) => [
                         'id' => $a->id,
@@ -212,7 +213,7 @@ class LabourForecastController extends Controller
             // Group entries by template ID
             foreach ($forecast->entries as $entry) {
                 $templateId = $entry->location_pay_rate_template_id;
-                if (!isset($savedData['entries'][$templateId])) {
+                if (! isset($savedData['entries'][$templateId])) {
                     $savedData['entries'][$templateId] = [
                         'hourly_rate' => $entry->hourly_rate,
                         'weeks' => [],
@@ -238,8 +239,11 @@ class LabourForecastController extends Controller
                 'id' => $type->id,
                 'name' => $type->name,
                 'code' => $type->code,
+                'category' => $type->category ?? 'custom',
                 'description' => $type->description,
                 'default_rate' => $type->default_rate,
+                'default_rate_type' => $type->default_rate_type ?? 'hourly',
+                'pay_category_id' => $type->pay_category_id,
             ]);
 
         // Get current user permissions for workflow buttons
@@ -291,7 +295,7 @@ class LabourForecastController extends Controller
         $forecastMonth = Carbon::parse($request->forecast_month)->startOfMonth();
 
         // Load cost calculator for snapshot
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
         $location->load('worktypes');
 
         DB::transaction(function () use ($request, $location, $user, $forecastMonth, $costCalculator) {
@@ -308,7 +312,7 @@ class LabourForecastController extends Controller
             );
 
             // Only allow editing if draft
-            if (!$forecast->isEditable() && $forecast->wasRecentlyCreated === false) {
+            if (! $forecast->isEditable() && $forecast->wasRecentlyCreated === false) {
                 abort(403, 'This forecast has been submitted and cannot be edited.');
             }
 
@@ -320,7 +324,9 @@ class LabourForecastController extends Controller
                 $templateConfig = LocationPayRateTemplate::with('payRateTemplate.payCategories.payCategory')
                     ->find($entryData['template_id']);
 
-                if (!$templateConfig) continue;
+                if (! $templateConfig) {
+                    continue;
+                }
 
                 foreach ($entryData['weeks'] as $weekData) {
                     $headcount = (float) $weekData['headcount'];
@@ -372,7 +378,7 @@ class LabourForecastController extends Controller
             abort(403);
         }
 
-        if (!$forecast->canBeSubmitted()) {
+        if (! $forecast->canBeSubmitted()) {
             return redirect()->back()->with('error', 'This forecast cannot be submitted.');
         }
 
@@ -399,7 +405,7 @@ class LabourForecastController extends Controller
             abort(403);
         }
 
-        if (!$forecast->canBeApproved()) {
+        if (! $forecast->canBeApproved()) {
             return redirect()->back()->with('error', 'This forecast cannot be approved.');
         }
 
@@ -432,7 +438,7 @@ class LabourForecastController extends Controller
             'reason' => 'required|string|max:500',
         ]);
 
-        if (!$forecast->canBeApproved()) {
+        if (! $forecast->canBeApproved()) {
             return redirect()->back()->with('error', 'This forecast cannot be rejected.');
         }
 
@@ -563,6 +569,7 @@ class LabourForecastController extends Controller
             'label' => 'nullable|string|max:255',
             'cost_code_prefix' => 'nullable|string|max:10',
             'overtime_enabled' => 'nullable|boolean',
+            'leave_markups_job_costed' => 'nullable|boolean',
         ]);
 
         $updateData = [];
@@ -579,7 +586,11 @@ class LabourForecastController extends Controller
             $updateData['overtime_enabled'] = $request->boolean('overtime_enabled');
         }
 
-        if (!empty($updateData)) {
+        if ($request->has('leave_markups_job_costed')) {
+            $updateData['leave_markups_job_costed'] = $request->boolean('leave_markups_job_costed');
+        }
+
+        if (! empty($updateData)) {
             $template->update($updateData);
         }
 
@@ -601,18 +612,9 @@ class LabourForecastController extends Controller
             'allowances.*.rate' => 'required|numeric|min:0',
             'allowances.*.rate_type' => 'required|in:hourly,daily,weekly',
             'allowances.*.paid_to_rdo' => 'nullable|boolean',
-            'rdo_fares_travel' => 'nullable|boolean',
-            'rdo_site_allowance' => 'nullable|boolean',
-            'rdo_multistorey_allowance' => 'nullable|boolean',
         ]);
 
         DB::transaction(function () use ($template, $request) {
-            // Update RDO standard allowance flags
-            $template->update([
-                'rdo_fares_travel' => $request->input('rdo_fares_travel', true),
-                'rdo_site_allowance' => $request->input('rdo_site_allowance', false),
-                'rdo_multistorey_allowance' => $request->input('rdo_multistorey_allowance', false),
-            ]);
 
             // Get IDs of allowances being updated
             $allowanceIds = collect($request->allowances)
@@ -664,7 +666,7 @@ class LabourForecastController extends Controller
             ->with('entries')
             ->first();
 
-        if (!$previousForecast) {
+        if (! $previousForecast) {
             return redirect()->back()->with('error', 'No approved forecast found for this location.');
         }
 
@@ -684,7 +686,7 @@ class LabourForecastController extends Controller
             $weekEndingKey = $entry->week_ending->format('Y-m-d');
 
             // Store entry indexed by template and week_ending for exact matching
-            if (!isset($entriesByTemplateAndWeek[$templateId])) {
+            if (! isset($entriesByTemplateAndWeek[$templateId])) {
                 $entriesByTemplateAndWeek[$templateId] = [];
             }
             $entriesByTemplateAndWeek[$templateId][$weekEndingKey] = $entry;
@@ -701,11 +703,11 @@ class LabourForecastController extends Controller
             ->first();
 
         if ($existingForecast) {
-            return redirect()->back()->with('error', 'Cannot overwrite submitted or approved forecast for ' . $targetMonth->format('F Y'));
+            return redirect()->back()->with('error', 'Cannot overwrite submitted or approved forecast for '.$targetMonth->format('F Y'));
         }
 
         $user = Auth::user();
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
         $location->load('worktypes');
 
         // Get configured templates for this location
@@ -722,7 +724,7 @@ class LabourForecastController extends Controller
                 'forecast_month' => $targetMonth,
             ],
             [
-                'notes' => 'Copied from ' . $previousForecast->forecast_month->format('F Y') . ' forecast',
+                'notes' => 'Copied from '.$previousForecast->forecast_month->format('F Y').' forecast',
                 'created_by' => $user->id,
                 'status' => 'draft',
             ]
@@ -790,21 +792,21 @@ class LabourForecastController extends Controller
             ? $projectEndDate->copy()
             : $startDate->copy()->addMonths(6)->endOfMonth();
 
-        // Find the first Sunday (week ending) on or after start date
+        // Find the first Friday (week ending) on or after start date
         $currentDate = $startDate->copy();
-        if ($currentDate->dayOfWeek !== 0) { // 0 = Sunday
-            $currentDate = $currentDate->next('Sunday');
+        if ($currentDate->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+            $currentDate = $currentDate->next('Friday');
         }
 
         $weekNum = 1;
         while ($currentDate <= $endDate) {
             $weeks[] = [
-                'key' => 'week_' . $weekNum,
+                'key' => 'week_'.$weekNum,
                 'label' => $currentDate->format('d/m/Y'),
                 'weekEnding' => $currentDate->format('Y-m-d'),
             ];
 
-            // Move to next week (next Sunday)
+            // Move to next week (next Friday)
             $currentDate = $currentDate->addWeek();
             $weekNum++;
         }
@@ -826,7 +828,7 @@ class LabourForecastController extends Controller
         $forecastId = $request->query('forecast_id') ? (int) $request->query('forecast_id') : null;
 
         // Get variance data
-        $varianceService = new LabourVarianceService();
+        $varianceService = new LabourVarianceService;
         $varianceData = $varianceService->getVarianceData($location, $targetMonth, $forecastId);
 
         // Get all forecasts for this location (for the forecast selector)
@@ -881,41 +883,58 @@ class LabourForecastController extends Controller
 
     /**
      * Get detailed cost breakdown for a location and specific week
+     * Supports aggregate modes: 'week' (default), 'month', 'all'
      */
     public function getCostBreakdown(Request $request, Location $location)
     {
+        $aggregate = $request->query('aggregate', 'week');
+        if ($aggregate === 'month' || $aggregate === 'all') {
+            return $this->getAggregatedCostBreakdown($request, $location, $aggregate);
+        }
+
         // Get week ending from query param or default to current week
         $weekEndingParam = $request->query('week_ending');
         if ($weekEndingParam) {
             $weekEnding = Carbon::parse($weekEndingParam);
         } else {
-            // Calculate current week ending (next Sunday)
+            // Calculate current week ending (next Friday)
             $weekEnding = now()->copy();
-            if ($weekEnding->dayOfWeek !== 0) { // 0 = Sunday
-                $weekEnding = $weekEnding->next('Sunday');
+            if ($weekEnding->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
+                $weekEnding = $weekEnding->next('Friday');
             }
         }
 
-        // Get the month that contains this week for forecast lookup
-        $forecastMonth = $weekEnding->copy()->startOfMonth();
+        // Get optional forecast_month parameter to specify exactly which forecast to read from
+        $forecastMonthParam = $request->query('forecast_month');
 
-        // Try to find forecast for the month containing this week
-        $forecast = LabourForecast::where('location_id', $location->id)
-            ->where('forecast_month', $forecastMonth)
-            ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
-            ->first();
-
-        // If no forecast for that month, try to find ANY forecast that has this week
-        if (!$forecast) {
+        // If forecast_month is provided, use it directly (most reliable)
+        if ($forecastMonthParam) {
+            $forecastMonth = Carbon::parse($forecastMonthParam)->startOfMonth();
+            $forecast = LabourForecast::where('location_id', $location->id)
+                ->where('forecast_month', $forecastMonth)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->first();
+        } else {
+            // First, try to find a forecast that actually HAS an entry for this specific week
+            // This handles the case where week 6 of a February forecast falls in March
             $forecast = LabourForecast::where('location_id', $location->id)
                 ->whereHas('entries', function ($query) use ($weekEnding) {
                     $query->where('week_ending', $weekEnding->format('Y-m-d'));
                 })
                 ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
                 ->first();
+
+            // Fallback: If no forecast has this week's entry, try to find forecast for that month
+            if (! $forecast) {
+                $forecastMonth = $weekEnding->copy()->startOfMonth();
+                $forecast = LabourForecast::where('location_id', $location->id)
+                    ->where('forecast_month', $forecastMonth)
+                    ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                    ->first();
+            }
         }
 
-        if (!$forecast) {
+        if (! $forecast) {
             return response()->json([
                 'error' => 'No forecast found for this week',
                 'location' => $location->name,
@@ -930,7 +949,7 @@ class LabourForecastController extends Controller
 
         if ($weekEntries->isEmpty()) {
             // Get all week endings that DO have data for debugging
-            $availableWeeks = $forecast->entries->pluck('week_ending')->map(fn($w) => $w->format('Y-m-d'))->unique()->values();
+            $availableWeeks = $forecast->entries->pluck('week_ending')->map(fn ($w) => $w->format('Y-m-d'))->unique()->values();
 
             return response()->json([
                 'error' => 'No forecast entries found for this week',
@@ -949,7 +968,9 @@ class LabourForecastController extends Controller
 
         foreach ($weekEntries as $entry) {
             $templateConfig = $entry->template;
-            if (!$templateConfig) continue;
+            if (! $templateConfig) {
+                continue;
+            }
 
             $costBreakdown = $entry->cost_breakdown_snapshot ?? [];
 
@@ -992,6 +1013,339 @@ class LabourForecastController extends Controller
     }
 
     /**
+     * Get aggregated cost breakdown across multiple weeks (month or all forecasts)
+     */
+    private function getAggregatedCostBreakdown(Request $request, Location $location, string $mode)
+    {
+        $forecastMonthParam = $request->query('forecast_month');
+
+        if ($forecastMonthParam) {
+            $forecastMonth = Carbon::parse($forecastMonthParam)->startOfMonth();
+            $forecasts = LabourForecast::where('location_id', $location->id)
+                ->where('forecast_month', $forecastMonth)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->get();
+            $periodLabel = $mode === 'month'
+                ? $forecastMonth->format('F Y').' (Monthly Total)'
+                : 'Project Total (All Months)';
+        } else {
+            $forecasts = LabourForecast::where('location_id', $location->id)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->get();
+            $periodLabel = 'Project Total (All Months)';
+        }
+
+        if ($forecasts->isEmpty()) {
+            return response()->json(['error' => 'No forecasts found for this location'], 404);
+        }
+
+        $allEntries = $forecasts->flatMap(fn ($f) => $f->entries);
+
+        // When aggregating by month, filter entries to only those whose week_ending falls within the requested month
+        if ($mode === 'month' && $forecastMonthParam) {
+            $monthStart = $forecastMonth->copy()->startOfMonth();
+            $monthEnd = $forecastMonth->copy()->endOfMonth();
+            $allEntries = $allEntries->filter(function ($entry) use ($monthStart, $monthEnd) {
+                return $entry->week_ending >= $monthStart && $entry->week_ending <= $monthEnd;
+            });
+        }
+
+        if ($allEntries->isEmpty()) {
+            return response()->json(['error' => 'No forecast entries found'], 404);
+        }
+
+        $grouped = $allEntries->groupBy('location_pay_rate_template_id');
+
+        $templates = [];
+        $grandTotalCost = 0;
+        $grandTotalHeadcount = 0;
+
+        foreach ($grouped as $templateId => $entries) {
+            $firstEntry = $entries->first();
+            $templateConfig = $firstEntry->template;
+            if (! $templateConfig) {
+                continue;
+            }
+
+            $totalPersonWeeks = 0;
+            $totalCost = 0;
+            $totalOtHours = 0;
+            $totalLeaveHours = 0;
+            $totalRdoHours = 0;
+            $totalPhHours = 0;
+            $aggregatedBreakdown = null;
+
+            foreach ($entries as $entry) {
+                $hc = (float) $entry->headcount;
+
+                $totalPersonWeeks += $hc;
+                // weekly_cost already includes headcount (snapshot total_weekly_cost is for full headcount)
+                $totalCost += (float) $entry->weekly_cost;
+                $totalOtHours += (float) ($entry->overtime_hours ?? 0);
+                $totalLeaveHours += (float) ($entry->leave_hours ?? 0);
+                $totalRdoHours += (float) ($entry->rdo_hours ?? 0);
+                $totalPhHours += (float) ($entry->public_holiday_not_worked_hours ?? 0);
+
+                // Snapshots already include headcount in their values (ordinary_hours = headcount * 40, etc.)
+                // Just sum them directly without scaling
+                $snapshot = $entry->cost_breakdown_snapshot ?? [];
+                if (! empty($snapshot)) {
+                    $aggregatedBreakdown = $aggregatedBreakdown
+                        ? $this->sumBreakdownSnapshots($aggregatedBreakdown, $snapshot)
+                        : $snapshot;
+                }
+            }
+
+            $templates[] = [
+                'id' => $templateConfig->id,
+                'label' => $templateConfig->custom_label ?: $templateConfig->payRateTemplate?->name ?? 'Unknown',
+                'headcount' => round($totalPersonWeeks, 1),
+                'overtime_hours' => round($totalOtHours, 1),
+                'leave_hours' => round($totalLeaveHours, 1),
+                'rdo_hours' => round($totalRdoHours, 1),
+                'public_holiday_not_worked_hours' => round($totalPhHours, 1),
+                'hourly_rate' => (float) $firstEntry->hourly_rate,
+                'weekly_cost' => round($totalCost, 2),
+                'cost_breakdown' => $aggregatedBreakdown ?? [],
+            ];
+
+            $grandTotalCost += $totalCost;
+            $grandTotalHeadcount += $totalPersonWeeks;
+        }
+
+        return response()->json([
+            'location' => [
+                'id' => $location->id,
+                'name' => $location->name,
+                'job_number' => $location->external_id,
+            ],
+            'week_ending' => $periodLabel,
+            'week_ending_date' => null,
+            'total_headcount' => round($grandTotalHeadcount, 1),
+            'total_cost' => round($grandTotalCost, 2),
+            'templates' => $templates,
+            'is_aggregate' => true,
+        ]);
+    }
+
+    /**
+     * Sum two breakdown snapshots together (all numeric monetary values are summed)
+     */
+    private function sumBreakdownSnapshots(array $a, array $b): array
+    {
+        $result = [];
+
+        // Top-level numeric fields
+        foreach (['headcount', 'ordinary_hours', 'overtime_hours', 'leave_hours', 'worked_hours', 'total_hours', 'total_weekly_cost'] as $key) {
+            $result[$key] = ($a[$key] ?? 0) + ($b[$key] ?? 0);
+        }
+        $result['base_hourly_rate'] = $a['base_hourly_rate'] ?? $b['base_hourly_rate'] ?? 0;
+
+        // Ordinary
+        $result['ordinary'] = $this->sumSections($a['ordinary'] ?? [], $b['ordinary'] ?? [],
+            ['base_wages', 'gross', 'annual_leave_markup', 'leave_loading_markup', 'marked_up']);
+        $result['ordinary']['allowances'] = $this->sumAllowances($a['ordinary']['allowances'] ?? [], $b['ordinary']['allowances'] ?? []);
+
+        // Overtime
+        if (isset($a['overtime']) || isset($b['overtime'])) {
+            $result['overtime'] = $this->sumSections($a['overtime'] ?? [], $b['overtime'] ?? [],
+                ['base_wages', 'gross', 'accruals_base', 'annual_leave_markup', 'leave_loading_markup', 'marked_up']);
+            $result['overtime']['multiplier'] = $a['overtime']['multiplier'] ?? $b['overtime']['multiplier'] ?? 0;
+            $result['overtime']['effective_rate'] = $a['overtime']['effective_rate'] ?? $b['overtime']['effective_rate'] ?? 0;
+            $result['overtime']['allowances'] = $this->sumAllowances($a['overtime']['allowances'] ?? [], $b['overtime']['allowances'] ?? []);
+        }
+
+        // Leave
+        if (isset($a['leave']) || isset($b['leave'])) {
+            $al = $a['leave'] ?? [];
+            $bl = $b['leave'] ?? [];
+            $result['leave'] = [
+                'hours' => ($al['hours'] ?? 0) + ($bl['hours'] ?? 0),
+                'days' => ($al['days'] ?? 0) + ($bl['days'] ?? 0),
+                'gross_wages' => ($al['gross_wages'] ?? 0) + ($bl['gross_wages'] ?? 0),
+                'leave_markups_job_costed' => $al['leave_markups_job_costed'] ?? $bl['leave_markups_job_costed'] ?? false,
+                'leave_markups' => [
+                    'annual_leave_accrual' => ($al['leave_markups']['annual_leave_accrual'] ?? 0) + ($bl['leave_markups']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($al['leave_markups']['leave_loading'] ?? 0) + ($bl['leave_markups']['leave_loading'] ?? 0),
+                    'total' => ($al['leave_markups']['total'] ?? 0) + ($bl['leave_markups']['total'] ?? 0),
+                ],
+                'oncosts' => $this->sumOncostSections($al['oncosts'] ?? [], $bl['oncosts'] ?? []),
+                'total_cost' => ($al['total_cost'] ?? 0) + ($bl['total_cost'] ?? 0),
+            ];
+        }
+
+        // RDO
+        if (isset($a['rdo']) || isset($b['rdo'])) {
+            $ar = $a['rdo'] ?? [];
+            $br = $b['rdo'] ?? [];
+            $result['rdo'] = [
+                'hours' => ($ar['hours'] ?? 0) + ($br['hours'] ?? 0),
+                'days' => ($ar['days'] ?? 0) + ($br['days'] ?? 0),
+                'gross_wages' => ($ar['gross_wages'] ?? 0) + ($br['gross_wages'] ?? 0),
+                'allowances' => $this->sumAllowances($ar['allowances'] ?? [], $br['allowances'] ?? []),
+                'accruals' => [
+                    'base' => ($ar['accruals']['base'] ?? 0) + ($br['accruals']['base'] ?? 0),
+                    'annual_leave_accrual' => ($ar['accruals']['annual_leave_accrual'] ?? 0) + ($br['accruals']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($ar['accruals']['leave_loading'] ?? 0) + ($br['accruals']['leave_loading'] ?? 0),
+                    'total' => ($ar['accruals']['total'] ?? 0) + ($br['accruals']['total'] ?? 0),
+                ],
+                'oncosts' => $this->sumOncostSections($ar['oncosts'] ?? [], $br['oncosts'] ?? []),
+                'total_cost' => ($ar['total_cost'] ?? 0) + ($br['total_cost'] ?? 0),
+            ];
+        }
+
+        // Public Holiday
+        if (isset($a['public_holiday_not_worked']) || isset($b['public_holiday_not_worked'])) {
+            $ap = $a['public_holiday_not_worked'] ?? [];
+            $bp = $b['public_holiday_not_worked'] ?? [];
+            $result['public_holiday_not_worked'] = [
+                'hours' => ($ap['hours'] ?? 0) + ($bp['hours'] ?? 0),
+                'days' => ($ap['days'] ?? 0) + ($bp['days'] ?? 0),
+                'gross_wages' => ($ap['gross_wages'] ?? 0) + ($bp['gross_wages'] ?? 0),
+                'accruals' => [
+                    'annual_leave_accrual' => ($ap['accruals']['annual_leave_accrual'] ?? 0) + ($bp['accruals']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($ap['accruals']['leave_loading'] ?? 0) + ($bp['accruals']['leave_loading'] ?? 0),
+                    'total' => ($ap['accruals']['total'] ?? 0) + ($bp['accruals']['total'] ?? 0),
+                ],
+                'marked_up' => ($ap['marked_up'] ?? 0) + ($bp['marked_up'] ?? 0),
+                'oncosts' => $this->sumOncostSections($ap['oncosts'] ?? [], $bp['oncosts'] ?? []),
+                'total_cost' => ($ap['total_cost'] ?? 0) + ($bp['total_cost'] ?? 0),
+            ];
+        }
+
+        // Worked hours oncosts
+        $result['oncosts'] = $this->sumWorkedOncosts($a['oncosts'] ?? [], $b['oncosts'] ?? []);
+
+        return $result;
+    }
+
+    /**
+     * Sum numeric fields in two section arrays
+     */
+    private function sumSections(array $a, array $b, array $numericKeys): array
+    {
+        $result = [];
+        foreach ($numericKeys as $key) {
+            $result[$key] = ($a[$key] ?? 0) + ($b[$key] ?? 0);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Sum two allowances sections
+     */
+    private function sumAllowances(array $a, array $b): array
+    {
+        $result = [];
+
+        foreach (['fares_travel', 'site', 'multistorey'] as $key) {
+            $aa = $a[$key] ?? [];
+            $bb = $b[$key] ?? [];
+            $result[$key] = [
+                'name' => $aa['name'] ?? $bb['name'] ?? null,
+                'rate' => $aa['rate'] ?? $bb['rate'] ?? 0,
+                'type' => $aa['type'] ?? $bb['type'] ?? '',
+                'amount' => ($aa['amount'] ?? 0) + ($bb['amount'] ?? 0),
+            ];
+            if (isset($aa['hours']) || isset($bb['hours'])) {
+                $result[$key]['hours'] = ($aa['hours'] ?? 0) + ($bb['hours'] ?? 0);
+            }
+            if (isset($aa['days']) || isset($bb['days'])) {
+                $result[$key]['days'] = ($aa['days'] ?? 0) + ($bb['days'] ?? 0);
+            }
+        }
+
+        // Merge custom allowances by matching name/code
+        $customA = $a['custom'] ?? [];
+        $customB = $b['custom'] ?? [];
+        $merged = [];
+        foreach ($customA as $item) {
+            $merged[$item['code'] ?? $item['name'] ?? ''] = $item;
+        }
+        foreach ($customB as $item) {
+            $key = $item['code'] ?? $item['name'] ?? '';
+            if (isset($merged[$key])) {
+                foreach (['ordinary_amount', 'overtime_amount', 'amount'] as $field) {
+                    if (isset($item[$field])) {
+                        $merged[$key][$field] = ($merged[$key][$field] ?? 0) + $item[$field];
+                    }
+                }
+            } else {
+                $merged[$key] = $item;
+            }
+        }
+        $result['custom'] = array_values($merged);
+        $result['total'] = ($a['total'] ?? 0) + ($b['total'] ?? 0);
+
+        return $result;
+    }
+
+    /**
+     * Sum two oncost sections (items matched by code)
+     */
+    private function sumOncostSections(array $a, array $b): array
+    {
+        $itemsA = $a['items'] ?? [];
+        $itemsB = $b['items'] ?? [];
+
+        $merged = [];
+        foreach ($itemsA as $item) {
+            $merged[$item['code'] ?? ''] = $item;
+        }
+        foreach ($itemsB as $item) {
+            $code = $item['code'] ?? '';
+            if (isset($merged[$code])) {
+                $merged[$code]['amount'] = ($merged[$code]['amount'] ?? 0) + ($item['amount'] ?? 0);
+                if (isset($item['hours'])) {
+                    $merged[$code]['hours'] = ($merged[$code]['hours'] ?? 0) + ($item['hours'] ?? 0);
+                }
+            } else {
+                $merged[$code] = $item;
+            }
+        }
+
+        return [
+            'items' => array_values($merged),
+            'fixed_total' => ($a['fixed_total'] ?? 0) + ($b['fixed_total'] ?? 0),
+            'percentage_total' => ($a['percentage_total'] ?? 0) + ($b['percentage_total'] ?? 0),
+            'total' => ($a['total'] ?? 0) + ($b['total'] ?? 0),
+        ];
+    }
+
+    /**
+     * Sum two worked-hours oncost sections (items matched by code)
+     */
+    private function sumWorkedOncosts(array $a, array $b): array
+    {
+        $itemsA = $a['items'] ?? [];
+        $itemsB = $b['items'] ?? [];
+
+        $merged = [];
+        foreach ($itemsA as $item) {
+            $merged[$item['code'] ?? ''] = $item;
+        }
+        foreach ($itemsB as $item) {
+            $code = $item['code'] ?? '';
+            if (isset($merged[$code])) {
+                $merged[$code]['amount'] = ($merged[$code]['amount'] ?? 0) + ($item['amount'] ?? 0);
+                if (isset($item['hours_applied'])) {
+                    $merged[$code]['hours_applied'] = ($merged[$code]['hours_applied'] ?? 0) + ($item['hours_applied'] ?? 0);
+                }
+            } else {
+                $merged[$code] = $item;
+            }
+        }
+
+        return [
+            'items' => array_values($merged),
+            'worked_hours_total' => ($a['worked_hours_total'] ?? 0) + ($b['worked_hours_total'] ?? 0),
+            'leave_hours_total' => ($a['leave_hours_total'] ?? 0) + ($b['leave_hours_total'] ?? 0),
+            'total' => ($a['total'] ?? 0) + ($b['total'] ?? 0),
+        ];
+    }
+
+    /**
      * Calculate real-time cost for a specific week based on current grid values
      * This is used while editing before saving to show accurate costs
      */
@@ -1007,7 +1361,7 @@ class LabourForecastController extends Controller
             'templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
         ]);
 
-        $calculator = new LabourCostCalculator();
+        $calculator = new LabourCostCalculator;
         $totalCost = 0;
 
         foreach ($request->templates as $templateData) {
@@ -1016,7 +1370,7 @@ class LabourForecastController extends Controller
                 ->where('id', $templateData['template_id'])
                 ->first();
 
-            if (!$templateConfig) {
+            if (! $templateConfig) {
                 continue;
             }
 
@@ -1065,7 +1419,7 @@ class LabourForecastController extends Controller
             'weeks.*.templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
         ]);
 
-        $calculator = new LabourCostCalculator();
+        $calculator = new LabourCostCalculator;
         $results = [];
 
         // Pre-fetch all template configs for this location to avoid N+1 queries
@@ -1080,7 +1434,7 @@ class LabourForecastController extends Controller
             foreach ($weekData['templates'] as $templateData) {
                 $templateConfig = $templateConfigs->get($templateData['template_id']);
 
-                if (!$templateConfig) {
+                if (! $templateConfig) {
                     continue;
                 }
 
@@ -1164,7 +1518,7 @@ class LabourForecastController extends Controller
             foreach ($forecast->entries as $entry) {
                 $prefix = $entry->template?->cost_code_prefix;
                 if ($prefix && in_array($prefix, $labourPrefixes)) {
-                    if (!isset($forecastByPrefix[$prefix])) {
+                    if (! isset($forecastByPrefix[$prefix])) {
                         $forecastByPrefix[$prefix] = 0;
                     }
                     $forecastByPrefix[$prefix] += $entry->weekly_cost ?? 0;
@@ -1179,22 +1533,22 @@ class LabourForecastController extends Controller
 
             // Get EAC - sum of estimate_at_completion for wages and oncosts
             $wagesEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->where('cost_item', 'like', $wagesPrefix.'-%')
                 ->sum('estimate_at_completion');
 
             $oncostsEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->where('cost_item', 'like', $oncostsPrefix.'-%')
                 ->sum('estimate_at_completion');
 
             $eac = $wagesEac + $oncostsEac;
 
             // Get cost to date (claimed) from JobCostDetail
             $wagesClaimed = JobCostDetail::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->where('cost_item', 'like', $wagesPrefix.'-%')
                 ->sum('amount');
 
             $oncostsClaimed = JobCostDetail::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->where('cost_item', 'like', $oncostsPrefix.'-%')
                 ->sum('amount');
 
             $claimed = $wagesClaimed + $oncostsClaimed;
@@ -1209,8 +1563,8 @@ class LabourForecastController extends Controller
             if ($eac > 0 || $claimed > 0) {
                 // Find primary wages cost code for display
                 $wagesCode = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                    ->where('cost_item', 'like', $wagesPrefix . '-%')
-                    ->first()?->cost_item ?? ($wagesPrefix . '-xxxx');
+                    ->where('cost_item', 'like', $wagesPrefix.'-%')
+                    ->first()?->cost_item ?? ($wagesPrefix.'-xxxx');
 
                 $series[] = [
                     'prefix' => $prefix,

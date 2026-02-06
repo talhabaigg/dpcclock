@@ -33,9 +33,13 @@ class DrawingSet extends Model
     protected $table = 'drawing_sets';
 
     const STATUS_QUEUED = 'queued';
+
     const STATUS_PROCESSING = 'processing';
+
     const STATUS_PARTIAL = 'partial';
+
     const STATUS_SUCCESS = 'success';
+
     const STATUS_FAILED = 'failed';
 
     protected $fillable = [
@@ -200,7 +204,7 @@ class DrawingSet extends Model
      */
     public function isFullyProcessed(): bool
     {
-        return !$this->sheets()
+        return ! $this->sheets()
             ->whereIn('extraction_status', ['queued', 'processing'])
             ->exists();
     }

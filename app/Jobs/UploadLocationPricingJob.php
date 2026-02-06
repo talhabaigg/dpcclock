@@ -68,7 +68,7 @@ class UploadLocationPricingJob implements ShouldQueue
         $startTime = now();
         Log::info('UploadLocationPricingJob: Job started', [
             'file' => $this->uploadedFileName,
-            'user_id' => $this->userId
+            'user_id' => $this->userId,
         ]);
 
         try {
@@ -82,7 +82,7 @@ class UploadLocationPricingJob implements ShouldQueue
             $totalRows = count($rows);
             Log::info('UploadLocationPricingJob: CSV parsed', [
                 'total_rows' => $totalRows,
-                'headers' => $header
+                'headers' => $header,
             ]);
 
             $stats = [
@@ -109,12 +109,12 @@ class UploadLocationPricingJob implements ShouldQueue
                 ->where('is_locked', true)
                 ->get()
                 ->groupBy('location_id')
-                ->map(fn($items) => $items->pluck('material_item_id')->toArray());
+                ->map(fn ($items) => $items->pluck('material_item_id')->toArray());
 
             Log::info('UploadLocationPricingJob: Reference data loaded', [
                 'locations_count' => $locationsData->count(),
                 'materials_count' => $materials->count(),
-                'locked_items_locations' => $lockedPricing->count()
+                'locked_items_locations' => $lockedPricing->count(),
             ]);
 
             // Process each row
@@ -123,6 +123,7 @@ class UploadLocationPricingJob implements ShouldQueue
                 if (count($row) === 1 && trim((string) $row[0]) === '') {
                     $stats['empty']++;
                     Log::debug('UploadLocationPricingJob: Empty row skipped', ['row' => $rowIndex + 2]);
+
                     continue;
                 }
 
@@ -131,13 +132,14 @@ class UploadLocationPricingJob implements ShouldQueue
                     $stats['malformed']++;
                     $failedRows[] = [
                         'row' => $row,
-                        'reason' => 'Malformed: column count mismatch'
+                        'reason' => 'Malformed: column count mismatch',
                     ];
                     Log::warning('UploadLocationPricingJob: Malformed row', [
                         'row' => $rowIndex + 2,
                         'expected_columns' => count($header),
-                        'actual_columns' => count($row)
+                        'actual_columns' => count($row),
                     ]);
+
                     continue;
                 }
 
@@ -147,27 +149,32 @@ class UploadLocationPricingJob implements ShouldQueue
                 $location = $locationsData->get($data['location_id'] ?? null);
                 $material = $materials->get($data['code'] ?? null);
 
-                if (!$location || !$material) {
+                if (! $location || ! $material) {
                     $stats['failed_lookup']++;
                     $reason = [];
-                    if (!$location) $reason[] = 'location not found';
-                    if (!$material) $reason[] = 'material not found';
+                    if (! $location) {
+                        $reason[] = 'location not found';
+                    }
+                    if (! $material) {
+                        $reason[] = 'material not found';
+                    }
                     $failedRows[] = [
                         'row' => $row,
-                        'reason' => 'Lookup failed: ' . implode(', ', $reason)
+                        'reason' => 'Lookup failed: '.implode(', ', $reason),
                     ];
                     Log::warning('UploadLocationPricingJob: Lookup failed', [
                         'row' => $rowIndex + 2,
                         'location_id' => $data['location_id'] ?? 'missing',
                         'code' => $data['code'] ?? 'missing',
-                        'location_found' => !is_null($location),
-                        'material_found' => !is_null($material)
+                        'location_found' => ! is_null($location),
+                        'material_found' => ! is_null($material),
                     ]);
+
                     continue;
                 }
 
                 // Check for duplicates within the file
-                $key = $location->id . '-' . $material->id;
+                $key = $location->id.'-'.$material->id;
 
                 // Check if this item is locked
                 $locationLockedItems = $lockedPricing->get($location->id, []);
@@ -175,13 +182,14 @@ class UploadLocationPricingJob implements ShouldQueue
                     $stats['locked_skipped']++;
                     $failedRows[] = [
                         'row' => $row,
-                        'reason' => 'Locked: price is locked and cannot be modified'
+                        'reason' => 'Locked: price is locked and cannot be modified',
                     ];
                     Log::debug('UploadLocationPricingJob: Locked item skipped', [
                         'row' => $rowIndex + 2,
                         'location_id' => $location->id,
-                        'material_id' => $material->id
+                        'material_id' => $material->id,
                     ]);
+
                     continue;
                 }
 
@@ -189,13 +197,14 @@ class UploadLocationPricingJob implements ShouldQueue
                     $stats['duplicate']++;
                     $failedRows[] = [
                         'row' => $row,
-                        'reason' => 'Duplicate'
+                        'reason' => 'Duplicate',
                     ];
                     Log::debug('UploadLocationPricingJob: Duplicate row skipped', [
                         'row' => $rowIndex + 2,
                         'location_id' => $location->id,
-                        'material_id' => $material->id
+                        'material_id' => $material->id,
                     ]);
+
                     continue;
                 }
                 $seen[$key] = true;
@@ -210,7 +219,7 @@ class UploadLocationPricingJob implements ShouldQueue
                         'row' => $rowIndex + 2,
                         'raw_value' => $data['is_locked'],
                         'lowercase_value' => $isLockedValue,
-                        'result' => $isLocked
+                        'result' => $isLocked,
                     ]);
                 }
 
@@ -256,20 +265,20 @@ class UploadLocationPricingJob implements ShouldQueue
                         $stats['processed'] + $totalFailed,
                         $stats['processed'],
                         $totalFailed
-                    )
-                ]
+                    ),
+                ],
             ]);
 
             // Get unique location IDs and deduplicate dataToInsert
             $uniqueLocationIds = array_unique($locationIds);
             $dataToInsert = collect($dataToInsert)
-                ->unique(fn($item) => $item['location_id'] . '-' . $item['material_item_id'])
+                ->unique(fn ($item) => $item['location_id'].'-'.$item['material_item_id'])
                 ->values()
                 ->toArray();
 
             Log::info('UploadLocationPricingJob: Starting database transaction', [
                 'unique_locations' => count($uniqueLocationIds),
-                'records_to_insert' => count($dataToInsert)
+                'records_to_insert' => count($dataToInsert),
             ]);
 
             // Perform database transaction
@@ -281,7 +290,7 @@ class UploadLocationPricingJob implements ShouldQueue
                     ->delete();
 
                 Log::info('UploadLocationPricingJob: Old unlocked pricing deleted', [
-                    'deleted_count' => $deletedCount
+                    'deleted_count' => $deletedCount,
                 ]);
 
                 // Insert new pricing in chunks to avoid memory issues
@@ -293,7 +302,7 @@ class UploadLocationPricingJob implements ShouldQueue
                     Log::info('UploadLocationPricingJob: Batch inserted', [
                         'batch' => $index + 1,
                         'total_batches' => count($chunks),
-                        'rows_in_batch' => count($chunk)
+                        'rows_in_batch' => count($chunk),
                     ]);
                 }
             });
@@ -304,12 +313,12 @@ class UploadLocationPricingJob implements ShouldQueue
             $s3FailedUrl = null;
             $failedFilePath = null;
 
-            if (!empty($failedRows)) {
+            if (! empty($failedRows)) {
                 Log::info('UploadLocationPricingJob: Processing failed rows', [
-                    'failed_count' => count($failedRows)
+                    'failed_count' => count($failedRows),
                 ]);
 
-                $filename = 'failed_location_pricing_' . now()->format('Ymd_His') . '.csv';
+                $filename = 'failed_location_pricing_'.now()->format('Ymd_His').'.csv';
                 $localFilePath = storage_path("app/{$filename}");
 
                 $handle = fopen($localFilePath, 'w');
@@ -334,19 +343,19 @@ class UploadLocationPricingJob implements ShouldQueue
                 $failedFilePath = $s3Path;
 
                 Log::info('UploadLocationPricingJob: Failed rows file uploaded to S3', [
-                    's3_path' => $s3Path
+                    's3_path' => $s3Path,
                 ]);
             }
 
             // Get the first location for the upload record (use the first processed location)
-            $firstLocationId = !empty($uniqueLocationIds) ? $uniqueLocationIds[0] : null;
+            $firstLocationId = ! empty($uniqueLocationIds) ? $uniqueLocationIds[0] : null;
 
             // Create upload record
             // Note: total_rows = processed + failed (where failed includes malformed, lookup failures, and duplicates)
             // Empty rows are excluded from total count
             $priceList = MaterialItemPriceListUpload::create([
                 'location_id' => $firstLocationId,
-                'upload_file_path' => 'location_pricing/uploads/' . $this->uploadedFileName,
+                'upload_file_path' => 'location_pricing/uploads/'.$this->uploadedFileName,
                 'failed_file_path' => $failedFilePath,
                 'status' => 'success',
                 'total_rows' => $stats['processed'] + $totalFailed,
@@ -355,13 +364,13 @@ class UploadLocationPricingJob implements ShouldQueue
                 'created_by' => $this->userId,
             ]);
 
-            if (!$priceList) {
+            if (! $priceList) {
                 Log::error('UploadLocationPricingJob: Failed to create MaterialItemPriceListUpload record', [
-                    'file' => $this->uploadedFileName
+                    'file' => $this->uploadedFileName,
                 ]);
             } else {
                 Log::info('UploadLocationPricingJob: Upload record created', [
-                    'record_id' => $priceList->id
+                    'record_id' => $priceList->id,
                 ]);
             }
 
@@ -370,7 +379,7 @@ class UploadLocationPricingJob implements ShouldQueue
                 'processed_rows' => $stats['processed'],
                 'failed_rows' => $totalFailed,
                 'duration_seconds' => $duration,
-                'has_failed_file' => !is_null($s3FailedUrl)
+                'has_failed_file' => ! is_null($s3FailedUrl),
             ]);
 
             // Store result data for controller access (optional)
@@ -380,7 +389,7 @@ class UploadLocationPricingJob implements ShouldQueue
                     'processed' => $stats['processed'],
                     'failed' => $totalFailed,
                     'failed_url' => $s3FailedUrl,
-                    'status' => 'success'
+                    'status' => 'success',
                 ],
                 now()->addMinutes(30)
             );
@@ -389,7 +398,7 @@ class UploadLocationPricingJob implements ShouldQueue
             if (file_exists($this->filePath)) {
                 unlink($this->filePath);
                 Log::info('UploadLocationPricingJob: Temporary file deleted', [
-                    'file_path' => $this->filePath
+                    'file_path' => $this->filePath,
                 ]);
             }
 
@@ -400,14 +409,14 @@ class UploadLocationPricingJob implements ShouldQueue
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Create failed upload record
             try {
                 MaterialItemPriceListUpload::create([
                     'location_id' => null,
-                    'upload_file_path' => 'location_pricing/uploads/' . $this->uploadedFileName,
+                    'upload_file_path' => 'location_pricing/uploads/'.$this->uploadedFileName,
                     'failed_file_path' => null,
                     'status' => 'failed',
                     'total_rows' => 0,
@@ -420,13 +429,13 @@ class UploadLocationPricingJob implements ShouldQueue
                     "location_pricing_upload_{$this->uploadedFileName}",
                     [
                         'status' => 'failed',
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ],
                     now()->addMinutes(30)
                 );
             } catch (Throwable $dbError) {
                 Log::error('UploadLocationPricingJob: Failed to create error record', [
-                    'error' => $dbError->getMessage()
+                    'error' => $dbError->getMessage(),
                 ]);
             }
 
@@ -434,7 +443,7 @@ class UploadLocationPricingJob implements ShouldQueue
             if (file_exists($this->filePath)) {
                 unlink($this->filePath);
                 Log::info('UploadLocationPricingJob: Temporary file deleted after error', [
-                    'file_path' => $this->filePath
+                    'file_path' => $this->filePath,
                 ]);
             }
 
@@ -451,7 +460,7 @@ class UploadLocationPricingJob implements ShouldQueue
             'file' => $this->uploadedFileName,
             'user_id' => $this->userId,
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
 
         // Update cache with permanent failure status
@@ -459,7 +468,7 @@ class UploadLocationPricingJob implements ShouldQueue
             "location_pricing_upload_{$this->uploadedFileName}",
             [
                 'status' => 'failed_permanently',
-                'error' => $exception->getMessage()
+                'error' => $exception->getMessage(),
             ],
             now()->addHours(24)
         );
@@ -468,7 +477,7 @@ class UploadLocationPricingJob implements ShouldQueue
         if (file_exists($this->filePath)) {
             unlink($this->filePath);
             Log::info('UploadLocationPricingJob: Temporary file deleted after permanent failure', [
-                'file_path' => $this->filePath
+                'file_path' => $this->filePath,
             ]);
         }
 

@@ -90,17 +90,9 @@ export default function ClockIn() {
             />
 
             {/* Back Button - Mobile */}
-            <div className="absolute left-4 top-4 sm:hidden">
+            <div className="absolute top-4 left-4 sm:hidden">
                 <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                            'h-12 w-12 rounded-full',
-                            'hover:bg-accent',
-                            'touch-manipulation',
-                        )}
-                    >
+                    <Button variant="ghost" size="icon" className={cn('h-12 w-12 rounded-full', 'hover:bg-accent', 'touch-manipulation')}>
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -110,14 +102,10 @@ export default function ClockIn() {
             <div className="flex flex-col items-center">
                 {/* Employee Info */}
                 <div className="mb-8 flex flex-col items-center">
-                    <Avatar className="mb-4 h-24 w-24 border-4 border-primary/20 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-3xl font-semibold text-primary">
-                            {getInitials(employee.name)}
-                        </AvatarFallback>
+                    <Avatar className="border-primary/20 mb-4 h-24 w-24 border-4 shadow-lg">
+                        <AvatarFallback className="bg-primary/10 text-primary text-3xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
                     </Avatar>
-                    <h2 className="text-2xl font-bold text-foreground">
-                        {employee.name}
-                    </h2>
+                    <h2 className="text-foreground text-2xl font-bold">{employee.name}</h2>
                 </div>
 
                 {/* Status Badge */}
@@ -155,9 +143,7 @@ export default function ClockIn() {
                         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
                             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                         </div>
-                        <p className="text-lg font-medium text-emerald-600">
-                            Successfully clocked in!
-                        </p>
+                        <p className="text-lg font-medium text-emerald-600">Successfully clocked in!</p>
                     </div>
                 )}
             </div>
@@ -165,7 +151,7 @@ export default function ClockIn() {
     );
 
     return isMobile ? (
-        <div className="min-h-screen bg-background">{content}</div>
+        <div className="bg-background min-h-screen">{content}</div>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}

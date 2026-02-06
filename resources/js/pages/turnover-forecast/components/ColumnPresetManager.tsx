@@ -1,12 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -16,9 +9,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { BookmarkPlus, ChevronDown, Trash2, Check } from 'lucide-react';
-import { useState, useCallback } from 'react';
 import type { ColumnState } from 'ag-grid-community';
+import { BookmarkPlus, Check, ChevronDown, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 const PRESETS_STORAGE_KEY = 'turnover-forecast-column-presets';
 
@@ -81,36 +74,45 @@ export function ColumnPresetManager({
         setSaveDialogOpen(false);
     }, [newPresetName, currentColumnState, currentHiddenColumns, presets, savePresetsToStorage, onActivePresetChange]);
 
-    const handleUpdatePreset = useCallback((presetId: string) => {
-        if (!currentColumnState) return;
+    const handleUpdatePreset = useCallback(
+        (presetId: string) => {
+            if (!currentColumnState) return;
 
-        const updatedPresets = presets.map((preset) => {
-            if (preset.id === presetId) {
-                return {
-                    ...preset,
-                    columnState: currentColumnState,
-                    hiddenColumns: currentHiddenColumns,
-                };
+            const updatedPresets = presets.map((preset) => {
+                if (preset.id === presetId) {
+                    return {
+                        ...preset,
+                        columnState: currentColumnState,
+                        hiddenColumns: currentHiddenColumns,
+                    };
+                }
+                return preset;
+            });
+
+            savePresetsToStorage(updatedPresets);
+        },
+        [currentColumnState, currentHiddenColumns, presets, savePresetsToStorage],
+    );
+
+    const handleDeletePreset = useCallback(
+        (presetId: string) => {
+            const updatedPresets = presets.filter((p) => p.id !== presetId);
+            savePresetsToStorage(updatedPresets);
+            if (activePresetId === presetId) {
+                onActivePresetChange(null);
             }
-            return preset;
-        });
+            setDeleteConfirmId(null);
+        },
+        [presets, savePresetsToStorage, activePresetId, onActivePresetChange],
+    );
 
-        savePresetsToStorage(updatedPresets);
-    }, [currentColumnState, currentHiddenColumns, presets, savePresetsToStorage]);
-
-    const handleDeletePreset = useCallback((presetId: string) => {
-        const updatedPresets = presets.filter((p) => p.id !== presetId);
-        savePresetsToStorage(updatedPresets);
-        if (activePresetId === presetId) {
-            onActivePresetChange(null);
-        }
-        setDeleteConfirmId(null);
-    }, [presets, savePresetsToStorage, activePresetId, onActivePresetChange]);
-
-    const handleLoadPreset = useCallback((preset: ColumnPreset) => {
-        onLoadPreset(preset);
-        onActivePresetChange(preset.id);
-    }, [onLoadPreset, onActivePresetChange]);
+    const handleLoadPreset = useCallback(
+        (preset: ColumnPreset) => {
+            onLoadPreset(preset);
+            onActivePresetChange(preset.id);
+        },
+        [onLoadPreset, onActivePresetChange],
+    );
 
     const activePreset = presets.find((p) => p.id === activePresetId);
 
@@ -120,40 +122,30 @@ export function ColumnPresetManager({
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
                         <BookmarkPlus className="h-4 w-4" />
-                        <span className="hidden sm:inline max-w-[100px] truncate">
-                            {activePreset ? activePreset.name : 'Views'}
-                        </span>
+                        <span className="hidden max-w-[100px] truncate sm:inline">{activePreset ? activePreset.name : 'Views'}</span>
                         <ChevronDown className="h-3 w-3 opacity-50" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">
-                        Saved Views
-                    </DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-muted-foreground text-xs">Saved Views</DropdownMenuLabel>
 
                     {presets.length === 0 ? (
-                        <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                            No saved views yet
-                        </div>
+                        <div className="text-muted-foreground px-2 py-3 text-center text-sm">No saved views yet</div>
                     ) : (
                         presets.map((preset) => (
                             <DropdownMenuItem
                                 key={preset.id}
-                                className="flex items-center justify-between group"
+                                className="group flex items-center justify-between"
                                 onSelect={(e) => {
                                     e.preventDefault();
                                     handleLoadPreset(preset);
                                 }}
                             >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    {activePresetId === preset.id && (
-                                        <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                                    )}
-                                    <span className={`truncate ${activePresetId !== preset.id ? 'ml-6' : ''}`}>
-                                        {preset.name}
-                                    </span>
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                    {activePresetId === preset.id && <Check className="text-primary h-4 w-4 flex-shrink-0" />}
+                                    <span className={`truncate ${activePresetId !== preset.id ? 'ml-6' : ''}`}>{preset.name}</span>
                                 </div>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                                     {activePresetId === preset.id && (
                                         <Button
                                             variant="ghost"
@@ -170,7 +162,7 @@ export function ColumnPresetManager({
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                        className="text-destructive hover:text-destructive h-6 w-6 p-0"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setDeleteConfirmId(preset.id);
@@ -192,15 +184,12 @@ export function ColumnPresetManager({
                         }}
                         className="text-primary"
                     >
-                        <BookmarkPlus className="h-4 w-4 mr-2" />
+                        <BookmarkPlus className="mr-2 h-4 w-4" />
                         Save Current View
                     </DropdownMenuItem>
 
                     {activePresetId && (
-                        <DropdownMenuItem
-                            onSelect={() => onActivePresetChange(null)}
-                            className="text-muted-foreground"
-                        >
+                        <DropdownMenuItem onSelect={() => onActivePresetChange(null)} className="text-muted-foreground">
                             Clear Active View
                         </DropdownMenuItem>
                     )}
@@ -212,9 +201,7 @@ export function ColumnPresetManager({
                 <DialogContent className="sm:max-w-[400px]">
                     <DialogHeader>
                         <DialogTitle>Save View</DialogTitle>
-                        <DialogDescription>
-                            Save your current column settings as a reusable view.
-                        </DialogDescription>
+                        <DialogDescription>Save your current column settings as a reusable view.</DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                         <Input
@@ -245,18 +232,13 @@ export function ColumnPresetManager({
                 <DialogContent className="sm:max-w-[400px]">
                     <DialogHeader>
                         <DialogTitle>Delete View</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to delete this saved view? This action cannot be undone.
-                        </DialogDescription>
+                        <DialogDescription>Are you sure you want to delete this saved view? This action cannot be undone.</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
                             Cancel
                         </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => deleteConfirmId && handleDeletePreset(deleteConfirmId)}
-                        >
+                        <Button variant="destructive" onClick={() => deleteConfirmId && handleDeletePreset(deleteConfirmId)}>
                             Delete
                         </Button>
                     </DialogFooter>

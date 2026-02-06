@@ -3,26 +3,27 @@
 namespace App\Exports;
 
 use App\Models\MaterialItem;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\FromView;
-use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\Exportable;
-use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping, WithStyles, WithHeadings
+
+class MaterialItemExport implements FromQuery, WithColumnFormatting, WithHeadings, WithMapping, WithStyles
 {
     /**
      * @return \Illuminate\Support\Query\Builder
      */
     use Exportable;
+
     public function query()
     {
         return MaterialItem::with('supplier', 'costCode', 'supplierCategory');
     }
+
     public function columnFormats(): array
     {
         return [
@@ -35,15 +36,16 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             'G' => NumberFormat::FORMAT_GENERAL,
         ];
     }
+
     public function styles(Worksheet $sheet)
     {
         return [
             // Style the first row as bold text.
             1 => ['font' => ['bold' => true]],
 
-
         ];
     }
+
     public function headings(): array
     {
         return [
@@ -69,5 +71,4 @@ class MaterialItemExport implements WithColumnFormatting, FromQuery, WithMapping
             $materialItem->supplierCategory ? $materialItem->supplierCategory->code : '',
         ];
     }
-
 }

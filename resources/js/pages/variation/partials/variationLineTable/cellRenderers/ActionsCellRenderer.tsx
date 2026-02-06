@@ -23,7 +23,7 @@ export const ActionsCellRenderer = (props: ActionsCellRendererProps) => {
             <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground "
+                className="text-muted-foreground h-8 w-8"
                 onClick={handleDelete}
                 aria-label={`Delete line ${props.data?.line_number || ''}`}
             >

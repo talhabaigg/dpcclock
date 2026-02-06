@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class TestQueueBroadcast extends Command
 {
     protected $signature = 'queue:test-broadcast';
+
     protected $description = 'Test queue status broadcasting';
 
     public function handle(): void
@@ -15,7 +16,7 @@ class TestQueueBroadcast extends Command
         $this->info('Broadcasting test queue job status...');
 
         event(new QueueJobStatusUpdated(
-            jobId: 'test-' . time(),
+            jobId: 'test-'.time(),
             jobName: 'TestJob',
             status: 'processing',
             message: 'This is a test broadcast',
@@ -27,7 +28,7 @@ class TestQueueBroadcast extends Command
         sleep(2);
 
         event(new QueueJobStatusUpdated(
-            jobId: 'test-' . time(),
+            jobId: 'test-'.time(),
             jobName: 'TestJob',
             status: 'completed',
             message: 'Test completed successfully',

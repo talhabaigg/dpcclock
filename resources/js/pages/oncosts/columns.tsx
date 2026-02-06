@@ -87,7 +87,9 @@ export const oncostColumns: ColumnDef<Oncost>[] = [
         cell: ({ row }) => {
             const isPercentage = row.getValue('is_percentage') as boolean;
             return (
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${isPercentage ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                <span
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${isPercentage ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}
+                >
                     {isPercentage ? 'Percentage' : 'Fixed'}
                 </span>
             );

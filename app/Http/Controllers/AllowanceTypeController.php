@@ -13,7 +13,7 @@ class AllowanceTypeController extends Controller
         $allowanceTypes = AllowanceType::ordered()->get();
 
         return Inertia::render('allowanceTypes/index', [
-            'allowanceTypes' => $allowanceTypes
+            'allowanceTypes' => $allowanceTypes,
         ]);
     }
 
@@ -37,7 +37,7 @@ class AllowanceTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:allowance_types,code,' . $allowanceType->id,
+            'code' => 'required|string|max:50|unique:allowance_types,code,'.$allowanceType->id,
             'description' => 'nullable|string',
             'default_rate' => 'nullable|numeric|min:0',
             'is_active' => 'boolean',

@@ -26,9 +26,7 @@ export const CostCodeCellEditor = forwardRef((props: CostCodeCellEditorParams, r
     // Use ref to track selected value synchronously (React state updates are async)
     const selectedValueRef = useRef(initialValue || '');
 
-    const filteredCostCodes = costCodes.filter((costCode) =>
-        `${costCode.code} ${costCode.description}`.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredCostCodes = costCodes.filter((costCode) => `${costCode.code} ${costCode.description}`.toLowerCase().includes(search.toLowerCase()));
 
     // AG Grid cell editor interface
     useImperativeHandle(ref, () => ({
@@ -68,57 +66,63 @@ export const CostCodeCellEditor = forwardRef((props: CostCodeCellEditorParams, r
         }
     }, []);
 
-    const handleSelect = useCallback((code: string) => {
-        // Update ref synchronously so getValue() returns correct value
-        selectedValueRef.current = code;
-        stopEditing();
-    }, [stopEditing]);
+    const handleSelect = useCallback(
+        (code: string) => {
+            // Update ref synchronously so getValue() returns correct value
+            selectedValueRef.current = code;
+            stopEditing();
+        },
+        [stopEditing],
+    );
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                e.stopPropagation();
-                setHighlightedIndex((prev) => Math.min(prev + 1, filteredCostCodes.length - 1));
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                e.stopPropagation();
-                setHighlightedIndex((prev) => Math.max(prev - 1, 0));
-                break;
-            case 'Enter':
-                e.preventDefault();
-                e.stopPropagation();
-                if (filteredCostCodes[highlightedIndex]) {
-                    handleSelect(filteredCostCodes[highlightedIndex].code);
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                e.stopPropagation();
-                stopEditing();
-                break;
-            case 'Tab':
-                // Match original behavior - only stopPropagation, let AG Grid handle navigation
-                e.stopPropagation();
-                if (filteredCostCodes[highlightedIndex]) {
-                    handleSelect(filteredCostCodes[highlightedIndex].code);
-                } else {
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setHighlightedIndex((prev) => Math.min(prev + 1, filteredCostCodes.length - 1));
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (filteredCostCodes[highlightedIndex]) {
+                        handleSelect(filteredCostCodes[highlightedIndex].code);
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    e.stopPropagation();
                     stopEditing();
-                }
-                break;
-        }
-    }, [filteredCostCodes, highlightedIndex, handleSelect, stopEditing]);
+                    break;
+                case 'Tab':
+                    // Match original behavior - only stopPropagation, let AG Grid handle navigation
+                    e.stopPropagation();
+                    if (filteredCostCodes[highlightedIndex]) {
+                        handleSelect(filteredCostCodes[highlightedIndex].code);
+                    } else {
+                        stopEditing();
+                    }
+                    break;
+            }
+        },
+        [filteredCostCodes, highlightedIndex, handleSelect, stopEditing],
+    );
 
     return (
-        <div className="w-[350px] overflow-hidden rounded-lg border bg-popover shadow-lg">
+        <div className="bg-popover w-[350px] overflow-hidden rounded-lg border shadow-lg">
             {/* Search Input */}
             <div className="flex items-center gap-2 border-b px-3 py-2">
-                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Search className="text-muted-foreground h-4 w-4 shrink-0" />
                 <input
                     ref={inputRef}
                     type="text"
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
                     placeholder="Search code or description..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -131,11 +135,11 @@ export const CostCodeCellEditor = forwardRef((props: CostCodeCellEditorParams, r
             <div ref={listRef} className="max-h-[280px] overflow-y-auto p-1.5">
                 {filteredCostCodes.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-6">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                            <Hash className="h-5 w-5 text-muted-foreground" />
+                        <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-full">
+                            <Hash className="text-muted-foreground h-5 w-5" />
                         </div>
-                        <span className="text-sm text-muted-foreground">No cost codes found</span>
-                        <span className="text-xs text-muted-foreground/70">Try a different search term</span>
+                        <span className="text-muted-foreground text-sm">No cost codes found</span>
+                        <span className="text-muted-foreground/70 text-xs">Try a different search term</span>
                     </div>
                 ) : (
                     filteredCostCodes.map((costCode, index) => (
@@ -154,17 +158,10 @@ export const CostCodeCellEditor = forwardRef((props: CostCodeCellEditorParams, r
                                 <Hash className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400">
-                                    {costCode.code}
-                                </span>
-                                <span className="truncate text-xs text-muted-foreground">{costCode.description}</span>
+                                <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400">{costCode.code}</span>
+                                <span className="text-muted-foreground truncate text-xs">{costCode.description}</span>
                             </div>
-                            <Check
-                                className={cn(
-                                    'h-4 w-4 shrink-0 text-amber-600',
-                                    initialValue === costCode.code ? 'opacity-100' : 'opacity-0'
-                                )}
-                            />
+                            <Check className={cn('h-4 w-4 shrink-0 text-amber-600', initialValue === costCode.code ? 'opacity-100' : 'opacity-0')} />
                         </div>
                     ))
                 )}

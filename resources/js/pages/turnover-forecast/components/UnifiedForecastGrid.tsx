@@ -2,33 +2,33 @@ import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
-import type { ColDef, GridReadyEvent, ColumnState, GetRowIdParams } from 'ag-grid-community';
+import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { Download, HelpCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-    transformToUnifiedRows,
-    calculateTotalRow,
-    calculateLabourRow,
-    createTargetRows,
-    type TurnoverRow,
-    type UnifiedRow,
-} from '../lib/data-transformer';
-import {
     formatCurrency,
     formatMonthHeader,
     getMonthCellClass,
     getMonthHeaderClass,
-    getRowClass,
     getPinnedCellClass,
+    getRowClass,
     getValueCellClass,
 } from '../lib/cell-styles';
+import {
+    calculateLabourRow,
+    calculateTotalRow,
+    createTargetRows,
+    transformToUnifiedRows,
+    type TurnoverRow,
+    type UnifiedRow,
+} from '../lib/data-transformer';
+import { ColumnPresetManager, type ColumnPreset } from './ColumnPresetManager';
+import { ColumnVisibilityDropdown, type ColumnGroup } from './ColumnVisibilityDropdown';
 import { ForecastStatusCell } from './ForecastStatusCell';
 import { LabourCell } from './LabourCell';
-import { ColumnVisibilityDropdown, type ColumnGroup } from './ColumnVisibilityDropdown';
-import { ColumnPresetManager, type ColumnPreset } from './ColumnPresetManager';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -46,7 +46,7 @@ function HeaderWithHelp({ displayName, helpText }: HeaderWithHelpProps) {
                 <HoverCardTrigger asChild>
                     <button
                         type="button"
-                        className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-muted-foreground hover:text-foreground inline-flex items-center justify-center transition-colors"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <HelpCircle className="h-3.5 w-3.5" />
@@ -111,9 +111,16 @@ export function UnifiedForecastGrid({
 
         // Get all column IDs that should be hidden/shown based on React state
         const allColumnIds = [
-            'projectType', 'jobName', 'projectManager', 'overUnderBilling',
-            'forecastStatus', 'toDate', 'contractFY', 'totalValue',
-            'remainingFY', 'remainingTotal'
+            'projectType',
+            'jobName',
+            'projectManager',
+            'overUnderBilling',
+            'forecastStatus',
+            'toDate',
+            'contractFY',
+            'totalValue',
+            'remainingFY',
+            'remainingTotal',
         ];
 
         // Apply visibility for each column
@@ -147,7 +154,7 @@ export function UnifiedForecastGrid({
             const labourRow = calculateLabourRow(
                 rowData.filter((r) => r.rowType === 'revenue'),
                 data,
-                months
+                months,
             );
             return [revenueTotal, labourRow];
         }
@@ -179,10 +186,7 @@ export function UnifiedForecastGrid({
 
             staticCols.push({
                 headerComponent: () => (
-                    <HeaderWithHelp
-                        displayName={`Total ${fyLabel}`}
-                        helpText="Sum of all monthly values for the selected financial year"
-                    />
+                    <HeaderWithHelp displayName={`Total ${fyLabel}`} helpText="Sum of all monthly values for the selected financial year" />
                 ),
                 field: 'fyTotal',
                 width: 140,
@@ -216,10 +220,7 @@ export function UnifiedForecastGrid({
                 },
                 {
                     headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Job Number"
-                            helpText="Unique job identifier. Click to view the job forecast details."
-                        />
+                        <HeaderWithHelp displayName="Job Number" helpText="Unique job identifier. Click to view the job forecast details." />
                     ),
                     field: 'jobNumber',
                     width: 120,
@@ -242,12 +243,7 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Job Name"
-                            helpText="Name of the project or job"
-                        />
-                    ),
+                    headerComponent: () => <HeaderWithHelp displayName="Job Name" helpText="Name of the project or job" />,
                     field: 'jobName',
                     width: 150,
                     pinned: 'left',
@@ -261,12 +257,7 @@ export function UnifiedForecastGrid({
                     },
                 },
                 {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Project Manager"
-                            helpText="The manager responsible for this project"
-                        />
-                    ),
+                    headerComponent: () => <HeaderWithHelp displayName="Project Manager" helpText="The manager responsible for this project" />,
                     field: 'projectManager',
                     width: 140,
                     hide: hiddenColumns.has('projectManager'),
@@ -302,11 +293,7 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('forecastStatus'),
                     cellRenderer: (params: { data: UnifiedRow }) => {
                         const rowData = params.data;
-                        if (
-                            rowData?.rowType !== 'revenue' ||
-                            rowData?.projectType === 'total' ||
-                            rowData?.projectType === 'summary'
-                        ) {
+                        if (rowData?.rowType !== 'revenue' || rowData?.projectType === 'total' || rowData?.projectType === 'summary') {
                             return null;
                         }
                         return <ForecastStatusCell value={rowData.forecastStatus} />;
@@ -396,7 +383,7 @@ export function UnifiedForecastGrid({
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
-                }
+                },
             );
         }
 
@@ -435,7 +422,7 @@ export function UnifiedForecastGrid({
             filter: false,
             resizable: true,
         }),
-        []
+        [],
     );
 
     // Get row ID for stable rendering
@@ -460,19 +447,22 @@ export function UnifiedForecastGrid({
     }, []);
 
     // Column state persistence
-    const handleGridReady = useCallback((params: GridReadyEvent) => {
-        try {
-            const stored = localStorage.getItem(COLUMN_STATE_KEY);
-            if (stored) {
-                const state = JSON.parse(stored) as ColumnState[];
-                params.api.applyColumnState({ state, applyOrder: true });
+    const handleGridReady = useCallback(
+        (params: GridReadyEvent) => {
+            try {
+                const stored = localStorage.getItem(COLUMN_STATE_KEY);
+                if (stored) {
+                    const state = JSON.parse(stored) as ColumnState[];
+                    params.api.applyColumnState({ state, applyOrder: true });
+                }
+            } catch {
+                // Ignore storage errors
             }
-        } catch {
-            // Ignore storage errors
-        }
-        // Initialize current column state
-        updateCurrentColumnState();
-    }, [updateCurrentColumnState]);
+            // Initialize current column state
+            updateCurrentColumnState();
+        },
+        [updateCurrentColumnState],
+    );
 
     const saveColumnState = useCallback(() => {
         try {
@@ -556,9 +546,16 @@ export function UnifiedForecastGrid({
         // Show all columns via AG Grid API
         if (gridRef.current?.api) {
             const allColumnIds = [
-                'projectType', 'jobName', 'projectManager', 'overUnderBilling',
-                'forecastStatus', 'toDate', 'contractFY', 'totalValue',
-                'remainingFY', 'remainingTotal'
+                'projectType',
+                'jobName',
+                'projectManager',
+                'overUnderBilling',
+                'forecastStatus',
+                'toDate',
+                'contractFY',
+                'totalValue',
+                'remainingFY',
+                'remainingTotal',
             ];
             gridRef.current.api.setColumnsVisible(allColumnIds, true);
         }
@@ -575,33 +572,43 @@ export function UnifiedForecastGrid({
     }, [columnGroups]);
 
     // Preset management
-    const handleLoadPreset = useCallback((preset: ColumnPreset) => {
-        // Apply column state (for column order, width, pinning)
-        if (preset.columnState && gridRef.current?.api) {
-            gridRef.current.api.applyColumnState({ state: preset.columnState, applyOrder: true });
-            localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(preset.columnState));
-        }
+    const handleLoadPreset = useCallback(
+        (preset: ColumnPreset) => {
+            // Apply column state (for column order, width, pinning)
+            if (preset.columnState && gridRef.current?.api) {
+                gridRef.current.api.applyColumnState({ state: preset.columnState, applyOrder: true });
+                localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(preset.columnState));
+            }
 
-        // Apply hidden columns via React state
-        const newHiddenColumns = new Set(preset.hiddenColumns);
-        setHiddenColumns(newHiddenColumns);
-        localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(preset.hiddenColumns));
+            // Apply hidden columns via React state
+            const newHiddenColumns = new Set(preset.hiddenColumns);
+            setHiddenColumns(newHiddenColumns);
+            localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(preset.hiddenColumns));
 
-        // Also explicitly set visibility via AG Grid API to ensure sync
-        if (gridRef.current?.api) {
-            const allColumnIds = [
-                'projectType', 'jobName', 'projectManager', 'overUnderBilling',
-                'forecastStatus', 'toDate', 'contractFY', 'totalValue',
-                'remainingFY', 'remainingTotal'
-            ];
-            allColumnIds.forEach((colId) => {
-                const shouldHide = newHiddenColumns.has(colId);
-                gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
-            });
-        }
+            // Also explicitly set visibility via AG Grid API to ensure sync
+            if (gridRef.current?.api) {
+                const allColumnIds = [
+                    'projectType',
+                    'jobName',
+                    'projectManager',
+                    'overUnderBilling',
+                    'forecastStatus',
+                    'toDate',
+                    'contractFY',
+                    'totalValue',
+                    'remainingFY',
+                    'remainingTotal',
+                ];
+                allColumnIds.forEach((colId) => {
+                    const shouldHide = newHiddenColumns.has(colId);
+                    gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
+                });
+            }
 
-        updateCurrentColumnState();
-    }, [updateCurrentColumnState]);
+            updateCurrentColumnState();
+        },
+        [updateCurrentColumnState],
+    );
 
     const handleActivePresetChange = useCallback((presetId: string | null) => {
         setActivePresetId(presetId);
@@ -633,7 +640,7 @@ export function UnifiedForecastGrid({
             document.addEventListener('mousemove', handleDrag);
             document.addEventListener('mouseup', handleDragEnd);
         },
-        [height, onHeightChange]
+        [height, onHeightChange],
     );
 
     return (
@@ -641,11 +648,7 @@ export function UnifiedForecastGrid({
             {/* Toolbar */}
             <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {viewMode === 'targets'
-                        ? 'Revenue Targets'
-                        : viewMode === 'expanded'
-                        ? 'Revenue, Cost & Profit'
-                        : 'Revenue Forecast'}
+                    {viewMode === 'targets' ? 'Revenue Targets' : viewMode === 'expanded' ? 'Revenue, Cost & Profit' : 'Revenue Forecast'}
                 </div>
                 <div className="flex items-center gap-2">
                     {viewMode !== 'targets' && (
@@ -685,10 +688,7 @@ export function UnifiedForecastGrid({
             </div>
 
             {/* Grid */}
-            <div
-                className="rounded-xl border bg-card overflow-hidden shadow-sm"
-                style={{ height: `${height}px` }}
-            >
+            <div className="bg-card overflow-hidden rounded-xl border shadow-sm" style={{ height: `${height}px` }}>
                 <AgGridReact
                     ref={gridRef}
                     rowData={rowData}

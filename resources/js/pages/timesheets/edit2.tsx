@@ -336,7 +336,7 @@ export default function EditTimesheet() {
                                     />
                                 </TableCell>
                                 <TableCell>
-                                    <Link href={route('clocks.destroy', clock.id)} method="delete" as="button">
+                                    <Link href={route('clocks.delete', clock.id)} method="delete" as="button">
                                         <TrashIcon />
                                     </Link>
                                 </TableCell>

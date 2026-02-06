@@ -49,7 +49,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
         Log::info('LoadArProgressBillingSummaries: Job started');
 
         try {
-            $baseUrl = config('premier.api.base_url') . config('premier.endpoints.ar_progress_billing');
+            $baseUrl = config('premier.api.base_url').config('premier.endpoints.ar_progress_billing');
             $insertBatchSize = 100; // Smaller batch size for inserts due to many columns
             $pageSize = 200; // Smaller OData page size for API requests
             $skip = 0;
@@ -58,11 +58,11 @@ class LoadArProgressBillingSummaries implements ShouldQueue
 
             do {
                 // Fetch data in pages using OData $skip and $top
-                $url = $baseUrl . '?$top=' . $pageSize . '&$skip=' . $skip;
+                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
 
-                Log::info("LoadArProgressBillingSummaries: Fetching page", [
+                Log::info('LoadArProgressBillingSummaries: Fetching page', [
                     'skip' => $skip,
-                    'top' => $pageSize
+                    'top' => $pageSize,
                 ]);
 
                 $response = Http::timeout(config('premier.api.timeout', 300))
@@ -77,7 +77,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
                     ])
                     ->get($url);
 
-                if (!$response->successful()) {
+                if (! $response->successful()) {
                     throw new \RuntimeException(
                         "API request failed with status {$response->status()}: {$response->body()}"
                     );
@@ -87,7 +87,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
                 unset($response); // Free response memory immediately
 
                 // Validate response structure
-                if (!isset($json['d'])) {
+                if (! isset($json['d'])) {
                     throw new \RuntimeException('Invalid API response structure: missing "d" property');
                 }
 
@@ -95,7 +95,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
                 $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
                 unset($json); // Free json memory immediately
 
-                if (!is_array($rows)) {
+                if (! is_array($rows)) {
                     throw new \RuntimeException('Invalid API response: expected array of rows');
                 }
 
@@ -103,6 +103,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
 
                 if ($rowCount === 0 && $isFirstBatch) {
                     Log::warning('LoadArProgressBillingSummaries: ERP returned 0 rows, skipping database update');
+
                     return;
                 }
 
@@ -112,7 +113,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
 
                 Log::info('LoadArProgressBillingSummaries: Processing page', [
                     'rows' => $rowCount,
-                    'skip' => $skip
+                    'skip' => $skip,
                 ]);
 
                 // On first batch, delete all existing records
@@ -146,7 +147,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadArProgressBillingSummaries: Job completed successfully', [
                 'records_processed' => $totalProcessed,
-                'duration_seconds' => $duration
+                'duration_seconds' => $duration,
             ]);
 
         } catch (Throwable $e) {
@@ -170,19 +171,19 @@ class LoadArProgressBillingSummaries implements ShouldQueue
         $insertMs = null;
         $updateMs = null;
 
-        if (!empty($r['From_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['From_Date'], $m)) {
+        if (! empty($r['From_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['From_Date'], $m)) {
             $fromMs = (int) $m[1];
         }
 
-        if (!empty($r['Period_End_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Period_End_Date'], $m)) {
+        if (! empty($r['Period_End_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Period_End_Date'], $m)) {
             $periodMs = (int) $m[1];
         }
 
-        if (!empty($r['Insert_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Insert_Date'], $m)) {
+        if (! empty($r['Insert_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Insert_Date'], $m)) {
             $insertMs = (int) $m[1];
         }
 
-        if (!empty($r['Update_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Update_Date'], $m)) {
+        if (! empty($r['Update_Date']) && preg_match('/\/Date\((\d+)\)\//', $r['Update_Date'], $m)) {
             $updateMs = (int) $m[1];
         }
 
@@ -230,7 +231,7 @@ class LoadArProgressBillingSummaries implements ShouldQueue
     {
         Log::error('LoadArProgressBillingSummaries: Job failed permanently after all retries', [
             'error' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
         ]);
 
         // Here you could send notifications to administrators

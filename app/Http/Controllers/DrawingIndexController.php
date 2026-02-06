@@ -26,6 +26,7 @@ class DrawingIndexController extends Controller
             ->get()
             ->map(function ($sheet) {
                 $revision = $sheet->currentRevision;
+
                 return [
                     'id' => $sheet->id,
                     'sheet_number' => $sheet->sheet_number,

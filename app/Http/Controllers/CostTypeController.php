@@ -11,13 +11,15 @@ class CostTypeController extends Controller
     public function index()
     {
         $costTypes = CostType::all();
+
         return Inertia::render('costTypes/index', [
-            'costTypes' => $costTypes
+            'costTypes' => $costTypes,
         ]);
     }
+
     public function download()
     {
-        $fileName = 'costtypes_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'costtypes_'.now()->format('Ymd_His').'.csv';
         $headers = ['code', 'description'];
         $costTypes = CostType::select($headers)->get()->toArray();
 
@@ -31,6 +33,7 @@ class CostTypeController extends Controller
             fclose($handle);
         }, $fileName);
     }
+
     public function upload(Request $request)
     {
         // Validate uploaded file

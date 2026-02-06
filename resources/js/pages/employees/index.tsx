@@ -60,7 +60,7 @@ export default function EmployeesList() {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-1">
                         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <Users className="h-6 w-6 text-primary" />
+                            <Users className="text-primary h-6 w-6" />
                             Employees
                         </h1>
                         <p className="text-muted-foreground text-sm">
@@ -75,13 +75,13 @@ export default function EmployeesList() {
                         </div>
                         <div className="flex items-center gap-2">
                             <Link href="/employees/sync" method="get">
-                                <Button variant="outline" className="gap-2 transition-all hover:border-primary/50" onClick={() => setOpen(true)}>
+                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                     <RefreshCcw className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
                                     Sync Employees
                                 </Button>
                             </Link>
                             <Link href="/employees/worktypes/sync" method="get">
-                                <Button variant="outline" className="gap-2 transition-all hover:border-primary/50" onClick={() => setOpen(true)}>
+                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                     <RefreshCcw className="h-4 w-4" />
                                     Sync Worktypes
                                 </Button>
@@ -114,7 +114,7 @@ export default function EmployeesList() {
                                                 onClick={() => handleSort('name')}
                                             >
                                                 Employee
-                                                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </TableHead>
                                         <TableHead>
@@ -125,7 +125,7 @@ export default function EmployeesList() {
                                                 onClick={() => handleSort('external_id')}
                                             >
                                                 External ID
-                                                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </TableHead>
                                         <TableHead>
@@ -136,7 +136,7 @@ export default function EmployeesList() {
                                                 onClick={() => handleSort('eh_employee_id')}
                                             >
                                                 EH Employee ID
-                                                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </TableHead>
                                         <TableHead>Work Types</TableHead>
@@ -147,7 +147,7 @@ export default function EmployeesList() {
                                     {filteredEmployees.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="h-32 text-center">
-                                                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                     <Users className="h-8 w-8 opacity-40" />
                                                     <p>No employees found</p>
                                                     {searchQuery && (
@@ -160,7 +160,7 @@ export default function EmployeesList() {
                                         </TableRow>
                                     ) : (
                                         filteredEmployees.map((employee) => (
-                                            <TableRow key={employee.id} className="group transition-colors hover:bg-muted/50">
+                                            <TableRow key={employee.id} className="group hover:bg-muted/50 transition-colors">
                                                 <TableCell className="pl-6">
                                                     <UserInfo
                                                         user={{
@@ -174,20 +174,20 @@ export default function EmployeesList() {
                                                 </TableCell>
                                                 <TableCell>
                                                     {employee.external_id?.trim() ? (
-                                                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                                                             {employee.external_id}
                                                         </code>
                                                     ) : (
-                                                        <span className="text-sm italic text-muted-foreground">N/A</span>
+                                                        <span className="text-muted-foreground text-sm italic">N/A</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
                                                     {employee.eh_employee_id?.trim() ? (
-                                                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                                                             {employee.eh_employee_id}
                                                         </code>
                                                     ) : (
-                                                        <span className="text-sm italic text-muted-foreground">N/A</span>
+                                                        <span className="text-muted-foreground text-sm italic">N/A</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
@@ -209,7 +209,7 @@ export default function EmployeesList() {
                                                                             <TooltipTrigger asChild>
                                                                                 <Badge
                                                                                     variant="outline"
-                                                                                    className="cursor-pointer text-xs text-muted-foreground transition-all hover:bg-muted"
+                                                                                    className="text-muted-foreground hover:bg-muted cursor-pointer text-xs transition-all"
                                                                                 >
                                                                                     +{employee.worktypes.length - 2}
                                                                                 </Badge>
@@ -233,7 +233,7 @@ export default function EmployeesList() {
                                                                 )}
                                                             </>
                                                         ) : (
-                                                            <span className="text-sm italic text-muted-foreground">None assigned</span>
+                                                            <span className="text-muted-foreground text-sm italic">None assigned</span>
                                                         )}
                                                     </div>
                                                 </TableCell>

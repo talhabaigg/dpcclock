@@ -17,6 +17,7 @@ class LoadTimesheetsFromEH implements ShouldQueue
     use Queueable;
 
     public $weekEnding;
+
     /**
      * Create a new job instance.
      */
@@ -58,6 +59,7 @@ class LoadTimesheetsFromEH implements ShouldQueue
         ]);
         if ($validator->fails()) {
             Log::error('Timesheet data validation failed', ['errors' => $validator->errors()]);
+
             return;
         }
         $validatedData = $validator->validated();
@@ -98,12 +100,12 @@ class LoadTimesheetsFromEH implements ShouldQueue
                 'setout_allowance' => in_array($allowancesMap['setout_allowance'], $data['shiftConditionIds'] ?? [], true),
             ];
             $clock = Clock::query()
-                ->when($eh_timesheet_id, fn($q) => $q->orWhere('eh_timesheet_id', $eh_timesheet_id))
-                ->when($externalId, fn($q) => $q->orWhere('uuid', $externalId))
+                ->when($eh_timesheet_id, fn ($q) => $q->orWhere('eh_timesheet_id', $eh_timesheet_id))
+                ->when($externalId, fn ($q) => $q->orWhere('uuid', $externalId))
                 ->first();
 
             // Optional: last-resort fallback if both ids missing
-            if (!$clock && !$eh_timesheet_id && !$externalId && $clock_in) {
+            if (! $clock && ! $eh_timesheet_id && ! $externalId && $clock_in) {
                 $clock = Clock::where('eh_employee_id', $ehId)
                     ->where('clock_in', $clock_in->toDateTimeString())
                     ->first();
@@ -118,8 +120,8 @@ class LoadTimesheetsFromEH implements ShouldQueue
             }
         }
 
-
     }
+
     private function determineKioskId($locationId, $kiosks, $locations)
     {
         $location = $locations->firstWhere('eh_location_id', $locationId); // Load location model from eh id
@@ -128,6 +130,7 @@ class LoadTimesheetsFromEH implements ShouldQueue
         $kioskFromSelf = $location ? $kiosks->firstWhere('eh_location_id', $location->id) : null; // Load kiosk from self location if exists
 
         $kioskId = (int) ($kioskFromSub->eh_kiosk_id ?? $kioskFromSelf->eh_kiosk_id ?? 0); // Default to 0 if no kiosk found
+
         return $kioskId;
     }
 
@@ -136,6 +139,7 @@ class LoadTimesheetsFromEH implements ShouldQueue
         $tz = 'Australia/Brisbane';
         $weekEnd = Carbon::createFromFormat('d-m-Y', $this->weekEnding, $tz)->endOfDay();
         $weekStart = (clone $weekEnd)->subDays(6)->startOfDay();
+
         return [
             'from' => $weekStart->format('Y-m-d\TH:i:s'),
             'to' => $weekEnd->format('Y-m-d\TH:i:s'),
@@ -146,18 +150,18 @@ class LoadTimesheetsFromEH implements ShouldQueue
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Accept' => 'application/json',
         ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet', [
-                    '$filter' => $filter,
-                    '$orderby' => 'StartTime',
-                ]);
+            '$filter' => $filter,
+            '$orderby' => 'StartTime',
+        ]);
         if ($response->failed()) {
             Log::error('Timesheet sync failed', ['status' => $response->status(), 'body' => $response->body()]);
+
             return [];
         }
+
         return $response;
     }
-
-
 }

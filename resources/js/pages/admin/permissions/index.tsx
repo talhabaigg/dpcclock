@@ -1,15 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -66,8 +58,7 @@ export default function PermissionsIndex() {
 
     const filteredPermissions = permissions.filter((perm) => {
         const matchesSearch =
-            perm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            perm.description.toLowerCase().includes(searchQuery.toLowerCase());
+            perm.name.toLowerCase().includes(searchQuery.toLowerCase()) || perm.description.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || perm.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });
@@ -107,13 +98,9 @@ export default function PermissionsIndex() {
             <div className="m-4 space-y-4">
                 {/* Flash Messages */}
                 {flash.success && (
-                    <div className="rounded-md bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                        {flash.success}
-                    </div>
+                    <div className="rounded-md bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
                 )}
-                {flash.error && (
-                    <div className="rounded-md bg-red-50 p-4 text-red-800 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
-                )}
+                {flash.error && <div className="rounded-md bg-red-50 p-4 text-red-800 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>}
 
                 {/* Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -154,9 +141,7 @@ export default function PermissionsIndex() {
                                             placeholder="e.g., custom.feature"
                                             className="mt-1"
                                         />
-                                        {createForm.errors.name && (
-                                            <p className="mt-1 text-sm text-red-500">{createForm.errors.name}</p>
-                                        )}
+                                        {createForm.errors.name && <p className="mt-1 text-sm text-red-500">{createForm.errors.name}</p>}
                                     </div>
                                     <DialogFooter>
                                         <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
@@ -174,14 +159,9 @@ export default function PermissionsIndex() {
 
                 {/* Filters */}
                 <div className="flex gap-3">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Search..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10"
-                        />
+                    <div className="relative max-w-sm flex-1">
+                        <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                        <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
                     </div>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                         <SelectTrigger className="w-[180px]">
@@ -205,7 +185,7 @@ export default function PermissionsIndex() {
                             {index > 0 && <div className="border-t" />}
                             <div className="bg-muted/50 px-4 py-2">
                                 <span className="text-sm font-medium">{category}</span>
-                                <span className="ml-2 text-xs text-muted-foreground">({perms.length})</span>
+                                <span className="text-muted-foreground ml-2 text-xs">({perms.length})</span>
                             </div>
                             <div className="divide-y">
                                 {perms.map((perm) => (
@@ -219,29 +199,25 @@ export default function PermissionsIndex() {
                                                     </Badge>
                                                 )}
                                             </div>
-                                            <p className="mt-0.5 text-sm text-muted-foreground">{perm.description}</p>
+                                            <p className="text-muted-foreground mt-0.5 text-sm">{perm.description}</p>
                                         </div>
                                         <div className="ml-4 flex items-center gap-3">
                                             <div className="flex items-center gap-1">
                                                 {perm.roles.slice(0, 3).map((role) => (
-                                                    <Badge key={role} variant="outline" className="capitalize text-xs">
+                                                    <Badge key={role} variant="outline" className="text-xs capitalize">
                                                         {role}
                                                     </Badge>
                                                 ))}
                                                 {perm.roles.length > 3 && (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        +{perm.roles.length - 3}
-                                                    </span>
+                                                    <span className="text-muted-foreground text-xs">+{perm.roles.length - 3}</span>
                                                 )}
-                                                {perm.roles.length === 0 && (
-                                                    <span className="text-xs text-muted-foreground">No roles</span>
-                                                )}
+                                                {perm.roles.length === 0 && <span className="text-muted-foreground text-xs">No roles</span>}
                                             </div>
                                             {!perm.is_core && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                                    className="text-muted-foreground h-8 w-8 hover:text-red-500"
                                                     onClick={() => setDeleteConfirm(perm)}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -255,20 +231,18 @@ export default function PermissionsIndex() {
                     ))}
 
                     {filteredPermissions.length === 0 && (
-                        <div className="p-8 text-center text-muted-foreground">
-                            No permissions found matching your search.
-                        </div>
+                        <div className="text-muted-foreground p-8 text-center">No permissions found matching your search.</div>
                     )}
                 </Card>
 
                 {/* Quick Link */}
                 <Link href="/admin/roles" className="block">
-                    <Card className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50">
+                    <Card className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors">
                         <div>
                             <p className="font-medium">Need to assign permissions to roles?</p>
-                            <p className="text-sm text-muted-foreground">Go to Roles & Permissions to manage role assignments</p>
+                            <p className="text-muted-foreground text-sm">Go to Roles & Permissions to manage role assignments</p>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        <ChevronRight className="text-muted-foreground h-5 w-5" />
                     </Card>
                 </Link>
             </div>

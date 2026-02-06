@@ -19,8 +19,6 @@ class MaterialItemPriceListUpload extends Model
         'created_by',
     ];
 
-
-
     protected static function booted()
     {
         static::creating(function ($model) {

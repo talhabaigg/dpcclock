@@ -1,15 +1,7 @@
 // useVoiceCall Hook - OpenAI Realtime API voice call management
 import { useCallback, useRef, useState } from 'react';
 
-export type VoiceCallStatus =
-    | 'idle'
-    | 'connecting'
-    | 'connected'
-    | 'speaking'
-    | 'listening'
-    | 'processing'
-    | 'error'
-    | 'disconnected';
+export type VoiceCallStatus = 'idle' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'processing' | 'error' | 'disconnected';
 
 export interface VoiceCallEvent {
     type: 'transcript' | 'response' | 'tool_call' | 'error' | 'status';
@@ -66,7 +58,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             setStatus(newStatus);
             onStatusChange?.(newStatus);
         },
-        [onStatusChange]
+        [onStatusChange],
     );
 
     const handleDataChannelMessage = useCallback(
@@ -150,10 +142,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN':
-                                        document.querySelector<HTMLMetaElement>(
-                                            'meta[name="csrf-token"]'
-                                        )?.content || '',
+                                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                                 },
                                 body: JSON.stringify({
                                     tool_name: toolName,
@@ -174,14 +163,14 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                                             call_id: toolCallId,
                                             output: result.output,
                                         },
-                                    })
+                                    }),
                                 );
 
                                 // Trigger response generation
                                 dataChannelRef.current.send(
                                     JSON.stringify({
                                         type: 'response.create',
-                                    })
+                                    }),
                                 );
                             }
                         } catch (toolError) {
@@ -209,7 +198,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                 console.error('Error parsing data channel message:', err);
             }
         },
-        [onTranscript, onResponse, onToolCall, onError, updateStatus]
+        [onTranscript, onResponse, onToolCall, onError, updateStatus],
     );
 
     const startCall = useCallback(async () => {
@@ -221,9 +210,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN':
-                        document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                            ?.content || '',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                 },
             });
 
@@ -292,7 +279,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                                     modalities: ['text', 'audio'],
                                     instructions: 'Greet the user briefly and ask how you can help them today.',
                                 },
-                            })
+                            }),
                         );
                         updateStatus('listening');
                     }
@@ -353,9 +340,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN':
-                            document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                                ?.content || '',
+                        'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                     },
                     body: JSON.stringify({
                         voice_session_id: voiceSessionIdRef.current,

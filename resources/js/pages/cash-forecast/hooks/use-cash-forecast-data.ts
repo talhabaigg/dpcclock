@@ -1,17 +1,17 @@
-import { useMemo, useCallback, useEffect, useState } from 'react';
-import { formatMonthShort, WATERFALL_ORDER } from '../utils';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
-    MonthNode,
-    CashInSource,
+    CashFlowTotals,
     CashInAdjustment,
-    CashOutSource,
+    CashInSource,
     CashOutAdjustment,
+    CashOutSource,
     ChartDataPoint,
     CumulativeDataPoint,
-    WaterfallDataPoint,
-    CashFlowTotals,
     DataSource,
+    MonthNode,
+    WaterfallDataPoint,
 } from '../types';
+import { formatMonthShort, WATERFALL_ORDER } from '../utils';
 
 type UseCashForecastDataProps = {
     months: MonthNode[];
@@ -24,14 +24,7 @@ type UseCashForecastDataProps = {
 };
 
 export const useCashForecastData = (props: UseCashForecastDataProps) => {
-    const {
-        months,
-        cashInSources,
-        cashInAdjustments,
-        cashOutSources,
-        cashOutAdjustments,
-        costCodeDescriptions = {},
-    } = props;
+    const { months, cashInSources, cashInAdjustments, cashOutSources, cashOutAdjustments, costCodeDescriptions = {} } = props;
     // Calculate totals
     const totals = useMemo<CashFlowTotals>(() => {
         return months.reduce(
@@ -40,7 +33,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                 cashOut: sum.cashOut + (month.cash_out?.total ?? 0),
                 net: sum.net + (month.net ?? 0),
             }),
-            { cashIn: 0, cashOut: 0, net: 0 }
+            { cashIn: 0, cashOut: 0, net: 0 },
         );
     }, [months]);
 
@@ -92,11 +85,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
     }, [cashInAdjustments]);
 
     const cashOutAdjustmentVendors = useMemo(() => {
-        return new Set(
-            cashOutAdjustments.map(
-                (adjustment) => `${adjustment.cost_item}|${adjustment.vendor}`
-            )
-        );
+        return new Set(cashOutAdjustments.map((adjustment) => `${adjustment.cost_item}|${adjustment.vendor}`));
     }, [cashOutAdjustments]);
 
     // Get unique cost items for a flow type
@@ -115,7 +104,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([code, desc]) => ({ code, description: desc }));
         },
-        [months, costCodeDescriptions]
+        [months, costCodeDescriptions],
     );
 
     // Get all jobs for a cost item
@@ -133,7 +122,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                 .sort((a, b) => b[1] - a[1])
                 .map(([jobNumber, total]) => ({ jobNumber, total }));
         },
-        [months]
+        [months],
     );
 
     // Get all vendors for a cash out cost item
@@ -149,10 +138,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                     const vendorEntry = vendorMap.get(vendor.vendor)!;
                     vendorEntry.total += vendor.total;
                     vendor.jobs?.forEach((job) => {
-                        vendorEntry.jobs.set(
-                            job.job_number,
-                            (vendorEntry.jobs.get(job.job_number) ?? 0) + job.total
-                        );
+                        vendorEntry.jobs.set(job.job_number, (vendorEntry.jobs.get(job.job_number) ?? 0) + job.total);
                     });
                 });
             });
@@ -168,7 +154,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                         .map(([jobNumber, total]) => ({ jobNumber, total })),
                 }));
         },
-        [months]
+        [months],
     );
 
     // Get all jobs for cash out
@@ -188,20 +174,14 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
                 .sort((a, b) => b[1] - a[1])
                 .map(([jobNumber, total]) => ({ jobNumber, total }));
         },
-        [months]
+        [months],
     );
 
     // Get source data for a specific cost item in a month
     const getCostItemSourceData = useCallback(
-        (
-            month: string,
-            costItem: string,
-            flowType: 'cash_in' | 'cash_out'
-        ): { amount: number; source: DataSource | 'mixed' | undefined } => {
+        (month: string, costItem: string, flowType: 'cash_in' | 'cash_out'): { amount: number; source: DataSource | 'mixed' | undefined } => {
             if (flowType === 'cash_out') {
-                const sources = cashOutSources.filter(
-                    (s) => s.month === month && s.cost_item === costItem
-                );
+                const sources = cashOutSources.filter((s) => s.month === month && s.cost_item === costItem);
                 if (sources.length === 0) return { amount: 0, source: undefined };
 
                 const total = sources.reduce((sum, s) => sum + s.amount, 0);
@@ -221,7 +201,7 @@ export const useCashForecastData = (props: UseCashForecastDataProps) => {
             }
             return { amount: 0, source: undefined };
         },
-        [cashOutSources]
+        [cashOutSources],
     );
 
     return {
@@ -248,12 +228,7 @@ type UseWaterfallDataProps = {
     costTypeByCostItem: Record<string, string | null>;
 };
 
-export const useWaterfallData = ({
-    months,
-    startMonth,
-    endMonth,
-    costTypeByCostItem,
-}: UseWaterfallDataProps) => {
+export const useWaterfallData = ({ months, startMonth, endMonth, costTypeByCostItem }: UseWaterfallDataProps) => {
     const [waterfallStartMonth, setWaterfallStartMonth] = useState(startMonth);
     const [waterfallEndMonth, setWaterfallEndMonth] = useState(endMonth);
 
@@ -276,14 +251,8 @@ export const useWaterfallData = ({
     const waterfallData = useMemo<WaterfallDataPoint[]>(() => {
         if (!months.length) return [];
 
-        const start =
-            waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth
-                ? waterfallEndMonth
-                : waterfallStartMonth;
-        const end =
-            waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth
-                ? waterfallStartMonth
-                : waterfallEndMonth;
+        const start = waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth ? waterfallEndMonth : waterfallStartMonth;
+        const end = waterfallStartMonth && waterfallEndMonth && waterfallStartMonth > waterfallEndMonth ? waterfallStartMonth : waterfallEndMonth;
 
         const sums = new Map<string, number>();
         WATERFALL_ORDER.forEach((code) => sums.set(code, 0));
@@ -311,9 +280,7 @@ export const useWaterfallData = ({
 
                     const mappedType = costTypeByCostItem[costItemCode] ?? null;
                     const costType =
-                        mappedType && allowedTypes.has(mappedType as (typeof WATERFALL_ORDER)[number]) && mappedType !== 'REV'
-                            ? mappedType
-                            : 'UNM';
+                        mappedType && allowedTypes.has(mappedType as (typeof WATERFALL_ORDER)[number]) && mappedType !== 'REV' ? mappedType : 'UNM';
                     sums.set(costType, (sums.get(costType) ?? 0) - item.total);
                 });
             });

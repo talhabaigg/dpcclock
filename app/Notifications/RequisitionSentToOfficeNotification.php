@@ -14,13 +14,14 @@ class RequisitionSentToOfficeNotification extends Notification
     use Queueable;
 
     protected Requisition $requisition;
+
     protected ?User $sender;
 
     /**
      * Create a new notification instance.
      *
-     * @param Requisition $requisition The requisition sent to office
-     * @param User|null $sender The user who sent it to office
+     * @param  Requisition  $requisition  The requisition sent to office
+     * @param  User|null  $sender  The user who sent it to office
      */
     public function __construct(Requisition $requisition, ?User $sender = null)
     {
@@ -57,7 +58,7 @@ class RequisitionSentToOfficeNotification extends Notification
             ->body($data['body'])
             ->icon('/icon-192x192.png')
             ->badge('/icon-192x192.png')
-            ->tag('requisition-office-' . $this->requisition->id)
+            ->tag('requisition-office-'.$this->requisition->id)
             ->data(['url' => route('requisition.show', $this->requisition->id)])
             ->options(['TTL' => 86400]); // 24 hours
     }

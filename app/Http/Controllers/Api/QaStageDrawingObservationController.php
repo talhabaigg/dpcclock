@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\QaStageDrawing;
 use App\Models\QaStageDrawingObservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -47,8 +46,8 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/' . $validated['qa_stage_drawing_id'],
-                time() . '_' . $photoName,
+                'qa-drawing-observations/'.$validated['qa_stage_drawing_id'],
+                time().'_'.$photoName,
                 'public'
             );
         }
@@ -123,8 +122,8 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/' . $qaStageDrawingObservation->qa_stage_drawing_id,
-                time() . '_' . $photoName,
+                'qa-drawing-observations/'.$qaStageDrawingObservation->qa_stage_drawing_id,
+                time().'_'.$photoName,
                 'public'
             );
 

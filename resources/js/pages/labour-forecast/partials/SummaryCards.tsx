@@ -25,22 +25,13 @@ interface RemainingToForecastData {
 }
 
 interface SummaryCardsProps {
-    grandTotalHeadcount: number;
     grandTotalCost: number;
-    weeksCount: number;
-    weeksWithCost: number;
     remainingToForecast?: RemainingToForecastData | null;
     isBudgetLoading?: boolean;
+    onCostClick?: () => void;
 }
 
-export const SummaryCards = ({
-    grandTotalHeadcount,
-    grandTotalCost,
-    weeksCount,
-    weeksWithCost,
-    remainingToForecast,
-    isBudgetLoading,
-}: SummaryCardsProps) => {
+export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoading, onCostClick }: SummaryCardsProps) => {
     // Determine color based on remaining to forecast value
     const getRemainingColor = (value: number) => {
         if (value > 0) {
@@ -66,28 +57,18 @@ export const SummaryCards = ({
         };
     };
 
-    const remainingColors = remainingToForecast
-        ? getRemainingColor(remainingToForecast.remainingToForecast)
-        : getRemainingColor(0);
+    const remainingColors = remainingToForecast ? getRemainingColor(remainingToForecast.remainingToForecast) : getRemainingColor(0);
 
     return (
-        <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Person-Weeks</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{grandTotalHeadcount.toLocaleString()}</p>
-            </div>
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+        <div className="mb-4 grid grid-cols-2 gap-4">
+            <div
+                className={`rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20 ${onCostClick ? 'cursor-pointer transition-colors hover:bg-green-100 dark:hover:bg-green-900/30' : ''}`}
+                onClick={onCostClick}
+                title={onCostClick ? 'Click to view cost breakdown' : undefined}
+            >
                 <p className="text-xs font-medium text-green-600 dark:text-green-400">Total Labour Cost</p>
-                <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(grandTotalCost)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Forecast Weeks</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{weeksCount}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Avg Cost/Week</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                    {weeksWithCost > 0 ? formatCurrency(grandTotalCost / weeksWithCost) : '-'}
+                <p className={`mt-1 text-2xl font-bold text-green-700 dark:text-green-300 ${onCostClick ? 'hover:underline' : ''}`}>
+                    {formatCurrency(grandTotalCost)}
                 </p>
             </div>
             <Tooltip>

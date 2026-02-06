@@ -31,14 +31,15 @@ class QaStageDrawingController extends Controller
 
         $file = $request->file('file');
         $fileName = $file->getClientOriginalName();
-        $directory = 'qa-drawings/' . $qaStage->id;
+        $directory = 'qa-drawings/'.$qaStage->id;
 
         try {
             // Store file locally in public storage
-            $filePath = $file->storeAs($directory, time() . '_' . $fileName, 'public');
+            $filePath = $file->storeAs($directory, time().'_'.$fileName, 'public');
 
-            if (!$filePath) {
+            if (! $filePath) {
                 Log::error('Failed to upload file', ['fileName' => $fileName]);
+
                 return redirect()->back()->with('error', 'Failed to upload file.');
             }
 
@@ -72,7 +73,7 @@ class QaStageDrawingController extends Controller
                 $firstDrawing = null;
                 for ($page = 1; $page <= $pageCount; $page++) {
                     $pageName = $pageCount > 1
-                        ? $validated['name'] . " — Page {$page}"
+                        ? $validated['name']." — Page {$page}"
                         : $validated['name'];
 
                     $drawing = QaStageDrawing::create([
@@ -110,7 +111,8 @@ class QaStageDrawingController extends Controller
             return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             Log::error('Upload error', ['error' => $e->getMessage()]);
-            return redirect()->back()->with('error', 'Failed to upload: ' . $e->getMessage());
+
+            return redirect()->back()->with('error', 'Failed to upload: '.$e->getMessage());
         }
     }
 
@@ -120,12 +122,12 @@ class QaStageDrawingController extends Controller
     private function resolveDrawingSheet(QaStage $qaStage, array $validated): DrawingSheet
     {
         // If explicit drawing_sheet_id provided, use it
-        if (!empty($validated['drawing_sheet_id'])) {
+        if (! empty($validated['drawing_sheet_id'])) {
             return DrawingSheet::find($validated['drawing_sheet_id']);
         }
 
         // If sheet_number provided, find or create by sheet number
-        if (!empty($validated['sheet_number'])) {
+        if (! empty($validated['sheet_number'])) {
             return DrawingSheet::findOrCreateBySheetNumber(
                 $qaStage->id,
                 $validated['sheet_number'],
@@ -159,9 +161,11 @@ class QaStageDrawingController extends Controller
         try {
             $processingService = app(DrawingProcessingService::class);
             $dimensions = $processingService->extractPageDimensionsFromPath($filePath);
+
             return $dimensions['pages'] ?? 1;
         } catch (\Exception $e) {
             Log::warning("Could not determine page count: {$e->getMessage()}");
+
             // Default to 1 page if we can't determine
             return 1;
         }
@@ -196,13 +200,13 @@ class QaStageDrawingController extends Controller
         $storagePath = $drawing->drawingFile?->storage_path ?? $drawing->file_path;
         $fileName = $drawing->drawingFile?->original_name ?? $drawing->file_name;
 
-        if (!$storagePath) {
+        if (! $storagePath) {
             return redirect()->back()->with('error', 'No file associated with this drawing.');
         }
 
         $path = Storage::disk('public')->path($storagePath);
 
-        if (!file_exists($path)) {
+        if (! file_exists($path)) {
             return redirect()->back()->with('error', 'File not found.');
         }
 
@@ -273,7 +277,7 @@ class QaStageDrawingController extends Controller
     {
         $result = $metadataService->extractMetadata($drawing);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return response()->json([
                 'success' => false,
                 'message' => 'Metadata extraction failed',
@@ -342,7 +346,7 @@ class QaStageDrawingController extends Controller
     {
         $alignment = DrawingAlignment::findForPair($drawing->id, $candidateDrawing->id);
 
-        if (!$alignment) {
+        if (! $alignment) {
             return response()->json([
                 'success' => true,
                 'alignment' => null,

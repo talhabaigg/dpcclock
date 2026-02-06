@@ -3,20 +3,18 @@
 namespace App\Exports;
 
 use App\Models\Requisition;
-use App\Models\MaterialItem;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class RequisitionExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
+class RequisitionExport implements FromCollection, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithMapping, WithStyles
 {
     protected $requisition;
 
@@ -60,7 +58,7 @@ class RequisitionExport implements FromCollection, WithHeadings, WithMapping, Wi
             'GL Division',
             'GL SubAccount',
             'Tax Group',
-            'Discount %'
+            'Discount %',
         ];
     }
 
@@ -70,9 +68,9 @@ class RequisitionExport implements FromCollection, WithHeadings, WithMapping, Wi
         $index++;
 
         $requisition = $this->requisition;
-        
-        $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
-        
+
+        $lineItemValue = $lineItem->code ? $lineItem->code.'-'.$lineItem->description : $lineItem->description;
+
         return [
             'AP',
             'NEXT #',
@@ -101,7 +99,7 @@ class RequisitionExport implements FromCollection, WithHeadings, WithMapping, Wi
             '',
             '',
             'GST',
-            ''
+            '',
         ];
     }
 

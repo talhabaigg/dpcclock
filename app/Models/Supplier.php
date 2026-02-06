@@ -10,13 +10,14 @@ class Supplier extends Model
 
     protected $fillable = [
         'name',
-        'code'
+        'code',
     ];
 
     public function materialItems()
     {
         return $this->hasMany(MaterialItem::class);
     }
+
     public function costCodes()
     {
         return $this->hasMany(CostCode::class);

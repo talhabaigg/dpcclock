@@ -18,7 +18,7 @@ class VoiceCallController extends Controller
         try {
             $apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: env('VITE_OPEN_AI_API_KEY');
 
-            if (!$apiKey) {
+            if (! $apiKey) {
                 return response()->json(['error' => 'OpenAI API key is not configured'], 500);
             }
 
@@ -52,6 +52,7 @@ class VoiceCallController extends Controller
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
+
                 return response()->json([
                     'error' => 'Failed to create voice session',
                     'details' => $response->json(),
@@ -111,7 +112,7 @@ class VoiceCallController extends Controller
                 ->where('status', 'active')
                 ->first();
 
-            if (!$session) {
+            if (! $session) {
                 return response()->json(['error' => 'Session not found or already ended'], 404);
             }
 
@@ -165,7 +166,7 @@ class VoiceCallController extends Controller
 
             return response()->json([
                 'call_id' => $validated['call_id'],
-                'output' => json_encode(['error' => 'Tool execution failed: ' . $e->getMessage()]),
+                'output' => json_encode(['error' => 'Tool execution failed: '.$e->getMessage()]),
             ], 500);
         }
     }

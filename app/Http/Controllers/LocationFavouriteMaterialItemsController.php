@@ -29,7 +29,7 @@ class LocationFavouriteMaterialItemsController extends Controller
             $location = Location::where('external_id', $data['location_id'])->first();
             $material = MaterialItem::where('code', $data['code'])->first();
 
-            if (!$location || !$material) {
+            if (! $location || ! $material) {
                 continue;
             }
 
@@ -45,7 +45,7 @@ class LocationFavouriteMaterialItemsController extends Controller
 
         $uniqueLocationIds = array_unique($locationIds);
         $dataToInsert = collect($dataToInsert)
-            ->unique(fn($item) => $item['location_id'] . '-' . $item['material_item_id'])
+            ->unique(fn ($item) => $item['location_id'].'-'.$item['material_item_id'])
             ->values()
             ->toArray();
 
@@ -59,13 +59,13 @@ class LocationFavouriteMaterialItemsController extends Controller
             DB::table('location_favourite_materials')->insert($dataToInsert);
         });
 
-        return back()->with('success', "Imported " . count($dataToInsert) . " prices successfully.");
+        return back()->with('success', 'Imported '.count($dataToInsert).' prices successfully.');
     }
 
     public function downloadFavouriteMaterials($locationId)
     {
         $location = Location::findOrFail($locationId);
-        $fileName = 'location_favourite_items_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'location_favourite_items_'.$location->name.'_'.now()->format('Ymd_His').'.csv';
         $filePath = storage_path("app/{$fileName}");
 
         $handle = fopen($filePath, 'w');
@@ -87,6 +87,4 @@ class LocationFavouriteMaterialItemsController extends Controller
 
         return response()->download($filePath)->deleteFileAfterSend(true);
     }
-
-
 }

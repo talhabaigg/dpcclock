@@ -27,7 +27,7 @@ export default function PinNumpad({ onClick, disabled }: NumpadProps) {
                             'touch-manipulation select-none',
                             'active:scale-95',
                             !isSpecial && [
-                                'border-2 border-border bg-card shadow-sm',
+                                'border-border bg-card border-2 shadow-sm',
                                 'hover:border-primary/50 hover:bg-primary/5',
                                 'active:bg-primary/10 active:shadow-none',
                             ],

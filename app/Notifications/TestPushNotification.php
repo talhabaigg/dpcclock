@@ -12,6 +12,7 @@ class TestPushNotification extends Notification
     use Queueable;
 
     protected string $title;
+
     protected string $body;
 
     public function __construct(string $title = 'Test Notification', string $body = 'This is a test push notification from Clock Me In!')
@@ -40,7 +41,7 @@ class TestPushNotification extends Notification
             ->body($this->body)
             ->icon('/icon-192x192.png')
             ->badge('/icon-192x192.png')
-            ->tag('test-' . time())
+            ->tag('test-'.time())
             ->data(['url' => route('dashboard')])
             ->vibrate([100, 50, 100])
             ->options(['TTL' => 3600]); // 1 hour
