@@ -48,7 +48,7 @@ class QaStageDrawingObservationController extends Controller
             $photoPath = $photo->storeAs(
                 'qa-drawing-observations/'.$validated['qa_stage_drawing_id'],
                 time().'_'.$photoName,
-                'public'
+                's3'
             );
         }
 
@@ -76,7 +76,7 @@ class QaStageDrawingObservationController extends Controller
             ]);
 
             if ($photoPath) {
-                Storage::disk('public')->delete($photoPath);
+                Storage::disk('s3')->delete($photoPath);
             }
 
             return response()->json(['message' => 'Failed to save observation.'], 500);
@@ -110,7 +110,7 @@ class QaStageDrawingObservationController extends Controller
         // Handle photo removal
         if ($request->boolean('remove_photo')) {
             if ($qaStageDrawingObservation->photo_path) {
-                Storage::disk('public')->delete($qaStageDrawingObservation->photo_path);
+                Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
             }
             $photoPath = null;
             $photoName = null;
@@ -124,11 +124,11 @@ class QaStageDrawingObservationController extends Controller
             $photoPath = $photo->storeAs(
                 'qa-drawing-observations/'.$qaStageDrawingObservation->qa_stage_drawing_id,
                 time().'_'.$photoName,
-                'public'
+                's3'
             );
 
             if ($qaStageDrawingObservation->photo_path) {
-                Storage::disk('public')->delete($qaStageDrawingObservation->photo_path);
+                Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
             }
         }
 
@@ -161,7 +161,7 @@ class QaStageDrawingObservationController extends Controller
     public function destroy(QaStageDrawingObservation $qaStageDrawingObservation)
     {
         if ($qaStageDrawingObservation->photo_path) {
-            Storage::disk('public')->delete($qaStageDrawingObservation->photo_path);
+            Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
         }
 
         $qaStageDrawingObservation->delete();

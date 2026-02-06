@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class QaStageDrawingObservation extends Model
 {
@@ -117,6 +118,6 @@ class QaStageDrawingObservation extends Model
             return null;
         }
 
-        return '/storage/'.$this->photo_path;
+        return Storage::disk('s3')->temporaryUrl($this->photo_path, now()->addHour());
     }
 }
