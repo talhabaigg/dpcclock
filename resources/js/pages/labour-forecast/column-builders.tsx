@@ -407,7 +407,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
             if (params.data?.isTotal && params.data?.isPublicHolidayRow)
                 return 'font-bold text-center text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30';
             if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
-            if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
+            if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
             if (params.data?.isOrdinaryRow)
                 return 'text-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 font-medium';
             if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20';

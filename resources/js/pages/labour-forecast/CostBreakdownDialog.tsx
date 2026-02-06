@@ -13,6 +13,7 @@ interface CostBreakdownDialogProps {
     locationName: string;
     weekEnding?: string; // Optional: if not provided, uses current week
     forecastMonth?: string; // Optional: specify which forecast to read from (YYYY-MM format)
+    aggregate?: 'week' | 'month' | 'all'; // Optional: aggregate mode for monthly/project totals
 }
 
 interface CostBreakdown {
@@ -196,7 +197,7 @@ interface CostBreakdownData {
     templates: Template[];
 }
 
-export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationName, weekEnding, forecastMonth }: CostBreakdownDialogProps) => {
+export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationName, weekEnding, forecastMonth, aggregate }: CostBreakdownDialogProps) => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<CostBreakdownData | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -205,7 +206,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
         if (open && locationId) {
             fetchCostBreakdown();
         }
-    }, [open, locationId, weekEnding, forecastMonth]);
+    }, [open, locationId, weekEnding, forecastMonth, aggregate]);
 
     const fetchCostBreakdown = async () => {
         setLoading(true);
@@ -214,6 +215,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
             const params = new URLSearchParams();
             if (weekEnding) params.append('week_ending', weekEnding);
             if (forecastMonth) params.append('forecast_month', forecastMonth);
+            if (aggregate) params.append('aggregate', aggregate);
             const queryString = params.toString();
             const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
             const response = await axios.get(url);
@@ -423,7 +425,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                         <DollarSign className="text-primary h-5 w-5" />
                         Cost Breakdown - {locationName}
                     </DialogTitle>
-                    <DialogDescription>{data ? `Week ending ${data.week_ending}` : 'Detailed cost breakdown for current week'}</DialogDescription>
+                    <DialogDescription>{data ? data.week_ending : 'Detailed cost breakdown'}</DialogDescription>
                 </DialogHeader>
 
                 {loading && (
@@ -443,7 +445,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                         {/* Summary */}
                         <div className="grid grid-cols-3 gap-4 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/50">
                             <div>
-                                <p className="text-muted-foreground text-xs">Total Headcount</p>
+                                <p className="text-muted-foreground text-xs">{aggregate && aggregate !== 'week' ? 'Total Person-Weeks' : 'Total Headcount'}</p>
                                 <p className="text-lg font-semibold">{data.total_headcount.toFixed(1)}</p>
                             </div>
                             <div>
@@ -453,7 +455,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                 </p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground text-xs">Week Ending</p>
+                                <p className="text-muted-foreground text-xs">{aggregate && aggregate !== 'week' ? 'Period' : 'Week Ending'}</p>
                                 <p className="text-lg font-semibold">{data.week_ending}</p>
                             </div>
                         </div>
@@ -591,17 +593,19 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                     <div>
                                                         <h3 className="text-lg font-semibold">{template.label}</h3>
                                                         <p className="text-muted-foreground text-sm">
-                                                            Headcount: {template.headcount.toFixed(1)} | Hourly Rate:{' '}
+                                                            {aggregate && aggregate !== 'week' ? 'Person-Weeks' : 'Headcount'}: {template.headcount.toFixed(1)} | Hourly Rate:{' '}
                                                             {formatCurrency(template.hourly_rate)}
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-muted-foreground text-xs">Weekly Cost per Head</p>
+                                                        <p className="text-muted-foreground text-xs">{aggregate && aggregate !== 'week' ? 'Total Cost' : 'Weekly Cost per Head'}</p>
                                                         <p className="text-xl font-bold text-green-600 dark:text-green-400">
                                                             {formatCurrency(
-                                                                template.headcount > 0
-                                                                    ? template.weekly_cost / template.headcount
-                                                                    : template.weekly_cost,
+                                                                aggregate && aggregate !== 'week'
+                                                                    ? template.weekly_cost
+                                                                    : template.headcount > 0
+                                                                      ? template.weekly_cost / template.headcount
+                                                                      : template.weekly_cost,
                                                             )}
                                                         </p>
                                                     </div>
@@ -626,6 +630,14 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                             <p className="text-xs text-blue-600 dark:text-blue-400">Leave Hours</p>
                                                             <p className="font-semibold text-blue-600 dark:text-blue-400">
                                                                 {template.leave_hours.toFixed(1)} hrs
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    {template.rdo_hours > 0 && (
+                                                        <div>
+                                                            <p className="text-xs text-purple-600 dark:text-purple-400">RDO Hours</p>
+                                                            <p className="font-semibold text-purple-600 dark:text-purple-400">
+                                                                {template.rdo_hours.toFixed(1)} hrs
                                                             </p>
                                                         </div>
                                                     )}
@@ -1293,12 +1305,14 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
 
                                                 {/* Grand Total */}
                                                 <div className="mt-4 flex justify-between rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-                                                    <span className="text-lg font-bold">Total Weekly Cost (Per Head)</span>
+                                                    <span className="text-lg font-bold">{aggregate && aggregate !== 'week' ? 'Total Cost' : 'Total Weekly Cost (Per Head)'}</span>
                                                     <span className="text-xl font-bold text-green-600 dark:text-green-400">
                                                         {formatCurrency(
-                                                            template.headcount > 0
-                                                                ? calculatePerHeadCost(template.cost_breakdown) / template.headcount
-                                                                : calculatePerHeadCost(template.cost_breakdown),
+                                                            aggregate && aggregate !== 'week'
+                                                                ? calculatePerHeadCost(template.cost_breakdown)
+                                                                : template.headcount > 0
+                                                                  ? calculatePerHeadCost(template.cost_breakdown) / template.headcount
+                                                                  : calculatePerHeadCost(template.cost_breakdown),
                                                         )}
                                                     </span>
                                                 </div>
@@ -1306,7 +1320,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 {/* Total for headcount */}
                                                 {template.headcount > 0 && (
                                                     <div className="text-muted-foreground flex justify-between text-sm">
-                                                        <span>Total for {template.headcount.toFixed(1)} headcount:</span>
+                                                        <span>{aggregate && aggregate !== 'week' ? `Total for ${template.headcount.toFixed(1)} person-weeks:` : `Total for ${template.headcount.toFixed(1)} headcount:`}</span>
                                                         <span className="font-semibold">
                                                             {formatCurrency(calculatePerHeadCost(template.cost_breakdown))}
                                                         </span>

@@ -28,9 +28,10 @@ interface SummaryCardsProps {
     grandTotalCost: number;
     remainingToForecast?: RemainingToForecastData | null;
     isBudgetLoading?: boolean;
+    onCostClick?: () => void;
 }
 
-export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoading }: SummaryCardsProps) => {
+export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoading, onCostClick }: SummaryCardsProps) => {
     // Determine color based on remaining to forecast value
     const getRemainingColor = (value: number) => {
         if (value > 0) {
@@ -60,9 +61,15 @@ export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoad
 
     return (
         <div className="mb-4 grid grid-cols-2 gap-4">
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+            <div
+                className={`rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20 ${onCostClick ? 'cursor-pointer transition-colors hover:bg-green-100 dark:hover:bg-green-900/30' : ''}`}
+                onClick={onCostClick}
+                title={onCostClick ? 'Click to view cost breakdown' : undefined}
+            >
                 <p className="text-xs font-medium text-green-600 dark:text-green-400">Total Labour Cost</p>
-                <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(grandTotalCost)}</p>
+                <p className={`mt-1 text-2xl font-bold text-green-700 dark:text-green-300 ${onCostClick ? 'hover:underline' : ''}`}>
+                    {formatCurrency(grandTotalCost)}
+                </p>
             </div>
             <Tooltip>
                 <TooltipTrigger asChild>

@@ -883,9 +883,15 @@ class LabourForecastController extends Controller
 
     /**
      * Get detailed cost breakdown for a location and specific week
+     * Supports aggregate modes: 'week' (default), 'month', 'all'
      */
     public function getCostBreakdown(Request $request, Location $location)
     {
+        $aggregate = $request->query('aggregate', 'week');
+        if ($aggregate === 'month' || $aggregate === 'all') {
+            return $this->getAggregatedCostBreakdown($request, $location, $aggregate);
+        }
+
         // Get week ending from query param or default to current week
         $weekEndingParam = $request->query('week_ending');
         if ($weekEndingParam) {
@@ -1004,6 +1010,339 @@ class LabourForecastController extends Controller
             'total_cost' => $totalCost,
             'templates' => $templates,
         ]);
+    }
+
+    /**
+     * Get aggregated cost breakdown across multiple weeks (month or all forecasts)
+     */
+    private function getAggregatedCostBreakdown(Request $request, Location $location, string $mode)
+    {
+        $forecastMonthParam = $request->query('forecast_month');
+
+        if ($forecastMonthParam) {
+            $forecastMonth = Carbon::parse($forecastMonthParam)->startOfMonth();
+            $forecasts = LabourForecast::where('location_id', $location->id)
+                ->where('forecast_month', $forecastMonth)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->get();
+            $periodLabel = $mode === 'month'
+                ? $forecastMonth->format('F Y').' (Monthly Total)'
+                : 'Project Total (All Months)';
+        } else {
+            $forecasts = LabourForecast::where('location_id', $location->id)
+                ->with(['entries', 'entries.template', 'entries.template.payRateTemplate'])
+                ->get();
+            $periodLabel = 'Project Total (All Months)';
+        }
+
+        if ($forecasts->isEmpty()) {
+            return response()->json(['error' => 'No forecasts found for this location'], 404);
+        }
+
+        $allEntries = $forecasts->flatMap(fn ($f) => $f->entries);
+
+        // When aggregating by month, filter entries to only those whose week_ending falls within the requested month
+        if ($mode === 'month' && $forecastMonthParam) {
+            $monthStart = $forecastMonth->copy()->startOfMonth();
+            $monthEnd = $forecastMonth->copy()->endOfMonth();
+            $allEntries = $allEntries->filter(function ($entry) use ($monthStart, $monthEnd) {
+                return $entry->week_ending >= $monthStart && $entry->week_ending <= $monthEnd;
+            });
+        }
+
+        if ($allEntries->isEmpty()) {
+            return response()->json(['error' => 'No forecast entries found'], 404);
+        }
+
+        $grouped = $allEntries->groupBy('location_pay_rate_template_id');
+
+        $templates = [];
+        $grandTotalCost = 0;
+        $grandTotalHeadcount = 0;
+
+        foreach ($grouped as $templateId => $entries) {
+            $firstEntry = $entries->first();
+            $templateConfig = $firstEntry->template;
+            if (! $templateConfig) {
+                continue;
+            }
+
+            $totalPersonWeeks = 0;
+            $totalCost = 0;
+            $totalOtHours = 0;
+            $totalLeaveHours = 0;
+            $totalRdoHours = 0;
+            $totalPhHours = 0;
+            $aggregatedBreakdown = null;
+
+            foreach ($entries as $entry) {
+                $hc = (float) $entry->headcount;
+
+                $totalPersonWeeks += $hc;
+                // weekly_cost already includes headcount (snapshot total_weekly_cost is for full headcount)
+                $totalCost += (float) $entry->weekly_cost;
+                $totalOtHours += (float) ($entry->overtime_hours ?? 0);
+                $totalLeaveHours += (float) ($entry->leave_hours ?? 0);
+                $totalRdoHours += (float) ($entry->rdo_hours ?? 0);
+                $totalPhHours += (float) ($entry->public_holiday_not_worked_hours ?? 0);
+
+                // Snapshots already include headcount in their values (ordinary_hours = headcount * 40, etc.)
+                // Just sum them directly without scaling
+                $snapshot = $entry->cost_breakdown_snapshot ?? [];
+                if (! empty($snapshot)) {
+                    $aggregatedBreakdown = $aggregatedBreakdown
+                        ? $this->sumBreakdownSnapshots($aggregatedBreakdown, $snapshot)
+                        : $snapshot;
+                }
+            }
+
+            $templates[] = [
+                'id' => $templateConfig->id,
+                'label' => $templateConfig->custom_label ?: $templateConfig->payRateTemplate?->name ?? 'Unknown',
+                'headcount' => round($totalPersonWeeks, 1),
+                'overtime_hours' => round($totalOtHours, 1),
+                'leave_hours' => round($totalLeaveHours, 1),
+                'rdo_hours' => round($totalRdoHours, 1),
+                'public_holiday_not_worked_hours' => round($totalPhHours, 1),
+                'hourly_rate' => (float) $firstEntry->hourly_rate,
+                'weekly_cost' => round($totalCost, 2),
+                'cost_breakdown' => $aggregatedBreakdown ?? [],
+            ];
+
+            $grandTotalCost += $totalCost;
+            $grandTotalHeadcount += $totalPersonWeeks;
+        }
+
+        return response()->json([
+            'location' => [
+                'id' => $location->id,
+                'name' => $location->name,
+                'job_number' => $location->external_id,
+            ],
+            'week_ending' => $periodLabel,
+            'week_ending_date' => null,
+            'total_headcount' => round($grandTotalHeadcount, 1),
+            'total_cost' => round($grandTotalCost, 2),
+            'templates' => $templates,
+            'is_aggregate' => true,
+        ]);
+    }
+
+    /**
+     * Sum two breakdown snapshots together (all numeric monetary values are summed)
+     */
+    private function sumBreakdownSnapshots(array $a, array $b): array
+    {
+        $result = [];
+
+        // Top-level numeric fields
+        foreach (['headcount', 'ordinary_hours', 'overtime_hours', 'leave_hours', 'worked_hours', 'total_hours', 'total_weekly_cost'] as $key) {
+            $result[$key] = ($a[$key] ?? 0) + ($b[$key] ?? 0);
+        }
+        $result['base_hourly_rate'] = $a['base_hourly_rate'] ?? $b['base_hourly_rate'] ?? 0;
+
+        // Ordinary
+        $result['ordinary'] = $this->sumSections($a['ordinary'] ?? [], $b['ordinary'] ?? [],
+            ['base_wages', 'gross', 'annual_leave_markup', 'leave_loading_markup', 'marked_up']);
+        $result['ordinary']['allowances'] = $this->sumAllowances($a['ordinary']['allowances'] ?? [], $b['ordinary']['allowances'] ?? []);
+
+        // Overtime
+        if (isset($a['overtime']) || isset($b['overtime'])) {
+            $result['overtime'] = $this->sumSections($a['overtime'] ?? [], $b['overtime'] ?? [],
+                ['base_wages', 'gross', 'accruals_base', 'annual_leave_markup', 'leave_loading_markup', 'marked_up']);
+            $result['overtime']['multiplier'] = $a['overtime']['multiplier'] ?? $b['overtime']['multiplier'] ?? 0;
+            $result['overtime']['effective_rate'] = $a['overtime']['effective_rate'] ?? $b['overtime']['effective_rate'] ?? 0;
+            $result['overtime']['allowances'] = $this->sumAllowances($a['overtime']['allowances'] ?? [], $b['overtime']['allowances'] ?? []);
+        }
+
+        // Leave
+        if (isset($a['leave']) || isset($b['leave'])) {
+            $al = $a['leave'] ?? [];
+            $bl = $b['leave'] ?? [];
+            $result['leave'] = [
+                'hours' => ($al['hours'] ?? 0) + ($bl['hours'] ?? 0),
+                'days' => ($al['days'] ?? 0) + ($bl['days'] ?? 0),
+                'gross_wages' => ($al['gross_wages'] ?? 0) + ($bl['gross_wages'] ?? 0),
+                'leave_markups_job_costed' => $al['leave_markups_job_costed'] ?? $bl['leave_markups_job_costed'] ?? false,
+                'leave_markups' => [
+                    'annual_leave_accrual' => ($al['leave_markups']['annual_leave_accrual'] ?? 0) + ($bl['leave_markups']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($al['leave_markups']['leave_loading'] ?? 0) + ($bl['leave_markups']['leave_loading'] ?? 0),
+                    'total' => ($al['leave_markups']['total'] ?? 0) + ($bl['leave_markups']['total'] ?? 0),
+                ],
+                'oncosts' => $this->sumOncostSections($al['oncosts'] ?? [], $bl['oncosts'] ?? []),
+                'total_cost' => ($al['total_cost'] ?? 0) + ($bl['total_cost'] ?? 0),
+            ];
+        }
+
+        // RDO
+        if (isset($a['rdo']) || isset($b['rdo'])) {
+            $ar = $a['rdo'] ?? [];
+            $br = $b['rdo'] ?? [];
+            $result['rdo'] = [
+                'hours' => ($ar['hours'] ?? 0) + ($br['hours'] ?? 0),
+                'days' => ($ar['days'] ?? 0) + ($br['days'] ?? 0),
+                'gross_wages' => ($ar['gross_wages'] ?? 0) + ($br['gross_wages'] ?? 0),
+                'allowances' => $this->sumAllowances($ar['allowances'] ?? [], $br['allowances'] ?? []),
+                'accruals' => [
+                    'base' => ($ar['accruals']['base'] ?? 0) + ($br['accruals']['base'] ?? 0),
+                    'annual_leave_accrual' => ($ar['accruals']['annual_leave_accrual'] ?? 0) + ($br['accruals']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($ar['accruals']['leave_loading'] ?? 0) + ($br['accruals']['leave_loading'] ?? 0),
+                    'total' => ($ar['accruals']['total'] ?? 0) + ($br['accruals']['total'] ?? 0),
+                ],
+                'oncosts' => $this->sumOncostSections($ar['oncosts'] ?? [], $br['oncosts'] ?? []),
+                'total_cost' => ($ar['total_cost'] ?? 0) + ($br['total_cost'] ?? 0),
+            ];
+        }
+
+        // Public Holiday
+        if (isset($a['public_holiday_not_worked']) || isset($b['public_holiday_not_worked'])) {
+            $ap = $a['public_holiday_not_worked'] ?? [];
+            $bp = $b['public_holiday_not_worked'] ?? [];
+            $result['public_holiday_not_worked'] = [
+                'hours' => ($ap['hours'] ?? 0) + ($bp['hours'] ?? 0),
+                'days' => ($ap['days'] ?? 0) + ($bp['days'] ?? 0),
+                'gross_wages' => ($ap['gross_wages'] ?? 0) + ($bp['gross_wages'] ?? 0),
+                'accruals' => [
+                    'annual_leave_accrual' => ($ap['accruals']['annual_leave_accrual'] ?? 0) + ($bp['accruals']['annual_leave_accrual'] ?? 0),
+                    'leave_loading' => ($ap['accruals']['leave_loading'] ?? 0) + ($bp['accruals']['leave_loading'] ?? 0),
+                    'total' => ($ap['accruals']['total'] ?? 0) + ($bp['accruals']['total'] ?? 0),
+                ],
+                'marked_up' => ($ap['marked_up'] ?? 0) + ($bp['marked_up'] ?? 0),
+                'oncosts' => $this->sumOncostSections($ap['oncosts'] ?? [], $bp['oncosts'] ?? []),
+                'total_cost' => ($ap['total_cost'] ?? 0) + ($bp['total_cost'] ?? 0),
+            ];
+        }
+
+        // Worked hours oncosts
+        $result['oncosts'] = $this->sumWorkedOncosts($a['oncosts'] ?? [], $b['oncosts'] ?? []);
+
+        return $result;
+    }
+
+    /**
+     * Sum numeric fields in two section arrays
+     */
+    private function sumSections(array $a, array $b, array $numericKeys): array
+    {
+        $result = [];
+        foreach ($numericKeys as $key) {
+            $result[$key] = ($a[$key] ?? 0) + ($b[$key] ?? 0);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Sum two allowances sections
+     */
+    private function sumAllowances(array $a, array $b): array
+    {
+        $result = [];
+
+        foreach (['fares_travel', 'site', 'multistorey'] as $key) {
+            $aa = $a[$key] ?? [];
+            $bb = $b[$key] ?? [];
+            $result[$key] = [
+                'name' => $aa['name'] ?? $bb['name'] ?? null,
+                'rate' => $aa['rate'] ?? $bb['rate'] ?? 0,
+                'type' => $aa['type'] ?? $bb['type'] ?? '',
+                'amount' => ($aa['amount'] ?? 0) + ($bb['amount'] ?? 0),
+            ];
+            if (isset($aa['hours']) || isset($bb['hours'])) {
+                $result[$key]['hours'] = ($aa['hours'] ?? 0) + ($bb['hours'] ?? 0);
+            }
+            if (isset($aa['days']) || isset($bb['days'])) {
+                $result[$key]['days'] = ($aa['days'] ?? 0) + ($bb['days'] ?? 0);
+            }
+        }
+
+        // Merge custom allowances by matching name/code
+        $customA = $a['custom'] ?? [];
+        $customB = $b['custom'] ?? [];
+        $merged = [];
+        foreach ($customA as $item) {
+            $merged[$item['code'] ?? $item['name'] ?? ''] = $item;
+        }
+        foreach ($customB as $item) {
+            $key = $item['code'] ?? $item['name'] ?? '';
+            if (isset($merged[$key])) {
+                foreach (['ordinary_amount', 'overtime_amount', 'amount'] as $field) {
+                    if (isset($item[$field])) {
+                        $merged[$key][$field] = ($merged[$key][$field] ?? 0) + $item[$field];
+                    }
+                }
+            } else {
+                $merged[$key] = $item;
+            }
+        }
+        $result['custom'] = array_values($merged);
+        $result['total'] = ($a['total'] ?? 0) + ($b['total'] ?? 0);
+
+        return $result;
+    }
+
+    /**
+     * Sum two oncost sections (items matched by code)
+     */
+    private function sumOncostSections(array $a, array $b): array
+    {
+        $itemsA = $a['items'] ?? [];
+        $itemsB = $b['items'] ?? [];
+
+        $merged = [];
+        foreach ($itemsA as $item) {
+            $merged[$item['code'] ?? ''] = $item;
+        }
+        foreach ($itemsB as $item) {
+            $code = $item['code'] ?? '';
+            if (isset($merged[$code])) {
+                $merged[$code]['amount'] = ($merged[$code]['amount'] ?? 0) + ($item['amount'] ?? 0);
+                if (isset($item['hours'])) {
+                    $merged[$code]['hours'] = ($merged[$code]['hours'] ?? 0) + ($item['hours'] ?? 0);
+                }
+            } else {
+                $merged[$code] = $item;
+            }
+        }
+
+        return [
+            'items' => array_values($merged),
+            'fixed_total' => ($a['fixed_total'] ?? 0) + ($b['fixed_total'] ?? 0),
+            'percentage_total' => ($a['percentage_total'] ?? 0) + ($b['percentage_total'] ?? 0),
+            'total' => ($a['total'] ?? 0) + ($b['total'] ?? 0),
+        ];
+    }
+
+    /**
+     * Sum two worked-hours oncost sections (items matched by code)
+     */
+    private function sumWorkedOncosts(array $a, array $b): array
+    {
+        $itemsA = $a['items'] ?? [];
+        $itemsB = $b['items'] ?? [];
+
+        $merged = [];
+        foreach ($itemsA as $item) {
+            $merged[$item['code'] ?? ''] = $item;
+        }
+        foreach ($itemsB as $item) {
+            $code = $item['code'] ?? '';
+            if (isset($merged[$code])) {
+                $merged[$code]['amount'] = ($merged[$code]['amount'] ?? 0) + ($item['amount'] ?? 0);
+                if (isset($item['hours_applied'])) {
+                    $merged[$code]['hours_applied'] = ($merged[$code]['hours_applied'] ?? 0) + ($item['hours_applied'] ?? 0);
+                }
+            } else {
+                $merged[$code] = $item;
+            }
+        }
+
+        return [
+            'items' => array_values($merged),
+            'worked_hours_total' => ($a['worked_hours_total'] ?? 0) + ($b['worked_hours_total'] ?? 0),
+            'leave_hours_total' => ($a['leave_hours_total'] ?? 0) + ($b['leave_hours_total'] ?? 0),
+            'total' => ($a['total'] ?? 0) + ($b['total'] ?? 0),
+        ];
     }
 
     /**

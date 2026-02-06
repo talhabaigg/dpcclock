@@ -197,8 +197,8 @@ export const SettingsDialog = ({
                                                     forecast grid
                                                 </li>
                                                 <li>
-                                                    <span className="font-medium">Leave Markups Job Costed</span> - Enable to include leave markups in
-                                                    job costing
+                                                    <span className="font-medium">Leave Markups Job Costed</span> - Enable if leave accruals are charged
+                                                    to the job, disable if they are absorbed as company overhead
                                                 </li>
                                             </ul>
                                         </div>
@@ -596,10 +596,9 @@ export const SettingsDialog = ({
                                                         </span>
                                                     </TooltipTrigger>
                                                     <TooltipContent side="top" className="max-w-xs">
-                                                        <p className="text-xs">
-                                                            When disabled (default), only oncosts are job costed for leave hours. When enabled, leave
-                                                            markups (annual leave accrual + leave loading) are also job costed.
-                                                        </p>
+                                                        <p className="text-xs font-medium mb-1">Controls whether leave markups (annual leave accrual + leave loading) are charged to the job.</p>
+                                                        <p className="text-xs mb-1"><span className="font-medium">Enable</span> if leave accrual costs should be charged directly to the job. This adds annual leave and leave loading markups to the job cost.</p>
+                                                        <p className="text-xs"><span className="font-medium">Disable</span> (default) if leave accruals are absorbed as overhead. Only oncosts (workers comp, payroll tax, super) will be job costed for leave hours.</p>
                                                     </TooltipContent>
                                                 </Tooltip>
                                                 <Switch

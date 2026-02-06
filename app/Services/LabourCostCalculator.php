@@ -413,8 +413,8 @@ class LabourCostCalculator
         $bewt = self::BEWT_WEEKLY;
         $cipq = self::CIPQ_WEEKLY;
 
-        // Percentage-based on-costs (on marked-up wages + super)
-        $taxableBase = $markedUpWages + $super;
+        // Percentage-based on-costs (on gross wages + super)
+        $taxableBase = $grossWages + $super;
         $payrollTax = $taxableBase * self::PAYROLL_TAX_RATE;
         $workcover = $taxableBase * self::WORKCOVER_RATE;
 
@@ -643,8 +643,8 @@ class LabourCostCalculator
             $superAmount = (float) $superOncost['hourly_rate'] * $ordinaryHours;
         }
 
-        // Taxable base includes both ordinary and overtime marked up amounts + super
-        $taxableBase = $ordinaryMarkedUp + $overtimeMarkedUp + $superAmount;
+        // Taxable base = gross wages + allowances + super (not marked-up wages)
+        $taxableBase = $ordinaryGross + $overtimeGross + $superAmount;
 
         foreach ($oncosts as $oncost) {
             $amount = 0;
@@ -719,18 +719,24 @@ class LabourCostCalculator
                 }
             }
 
-            // Calculate percentage oncosts on the gross wages paid from accruals
-            // Base for percentage oncosts is the gross wages (no super added for leave)
+            // Calculate percentage oncosts on the gross wages + super
+            // Super is calculated on leave hours at the same hourly rate as ordinary hours
+            $leaveSuperAmount = 0;
+            if ($superOncost && ! $superOncost['is_percentage']) {
+                $leaveSuperAmount = (float) $superOncost['hourly_rate'] * $leaveHours;
+            }
+            $leaveTaxableBase = $leaveGrossWages + $leaveSuperAmount;
+
             foreach ($oncosts as $oncost) {
                 if ($oncost['is_percentage']) {
-                    $leaveAmount = $leaveGrossWages * (float) $oncost['percentage_rate'];
+                    $leaveAmount = $leaveTaxableBase * (float) $oncost['percentage_rate'];
                     $leavePercentageOncosts += $leaveAmount;
 
                     $leaveOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($leaveGrossWages, 2),
+                        'base' => round($leaveTaxableBase, 2),
                         'amount' => round($leaveAmount, 2),
                     ];
                 }
@@ -815,15 +821,21 @@ class LabourCostCalculator
                         'amount' => round($amount, 2),
                     ];
                 } else {
-                    // Percentage oncost on the accruals total
-                    $amount = $rdoAccrualsTotal * (float) $oncost['percentage_rate'];
+                    // Percentage oncost on accruals total + super
+                    $rdoSuperAmount = 0;
+                    if ($superOncost && ! $superOncost['is_percentage']) {
+                        $rdoSuperAmount = (float) $superOncost['hourly_rate'] * $rdoHours;
+                    }
+                    $rdoTaxableBase = $rdoAccrualsTotal + $rdoSuperAmount;
+
+                    $amount = $rdoTaxableBase * (float) $oncost['percentage_rate'];
                     $rdoPercentageOncosts += $amount;
 
                     $rdoOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($rdoAccrualsTotal, 2),
+                        'base' => round($rdoTaxableBase, 2),
                         'amount' => round($amount, 2),
                     ];
                 }
@@ -876,15 +888,21 @@ class LabourCostCalculator
                         'amount' => round($amount, 2),
                     ];
                 } else {
-                    // Percentage oncost on marked up wages
-                    $amount = $phMarkedUp * (float) $oncost['percentage_rate'];
+                    // Percentage oncost on marked up wages + super
+                    $phSuperAmount = 0;
+                    if ($superOncost && ! $superOncost['is_percentage']) {
+                        $phSuperAmount = (float) $superOncost['hourly_rate'] * $publicHolidayNotWorkedHours;
+                    }
+                    $phTaxableBase = $phMarkedUp + $phSuperAmount;
+
+                    $amount = $phTaxableBase * (float) $oncost['percentage_rate'];
                     $phPercentageOncosts += $amount;
 
                     $phOncostDetails[] = [
                         'code' => $oncost['code'],
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
-                        'base' => round($phMarkedUp, 2),
+                        'base' => round($phTaxableBase, 2),
                         'amount' => round($amount, 2),
                     ];
                 }

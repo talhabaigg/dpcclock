@@ -102,6 +102,8 @@ const LabourForecastShow = ({
     const [chartOpen, setChartOpen] = useState(false);
     const [weekCostBreakdownOpen, setWeekCostBreakdownOpen] = useState(false);
     const [selectedWeekForCost, setSelectedWeekForCost] = useState<string | null>(null);
+    const [monthlyCostBreakdownOpen, setMonthlyCostBreakdownOpen] = useState(false);
+    const [projectCostBreakdownOpen, setProjectCostBreakdownOpen] = useState(false);
 
     // ========================================================================
     // STATE: Workflow & Saving
@@ -1064,6 +1066,7 @@ const LabourForecastShow = ({
                                 grandTotalCost={grandTotalCost}
                                 remainingToForecast={remainingToForecast}
                                 isBudgetLoading={isBudgetLoading}
+                                onCostClick={() => setProjectCostBreakdownOpen(true)}
                             />
                         )}
 
@@ -1092,6 +1095,16 @@ const LabourForecastShow = ({
                                 setSelectedWeekForCost(weekEnding);
                                 setWeekCostBreakdownOpen(true);
                             }}
+                            onOpenMonthlyCostBreakdown={() => {
+                                // Open cost breakdown for the first week in the selected month
+                                const monthWeek = weeks.find((w) => w.weekEnding.substring(0, 7) === selectedMonth);
+                                if (monthWeek) {
+                                    setSelectedWeekForCost(monthWeek.weekEnding);
+                                } else if (weeks.length > 0) {
+                                    setSelectedWeekForCost(weeks[0].weekEnding);
+                                }
+                                setMonthlyCostBreakdownOpen(true);
+                            }}
                         />
                     </>
                 )}
@@ -1107,6 +1120,26 @@ const LabourForecastShow = ({
                         forecastMonth={selectedMonth}
                     />
                 )}
+
+                {/* Monthly Cost Breakdown Dialog */}
+                <CostBreakdownDialog
+                    open={monthlyCostBreakdownOpen}
+                    onOpenChange={setMonthlyCostBreakdownOpen}
+                    locationId={location.id}
+                    locationName={location.name}
+                    forecastMonth={selectedMonth}
+                    aggregate="month"
+                />
+
+                {/* Project Total Cost Breakdown Dialog */}
+                <CostBreakdownDialog
+                    open={projectCostBreakdownOpen}
+                    onOpenChange={setProjectCostBreakdownOpen}
+                    locationId={location.id}
+                    locationName={location.name}
+                    forecastMonth={selectedMonth}
+                    aggregate="all"
+                />
             </div>
         </AppLayout>
     );

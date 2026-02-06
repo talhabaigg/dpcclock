@@ -51,6 +51,8 @@ interface ForecastGridProps {
     onCellValueChanged: (event: CellValueChangedEvent) => void;
     // Week cost breakdown dialog
     onOpenWeekCostBreakdown: (weekEnding: string) => void;
+    // Monthly cost breakdown dialog (triggered from Month Total cell)
+    onOpenMonthlyCostBreakdown: () => void;
 }
 
 export const ForecastGrid = ({
@@ -67,6 +69,7 @@ export const ForecastGrid = ({
     onFillRight,
     onCellValueChanged,
     onOpenWeekCostBreakdown,
+    onOpenMonthlyCostBreakdown,
 }: ForecastGridProps) => {
     // Check if a parent row has child rows
     const hasChildRows = useCallback(() => {
@@ -127,6 +130,12 @@ export const ForecastGrid = ({
                 return;
             }
 
+            // Check if clicking on cost row in the Month Total column
+            if (event.data?.isCostRow && event.colDef.field === 'monthTotal') {
+                onOpenMonthlyCostBreakdown();
+                return;
+            }
+
             // Only track week cells that are editable
             if (!event.colDef.field?.startsWith('week_')) {
                 onCellSelected(null);
@@ -148,7 +157,7 @@ export const ForecastGrid = ({
                 workType: event.data.workType,
             });
         },
-        [weeks, onCellSelected, onOpenWeekCostBreakdown],
+        [weeks, onCellSelected, onOpenWeekCostBreakdown, onOpenMonthlyCostBreakdown],
     );
 
     return (
