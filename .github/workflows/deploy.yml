@@ -44,7 +44,7 @@ jobs:
             composer install --no-dev --no-interaction --optimize-autoloader
 
             # Install and build frontend assets
-            npm ci
+            npm ci --legacy-peer-deps
             npm run build
 
             # Run migrations
