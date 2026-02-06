@@ -208,7 +208,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:timesheets.convert');
     Route::post('/timesheets-converter/upload', [ClockController::class, 'convertTimesheets'])->name('timesheets.converter.convert')
         ->middleware('permission:timesheets.convert');
-    Route::delete('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.destroy')
+    Route::delete('/clocks/{clock}/delete', [ClockController::class, 'destroy'])->name('clocks.delete')
         ->middleware('permission:clocks.delete');
 
     // ============================================
@@ -412,7 +412,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // FORECASTING
     // ============================================
     Route::middleware('permission:forecast.view')->group(function () {
-        Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobData');
+        Route::get('/location/{location}/job-data', [LocationController::class, 'LoadJobDataFromPremier'])->name('locations.loadJobDataFromPremier');
         Route::get('/location/{location}/job-forecast', [JobForecastController::class, 'show'])->name('jobForecast.show');
         Route::get('/location/{location}/job-forecast/labour-costs', [JobForecastController::class, 'getLabourCostsForJobForecast'])->name('jobForecast.labourCosts');
         Route::get('/location/{location}/compare-forecast-actuals', [JobForecastController::class, 'compareForecast'])->name('forecast.compareForecast');
