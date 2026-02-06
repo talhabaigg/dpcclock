@@ -1,8 +1,8 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Hand, Maximize, MinusCircle, MousePointer, PlusCircle, RotateCcw } from 'lucide-react';
+import { Hand, Loader2, Maximize, MinusCircle, MousePointer, PlusCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { Button } from './ui/button';
 
 export type Observation = {
@@ -29,7 +29,10 @@ type TileInfo = {
 };
 
 type LeafletDrawingViewerProps = {
-    tiles: TileInfo;
+    tiles?: TileInfo;
+    imageUrl?: string;
+    comparisonImageUrl?: string;
+    comparisonOpacity?: number;
     observations?: Observation[];
     selectedObservationIds?: Set<number>;
     viewMode?: 'pan' | 'select';
@@ -267,6 +270,9 @@ function MapControlsInternal({
 
 export function LeafletDrawingViewer({
     tiles,
+    imageUrl,
+    comparisonImageUrl,
+    comparisonOpacity = 50,
     observations = [],
     selectedObservationIds = new Set(),
     viewMode = 'pan',
@@ -275,34 +281,64 @@ export function LeafletDrawingViewer({
     className = '',
 }: LeafletDrawingViewerProps) {
     const [internalViewMode, setInternalViewMode] = useState<'pan' | 'select'>(viewMode);
+    const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
     // Update internal state when prop changes
     useEffect(() => {
         setInternalViewMode(viewMode);
     }, [viewMode]);
 
+    // Preload image to get dimensions when using image mode (no tiles)
+    useEffect(() => {
+        if (tiles || !imageUrl) {
+            setImageDimensions(null);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => console.error('Failed to load drawing image');
+        img.src = imageUrl;
+        return () => {
+            img.onload = null;
+            img.onerror = null;
+        };
+    }, [imageUrl, tiles]);
+
+    // Determine image dimensions from tiles or preloaded image
+    const imageWidth = tiles ? tiles.width : imageDimensions?.width ?? 0;
+    const imageHeight = tiles ? tiles.height : imageDimensions?.height ?? 0;
+
     // Calculate bounds based on image dimensions
-    // Using CRS.Simple where coordinates are pixels
     const bounds: L.LatLngBoundsExpression = useMemo(() => {
         return [
             [0, 0],
-            [tiles.height, tiles.width],
+            [imageHeight, imageWidth],
         ];
-    }, [tiles.height, tiles.width]);
+    }, [imageHeight, imageWidth]);
 
     // Calculate appropriate min/max zoom levels
     const { minZoom, maxZoom } = useMemo(() => {
-        // Calculate min zoom where entire image fits
-        const minZ = 0;
-        const maxZ = tiles.maxZoom;
-        return { minZoom: minZ, maxZoom: maxZ };
-    }, [tiles.maxZoom]);
+        if (tiles) return { minZoom: 0, maxZoom: tiles.maxZoom };
+        return { minZoom: -5, maxZoom: 4 };
+    }, [tiles]);
 
     // Tile URL function
     const tileUrl = useMemo(() => {
-        // Pattern: {baseUrl}/{z}/{x}_{y}.jpg
+        if (!tiles) return '';
         return `${tiles.baseUrl}/{z}/{x}_{y}.jpg`;
-    }, [tiles.baseUrl]);
+    }, [tiles]);
+
+    // Show loading state when waiting for image dimensions
+    if (!tiles && !imageDimensions) {
+        return (
+            <div className={`relative w-full h-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 ${className}`}>
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading drawing...
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`relative w-full h-full ${className}`}>
@@ -317,21 +353,33 @@ export function LeafletDrawingViewer({
                 className="w-full h-full"
                 style={{ background: '#f5f5f5' }}
             >
-                <TileLayer
-                    url={tileUrl}
-                    tileSize={tiles.tileSize}
-                    noWrap={true}
-                    bounds={bounds}
-                    minZoom={minZoom}
-                    maxZoom={maxZoom}
-                />
+                {tiles ? (
+                    <TileLayer
+                        url={tileUrl}
+                        tileSize={tiles.tileSize}
+                        noWrap={true}
+                        bounds={bounds}
+                        minZoom={minZoom}
+                        maxZoom={maxZoom}
+                    />
+                ) : imageUrl ? (
+                    <ImageOverlay url={imageUrl} bounds={bounds} />
+                ) : null}
+
+                {comparisonImageUrl && (
+                    <ImageOverlay
+                        url={comparisonImageUrl}
+                        bounds={bounds}
+                        opacity={comparisonOpacity / 100}
+                    />
+                )}
 
                 <MapEventHandler
                     observations={observations}
                     selectedObservationIds={selectedObservationIds}
                     viewMode={internalViewMode}
-                    imageHeight={tiles.height}
-                    imageWidth={tiles.width}
+                    imageHeight={imageHeight}
+                    imageWidth={imageWidth}
                     onObservationClick={onObservationClick}
                     onMapClick={onMapClick}
                 />

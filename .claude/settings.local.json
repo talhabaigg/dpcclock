@@ -76,7 +76,9 @@
       "Bash(git log:*)",
       "Bash(grep:*)",
       "Bash(npx prettier:*)",
-      "Bash(vendor\\\\bin\\\\pint:*)"
+      "Bash(vendor\\\\bin\\\\pint:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx vite build)"
     ]
   }
 }
