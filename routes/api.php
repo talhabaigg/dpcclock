@@ -50,7 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/requisition/update-status', [PurchasingController::class, 'updateStatusFromPowerAutomate'])
-        ->name('requisition.updateStatusFromPowerAutomate');
+        ->name('api.requisition.updateStatusFromPowerAutomate');
 
     Route::post('/chat', [ChatController::class, 'handle'])->name('api.chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream']);
@@ -61,8 +61,8 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json(['message' => 'Logged out successfully']);
     });
 
-    Route::apiResource('qa-stages', QaStageController::class);
-    Route::apiResource('qa-stage-drawings', QaStageDrawingController::class);
+    Route::apiResource('qa-stages', QaStageController::class)->names('api.qa-stages');
+    Route::apiResource('qa-stage-drawings', QaStageDrawingController::class)->names('api.qa-stage-drawings');
 
     // Drawing revision and comparison endpoints
     Route::get('qa-stage-drawings/{qaStageDrawing}/thumbnail', [QaStageDrawingController::class, 'thumbnail'])
@@ -80,7 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('qa-stage-drawings/{qaStageDrawing}/metadata', [QaStageDrawingController::class, 'metadata'])
         ->name('qa-stage-drawings.metadata');
     Route::post('qa-stage-drawings/{qaStageDrawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])
-        ->name('qa-stage-drawings.extract-metadata');
+        ->name('api.qa-stage-drawings.extract-metadata');
     Route::post('qa-stage-drawings/{qaStageDrawing}/confirm-metadata', [QaStageDrawingController::class, 'confirmMetadata'])
         ->name('qa-stage-drawings.confirm-metadata');
 
