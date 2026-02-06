@@ -31,8 +31,8 @@ export default function ForgotPinLink({ eh_employee_id, eh_kiosk_id }: ForgotPin
                 <button
                     type="button"
                     className={cn(
-                        'flex items-center gap-1.5 text-sm text-muted-foreground',
-                        'transition-colors hover:text-primary',
+                        'text-muted-foreground flex items-center gap-1.5 text-sm',
+                        'hover:text-primary transition-colors',
                         'touch-manipulation',
                     )}
                 >
@@ -49,10 +49,7 @@ export default function ForgotPinLink({ eh_employee_id, eh_kiosk_id }: ForgotPin
                 </AlertDialogHeader>
                 <AlertDialogFooter className="gap-2 sm:gap-0">
                     <AlertDialogCancel className="touch-manipulation">Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={handleResetPin}
-                        className="touch-manipulation bg-primary hover:bg-primary/90"
-                    >
+                    <AlertDialogAction onClick={handleResetPin} className="bg-primary hover:bg-primary/90 touch-manipulation">
                         Reset PIN
                     </AlertDialogAction>
                 </AlertDialogFooter>

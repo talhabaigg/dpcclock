@@ -46,7 +46,6 @@ DESC;
      * Execute the tool call.
      *
      * @param  array<string, mixed>  $arguments
-     * @return ToolResult|Generator
      */
     public function handle(array $arguments): ToolResult|Generator
     {
@@ -62,7 +61,7 @@ DESC;
             ])
             ->find($requisitionId);
 
-        if (!$requisition) {
+        if (! $requisition) {
             return ToolResult::text(
                 "No requisition was found with id {$requisitionId}."
             );

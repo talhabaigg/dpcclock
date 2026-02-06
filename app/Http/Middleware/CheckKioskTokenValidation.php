@@ -25,7 +25,7 @@ class CheckKioskTokenValidation
         // Check for valid kiosk session access
         $access = Session::get('kiosk_access');
 
-        if (!$access) {
+        if (! $access) {
             return Inertia::render('kiosks/error/invalid-qr', [
                 'error' => 'Please scan the QR code to access this kiosk.',
             ]);
@@ -34,6 +34,7 @@ class CheckKioskTokenValidation
         // Check if session has expired
         if (now()->isAfter($access['expires_at'])) {
             Session::forget('kiosk_access');
+
             return Inertia::render('kiosks/error/invalid-qr', [
                 'error' => 'Your session has expired. Please scan the QR code again.',
             ]);
@@ -67,7 +68,7 @@ class CheckKioskTokenValidation
             $requestedKioskDbId = (int) $bodyKioskId;
         }
 
-        if (!$requestedKioskDbId) {
+        if (! $requestedKioskDbId) {
             return Inertia::render('kiosks/error/invalid-qr', [
                 'error' => 'Kiosk not found.',
             ]);

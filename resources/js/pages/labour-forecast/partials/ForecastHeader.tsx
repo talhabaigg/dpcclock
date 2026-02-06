@@ -19,18 +19,7 @@
 
 import { Button } from '@/components/ui/button';
 import { router } from '@inertiajs/react';
-import {
-    BarChart3,
-    Check,
-    ChevronLeft,
-    ChevronRight,
-    Copy,
-    Loader2,
-    Save,
-    Send,
-    Settings,
-    X,
-} from 'lucide-react';
+import { BarChart3, Check, ChevronLeft, ChevronRight, Copy, Loader2, Save, Send, Settings, X } from 'lucide-react';
 import type { SavedForecast } from '../types';
 import { formatMonthDisplay } from './utils';
 
@@ -127,32 +116,18 @@ export const ForecastHeader = ({
                                 {savedForecast.status.charAt(0).toUpperCase() + savedForecast.status.slice(1)}
                             </span>
                         )}
-                        {hasUnsavedChanges && (
-                            <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved</span>
-                        )}
+                        {hasUnsavedChanges && <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved</span>}
                     </div>
                     <p className="text-sm text-gray-500">Job: {location.job_number}</p>
                 </div>
 
                 {/* Month Navigation */}
                 <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1 dark:border-slate-700 dark:bg-slate-800">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navigateMonth('prev')}
-                    >
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('prev')}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <span className="min-w-[120px] text-center text-sm font-medium sm:min-w-[140px]">
-                        {formatMonthDisplay(selectedMonth)}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navigateMonth('next')}
-                    >
+                    <span className="min-w-[120px] text-center text-sm font-medium sm:min-w-[140px]">{formatMonthDisplay(selectedMonth)}</span>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('next')}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
@@ -162,17 +137,8 @@ export const ForecastHeader = ({
             <div className="flex flex-wrap items-center gap-2">
                 {/* Save Button */}
                 {hasConfiguredTemplates && !isEditingLocked && (
-                    <Button
-                        onClick={onSave}
-                        disabled={isSaving || !hasUnsavedChanges}
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700"
-                    >
-                        {isSaving ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Save className="mr-1.5 h-4 w-4" />
-                        )}
+                    <Button onClick={onSave} disabled={isSaving || !hasUnsavedChanges} size="sm" className="bg-green-600 hover:bg-green-700">
+                        {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                         <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
                     </Button>
                 )}
@@ -186,53 +152,26 @@ export const ForecastHeader = ({
                         disabled={isCopying}
                         title="Copy headcount from last approved forecast for all project months"
                     >
-                        {isCopying ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Copy className="mr-1.5 h-4 w-4" />
-                        )}
+                        {isCopying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
                         <span className="hidden sm:inline">{isCopying ? 'Copying...' : 'Copy Previous'}</span>
                     </Button>
                 )}
 
                 {/* Workflow Buttons */}
                 {savedForecast && savedForecast.status === 'draft' && permissions.canSubmit && (
-                    <Button
-                        onClick={onSubmit}
-                        disabled={isSubmitting || hasUnsavedChanges}
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700"
-                    >
-                        {isSubmitting ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Send className="mr-1.5 h-4 w-4" />
-                        )}
+                    <Button onClick={onSubmit} disabled={isSubmitting || hasUnsavedChanges} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                        {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
                         <span className="hidden sm:inline">Submit</span>
                     </Button>
                 )}
 
                 {savedForecast && savedForecast.status === 'submitted' && permissions.canApprove && (
                     <>
-                        <Button
-                            onClick={onApprove}
-                            disabled={isSubmitting}
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                        >
-                            {isSubmitting ? (
-                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Check className="mr-1.5 h-4 w-4" />
-                            )}
+                        <Button onClick={onApprove} disabled={isSubmitting} size="sm" className="bg-green-600 hover:bg-green-700">
+                            {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
                             <span className="hidden sm:inline">Approve</span>
                         </Button>
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={onOpenRejectDialog}
-                            disabled={isSubmitting}
-                        >
+                        <Button variant="destructive" size="sm" onClick={onOpenRejectDialog} disabled={isSubmitting}>
                             <X className="mr-1.5 h-4 w-4" />
                             <span className="hidden sm:inline">Reject</span>
                         </Button>
@@ -240,12 +179,7 @@ export const ForecastHeader = ({
                 )}
 
                 {savedForecast && (savedForecast.status === 'approved' || savedForecast.status === 'rejected') && permissions.canApprove && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onRevertToDraft}
-                        disabled={isSubmitting}
-                    >
+                    <Button variant="outline" size="sm" onClick={onRevertToDraft} disabled={isSubmitting}>
                         <span className="hidden sm:inline">Revert to Draft</span>
                         <span className="sm:hidden">Revert</span>
                     </Button>

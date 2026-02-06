@@ -24,31 +24,18 @@ interface ForecastNotesSectionProps {
     isEditingLocked: boolean;
 }
 
-export const ForecastNotesSection = ({
-    notes,
-    onNotesChange,
-    expanded,
-    onExpandedChange,
-    isEditingLocked,
-}: ForecastNotesSectionProps) => {
+export const ForecastNotesSection = ({ notes, onNotesChange, expanded, onExpandedChange, isEditingLocked }: ForecastNotesSectionProps) => {
     return (
         <div className="mb-4">
-            <div
-                className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
-            >
-                <button
-                    type="button"
-                    className="flex w-full items-center justify-between px-4 py-2"
-                    onClick={() => onExpandedChange(!expanded)}
-                >
+            <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800">
+                <button type="button" className="flex w-full items-center justify-between px-4 py-2" onClick={() => onExpandedChange(!expanded)}>
                     <div className="flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            Forecast Notes
-                        </span>
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Forecast Notes</span>
                         {notes && !expanded && (
                             <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
-                                - {notes.substring(0, 60)}{notes.length > 60 ? '...' : ''}
+                                - {notes.substring(0, 60)}
+                                {notes.length > 60 ? '...' : ''}
                             </span>
                         )}
                     </div>
@@ -65,7 +52,7 @@ export const ForecastNotesSection = ({
                             value={notes}
                             onChange={(e) => onNotesChange(e.target.value)}
                             placeholder="Add notes about this forecast (key assumptions, risks, notes for reviewers...)"
-                            className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
+                            className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
                             disabled={isEditingLocked}
                         />
                         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">

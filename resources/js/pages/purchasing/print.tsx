@@ -113,13 +113,13 @@ export default function RequisitionPrint() {
             {/* Preview hint */}
             <div className="no-print py-4">
                 <p className="text-center text-sm text-slate-500">
-                    Press <kbd className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-xs">Ctrl</kbd> + <kbd className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-xs">P</kbd> to print
+                    Press <kbd className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-xs">Ctrl</kbd> +{' '}
+                    <kbd className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-xs">P</kbd> to print
                 </p>
             </div>
 
             {/* Printable Document */}
             <div className="print-container mx-auto max-w-4xl bg-white p-8 shadow-lg md:my-4 md:rounded-lg">
-
                 {/* Document Header */}
                 <header className="mb-8">
                     <div className="flex items-start justify-between">
@@ -128,12 +128,12 @@ export default function RequisitionPrint() {
                                 src="/logo.png"
                                 alt="Company Logo"
                                 className="h-14 w-auto"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                }}
                             />
                             <div>
-                                <h1 className="text-xl font-bold uppercase tracking-wide text-slate-800">
-                                    Purchase Order
-                                </h1>
+                                <h1 className="text-xl font-bold tracking-wide text-slate-800 uppercase">Purchase Order</h1>
                                 <p className="text-sm text-slate-500">Internal Requisition</p>
                             </div>
                         </div>
@@ -141,9 +141,7 @@ export default function RequisitionPrint() {
                             <div className="text-2xl font-bold text-slate-900">
                                 {requisition.po_number ? `PO${requisition.po_number}` : `REQ-${requisition.id}`}
                             </div>
-                            <div className="mt-1 text-sm text-slate-600">
-                                Date: {new Date(requisition.created_at).toLocaleDateString('en-GB')}
-                            </div>
+                            <div className="mt-1 text-sm text-slate-600">Date: {new Date(requisition.created_at).toLocaleDateString('en-GB')}</div>
                         </div>
                     </div>
                     <div className="mt-4 h-px bg-slate-900" />
@@ -153,15 +151,11 @@ export default function RequisitionPrint() {
                 <section className="mb-6 grid grid-cols-2 gap-6">
                     {/* Left: Job/Project Info */}
                     <div className="border border-slate-300 p-4">
-                        <h2 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Deliver To
-                        </h2>
+                        <h2 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold tracking-wider text-slate-600 uppercase">Deliver To</h2>
                         <div className="space-y-1.5 text-sm">
                             <p className="font-semibold text-slate-900">{requisition.location?.name}</p>
                             <p className="text-slate-600">Job #: {requisition.location?.external_id}</p>
-                            {requisition.deliver_to && (
-                                <p className="mt-2 whitespace-pre-line text-slate-700">{requisition.deliver_to}</p>
-                            )}
+                            {requisition.deliver_to && <p className="mt-2 whitespace-pre-line text-slate-700">{requisition.deliver_to}</p>}
                             {requisition.delivery_contact && (
                                 <p className="text-slate-600">
                                     <span className="font-medium">Contact:</span> {requisition.delivery_contact}
@@ -172,14 +166,10 @@ export default function RequisitionPrint() {
 
                     {/* Right: Supplier Info */}
                     <div className="border border-slate-300 p-4">
-                        <h2 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Supplier
-                        </h2>
+                        <h2 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold tracking-wider text-slate-600 uppercase">Supplier</h2>
                         <div className="space-y-1.5 text-sm">
                             <p className="font-semibold text-slate-900">{requisition.supplier?.name}</p>
-                            {requisition.supplier?.code && (
-                                <p className="text-slate-600">Code: {requisition.supplier.code}</p>
-                            )}
+                            {requisition.supplier?.code && <p className="text-slate-600">Code: {requisition.supplier.code}</p>}
                         </div>
                     </div>
                 </section>
@@ -187,26 +177,26 @@ export default function RequisitionPrint() {
                 {/* Order Details Row */}
                 <section className="mb-6 grid grid-cols-4 gap-4 border border-slate-300 p-4">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Required By</p>
+                        <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Required By</p>
                         <p className="mt-0.5 text-sm font-semibold text-slate-900">
                             {new Date(requisition.date_required).toLocaleDateString('en-GB')}
                         </p>
                     </div>
                     {requisition.requested_by && (
                         <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Requested By</p>
+                            <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Requested By</p>
                             <p className="mt-0.5 text-sm font-semibold text-slate-900">{requisition.requested_by}</p>
                         </div>
                     )}
                     {requisition.pickup_by && (
                         <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pickup By</p>
+                            <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Pickup By</p>
                             <p className="mt-0.5 text-sm font-semibold text-slate-900">{requisition.pickup_by}</p>
                         </div>
                     )}
                     {requisition.order_reference && (
                         <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Reference</p>
+                            <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Reference</p>
                             <p className="mt-0.5 text-sm font-semibold text-slate-900">{requisition.order_reference}</p>
                         </div>
                     )}
@@ -217,10 +207,10 @@ export default function RequisitionPrint() {
                     <table className="w-full border-collapse text-sm">
                         <thead>
                             <tr className="border-y-2 border-slate-900">
-                                <th className="w-12 py-2 pr-2 text-left text-xs font-bold uppercase tracking-wider text-slate-700">#</th>
-                                <th className="py-2 pr-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">Code</th>
-                                <th className="py-2 pr-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">Description</th>
-                                <th className="w-20 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-700">Qty</th>
+                                <th className="w-12 py-2 pr-2 text-left text-xs font-bold tracking-wider text-slate-700 uppercase">#</th>
+                                <th className="py-2 pr-4 text-left text-xs font-bold tracking-wider text-slate-700 uppercase">Code</th>
+                                <th className="py-2 pr-4 text-left text-xs font-bold tracking-wider text-slate-700 uppercase">Description</th>
+                                <th className="w-20 py-2 text-right text-xs font-bold tracking-wider text-slate-700 uppercase">Qty</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -229,16 +219,16 @@ export default function RequisitionPrint() {
                                     <td className="py-2.5 pr-2 text-slate-500">{index + 1}</td>
                                     <td className="py-2.5 pr-4 font-mono text-xs text-slate-700">{item.code}</td>
                                     <td className="py-2.5 pr-4 text-slate-800">{item.description}</td>
-                                    <td className="py-2.5 text-right font-semibold tabular-nums text-slate-900">{item.qty}</td>
+                                    <td className="py-2.5 text-right font-semibold text-slate-900 tabular-nums">{item.qty}</td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot>
                             <tr className="border-t-2 border-slate-900">
-                                <td colSpan={3} className="py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
+                                <td colSpan={3} className="py-2.5 text-right text-xs font-bold tracking-wider text-slate-600 uppercase">
                                     Total Items
                                 </td>
-                                <td className="py-2.5 text-right font-bold tabular-nums text-slate-900">{itemCount}</td>
+                                <td className="py-2.5 text-right font-bold text-slate-900 tabular-nums">{itemCount}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -248,8 +238,8 @@ export default function RequisitionPrint() {
                 <footer className="border-t border-slate-300 pt-3">
                     <div className="flex items-center justify-between text-[10px] text-slate-500">
                         <div>
-                            <span className="font-medium">REF:</span> {requisition.id} |
-                            <span className="ml-2 font-medium">Created:</span> {new Date(requisition.created_at).toLocaleDateString('en-GB')}
+                            <span className="font-medium">REF:</span> {requisition.id} |<span className="ml-2 font-medium">Created:</span>{' '}
+                            {new Date(requisition.created_at).toLocaleDateString('en-GB')}
                         </div>
                         <div>
                             Printed by {printedBy} on {printedAt}

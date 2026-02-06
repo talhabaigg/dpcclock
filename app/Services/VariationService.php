@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Services;
 
 use Http;
+
 class VariationService
 {
     public function getChangeOrders($location, $companyId, $token)
@@ -15,7 +17,8 @@ class VariationService
         $base_url = env('PREMIER_SWAGGER_API_URL');
         $response = Http::withToken($token)
             ->acceptJson()
-            ->get($base_url . '/api/ChangeOrder/GetChangeOrders', $queryParams);
+            ->get($base_url.'/api/ChangeOrder/GetChangeOrders', $queryParams);
+
         return $response;
     }
 
@@ -28,7 +31,8 @@ class VariationService
         $base_url = env('PREMIER_SWAGGER_API_URL');
         $response = Http::withToken($token)
             ->acceptJson()
-            ->get($base_url . '/api/ChangeOrder/GetChangeOrderLines', $queryParams);
+            ->get($base_url.'/api/ChangeOrder/GetChangeOrderLines', $queryParams);
+
         return $response;
     }
 }

@@ -22,7 +22,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 interface RejectionDialogProps {
     open: boolean;
@@ -31,12 +31,7 @@ interface RejectionDialogProps {
     isSubmitting: boolean;
 }
 
-export const RejectionDialog = ({
-    open,
-    onOpenChange,
-    onReject,
-    isSubmitting,
-}: RejectionDialogProps) => {
+export const RejectionDialog = ({ open, onOpenChange, onReject, isSubmitting }: RejectionDialogProps) => {
     const [rejectionReason, setRejectionReason] = useState('');
 
     // Reset reason when dialog closes
@@ -68,18 +63,14 @@ export const RejectionDialog = ({
                         value={rejectionReason}
                         onChange={(e) => setRejectionReason(e.target.value)}
                         placeholder="Enter rejection reason..."
-                        className="min-h-[100px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                        className="min-h-[100px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
                     />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button
-                        variant="destructive"
-                        onClick={handleReject}
-                        disabled={isSubmitting || !rejectionReason.trim()}
-                    >
+                    <Button variant="destructive" onClick={handleReject} disabled={isSubmitting || !rejectionReason.trim()}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Reject Forecast
                     </Button>

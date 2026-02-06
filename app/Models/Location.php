@@ -3,20 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Requisition;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use \App\Models\RequisitionHeaderTemplate;
-
 
 class Location extends Model
 {
     use SoftDeletes;
+
     protected $fillable = [
         'name',
         'eh_location_id',
         'eh_parent_id',
         'external_id',
-        'state'
+        'state',
     ];
 
     public function worktypes()
@@ -60,6 +58,7 @@ class Location extends Model
     {
         return $this->belongsTo(Location::class, 'eh_parent_id', 'eh_location_id');
     }
+
     public function header()
     {
         return $this->hasOne(RequisitionHeaderTemplate::class, 'location_id', 'id');

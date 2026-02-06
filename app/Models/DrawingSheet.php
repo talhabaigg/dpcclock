@@ -101,6 +101,7 @@ class DrawingSheet extends Model
         if ($this->title) {
             return $this->title;
         }
+
         return "Sheet #{$this->id}";
     }
 
@@ -121,7 +122,7 @@ class DrawingSheet extends Model
         }
 
         // Auto-generate revision number if not provided
-        if (!$revisionNumber) {
+        if (! $revisionNumber) {
             $revisionNumber = $this->getNextRevisionNumber();
         }
 
@@ -148,7 +149,7 @@ class DrawingSheet extends Model
             ->orderBy('created_at', 'desc')
             ->first();
 
-        if (!$lastRevision || !$lastRevision->revision_number) {
+        if (! $lastRevision || ! $lastRevision->revision_number) {
             return 'A';
         }
 
@@ -176,12 +177,13 @@ class DrawingSheet extends Model
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($letters[$i] !== 'Z') {
                 $letters[$i] = chr(ord($letters[$i]) + 1);
+
                 return $letters;
             }
             $letters[$i] = 'A';
         }
 
-        return 'A' . $letters;
+        return 'A'.$letters;
     }
 
     /**
@@ -216,11 +218,7 @@ class DrawingSheet extends Model
      * Find or create a sheet by drawing number within a project.
      * Used for grouping sheets from drawing sets (bulk PDF uploads).
      *
-     * @param int $projectId
-     * @param string $drawingNumber
-     * @param string|null $title
-     * @param string|null $discipline
-     * @param int|null $createdBy User ID to use when creating (for job context where auth() is unavailable)
+     * @param  int|null  $createdBy  User ID to use when creating (for job context where auth() is unavailable)
      */
     public static function findOrCreateByDrawingNumber(
         int $projectId,
@@ -238,10 +236,11 @@ class DrawingSheet extends Model
 
         if ($sheet) {
             // Update title if not set and we have one
-            if (!$sheet->title && $title) {
+            if (! $sheet->title && $title) {
                 $sheet->title = $title;
                 $sheet->save();
             }
+
             return $sheet;
         }
 

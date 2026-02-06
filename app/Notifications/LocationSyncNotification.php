@@ -3,14 +3,14 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class LocationSyncNotification extends Notification
 {
     use Queueable;
+
     protected $status;
+
     protected $message;
 
     /**
@@ -43,6 +43,4 @@ class LocationSyncNotification extends Notification
             'message' => $this->message,
         ];
     }
-
-
 }

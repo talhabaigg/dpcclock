@@ -1,15 +1,17 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\Location;
 use DB;
+
 class GeneratePONumberService
 {
     public function generate($requisition)
     {
         return DB::transaction(function () use ($requisition) {
             $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
-            $companyService = new GetCompanyCodeService();
+            $companyService = new GetCompanyCodeService;
             $companyCode = $companyService->getCompanyCode($parentId);
             $sequence = DB::table('po_num_sequence')->lockForUpdate()->where('company_code', $companyCode)->first();
 
@@ -29,5 +31,4 @@ class GeneratePONumberService
             return $poNumber; // ✅ Make sure to return the PO number
         });
     }
-
 }

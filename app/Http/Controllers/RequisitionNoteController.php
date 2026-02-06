@@ -22,5 +22,4 @@ class RequisitionNoteController extends Controller
 
         return redirect()->back()->with('success', 'Note added successfully.');
     }
-
 }

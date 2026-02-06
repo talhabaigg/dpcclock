@@ -929,13 +929,7 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
             ['Quarter:', quarter.quarter_label],
             [''],
             ['Month', 'Job Number', 'Gross Amount', 'GST Amount', 'Source'],
-            ...quarter.collected.transactions.map((t) => [
-                formatMonthHeader(t.month),
-                t.job_number || '-',
-                t.gross_amount,
-                t.gst_amount,
-                t.source,
-            ]),
+            ...quarter.collected.transactions.map((t) => [formatMonthHeader(t.month), t.job_number || '-', t.gross_amount, t.gst_amount, t.source]),
             [''],
             ['', 'SUBTOTAL', quarter.collected.transactions.reduce((sum, t) => sum + t.gross_amount, 0), quarter.collected.total, ''],
         ];

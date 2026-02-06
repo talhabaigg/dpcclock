@@ -10,7 +10,9 @@ use Illuminate\Support\Str;
 class DrawingProcessingService
 {
     protected string $storageDisk = 'public';
+
     protected string $thumbnailDir = 'qa-drawing-thumbnails';
+
     protected string $diffDir = 'qa-drawing-diffs';
 
     /**
@@ -35,21 +37,21 @@ class DrawingProcessingService
             // Get the full file path
             $filePath = Storage::disk($this->storageDisk)->path($drawing->file_path);
 
-            if (!file_exists($filePath)) {
+            if (! file_exists($filePath)) {
                 throw new \Exception("Drawing file not found: {$filePath}");
             }
 
             // Generate thumbnail
             $thumbnailResult = $this->generateThumbnail($drawing, $filePath);
             $results['thumbnail'] = $thumbnailResult['success'];
-            if (!$thumbnailResult['success']) {
+            if (! $thumbnailResult['success']) {
                 $results['errors'][] = $thumbnailResult['error'];
             }
 
             // Extract page dimensions
             $dimensionsResult = $this->extractPageDimensions($drawing, $filePath);
             $results['dimensions'] = $dimensionsResult['success'];
-            if (!$dimensionsResult['success']) {
+            if (! $dimensionsResult['success']) {
                 $results['errors'][] = $dimensionsResult['error'];
             }
 
@@ -57,7 +59,7 @@ class DrawingProcessingService
             if ($drawing->previous_revision_id) {
                 $diffResult = $this->generateDiff($drawing);
                 $results['diff'] = $diffResult['success'];
-                if (!$diffResult['success']) {
+                if (! $diffResult['success']) {
                     $results['errors'][] = $diffResult['error'];
                 }
             }
@@ -93,7 +95,7 @@ class DrawingProcessingService
 
             // Ensure thumbnail directory exists
             $thumbnailDir = Storage::disk($this->storageDisk)->path($this->thumbnailDir);
-            if (!is_dir($thumbnailDir)) {
+            if (! is_dir($thumbnailDir)) {
                 mkdir($thumbnailDir, 0755, true);
             }
 
@@ -112,6 +114,7 @@ class DrawingProcessingService
 
             if ($success) {
                 $drawing->update(['thumbnail_path' => $thumbnailPath]);
+
                 return ['success' => true, 'path' => $thumbnailPath];
             }
 
@@ -122,6 +125,7 @@ class DrawingProcessingService
                 'drawing_id' => $drawing->id,
                 'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -163,6 +167,7 @@ class DrawingProcessingService
                 'file_path' => $filePath,
                 'error' => $e->getMessage(),
             ]);
+
             return [
                 'pages' => 1,
                 'width' => null,
@@ -182,6 +187,7 @@ class DrawingProcessingService
             $dimensions = $this->extractPageDimensionsFromPath($filePath);
 
             $drawing->update(['page_dimensions' => $dimensions]);
+
             return ['success' => true, 'dimensions' => $dimensions];
 
         } catch (\Exception $e) {
@@ -189,6 +195,7 @@ class DrawingProcessingService
                 'drawing_id' => $drawing->id,
                 'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -198,19 +205,19 @@ class DrawingProcessingService
      */
     public function generateDiff(QaStageDrawing $drawing): array
     {
-        if (!$drawing->previous_revision_id) {
+        if (! $drawing->previous_revision_id) {
             return ['success' => false, 'error' => 'No previous revision to compare'];
         }
 
         try {
             $previousRevision = QaStageDrawing::find($drawing->previous_revision_id);
-            if (!$previousRevision) {
+            if (! $previousRevision) {
                 return ['success' => false, 'error' => 'Previous revision not found'];
             }
 
             // Ensure diff directory exists
             $diffDir = Storage::disk($this->storageDisk)->path($this->diffDir);
-            if (!is_dir($diffDir)) {
+            if (! is_dir($diffDir)) {
                 mkdir($diffDir, 0755, true);
             }
 
@@ -226,7 +233,7 @@ class DrawingProcessingService
             $currentImage = $this->getFirstPageImage($currentPath);
             $previousImage = $this->getFirstPageImage($previousPath);
 
-            if (!$currentImage || !$previousImage) {
+            if (! $currentImage || ! $previousImage) {
                 return ['success' => false, 'error' => 'Could not convert PDFs to images for comparison'];
             }
 
@@ -243,6 +250,7 @@ class DrawingProcessingService
 
             if ($success) {
                 $drawing->update(['diff_image_path' => $diffPath]);
+
                 return ['success' => true, 'path' => $diffPath];
             }
 
@@ -253,13 +261,15 @@ class DrawingProcessingService
                 'drawing_id' => $drawing->id,
                 'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
     /**
      * Convert PDF first page to image
-     * @param int $maxWidth Maximum width of output image (default 1200 for good AI text recognition)
+     *
+     * @param  int  $maxWidth  Maximum width of output image (default 1200 for good AI text recognition)
      */
     protected function pdfToImage(string $pdfPath, string $outputPath, int $page = 1, int $maxWidth = 1200): bool
     {
@@ -269,14 +279,15 @@ class DrawingProcessingService
         // Try Imagick extension first
         if (extension_loaded('imagick')) {
             try {
-                $imagick = new \Imagick();
+                $imagick = new \Imagick;
                 $imagick->setResolution($dpi, $dpi);
-                $imagick->readImage($pdfPath . '[' . ($page - 1) . ']');
+                $imagick->readImage($pdfPath.'['.($page - 1).']');
                 $imagick->setImageFormat('png');
                 $imagick->thumbnailImage($maxWidth, 0);
                 $imagick->writeImage($outputPath);
                 $imagick->clear();
                 $imagick->destroy();
+
                 return true;
             } catch (\Exception $e) {
                 Log::warning('Imagick PDF conversion failed', ['error' => $e->getMessage()]);
@@ -286,30 +297,31 @@ class DrawingProcessingService
         // Try pdftoppm (poppler-utils)
         $pdftoppm = $this->findExecutable(['pdftoppm']);
         if ($pdftoppm) {
-            $tempBase = sys_get_temp_dir() . '/pdf_' . uniqid();
-            $cmd = escapeshellarg($pdftoppm) . ' -png -f ' . $page . ' -l ' . $page . ' -scale-to ' . $maxWidth . ' '
-                . escapeshellarg($pdfPath) . ' ' . escapeshellarg($tempBase);
-            exec($cmd . ' 2>&1', $output, $returnCode);
+            $tempBase = sys_get_temp_dir().'/pdf_'.uniqid();
+            $cmd = escapeshellarg($pdftoppm).' -png -f '.$page.' -l '.$page.' -scale-to '.$maxWidth.' '
+                .escapeshellarg($pdfPath).' '.escapeshellarg($tempBase);
+            exec($cmd.' 2>&1', $output, $returnCode);
 
-            $tempFile = $tempBase . '-' . $page . '.png';
+            $tempFile = $tempBase.'-'.$page.'.png';
             if ($returnCode === 0 && file_exists($tempFile)) {
                 rename($tempFile, $outputPath);
+
                 return true;
             }
             // Clean up potential temp files
             @unlink($tempFile);
-            @unlink($tempBase . '.png');
+            @unlink($tempBase.'.png');
         }
 
         // Try ImageMagick convert
         $convert = $this->findExecutable(['magick', 'convert']);
         if ($convert) {
-            $cmd = escapeshellarg($convert) . ' -density ' . $dpi . ' '
-                . escapeshellarg($pdfPath . '[' . ($page - 1) . ']')
-                . ' -resize ' . $maxWidth . 'x -quality 90 '
-                . escapeshellarg($outputPath);
+            $cmd = escapeshellarg($convert).' -density '.$dpi.' '
+                .escapeshellarg($pdfPath.'['.($page - 1).']')
+                .' -resize '.$maxWidth.'x -quality 90 '
+                .escapeshellarg($outputPath);
             Log::debug('ImageMagick command', ['cmd' => $cmd]);
-            exec($cmd . ' 2>&1', $output, $returnCode);
+            exec($cmd.' 2>&1', $output, $returnCode);
 
             if ($returnCode === 0 && file_exists($outputPath)) {
                 return true;
@@ -320,22 +332,24 @@ class DrawingProcessingService
         // Try Ghostscript
         $gs = $this->findExecutable(['gs', 'gswin64c', 'gswin32c']);
         if ($gs) {
-            $cmd = escapeshellarg($gs) . ' -dNOPAUSE -dBATCH -dSAFER -sDEVICE=png16m -r' . $dpi . ' '
-                . '-dFirstPage=' . $page . ' -dLastPage=' . $page . ' '
-                . '-sOutputFile=' . escapeshellarg($outputPath) . ' '
-                . escapeshellarg($pdfPath);
+            $cmd = escapeshellarg($gs).' -dNOPAUSE -dBATCH -dSAFER -sDEVICE=png16m -r'.$dpi.' '
+                .'-dFirstPage='.$page.' -dLastPage='.$page.' '
+                .'-sOutputFile='.escapeshellarg($outputPath).' '
+                .escapeshellarg($pdfPath);
             Log::debug('Ghostscript command', ['cmd' => $cmd]);
-            exec($cmd . ' 2>&1', $output, $returnCode);
+            exec($cmd.' 2>&1', $output, $returnCode);
 
             if ($returnCode === 0 && file_exists($outputPath)) {
                 // Resize the output to match the requested maxWidth
                 $this->resizeImage($outputPath, $outputPath, $maxWidth);
+
                 return true;
             }
             Log::warning('Ghostscript conversion failed', ['returnCode' => $returnCode, 'output' => $output]);
         }
 
         Log::warning('No PDF to image converter available');
+
         return false;
     }
 
@@ -345,11 +359,11 @@ class DrawingProcessingService
     protected function resizeImage(string $inputPath, string $outputPath, int $maxWidth): bool
     {
         $imageInfo = @getimagesize($inputPath);
-        if (!$imageInfo) {
+        if (! $imageInfo) {
             return false;
         }
 
-        list($width, $height, $type) = $imageInfo;
+        [$width, $height, $type] = $imageInfo;
 
         // Calculate new dimensions
         $ratio = $maxWidth / $width;
@@ -371,7 +385,7 @@ class DrawingProcessingService
                 return false;
         }
 
-        if (!$source) {
+        if (! $source) {
             return false;
         }
 
@@ -403,7 +417,7 @@ class DrawingProcessingService
         // Try pdfinfo command
         $pdfinfo = $this->findExecutable(['pdfinfo']);
         if ($pdfinfo) {
-            $cmd = escapeshellcmd($pdfinfo) . ' ' . escapeshellarg($pdfPath);
+            $cmd = escapeshellcmd($pdfinfo).' '.escapeshellarg($pdfPath);
             exec($cmd, $output, $returnCode);
 
             if ($returnCode === 0) {
@@ -417,7 +431,7 @@ class DrawingProcessingService
                         $info['height'] = (float) $m[2];
                     }
                 }
-                if (!empty($info)) {
+                if (! empty($info)) {
                     return $info;
                 }
             }
@@ -446,7 +460,7 @@ class DrawingProcessingService
 
         // Convert PDF to temp image
         if ($extension === 'pdf') {
-            $tempPath = sys_get_temp_dir() . '/drawing_' . uniqid() . '.png';
+            $tempPath = sys_get_temp_dir().'/drawing_'.uniqid().'.png';
             if ($this->pdfToImage($filePath, $tempPath)) {
                 return $tempPath;
             }
@@ -465,10 +479,10 @@ class DrawingProcessingService
         $compare = $this->findExecutable(['magick', 'compare']);
         if ($compare) {
             // ImageMagick compare with highlight
-            $cmd = escapeshellcmd($compare) . ' -metric AE -highlight-color blue -lowlight-color none '
-                . escapeshellarg($image1Path) . ' '
-                . escapeshellarg($image2Path) . ' '
-                . escapeshellarg($outputPath) . ' 2>&1';
+            $cmd = escapeshellcmd($compare).' -metric AE -highlight-color blue -lowlight-color none '
+                .escapeshellarg($image1Path).' '
+                .escapeshellarg($image2Path).' '
+                .escapeshellarg($outputPath).' 2>&1';
             exec($cmd, $output, $returnCode);
 
             // compare returns 0 for identical, 1 for different, 2 for error
@@ -489,7 +503,7 @@ class DrawingProcessingService
         $img1 = $this->loadImageGd($image1Path);
         $img2 = $this->loadImageGd($image2Path);
 
-        if (!$img1 || !$img2) {
+        if (! $img1 || ! $img2) {
             return false;
         }
 
@@ -552,7 +566,7 @@ class DrawingProcessingService
     protected function loadImageGd(string $path)
     {
         $info = @getimagesize($path);
-        if (!$info) {
+        if (! $info) {
             return null;
         }
 
@@ -603,9 +617,10 @@ class DrawingProcessingService
             // This avoids finding Windows' convert.exe (disk utility) instead of ImageMagick
             if (PHP_OS_FAMILY === 'Windows') {
                 foreach ($paths as $path) {
-                    $fullPath = $path . $name . '.exe';
+                    $fullPath = $path.$name.'.exe';
                     if (file_exists($fullPath)) {
                         Log::debug('Found executable at path', ['name' => $name, 'path' => $fullPath]);
+
                         return $fullPath;
                     }
                 }
@@ -616,16 +631,18 @@ class DrawingProcessingService
             $which = PHP_OS_FAMILY === 'Windows' ? 'where' : 'which';
             exec("$which $name 2>&1", $output, $returnCode);
 
-            if ($returnCode === 0 && !empty($output[0])) {
+            if ($returnCode === 0 && ! empty($output[0])) {
                 $foundPath = trim($output[0]);
                 // On Windows, skip if it's the Windows System32 convert.exe (disk utility)
                 if (PHP_OS_FAMILY === 'Windows' && str_contains(strtolower($foundPath), 'system32')) {
                     Log::debug('Skipping Windows system utility', ['name' => $name, 'path' => $foundPath]);
+
                     continue;
                 }
                 // Skip INFO: messages or "not found" responses
-                if (!str_contains($foundPath, 'INFO:') && !str_contains($foundPath, 'not found') && file_exists($foundPath)) {
+                if (! str_contains($foundPath, 'INFO:') && ! str_contains($foundPath, 'not found') && file_exists($foundPath)) {
                     Log::debug('Found executable in PATH', ['name' => $name, 'path' => $foundPath]);
+
                     return $foundPath;
                 }
             }
@@ -633,9 +650,10 @@ class DrawingProcessingService
             // Try specific paths (for Unix or as fallback)
             if (PHP_OS_FAMILY !== 'Windows') {
                 foreach ($paths as $path) {
-                    $fullPath = $path . $name;
+                    $fullPath = $path.$name;
                     if (file_exists($fullPath)) {
                         Log::debug('Found executable at path', ['name' => $name, 'path' => $fullPath]);
+
                         return $fullPath;
                     }
                 }
@@ -643,6 +661,7 @@ class DrawingProcessingService
         }
 
         Log::warning('Executable not found', ['names' => $names]);
+
         return null;
     }
 }

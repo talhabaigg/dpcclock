@@ -91,9 +91,9 @@ export default function PriceHistoryDialog({ locationId, materialItemId, code, d
             changes.push(
                 <span key="price" className="flex items-center gap-1">
                     <span className="text-muted-foreground">{formatPrice(entry.previous_unit_cost)}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-emerald-600 font-medium">{formatPrice(entry.unit_cost_override)}</span>
-                </span>
+                    <ArrowRight className="text-muted-foreground h-3 w-3" />
+                    <span className="font-medium text-emerald-600">{formatPrice(entry.unit_cost_override)}</span>
+                </span>,
             );
         }
 
@@ -102,11 +102,9 @@ export default function PriceHistoryDialog({ locationId, materialItemId, code, d
             changes.push(
                 <span key="lock" className="flex items-center gap-1 text-xs">
                     <span className="text-muted-foreground">{entry.previous_is_locked ? 'Locked' : 'Unlocked'}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span className={entry.is_locked ? 'text-amber-600' : 'text-blue-600'}>
-                        {entry.is_locked ? 'Locked' : 'Unlocked'}
-                    </span>
-                </span>
+                    <ArrowRight className="text-muted-foreground h-3 w-3" />
+                    <span className={entry.is_locked ? 'text-amber-600' : 'text-blue-600'}>{entry.is_locked ? 'Locked' : 'Unlocked'}</span>
+                </span>,
             );
         }
 
@@ -120,7 +118,7 @@ export default function PriceHistoryDialog({ locationId, materialItemId, code, d
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary">
+                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary h-8 w-8">
                     <History className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
@@ -128,18 +126,18 @@ export default function PriceHistoryDialog({ locationId, materialItemId, code, d
                 <DialogHeader>
                     <DialogTitle>Price History</DialogTitle>
                     <DialogDescription>
-                        History for <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{code}</code>
-                        <span className="block mt-1 text-xs truncate">{description}</span>
+                        History for <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{code}</code>
+                        <span className="mt-1 block truncate text-xs">{description}</span>
                     </DialogDescription>
                 </DialogHeader>
-                <div className="max-h-[400px] overflow-auto border rounded-lg">
+                <div className="max-h-[400px] overflow-auto rounded-lg border">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
                         </div>
                     ) : history.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                            <History className="h-8 w-8 mb-2 opacity-40" />
+                        <div className="text-muted-foreground flex flex-col items-center justify-center py-12">
+                            <History className="mb-2 h-8 w-8 opacity-40" />
                             <p className="text-sm">No history available</p>
                         </div>
                     ) : (

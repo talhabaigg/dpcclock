@@ -15,10 +15,11 @@ class CostCodeFactory extends Factory
      * @return array<string, mixed>
      */
     protected $model = \App\Models\CostCode::class;
+
     public function definition(): array
     {
         return [
-            'code' => strtoupper('CC' . $this->faker->unique()->numerify('###')),
+            'code' => strtoupper('CC'.$this->faker->unique()->numerify('###')),
             'description' => $this->faker->sentence(3),
         ];
     }

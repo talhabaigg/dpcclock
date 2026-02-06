@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-
 class Kiosk extends Model
 {
     protected $fillable = [
@@ -51,7 +50,4 @@ class Kiosk extends Model
     {
         return $this->belongsToMany(Kiosk::class, 'related_kiosks', 'parent_kiosk_id', 'child_kiosk_id');
     }
-
-
-
 }

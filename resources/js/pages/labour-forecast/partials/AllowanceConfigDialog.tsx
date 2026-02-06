@@ -51,19 +51,29 @@ interface AllowanceConfigDialogProps {
 
 // Category display names and colors
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-    fares_travel: { label: 'Fares & Travel', color: 'text-blue-700 dark:text-blue-400', bgColor: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
-    site: { label: 'Site Allowance', color: 'text-amber-700 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
-    multistorey: { label: 'Multi-storey', color: 'text-purple-700 dark:text-purple-400', bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
-    custom: { label: 'Other Allowances', color: 'text-slate-700 dark:text-slate-400', bgColor: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' },
+    fares_travel: {
+        label: 'Fares & Travel',
+        color: 'text-blue-700 dark:text-blue-400',
+        bgColor: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+    },
+    site: {
+        label: 'Site Allowance',
+        color: 'text-amber-700 dark:text-amber-400',
+        bgColor: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+    },
+    multistorey: {
+        label: 'Multi-storey',
+        color: 'text-purple-700 dark:text-purple-400',
+        bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
+    },
+    custom: {
+        label: 'Other Allowances',
+        color: 'text-slate-700 dark:text-slate-400',
+        bgColor: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+    },
 };
 
-export const AllowanceConfigDialog = ({
-    open,
-    onOpenChange,
-    template,
-    allowanceTypes,
-    locationId,
-}: AllowanceConfigDialogProps) => {
+export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceTypes, locationId }: AllowanceConfigDialogProps) => {
     // Local state
     const [allowanceConfig, setAllowanceConfig] = useState<LocalAllowanceConfigItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -77,7 +87,7 @@ export const AllowanceConfigDialog = ({
                     rate: a.rate,
                     rate_type: a.rate_type,
                     paid_to_rdo: a.paid_to_rdo,
-                }))
+                })),
             );
         }
     }, [template]);
@@ -164,21 +174,15 @@ export const AllowanceConfigDialog = ({
     };
 
     const handleUpdateAllowanceRate = (allowanceTypeId: number, rate: number) => {
-        setAllowanceConfig((prev) =>
-            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate } : a))
-        );
+        setAllowanceConfig((prev) => prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate } : a)));
     };
 
     const handleUpdateAllowanceRateType = (allowanceTypeId: number, rate_type: 'hourly' | 'daily' | 'weekly' | '') => {
-        setAllowanceConfig((prev) =>
-            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate_type } : a))
-        );
+        setAllowanceConfig((prev) => prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, rate_type } : a)));
     };
 
     const handleUpdateAllowancePaidToRdo = (allowanceTypeId: number, paid_to_rdo: boolean) => {
-        setAllowanceConfig((prev) =>
-            prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, paid_to_rdo } : a))
-        );
+        setAllowanceConfig((prev) => prev.map((a) => (a.allowance_type_id === allowanceTypeId ? { ...a, paid_to_rdo } : a)));
     };
 
     const handleSave = () => {
@@ -199,7 +203,7 @@ export const AllowanceConfigDialog = ({
                     onOpenChange(false);
                 },
                 onError: () => setIsSaving(false),
-            }
+            },
         );
     };
 
@@ -209,17 +213,12 @@ export const AllowanceConfigDialog = ({
         const weeklyCost = config.rate_type ? calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly') : null;
 
         return (
-            <div
-                key={config.allowance_type_id}
-                className="rounded-lg bg-white p-3 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-            >
+            <div key={config.allowance_type_id} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
                 {/* Header row - Name and Remove button */}
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                         <div className="font-medium">{config.allowanceType.name}</div>
-                        {config.allowanceType.description && (
-                            <div className="text-xs text-slate-500">{config.allowanceType.description}</div>
-                        )}
+                        {config.allowanceType.description && <div className="text-xs text-slate-500">{config.allowanceType.description}</div>}
                     </div>
                     <Button
                         size="sm"
@@ -240,24 +239,14 @@ export const AllowanceConfigDialog = ({
                             step="0.01"
                             min="0"
                             value={config.rate}
-                            onChange={(e) =>
-                                handleUpdateAllowanceRate(
-                                    config.allowance_type_id,
-                                    parseFloat(e.target.value) || 0
-                                )
-                            }
+                            onChange={(e) => handleUpdateAllowanceRate(config.allowance_type_id, parseFloat(e.target.value) || 0)}
                             className="h-8 w-20 text-right"
                         />
                     </div>
 
                     <Select
                         value={config.rate_type || undefined}
-                        onValueChange={(value) =>
-                            handleUpdateAllowanceRateType(
-                                config.allowance_type_id,
-                                value as 'hourly' | 'daily' | 'weekly'
-                            )
-                        }
+                        onValueChange={(value) => handleUpdateAllowanceRateType(config.allowance_type_id, value as 'hourly' | 'daily' | 'weekly')}
                     >
                         <SelectTrigger className={`h-8 w-28 ${!config.rate_type ? 'border-amber-400 dark:border-amber-600' : ''}`}>
                             <SelectValue placeholder="Select..." />
@@ -277,7 +266,8 @@ export const AllowanceConfigDialog = ({
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                                Weekly cost: {formatCurrency(config.rate)} x {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
+                                Weekly cost: {formatCurrency(config.rate)} x{' '}
+                                {config.rate_type === 'hourly' ? '40 hrs' : config.rate_type === 'daily' ? '5 days' : '1'}
                             </TooltipContent>
                         </Tooltip>
                     ) : (
@@ -292,17 +282,9 @@ export const AllowanceConfigDialog = ({
                     <Checkbox
                         id={`rdo-${config.allowance_type_id}`}
                         checked={config.paid_to_rdo}
-                        onCheckedChange={(checked) =>
-                            handleUpdateAllowancePaidToRdo(
-                                config.allowance_type_id,
-                                checked as boolean
-                            )
-                        }
+                        onCheckedChange={(checked) => handleUpdateAllowancePaidToRdo(config.allowance_type_id, checked as boolean)}
                     />
-                    <label
-                        htmlFor={`rdo-${config.allowance_type_id}`}
-                        className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
-                    >
+                    <label htmlFor={`rdo-${config.allowance_type_id}`} className="cursor-pointer text-sm text-slate-700 dark:text-slate-300">
                         Pay during RDO hours
                     </label>
                     <Tooltip>
@@ -322,7 +304,7 @@ export const AllowanceConfigDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Plus className="h-5 w-5 shrink-0" />
@@ -335,16 +317,12 @@ export const AllowanceConfigDialog = ({
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                                <h3 className="font-medium truncate">{template.name}</h3>
-                                <p className="text-sm text-slate-500">
-                                    Base Rate: {formatCurrency(template.hourly_rate)}/hr
-                                </p>
+                                <h3 className="truncate font-medium">{template.name}</h3>
+                                <p className="text-sm text-slate-500">Base Rate: {formatCurrency(template.hourly_rate)}/hr</p>
                             </div>
                             <div className="sm:text-right">
                                 <p className="text-sm text-slate-500">Base Weekly Cost</p>
-                                <p className="text-lg font-semibold text-green-600">
-                                    {formatCurrency(template.cost_breakdown.base_weekly_wages)}
-                                </p>
+                                <p className="text-lg font-semibold text-green-600">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</p>
                             </div>
                         </div>
                     </div>
@@ -353,10 +331,7 @@ export const AllowanceConfigDialog = ({
                     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                         <h3 className="mb-3 text-sm font-medium">Add Allowance</h3>
                         <div className="flex gap-2">
-                            <Select
-                                value=""
-                                onValueChange={(value) => handleAddAllowance(Number(value))}
-                            >
+                            <Select value="" onValueChange={(value) => handleAddAllowance(Number(value))}>
                                 <SelectTrigger className="flex-1">
                                     <SelectValue placeholder="Select an allowance to add..." />
                                 </SelectTrigger>
@@ -373,7 +348,8 @@ export const AllowanceConfigDialog = ({
                                                     {allowancesByCategory.fares_travel.map((type) => (
                                                         <SelectItem key={type.id} value={String(type.id)}>
                                                             {type.name}
-                                                            {type.default_rate != null && ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
+                                                            {type.default_rate != null &&
+                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectGroup>
@@ -384,7 +360,8 @@ export const AllowanceConfigDialog = ({
                                                     {allowancesByCategory.site.map((type) => (
                                                         <SelectItem key={type.id} value={String(type.id)}>
                                                             {type.name}
-                                                            {type.default_rate != null && ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
+                                                            {type.default_rate != null &&
+                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectGroup>
@@ -395,7 +372,8 @@ export const AllowanceConfigDialog = ({
                                                     {allowancesByCategory.multistorey.map((type) => (
                                                         <SelectItem key={type.id} value={String(type.id)}>
                                                             {type.name}
-                                                            {type.default_rate != null && ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
+                                                            {type.default_rate != null &&
+                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectGroup>
@@ -406,7 +384,8 @@ export const AllowanceConfigDialog = ({
                                                     {allowancesByCategory.custom.map((type) => (
                                                         <SelectItem key={type.id} value={String(type.id)}>
                                                             {type.name}
-                                                            {type.default_rate != null && ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
+                                                            {type.default_rate != null &&
+                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectGroup>
@@ -416,66 +395,46 @@ export const AllowanceConfigDialog = ({
                                 </SelectContent>
                             </Select>
                         </div>
-                        <p className="mt-2 text-xs text-slate-500">
-                            Select allowances to apply to this template for this job.
-                        </p>
+                        <p className="mt-2 text-xs text-slate-500">Select allowances to apply to this template for this job.</p>
                     </div>
 
                     {/* Configured Allowances - Grouped by Category */}
                     {allowanceConfig.length === 0 ? (
                         <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                             <h3 className="mb-3 text-sm font-medium">Configured Allowances</h3>
-                            <p className="text-sm text-slate-500">
-                                No allowances configured. Add allowances above to customize this template.
-                            </p>
+                            <p className="text-sm text-slate-500">No allowances configured. Add allowances above to customize this template.</p>
                         </div>
                     ) : (
                         <>
                             {/* Fares & Travel */}
                             {configuredByCategory.fares_travel.length > 0 && (
                                 <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.fares_travel.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.fares_travel.color}`}>
-                                        Fares & Travel
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {configuredByCategory.fares_travel.map(renderAllowanceItem)}
-                                    </div>
+                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.fares_travel.color}`}>Fares & Travel</h3>
+                                    <div className="space-y-3">{configuredByCategory.fares_travel.map(renderAllowanceItem)}</div>
                                 </div>
                             )}
 
                             {/* Site Allowance */}
                             {configuredByCategory.site.length > 0 && (
                                 <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.site.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.site.color}`}>
-                                        Site Allowance
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {configuredByCategory.site.map(renderAllowanceItem)}
-                                    </div>
+                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.site.color}`}>Site Allowance</h3>
+                                    <div className="space-y-3">{configuredByCategory.site.map(renderAllowanceItem)}</div>
                                 </div>
                             )}
 
                             {/* Multi-storey */}
                             {configuredByCategory.multistorey.length > 0 && (
                                 <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.multistorey.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.multistorey.color}`}>
-                                        Multi-storey
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {configuredByCategory.multistorey.map(renderAllowanceItem)}
-                                    </div>
+                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.multistorey.color}`}>Multi-storey</h3>
+                                    <div className="space-y-3">{configuredByCategory.multistorey.map(renderAllowanceItem)}</div>
                                 </div>
                             )}
 
                             {/* Other Allowances */}
                             {configuredByCategory.custom.length > 0 && (
                                 <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.custom.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.custom.color}`}>
-                                        Other Allowances
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {configuredByCategory.custom.map(renderAllowanceItem)}
-                                    </div>
+                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.custom.color}`}>Other Allowances</h3>
+                                    <div className="space-y-3">{configuredByCategory.custom.map(renderAllowanceItem)}</div>
                                 </div>
                             )}
                         </>
@@ -493,18 +452,19 @@ export const AllowanceConfigDialog = ({
                                 </div>
                                 <div className="sm:text-right">
                                     <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                                        +{formatCurrency(
+                                        +
+                                        {formatCurrency(
                                             allowanceConfig.reduce((sum, config) => {
                                                 if (!config.rate_type) return sum;
-                                                return sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly');
-                                            }, 0)
+                                                return (
+                                                    sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly')
+                                                );
+                                            }, 0),
                                         )}
                                     </p>
                                     <p className="text-xs text-slate-500">per worker per week</p>
                                     {hasIncompleteAllowances && (
-                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                            Select rate type for all allowances to save
-                                        </p>
+                                        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Select rate type for all allowances to save</p>
                                     )}
                                 </div>
                             </div>

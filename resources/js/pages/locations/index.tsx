@@ -145,22 +145,14 @@ export default function LocationsList() {
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-2">
                         <Link href="/locations/sync" method="get">
-                            <Button
-                                variant="outline"
-                                className="gap-2 transition-all hover:border-primary/50"
-                                onClick={() => setOpen(true)}
-                            >
+                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                 <RefreshCcw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
                                 {isLoading ? 'Syncing...' : 'Sync Locations'}
                             </Button>
                         </Link>
                         {isAdmin && (
                             <Link href="/locations/load-job-data" method="get">
-                                <Button
-                                    variant="outline"
-                                    className="gap-2 transition-all hover:border-primary/50"
-                                    onClick={() => setOpen(true)}
-                                >
+                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                     <Download className="h-4 w-4" />
                                     Load Job Data
                                 </Button>
@@ -187,11 +179,11 @@ export default function LocationsList() {
 
                 {/* Main Card */}
                 <Card className="overflow-hidden border-0 shadow-sm">
-                    <CardHeader className="border-b bg-muted/30 px-6 py-4">
+                    <CardHeader className="bg-muted/30 border-b px-6 py-4">
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                             <div>
                                 <CardTitle className="flex items-center gap-2 text-lg">
-                                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                                    <Building2 className="text-muted-foreground h-5 w-5" />
                                     All Locations
                                 </CardTitle>
                                 <CardDescription>
@@ -205,12 +197,7 @@ export default function LocationsList() {
                                     <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                                 </div>
                                 <div className="w-full sm:w-44">
-                                    <SelectFilter
-                                        value={filter}
-                                        options={companyOptions}
-                                        filterName="All Companies"
-                                        onChange={handleCompanyChange}
-                                    />
+                                    <SelectFilter value={filter} options={companyOptions} filterName="All Companies" onChange={handleCompanyChange} />
                                 </div>
                             </div>
                         </div>
@@ -230,7 +217,7 @@ export default function LocationsList() {
                                                 onClick={() => handleSort('name')}
                                             >
                                                 Name
-                                                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </TableHead>
                                         <TableHead className="w-24">State</TableHead>
@@ -242,18 +229,18 @@ export default function LocationsList() {
                                                 onClick={() => handleSort('external_id')}
                                             >
                                                 External ID
-                                                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </TableHead>
                                         <TableHead>Shift Conditions</TableHead>
-                                        <TableHead className="w-32 text-right pr-6">Actions</TableHead>
+                                        <TableHead className="w-32 pr-6 text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredLocations.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={6} className="h-32 text-center">
-                                                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                     <MapPin className="h-8 w-8 opacity-40" />
                                                     <p>No locations found</p>
                                                     {searchQuery && (
@@ -268,16 +255,16 @@ export default function LocationsList() {
                                         filteredLocations.map((location, index) => (
                                             <TableRow
                                                 key={location.id}
-                                                className="group transition-colors hover:bg-muted/50"
+                                                className="group hover:bg-muted/50 transition-colors"
                                                 style={{ animationDelay: `${index * 20}ms` }}
                                             >
-                                                <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
+                                                <TableCell className="text-muted-foreground pl-6 font-mono text-xs">
                                                     {location.eh_location_id}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Link
                                                         href={`locations/${location.id}`}
-                                                        className="group/link inline-flex items-center gap-1 font-medium transition-colors hover:text-primary"
+                                                        className="group/link hover:text-primary inline-flex items-center gap-1 font-medium transition-colors"
                                                     >
                                                         {location.name}
                                                         <ChevronRight className="h-3.5 w-3.5 opacity-0 transition-all group-hover/link:translate-x-0.5 group-hover/link:opacity-100" />
@@ -289,8 +276,7 @@ export default function LocationsList() {
                                                             variant="outline"
                                                             className={cn(
                                                                 'font-medium transition-transform hover:scale-105',
-                                                                stateColorMap[location.state] ||
-                                                                    'bg-gray-500/10 text-gray-600 border-gray-500/20',
+                                                                stateColorMap[location.state] || 'border-gray-500/20 bg-gray-500/10 text-gray-600',
                                                             )}
                                                         >
                                                             {location.state}
@@ -299,7 +285,7 @@ export default function LocationsList() {
                                                 </TableCell>
                                                 <TableCell>
                                                     {location.external_id ? (
-                                                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                                                             {location.external_id}
                                                         </code>
                                                     ) : (
@@ -325,18 +311,13 @@ export default function LocationsList() {
                                                                             <TooltipTrigger asChild>
                                                                                 <Badge
                                                                                     variant="outline"
-                                                                                    className="cursor-pointer text-xs text-muted-foreground transition-all hover:bg-muted"
+                                                                                    className="text-muted-foreground hover:bg-muted cursor-pointer text-xs transition-all"
                                                                                 >
                                                                                     +{location.worktypes.length - 2}
                                                                                 </Badge>
                                                                             </TooltipTrigger>
-                                                                            <TooltipContent
-                                                                                side="bottom"
-                                                                                className="max-w-xs p-3"
-                                                                            >
-                                                                                <p className="mb-2 text-xs font-medium">
-                                                                                    All Shift Conditions
-                                                                                </p>
+                                                                            <TooltipContent side="bottom" className="max-w-xs p-3">
+                                                                                <p className="mb-2 text-xs font-medium">All Shift Conditions</p>
                                                                                 <div className="flex flex-wrap gap-1">
                                                                                     {location.worktypes.map((worktype) => (
                                                                                         <Badge
@@ -388,7 +369,7 @@ export default function LocationsList() {
                                                                 </Link>
 
                                                                 <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
                                                                     Material Items
                                                                 </DropdownMenuLabel>
                                                                 <Link href={`location/${location.id}/material-items`}>
@@ -405,7 +386,7 @@ export default function LocationsList() {
                                                                 </Link>
 
                                                                 <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
                                                                     Variations
                                                                 </DropdownMenuLabel>
                                                                 <Link href={`locations/${location.id}/variations`}>
@@ -422,12 +403,10 @@ export default function LocationsList() {
                                                                 </Link>
 
                                                                 <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
                                                                     Requisition
                                                                 </DropdownMenuLabel>
-                                                                <Link
-                                                                    href={route('location.req-header.edit', { locationId: location.id })}
-                                                                >
+                                                                <Link href={route('location.req-header.edit', { locationId: location.id })}>
                                                                     <DropdownMenuItem className="gap-2">
                                                                         <Pencil className="h-4 w-4" />
                                                                         Edit Header

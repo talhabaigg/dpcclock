@@ -8,10 +8,11 @@ use Illuminate\Support\Facades\DB;
 class CostCode extends Model
 {
     use \Illuminate\Database\Eloquent\Factories\HasFactory;
+
     protected $fillable = [
         'code',
         'description',
-        'cost_type_id'
+        'cost_type_id',
     ];
 
     public function materialItems()

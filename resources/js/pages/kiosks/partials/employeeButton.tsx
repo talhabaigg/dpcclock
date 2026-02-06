@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
 import { useInitials } from '@/hooks/use-initials';
+import { cn } from '@/lib/utils';
 import { ChevronRight, Clock } from 'lucide-react';
 
 interface Employee {
@@ -27,7 +27,7 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
             onClick={onClick}
             className={cn(
                 'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all',
-                'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                 isSelected && 'bg-primary text-primary-foreground hover:bg-primary/90',
                 !isSelected && emp.clocked_in && 'bg-emerald-500/5',
             )}
@@ -51,7 +51,7 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
                     </AvatarFallback>
                 </Avatar>
                 {emp.clocked_in && !isSelected && (
-                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
+                    <span className="border-background absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 bg-emerald-500" />
                 )}
             </div>
 

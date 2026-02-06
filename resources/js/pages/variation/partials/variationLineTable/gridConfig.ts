@@ -1,5 +1,5 @@
-import { GridOptions } from 'ag-grid-community';
 import { shadcnTheme } from '@/themes/ag-grid-theme';
+import { GridOptions } from 'ag-grid-community';
 
 export const defaultColDef = {
     resizable: true,

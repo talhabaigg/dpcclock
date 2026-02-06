@@ -21,11 +21,7 @@ export class ChatService {
     /**
      * Send a message and receive a streaming response
      */
-    async *streamMessage(
-        message: string,
-        conversationId: string | null,
-        forceTool?: string
-    ): AsyncGenerator<StreamEvent> {
+    async *streamMessage(message: string, conversationId: string | null, forceTool?: string): AsyncGenerator<StreamEvent> {
         this.abortController = new AbortController();
 
         try {
@@ -168,10 +164,7 @@ export class ChatService {
     /**
      * Send a non-streaming message (fallback)
      */
-    async sendMessage(
-        message: string,
-        conversationId: string | null
-    ): Promise<{ reply: string; conversationId: string }> {
+    async sendMessage(message: string, conversationId: string | null): Promise<{ reply: string; conversationId: string }> {
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
             headers: {

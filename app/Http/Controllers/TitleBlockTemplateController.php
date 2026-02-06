@@ -7,8 +7,6 @@ use App\Models\QaStageDrawing;
 use App\Models\TitleBlockTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class TitleBlockTemplateController extends Controller
 {
@@ -47,7 +45,7 @@ class TitleBlockTemplateController extends Controller
         ]);
 
         // If source sheet provided, derive orientation and size bucket from it
-        if (!empty($validated['source_sheet_id'])) {
+        if (! empty($validated['source_sheet_id'])) {
             $sourceSheet = QaStageDrawing::find($validated['source_sheet_id']);
             if ($sourceSheet) {
                 $validated['orientation'] = $validated['orientation'] ?? $sourceSheet->page_orientation;
@@ -122,7 +120,7 @@ class TitleBlockTemplateController extends Controller
 
         $sheet = QaStageDrawing::findOrFail($validated['sheet_id']);
 
-        if (!$sheet->page_preview_s3_key) {
+        if (! $sheet->page_preview_s3_key) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sheet has no preview image to test against.',
@@ -141,7 +139,7 @@ class TitleBlockTemplateController extends Controller
             's3'
         );
 
-        if (!$croppedBytes) {
+        if (! $croppedBytes) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to crop image with template.',
@@ -151,10 +149,10 @@ class TitleBlockTemplateController extends Controller
         // Extract with Textract
         $textractResult = $textract->extractFromBytes($croppedBytes);
 
-        if (!$textractResult['success']) {
+        if (! $textractResult['success']) {
             return response()->json([
                 'success' => false,
-                'message' => 'Textract extraction failed: ' . ($textractResult['error'] ?? 'Unknown error'),
+                'message' => 'Textract extraction failed: '.($textractResult['error'] ?? 'Unknown error'),
             ], 500);
         }
 
@@ -189,7 +187,7 @@ class TitleBlockTemplateController extends Controller
             'crop_rect.h' => ['required', 'numeric', 'min:0.01', 'max:1'],
         ]);
 
-        if (!$sheet->page_preview_s3_key) {
+        if (! $sheet->page_preview_s3_key) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sheet has no preview image.',
@@ -206,7 +204,7 @@ class TitleBlockTemplateController extends Controller
             's3'
         );
 
-        if (!$croppedBytes) {
+        if (! $croppedBytes) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to crop image.',
@@ -235,10 +233,10 @@ class TitleBlockTemplateController extends Controller
             'error' => $result['error'] ?? null,
         ]);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return response()->json([
                 'success' => false,
-                'message' => 'Textract text detection failed: ' . ($result['error'] ?? 'Unknown error'),
+                'message' => 'Textract text detection failed: '.($result['error'] ?? 'Unknown error'),
             ], 500);
         }
 
@@ -300,7 +298,7 @@ class TitleBlockTemplateController extends Controller
             'crop_rect.h' => ['required', 'numeric', 'min:0.01', 'max:1'],
         ]);
 
-        if (!$sheet->drawingSet) {
+        if (! $sheet->drawingSet) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sheet is not part of a drawing set.',

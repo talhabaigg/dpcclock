@@ -112,8 +112,8 @@ export const InlineChartSection = ({
             {/* Chart Footer Tip */}
             <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
                 <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Click points to edit or drag to adjust.
-                    Use category buttons to filter.
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Click points to edit or drag to adjust. Use
+                    category buttons to filter.
                 </p>
             </div>
         </div>

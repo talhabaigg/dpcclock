@@ -12,11 +12,12 @@ use Illuminate\Support\Facades\Log;
 class PremierPurchaseOrderService
 {
     protected PremierAuthenticationService $authService;
+
     protected string $baseUrl;
 
     public function __construct()
     {
-        $this->authService = new PremierAuthenticationService();
+        $this->authService = new PremierAuthenticationService;
         $this->baseUrl = env('PREMIER_SWAGGER_API_URL');
     }
 
@@ -24,16 +25,15 @@ class PremierPurchaseOrderService
      * Get PO lines - uses local database first, falls back to API
      * Returns data in Premier API format for compatibility
      *
-     * @param string $premierPoId
-     * @param bool $forceRefresh Force fetch from API even if cached
-     * @param bool $cacheOnly Only return cached data, don't fall back to API
+     * @param  bool  $forceRefresh  Force fetch from API even if cached
+     * @param  bool  $cacheOnly  Only return cached data, don't fall back to API
      */
     public function getPurchaseOrderLines(string $premierPoId, bool $forceRefresh = false, bool $cacheOnly = false): array
     {
         // Try to get from local database first (unless forced refresh)
-        if (!$forceRefresh) {
+        if (! $forceRefresh) {
             $localLines = $this->getFromLocalDatabase($premierPoId);
-            if (!empty($localLines)) {
+            if (! empty($localLines)) {
                 return $localLines;
             }
         }
@@ -92,7 +92,7 @@ class PremierPurchaseOrderService
     {
         $lines = $this->fetchFromPremierApi($premierPoId);
 
-        if (!empty($lines)) {
+        if (! empty($lines)) {
             // Store in database
             $this->storeLines($premierPoId, $lines, $requisitionId);
         }
@@ -109,7 +109,7 @@ class PremierPurchaseOrderService
 
         foreach ($lines as $line) {
             $lineId = $line['PurchaseOrderLineId'] ?? null;
-            if (!$lineId) {
+            if (! $lineId) {
                 continue;
             }
 
@@ -156,7 +156,7 @@ class PremierPurchaseOrderService
                     'status' => $response->status(),
                     'response' => $response->body(),
                 ]);
-                throw new \Exception('Failed to fetch Purchase Order lines from Premier: ' . $response->body());
+                throw new \Exception('Failed to fetch Purchase Order lines from Premier: '.$response->body());
             }
 
             // Response structure: Data contains array of arrays
@@ -193,7 +193,7 @@ class PremierPurchaseOrderService
             ]);
 
             // Handle different response structures
-            if (!is_array($data) || empty($data)) {
+            if (! is_array($data) || empty($data)) {
                 return [];
             }
 
@@ -239,6 +239,7 @@ class PremierPurchaseOrderService
                 'premier_po_id' => $premierPoId,
                 'response' => $response->body(),
             ]);
+
             return [];
         }
 
@@ -336,7 +337,7 @@ class PremierPurchaseOrderService
     public function getPurchaseOrderHeader(string $premierPoId, bool $forceRefresh = false): ?array
     {
         // Try to get from local database first (unless forced refresh)
-        if (!$forceRefresh) {
+        if (! $forceRefresh) {
             $localHeader = PremierPoHeader::getByPremierPoId($premierPoId);
             if ($localHeader) {
                 return $this->headerToArray($localHeader);
@@ -390,6 +391,7 @@ class PremierPurchaseOrderService
                     'status' => $response->status(),
                     'response' => $response->body(),
                 ]);
+
                 return null;
             }
 
@@ -410,6 +412,7 @@ class PremierPurchaseOrderService
                 'premier_po_id' => $premierPoId,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

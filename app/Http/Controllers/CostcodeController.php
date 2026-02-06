@@ -22,9 +22,8 @@ class CostcodeController extends Controller
 
     public function download()
     {
-        $fileName = 'costcodes_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'costcodes_'.now()->format('Ymd_His').'.csv';
         $headers = ['code', 'description', 'cost_type_code'];
-
 
         $costCodes = CostCode::with('costType')->orderBy('code')->get()->map(function ($costCode) {
             return [
@@ -41,7 +40,7 @@ class CostcodeController extends Controller
             foreach ($costCodes as $index => $row) {
                 // Skip transformation for header row
                 if ($index > 0 && isset($row['code'])) {
-                    $row['code'] = '="' . $row['code'] . '"';
+                    $row['code'] = '="'.$row['code'].'"';
                 }
                 fputcsv($handle, $row);
             }
@@ -61,7 +60,6 @@ class CostcodeController extends Controller
 
         // Read and skip header row
         $header = fgetcsv($handle);
-
 
         while (($row = fgetcsv($handle)) !== false) {
             // Assuming CSV order is: name, code
@@ -85,6 +83,7 @@ class CostcodeController extends Controller
     public function destroy(CostCode $costcode)
     {
         $costcode->delete();
+
         return redirect()->back()->with('success', 'Cost Code deleted successfully.');
     }
 }

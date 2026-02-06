@@ -1,6 +1,6 @@
-import { Head, useForm, router } from '@inertiajs/react';
-import { LoaderCircle, Fingerprint } from 'lucide-react';
-import { FormEventHandler, useState, useEffect } from 'react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { Fingerprint, LoaderCircle } from 'lucide-react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -70,7 +70,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     onFinish: () => {
                         setIsAuthenticatingWithPasskey(false);
                     },
-                }
+                },
             );
         } catch (err: any) {
             console.error('Passkey authentication failed:', err);
@@ -165,9 +165,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                 Sign in with passkey
                             </Button>
 
-                            {passkeyError && (
-                                <p className="text-sm text-red-500 text-center">{passkeyError}</p>
-                            )}
+                            {passkeyError && <p className="text-center text-sm text-red-500">{passkeyError}</p>}
                         </>
                     )}
                 </div>

@@ -89,6 +89,7 @@ class SupplierCategoryController extends Controller
     public function destroy(SupplierCategory $supplierCategory)
     {
         $supplierCategory->delete();
+
         return redirect()->route('supplier-categories.index')->with('success', 'Supplier category deleted successfully.');
     }
 
@@ -98,6 +99,7 @@ class SupplierCategoryController extends Controller
     public function getBySupplier($supplierId)
     {
         $categories = SupplierCategory::where('supplier_id', $supplierId)->get();
+
         return response()->json($categories);
     }
 }

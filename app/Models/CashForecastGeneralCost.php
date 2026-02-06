@@ -41,7 +41,7 @@ class CashForecastGeneralCost extends Model
     {
         $cashflows = [];
 
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             return $cashflows;
         }
 
@@ -54,6 +54,7 @@ class CashForecastGeneralCost extends Model
             if ($costStart->between($startMonth, $endMonth)) {
                 $cashflows[$paymentMonth] = $this->getAmountWithGst();
             }
+
             return $cashflows;
         }
 
@@ -105,7 +106,7 @@ class CashForecastGeneralCost extends Model
         };
 
         // Add GST if not already included
-        if (!$this->includes_gst) {
+        if (! $this->includes_gst) {
             $monthlyAmount *= 1.1;
         }
 

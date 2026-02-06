@@ -32,8 +32,8 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/' . $drawing->id,
-                time() . '_' . $photoName,
+                'qa-drawing-observations/'.$drawing->id,
+                time().'_'.$photoName,
                 'public'
             );
         }
@@ -93,8 +93,8 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/' . $drawing->id,
-                time() . '_' . $photoName,
+                'qa-drawing-observations/'.$drawing->id,
+                time().'_'.$photoName,
                 'public'
             );
 
@@ -214,7 +214,7 @@ class QaStageDrawingObservationController extends Controller
         $qaDrawingA = \App\Models\QaStageDrawing::find($observation->source_sheet_a_id);
         $qaDrawingB = \App\Models\QaStageDrawing::find($observation->source_sheet_b_id);
 
-        if (!$qaDrawingA || !$qaDrawingB) {
+        if (! $qaDrawingA || ! $qaDrawingB) {
             return response()->json([
                 'success' => false,
                 'message' => 'Source drawings not found.',
@@ -225,7 +225,7 @@ class QaStageDrawingObservationController extends Controller
         $filePathA = $qaDrawingA->page_preview_s3_key ?: $qaDrawingA->thumbnail_path;
         $filePathB = $qaDrawingB->page_preview_s3_key ?: $qaDrawingB->thumbnail_path;
 
-        if (!$filePathA || !$filePathB) {
+        if (! $filePathA || ! $filePathB) {
             return response()->json([
                 'success' => false,
                 'message' => 'Source drawing preview images not found.',
@@ -242,7 +242,7 @@ class QaStageDrawingObservationController extends Controller
         ];
 
         try {
-            $comparisonService = new \App\Services\DrawingComparisonService();
+            $comparisonService = new \App\Services\DrawingComparisonService;
             $result = $comparisonService->describeRegionWithAI(
                 $filePathA,
                 $filePathB,
@@ -250,7 +250,7 @@ class QaStageDrawingObservationController extends Controller
                 'walls and ceilings'
             );
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return response()->json([
                     'success' => false,
                     'message' => $result['error'] ?? 'Failed to describe region.',
@@ -280,7 +280,7 @@ class QaStageDrawingObservationController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to describe observation: ' . $e->getMessage(),
+                'message' => 'Failed to describe observation: '.$e->getMessage(),
             ], 500);
         }
     }

@@ -106,7 +106,7 @@ function AnimatedGreeting({ userName }: { userName?: string }) {
             </h1>
             {/* Subtitle */}
             {showSubtitle && (
-                <p className="mt-3 text-2xl font-light text-foreground/80 md:text-3xl">
+                <p className="text-foreground/80 mt-3 text-2xl font-light md:text-3xl">
                     {displayedSubtitle}
                     {!isComplete && <span className="animate-pulse">|</span>}
                 </p>
@@ -185,11 +185,11 @@ export function ChatWelcome({
                 handleSubmit();
             }
         },
-        [handleSubmit]
+        [handleSubmit],
     );
 
     const canSubmit = inputValue.trim().length > 0 && !isLoading;
-    const selectedToolData = AVAILABLE_TOOLS.find(t => t.id === selectedTool);
+    const selectedToolData = AVAILABLE_TOOLS.find((t) => t.id === selectedTool);
 
     if (centered) {
         return (
@@ -222,7 +222,7 @@ export function ChatWelcome({
                         <div
                             className={cn(
                                 'absolute -inset-[2px] rounded-[28px] opacity-60 blur-sm transition-opacity duration-300',
-                                isFocused ? 'opacity-80' : 'opacity-40'
+                                isFocused ? 'opacity-80' : 'opacity-40',
                             )}
                             style={{
                                 background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
@@ -231,7 +231,7 @@ export function ChatWelcome({
                             }}
                         />
                         {/* Inner card */}
-                        <div className="relative rounded-3xl border border-border/50 bg-card shadow-lg">
+                        <div className="border-border/50 bg-card relative rounded-3xl border shadow-lg">
                             <div className="flex items-center gap-2 p-3 md:gap-3 md:p-4">
                                 {/* Plus button with tools dropdown */}
                                 <DropdownMenu>
@@ -246,7 +246,7 @@ export function ChatWelcome({
                                                         'size-9 shrink-0 rounded-full transition-colors',
                                                         selectedTool
                                                             ? 'bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400'
-                                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                                                     )}
                                                     disabled={isLoading}
                                                 >
@@ -270,10 +270,15 @@ export function ChatWelcome({
                                                 >
                                                     <Icon className={cn('size-4', isSelected && 'text-violet-500')} />
                                                     <div className="flex-1">
-                                                        <div className={cn('text-sm font-medium', isSelected && 'text-violet-600 dark:text-violet-400')}>
+                                                        <div
+                                                            className={cn(
+                                                                'text-sm font-medium',
+                                                                isSelected && 'text-violet-600 dark:text-violet-400',
+                                                            )}
+                                                        >
                                                             {tool.name}
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground">{tool.description}</div>
+                                                        <div className="text-muted-foreground text-xs">{tool.description}</div>
                                                     </div>
                                                     {isSelected && <Check className="size-4 text-violet-500" />}
                                                 </DropdownMenuItem>
@@ -282,11 +287,8 @@ export function ChatWelcome({
                                         {selectedTool && (
                                             <>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                    onClick={() => setSelectedTool(null)}
-                                                    className="text-muted-foreground"
-                                                >
-                                                    <X className="size-4 mr-2" />
+                                                <DropdownMenuItem onClick={() => setSelectedTool(null)} className="text-muted-foreground">
+                                                    <X className="mr-2 size-4" />
                                                     Clear selection
                                                 </DropdownMenuItem>
                                             </>
@@ -305,9 +307,9 @@ export function ChatWelcome({
                                     placeholder={placeholder}
                                     disabled={isLoading}
                                     className={cn(
-                                        'min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none md:text-lg',
+                                        'max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none md:text-lg',
                                         'placeholder:text-muted-foreground/60',
-                                        'disabled:cursor-not-allowed disabled:opacity-50'
+                                        'disabled:cursor-not-allowed disabled:opacity-50',
                                     )}
                                     rows={1}
                                 />
@@ -317,7 +319,7 @@ export function ChatWelcome({
                                     <Button
                                         type="button"
                                         size="icon"
-                                        className="size-9 shrink-0 rounded-full bg-foreground text-background shadow-md transition-transform hover:scale-105 hover:bg-foreground/90"
+                                        className="bg-foreground text-background hover:bg-foreground/90 size-9 shrink-0 rounded-full shadow-md transition-transform hover:scale-105"
                                         onClick={handleSubmit}
                                     >
                                         <ArrowUp className="size-5" />
@@ -327,7 +329,7 @@ export function ChatWelcome({
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="size-9 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                        className="text-muted-foreground hover:bg-muted hover:text-foreground size-9 shrink-0 rounded-full transition-colors"
                                         onClick={onVoiceCall}
                                         title="Start voice call"
                                     >
@@ -347,15 +349,15 @@ export function ChatWelcome({
                             return (
                                 <button
                                     key={index}
-                                    className="group flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-all hover:bg-muted/60 hover:translate-x-1"
+                                    className="group hover:bg-muted/60 flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-all hover:translate-x-1"
                                     onClick={() => onPromptClick?.(item.prompt)}
                                 >
                                     {Icon ? (
-                                        <Icon className="size-5 text-muted-foreground transition-colors group-hover:text-violet-500" />
+                                        <Icon className="text-muted-foreground size-5 transition-colors group-hover:text-violet-500" />
                                     ) : (
-                                        <Sparkles className="size-5 text-muted-foreground transition-colors group-hover:text-violet-500" />
+                                        <Sparkles className="text-muted-foreground size-5 transition-colors group-hover:text-violet-500" />
                                     )}
-                                    <span className="text-base text-muted-foreground transition-colors group-hover:text-foreground">
+                                    <span className="text-muted-foreground group-hover:text-foreground text-base transition-colors">
                                         {item.label}
                                     </span>
                                 </button>
@@ -384,14 +386,10 @@ export function ChatWelcome({
             </div>
 
             {/* Title */}
-            <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight">
-                {title}
-            </h2>
+            <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight">{title}</h2>
 
             {/* Subtitle */}
-            <p className="text-muted-foreground mb-8 max-w-sm text-center text-sm">
-                {subtitle}
-            </p>
+            <p className="text-muted-foreground mb-8 max-w-sm text-center text-sm">{subtitle}</p>
 
             {/* Suggested prompts */}
             {suggestedPrompts.length > 0 && (

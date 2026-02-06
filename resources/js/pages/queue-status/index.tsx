@@ -4,14 +4,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 import Echo from 'laravel-echo';
+import { Activity, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
-import { Activity, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Queue Status', href: '/queue-status' },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Queue Status', href: '/queue-status' }];
 
 type QueueJob = {
     id: string;
@@ -90,59 +88,61 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             setIsConnected(false);
         });
 
-        channel.listen('.job.status.updated', (event: { job_id: string; job_name: string; status: string; message?: string; metadata?: any; timestamp: string }) => {
+        channel.listen(
+            '.job.status.updated',
+            (event: { job_id: string; job_name: string; status: string; message?: string; metadata?: any; timestamp: string }) => {
+                const newJob: QueueJob = {
+                    id: event.job_id,
+                    name: event.job_name,
+                    status: event.status as QueueJob['status'],
+                    message: event.message,
+                    metadata: event.metadata,
+                    timestamp: event.timestamp,
+                };
 
-            const newJob: QueueJob = {
-                id: event.job_id,
-                name: event.job_name,
-                status: event.status as QueueJob['status'],
-                message: event.message,
-                metadata: event.metadata,
-                timestamp: event.timestamp,
-            };
+                if (event.status === 'processing') {
+                    // Add to processing jobs
+                    setProcessingJobs((prev) => {
+                        const filtered = prev.filter((j) => j.id !== event.job_id);
+                        return [newJob, ...filtered];
+                    });
 
-            if (event.status === 'processing') {
-                // Add to processing jobs
-                setProcessingJobs(prev => {
-                    const filtered = prev.filter(j => j.id !== event.job_id);
-                    return [newJob, ...filtered];
-                });
+                    // Remove from pending jobs
+                    setJobs((prev) => ({
+                        ...prev,
+                        pending: prev.pending.filter((j) => j.id !== event.job_id),
+                        stats: {
+                            ...prev.stats,
+                            pending_count: prev.pending.filter((j) => j.id !== event.job_id).length,
+                        },
+                    }));
+                } else if (event.status === 'completed') {
+                    // Remove from processing - match by either ID or name
+                    setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
 
-                // Remove from pending jobs
-                setJobs(prev => ({
-                    ...prev,
-                    pending: prev.pending.filter(j => j.id !== event.job_id),
-                    stats: {
-                        ...prev.stats,
-                        pending_count: prev.pending.filter(j => j.id !== event.job_id).length,
-                    },
-                }));
-            } else if (event.status === 'completed') {
-                // Remove from processing - match by either ID or name
-                setProcessingJobs(prev => prev.filter(j => j.id !== event.job_id));
+                    // Add to recently completed
+                    setRecentlyCompleted((prev) => {
+                        const filtered = prev.filter((j) => j.id !== event.job_id);
+                        return [newJob, ...filtered].slice(0, 20); // Keep last 20
+                    });
+                } else if (event.status === 'failed') {
+                    // Remove from processing - match by ID
+                    setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
 
-                // Add to recently completed
-                setRecentlyCompleted(prev => {
-                    const filtered = prev.filter(j => j.id !== event.job_id);
-                    return [newJob, ...filtered].slice(0, 20); // Keep last 20
-                });
-            } else if (event.status === 'failed') {
-                // Remove from processing - match by ID
-                setProcessingJobs(prev => prev.filter(j => j.id !== event.job_id));
-
-                // Remove from pending too, in case it was still there
-                setJobs(prev => ({
-                    ...prev,
-                    pending: prev.pending.filter(j => j.id !== event.job_id),
-                    failed: [newJob, ...prev.failed],
-                    stats: {
-                        ...prev.stats,
-                        pending_count: prev.pending.filter(j => j.id !== event.job_id).length,
-                        failed_count: prev.failed.length + 1,
-                    },
-                }));
-            }
-        });
+                    // Remove from pending too, in case it was still there
+                    setJobs((prev) => ({
+                        ...prev,
+                        pending: prev.pending.filter((j) => j.id !== event.job_id),
+                        failed: [newJob, ...prev.failed],
+                        stats: {
+                            ...prev.stats,
+                            pending_count: prev.pending.filter((j) => j.id !== event.job_id).length,
+                            failed_count: prev.failed.length + 1,
+                        },
+                    }));
+                }
+            },
+        );
 
         return () => {
             channel.stopListening('.job.status.updated');
@@ -156,7 +156,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             case 'pending':
                 return <Clock className="h-4 w-4 text-gray-500" />;
             case 'processing':
-                return <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />;
+                return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
             case 'completed':
                 return <CheckCircle2 className="h-4 w-4 text-green-500" />;
             case 'failed':
@@ -203,9 +203,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                     <h1 className="text-2xl font-bold">Queue Status Monitor</h1>
                     <div className="flex items-center gap-2">
                         <Activity className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-red-500'}`} />
-                        <span className="text-sm text-muted-foreground">
-                            {isConnected ? 'Connected to real-time updates' : 'Connecting...'}
-                        </span>
+                        <span className="text-muted-foreground text-sm">{isConnected ? 'Connected to real-time updates' : 'Connecting...'}</span>
                     </div>
                 </div>
 
@@ -213,7 +211,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 <div className="grid gap-4 md:grid-cols-4">
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+                            <CardTitle className="text-muted-foreground text-sm font-medium">Pending</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{jobs.stats.pending_count}</div>
@@ -222,7 +220,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Processing</CardTitle>
+                            <CardTitle className="text-muted-foreground text-sm font-medium">Processing</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{processingJobs.length}</div>
@@ -231,7 +229,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Recently Completed</CardTitle>
+                            <CardTitle className="text-muted-foreground text-sm font-medium">Recently Completed</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{recentlyCompleted.length}</div>
@@ -240,7 +238,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
+                            <CardTitle className="text-muted-foreground text-sm font-medium">Failed</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{jobs.stats.failed_count}</div>
@@ -392,9 +390,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                             </TableCell>
                                             <TableCell className="font-medium">{job.name}</TableCell>
                                             <TableCell>{job.queue || '-'}</TableCell>
-                                            <TableCell className="max-w-xs truncate text-sm text-red-600">
-                                                {job.message || '-'}
-                                            </TableCell>
+                                            <TableCell className="max-w-xs truncate text-sm text-red-600">{job.message || '-'}</TableCell>
                                             <TableCell>{formatDate(job.failed_at || job.timestamp)}</TableCell>
                                         </TableRow>
                                     ))}
@@ -413,7 +409,8 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                 <div>
                                     <p className="font-semibold">Real-time updates unavailable</p>
                                     <p className="text-sm">
-                                        Make sure Laravel Reverb is running: <code className="rounded bg-yellow-100 px-1">php artisan reverb:start</code>
+                                        Make sure Laravel Reverb is running:{' '}
+                                        <code className="rounded bg-yellow-100 px-1">php artisan reverb:start</code>
                                     </p>
                                     <p className="mt-1 text-sm">Currently showing initial job list. Jobs will update in real-time once connected.</p>
                                 </div>
@@ -425,7 +422,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 {/* Empty State */}
                 {jobs.pending.length === 0 && processingJobs.length === 0 && recentlyCompleted.length === 0 && jobs.failed.length === 0 && (
                     <Card>
-                        <CardContent className="py-8 text-center text-muted-foreground">
+                        <CardContent className="text-muted-foreground py-8 text-center">
                             <Activity className="mx-auto mb-2 h-12 w-12 opacity-50" />
                             <p>No queue jobs to display. The queue is empty.</p>
                         </CardContent>
@@ -435,7 +432,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
             {/* Failed Job Details Dialog */}
             <Dialog open={!!selectedFailedJob} onOpenChange={(open) => !open && setSelectedFailedJob(null)}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <XCircle className="h-5 w-5 text-red-500" />
@@ -450,7 +447,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                             </div>
                             <div>
                                 <h3 className="mb-1 text-sm font-semibold text-gray-700">Job ID</h3>
-                                <p className="font-mono text-sm text-gray-600 break-all">{selectedFailedJob.id}</p>
+                                <p className="font-mono text-sm break-all text-gray-600">{selectedFailedJob.id}</p>
                             </div>
                             <div>
                                 <h3 className="mb-1 text-sm font-semibold text-gray-700">Queue</h3>
@@ -463,13 +460,15 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                             {selectedFailedJob.metadata?.exception && (
                                 <div>
                                     <h3 className="mb-1 text-sm font-semibold text-gray-700">Exception Type</h3>
-                                    <p className="font-mono text-sm text-gray-600 break-all">{selectedFailedJob.metadata.exception}</p>
+                                    <p className="font-mono text-sm break-all text-gray-600">{selectedFailedJob.metadata.exception}</p>
                                 </div>
                             )}
                             <div>
                                 <h3 className="mb-1 text-sm font-semibold text-gray-700">Error Message</h3>
-                                <div className="max-h-96 overflow-y-auto overflow-x-auto rounded-md bg-red-50 p-3">
-                                    <pre className="whitespace-pre-wrap break-words text-xs text-red-900">{selectedFailedJob.message || 'No error message available'}</pre>
+                                <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-md bg-red-50 p-3">
+                                    <pre className="text-xs break-words whitespace-pre-wrap text-red-900">
+                                        {selectedFailedJob.message || 'No error message available'}
+                                    </pre>
                                 </div>
                             </div>
                         </div>

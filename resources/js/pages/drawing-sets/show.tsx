@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,12 +9,28 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, Check, CheckCircle, Clock, Edit2, ExternalLink, Eye, GitCompare, Loader2, MapPin, RefreshCw, RotateCcw, Save, Settings, Trash2, XCircle } from 'lucide-react';
+import {
+    AlertCircle,
+    Check,
+    CheckCircle,
+    Clock,
+    Edit2,
+    ExternalLink,
+    Eye,
+    GitCompare,
+    Loader2,
+    MapPin,
+    RefreshCw,
+    RotateCcw,
+    Save,
+    Settings,
+    Trash2,
+    XCircle,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -283,7 +300,7 @@ export default function DrawingSetShow() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
                 body: JSON.stringify(body),
@@ -391,7 +408,7 @@ export default function DrawingSetShow() {
     };
 
     const handleToggleChange = (idx: number) => {
-        setSelectedChanges(prev => {
+        setSelectedChanges((prev) => {
             const next = new Set(prev);
             if (next.has(idx)) {
                 next.delete(idx);
@@ -456,9 +473,7 @@ export default function DrawingSetShow() {
     };
 
     // Get sheets that have drawing numbers for comparison
-    const comparableSheets = drawingSet.sheets.filter(
-        (s) => s.drawing_number && s.page_preview_s3_key && s.extraction_status === 'success'
-    );
+    const comparableSheets = drawingSet.sheets.filter((s) => s.drawing_number && s.page_preview_s3_key && s.extraction_status === 'success');
 
     const getPreviewUrl = (sheet: Sheet) => {
         if (sheet.page_preview_s3_key) return `/drawing-sheets/${sheet.id}/preview`;
@@ -568,7 +583,7 @@ export default function DrawingSetShow() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
                 body: JSON.stringify({
@@ -641,8 +656,9 @@ export default function DrawingSetShow() {
                                                 <button
                                                     key={sheet.id}
                                                     onClick={() => setSelectedSheet(sheet)}
-                                                    className={`w-full rounded-lg border p-2 text-left transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                                                        }`}
+                                                    className={`w-full rounded-lg border p-2 text-left transition-colors ${
+                                                        isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                                                    }`}
                                                 >
                                                     <div className="flex items-start justify-between">
                                                         <div className="min-w-0 flex-1">
@@ -652,8 +668,9 @@ export default function DrawingSetShow() {
                                                             </p>
                                                         </div>
                                                         <StatusIcon
-                                                            className={`h-4 w-4 flex-shrink-0 ${config.color} ${sheet.extraction_status === 'processing' ? 'animate-spin' : ''
-                                                                }`}
+                                                            className={`h-4 w-4 flex-shrink-0 ${config.color} ${
+                                                                sheet.extraction_status === 'processing' ? 'animate-spin' : ''
+                                                            }`}
                                                         />
                                                     </div>
                                                 </button>
@@ -671,11 +688,11 @@ export default function DrawingSetShow() {
                                 Retry Failed ({stats.needs_review + stats.failed})
                             </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => handleRetryAll(true)}>
+                        <Button variant="ghost" size="sm" className="text-muted-foreground w-full" onClick={() => handleRetryAll(true)}>
                             <RefreshCw className="mr-2 h-4 w-4" />
                             Force Retry All ({stats.total})
                         </Button>
-                        <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={handleRelinkSheets}>
+                        <Button variant="ghost" size="sm" className="text-muted-foreground w-full" onClick={handleRelinkSheets}>
                             Re-link Revisions
                         </Button>
                         {comparableSheets.length >= 2 && (
@@ -706,11 +723,7 @@ export default function DrawingSetShow() {
                                     </CardDescription>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button
-                                        variant={showOverlays ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => setShowOverlays(!showOverlays)}
-                                    >
+                                    <Button variant={showOverlays ? 'default' : 'outline'} size="sm" onClick={() => setShowOverlays(!showOverlays)}>
                                         {showOverlays ? 'Hide' : 'Show'} Overlays
                                     </Button>
                                     {/* Template selector and Retry button */}
@@ -728,7 +741,13 @@ export default function DrawingSetShow() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setShowTemplateManager(true)} title="Manage Templates">
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={() => setShowTemplateManager(true)}
+                                            title="Manage Templates"
+                                        >
                                             <Settings className="h-4 w-4" />
                                         </Button>
                                         <Button
@@ -760,20 +779,18 @@ export default function DrawingSetShow() {
                                     </Button>
                                 </div>
                             </CardHeader>
-                            <CardContent className="flex flex-1 gap-4 overflow-hidden p-4 relative">
+                            <CardContent className="relative flex flex-1 gap-4 overflow-hidden p-4">
                                 {/* Sync Extraction Loading Overlay */}
                                 {retrySyncLoading && (
-                                    <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
-                                        <div className="text-center space-y-4">
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur-sm">
+                                        <div className="space-y-4 text-center">
                                             <div className="relative">
-                                                <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
-                                                <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+                                                <div className="border-primary/20 h-16 w-16 rounded-full border-4" />
+                                                <div className="border-primary absolute top-0 left-0 h-16 w-16 animate-spin rounded-full border-4 border-t-transparent" />
                                             </div>
                                             <div>
                                                 <h3 className="text-lg font-semibold text-slate-800">Extracting Metadata</h3>
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                    Running OCR extraction...
-                                                </p>
+                                                <p className="text-muted-foreground mt-1 text-sm">Running OCR extraction...</p>
                                             </div>
                                         </div>
                                     </div>
@@ -878,7 +895,7 @@ export default function DrawingSetShow() {
                                         <div className="text-muted-foreground text-xs">
                                             Used template: {templates.find((t) => t.id === selectedSheet.used_template_id)?.name || 'Unknown'}
                                             {selectedSheet.extraction_raw?.used_field_mappings && (
-                                                <Badge variant="outline" className="ml-2 text-[10px] bg-violet-50 text-violet-700 border-violet-200">
+                                                <Badge variant="outline" className="ml-2 border-violet-200 bg-violet-50 text-[10px] text-violet-700">
                                                     Field Mappings
                                                 </Badge>
                                             )}
@@ -995,8 +1012,7 @@ export default function DrawingSetShow() {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
-                                            'X-CSRF-TOKEN':
-                                                document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                                         },
                                         body: JSON.stringify({
                                             name: templateName,
@@ -1040,10 +1056,7 @@ export default function DrawingSetShow() {
                         ) : (
                             <div className="space-y-2">
                                 {templates.map((template) => (
-                                    <div
-                                        key={template.id}
-                                        className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50"
-                                    >
+                                    <div key={template.id} className="hover:bg-muted/50 flex items-center justify-between rounded-lg border p-3">
                                         <div className="min-w-0 flex-1">
                                             <p className="font-medium">{template.name}</p>
                                             <div className="text-muted-foreground flex gap-2 text-xs">
@@ -1092,13 +1105,13 @@ export default function DrawingSetShow() {
 
             {/* Field Mapping Dialog */}
             <Dialog open={showFieldMapping} onOpenChange={setShowFieldMapping}>
-                <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] min-w-full overflow-hidden flex flex-col p-0">
+                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] min-w-full flex-col overflow-hidden p-0">
                     {/* Header */}
-                    <div className="px-6 py-4 border-b bg-gradient-to-r from-slate-50 to-white">
+                    <div className="border-b bg-gradient-to-r from-slate-50 to-white px-6 py-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-                                    <MapPin className="h-5 w-5 text-primary" />
+                                <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+                                    <MapPin className="text-primary h-5 w-5" />
                                     Draw Field Regions
                                 </DialogTitle>
                                 <DialogDescription className="mt-1">
@@ -1107,7 +1120,7 @@ export default function DrawingSetShow() {
                             </div>
                             <div className="flex items-center gap-2">
                                 {/* Progress indicator */}
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground bg-slate-100 px-3 py-1.5 rounded-full">
+                                <div className="text-muted-foreground flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-sm">
                                     <span className="font-medium">
                                         {[fieldRects.drawing_number, fieldRects.drawing_title, fieldRects.revision].filter(Boolean).length}
                                     </span>
@@ -1118,10 +1131,10 @@ export default function DrawingSetShow() {
                         </div>
                     </div>
 
-                    <div className="flex flex-1 overflow-hidden min-h-0">
+                    <div className="flex min-h-0 flex-1 overflow-hidden">
                         {/* Left Sidebar - Field Tools */}
-                        <div className="w-72 border-r bg-slate-50/50 flex flex-col">
-                            <div className="p-4 flex-1 overflow-auto">
+                        <div className="flex w-72 flex-col border-r bg-slate-50/50">
+                            <div className="flex-1 overflow-auto p-4">
                                 <div className="space-y-2">
                                     {(['drawing_number', 'drawing_title', 'revision'] as const).map((field) => {
                                         const labels = {
@@ -1135,9 +1148,24 @@ export default function DrawingSetShow() {
                                             revision: 'The revision letter or number',
                                         };
                                         const colors = {
-                                            drawing_number: { bg: 'bg-emerald-500', border: 'border-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700' },
-                                            drawing_title: { bg: 'bg-blue-500', border: 'border-blue-500', light: 'bg-blue-50', text: 'text-blue-700' },
-                                            revision: { bg: 'bg-violet-500', border: 'border-violet-500', light: 'bg-violet-50', text: 'text-violet-700' },
+                                            drawing_number: {
+                                                bg: 'bg-emerald-500',
+                                                border: 'border-emerald-500',
+                                                light: 'bg-emerald-50',
+                                                text: 'text-emerald-700',
+                                            },
+                                            drawing_title: {
+                                                bg: 'bg-blue-500',
+                                                border: 'border-blue-500',
+                                                light: 'bg-blue-50',
+                                                text: 'text-blue-700',
+                                            },
+                                            revision: {
+                                                bg: 'bg-violet-500',
+                                                border: 'border-violet-500',
+                                                light: 'bg-violet-50',
+                                                text: 'text-violet-700',
+                                            },
                                         };
                                         const hasRect = fieldRects[field] !== null;
                                         const isActive = activeFieldTool === field;
@@ -1146,47 +1174,49 @@ export default function DrawingSetShow() {
                                         return (
                                             <div
                                                 key={field}
-                                                className={`rounded-lg border-2 transition-all cursor-pointer ${isActive
-                                                    ? `${colorSet.border} ${colorSet.light} shadow-sm`
-                                                    : hasRect
-                                                        ? 'border-slate-200 bg-white'
-                                                        : 'border-slate-200 bg-white hover:border-slate-300'
-                                                    }`}
+                                                className={`cursor-pointer rounded-lg border-2 transition-all ${
+                                                    isActive
+                                                        ? `${colorSet.border} ${colorSet.light} shadow-sm`
+                                                        : hasRect
+                                                          ? 'border-slate-200 bg-white'
+                                                          : 'border-slate-200 bg-white hover:border-slate-300'
+                                                }`}
                                                 onClick={() => setActiveFieldTool(field)}
                                             >
                                                 <div className="p-3">
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`w-3 h-3 rounded-sm ${colorSet.bg}`} />
-                                                            <span className={`font-medium text-sm ${isActive ? colorSet.text : 'text-slate-700'}`}>
+                                                            <span className={`h-3 w-3 rounded-sm ${colorSet.bg}`} />
+                                                            <span className={`text-sm font-medium ${isActive ? colorSet.text : 'text-slate-700'}`}>
                                                                 {labels[field]}
                                                             </span>
                                                         </div>
                                                         {hasRect ? (
-                                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
-                                                                <Check className="h-3 w-3 mr-1" />
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-emerald-200 bg-emerald-50 text-xs text-emerald-700"
+                                                            >
+                                                                <Check className="mr-1 h-3 w-3" />
                                                                 Mapped
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="outline" className="text-slate-400 border-slate-200 text-xs">
+                                                            <Badge variant="outline" className="border-slate-200 text-xs text-slate-400">
                                                                 Not set
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground mt-1 ml-5">
-                                                        {descriptions[field]}
-                                                    </p>
+                                                    <p className="text-muted-foreground mt-1 ml-5 text-xs">{descriptions[field]}</p>
                                                     {hasRect && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="w-full mt-2 h-7 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50"
+                                                            className="mt-2 h-7 w-full text-xs text-slate-500 hover:bg-red-50 hover:text-red-600"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleClearFieldRect(field);
                                                             }}
                                                         >
-                                                            <XCircle className="h-3 w-3 mr-1" />
+                                                            <XCircle className="mr-1 h-3 w-3" />
                                                             Clear selection
                                                         </Button>
                                                     )}
@@ -1198,11 +1228,11 @@ export default function DrawingSetShow() {
                             </div>
 
                             {/* Tips section */}
-                            <div className="p-4 border-t bg-amber-50/50">
+                            <div className="border-t bg-amber-50/50 p-4">
                                 <div className="flex gap-2">
-                                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
                                     <div className="text-xs text-amber-800">
-                                        <p className="font-medium mb-1">Tips</p>
+                                        <p className="mb-1 font-medium">Tips</p>
                                         <ul className="space-y-1 text-amber-700">
                                             <li>• Click a field above to select it</li>
                                             <li>• Draw a tight box around the text</li>
@@ -1214,46 +1244,54 @@ export default function DrawingSetShow() {
                         </div>
 
                         {/* Main Canvas Area */}
-                        <div className="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
+                        <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-100">
                             {/* Extraction Loading Overlay */}
                             {extractingAfterMapping && (
-                                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center">
-                                    <div className="text-center space-y-4">
+                                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-sm">
+                                    <div className="space-y-4 text-center">
                                         <div className="relative">
-                                            <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
-                                            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+                                            <div className="border-primary/20 h-16 w-16 rounded-full border-4" />
+                                            <div className="border-primary absolute top-0 left-0 h-16 w-16 animate-spin rounded-full border-4 border-t-transparent" />
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-semibold text-slate-800">Extracting Metadata</h3>
-                                            <p className="text-sm text-muted-foreground mt-1">
-                                                Running OCR with your field mappings...
-                                            </p>
+                                            <p className="text-muted-foreground mt-1 text-sm">Running OCR with your field mappings...</p>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* Canvas toolbar */}
-                            <div className="px-4 py-2 bg-white border-b flex items-center justify-between">
+                            <div className="flex items-center justify-between border-b bg-white px-4 py-2">
                                 <div className="flex items-center gap-2">
                                     {activeFieldTool ? (
-                                        <Badge className={`${activeFieldTool === 'drawing_number' ? 'bg-emerald-500' :
-                                            activeFieldTool === 'drawing_title' ? 'bg-blue-500' : 'bg-violet-500'
-                                            }`}>
-                                            Drawing: {activeFieldTool === 'drawing_number' ? 'Drawing Number' :
-                                                activeFieldTool === 'drawing_title' ? 'Drawing Title' : 'Revision'}
+                                        <Badge
+                                            className={`${
+                                                activeFieldTool === 'drawing_number'
+                                                    ? 'bg-emerald-500'
+                                                    : activeFieldTool === 'drawing_title'
+                                                      ? 'bg-blue-500'
+                                                      : 'bg-violet-500'
+                                            }`}
+                                        >
+                                            Drawing:{' '}
+                                            {activeFieldTool === 'drawing_number'
+                                                ? 'Drawing Number'
+                                                : activeFieldTool === 'drawing_title'
+                                                  ? 'Drawing Title'
+                                                  : 'Revision'}
                                         </Badge>
                                     ) : (
-                                        <span className="text-sm text-muted-foreground">Select a field from the left to start drawing</span>
+                                        <span className="text-muted-foreground text-sm">Select a field from the left to start drawing</span>
                                     )}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-muted-foreground text-xs">
                                     Template: <span className="font-medium">{fieldMappingTemplate?.name}</span>
                                 </div>
                             </div>
 
                             {/* Canvas */}
-                            <div className="flex-1 overflow-auto p-6 flex items-center justify-center">
+                            <div className="flex flex-1 items-center justify-center overflow-auto p-6">
                                 {selectedSheet && fieldMappingTemplate ? (
                                     <FieldMappingCanvas
                                         imageUrl={`/drawing-sheets/${selectedSheet.id}/preview`}
@@ -1263,7 +1301,7 @@ export default function DrawingSetShow() {
                                         onFieldRectDrawn={handleFieldRectDrawn}
                                     />
                                 ) : (
-                                    <div className="text-center text-muted-foreground">
+                                    <div className="text-muted-foreground text-center">
                                         <p>No sheet or template selected</p>
                                     </div>
                                 )}
@@ -1272,15 +1310,15 @@ export default function DrawingSetShow() {
                     </div>
 
                     {/* Footer */}
-                    <div className="px-6 py-4 border-t bg-white flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between border-t bg-white px-6 py-4">
+                        <div className="text-muted-foreground text-sm">
                             {extractingAfterMapping ? (
-                                <span className="text-blue-600 flex items-center gap-1">
+                                <span className="flex items-center gap-1 text-blue-600">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     Running extraction...
                                 </span>
                             ) : fieldRects.drawing_number || fieldRects.drawing_title || fieldRects.revision ? (
-                                <span className="text-emerald-600 flex items-center gap-1">
+                                <span className="flex items-center gap-1 text-emerald-600">
                                     <Check className="h-4 w-4" />
                                     Ready to save
                                 </span>
@@ -1289,12 +1327,20 @@ export default function DrawingSetShow() {
                             )}
                         </div>
                         <div className="flex gap-3">
-                            <Button variant="outline" onClick={() => setShowFieldMapping(false)} disabled={savingFieldMappings || extractingAfterMapping}>
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowFieldMapping(false)}
+                                disabled={savingFieldMappings || extractingAfterMapping}
+                            >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleSaveFieldMappings}
-                                disabled={savingFieldMappings || extractingAfterMapping || (!fieldRects.drawing_number && !fieldRects.drawing_title && !fieldRects.revision)}
+                                disabled={
+                                    savingFieldMappings ||
+                                    extractingAfterMapping ||
+                                    (!fieldRects.drawing_number && !fieldRects.drawing_title && !fieldRects.revision)
+                                }
                                 className="min-w-[140px]"
                             >
                                 {savingFieldMappings ? (
@@ -1320,26 +1366,27 @@ export default function DrawingSetShow() {
             </Dialog>
 
             {/* AI Comparison Dialog */}
-            <Dialog open={showCompareDialog} onOpenChange={(open) => {
-                setShowCompareDialog(open);
-                if (!open) {
-                    setComparisonResult(null);
-                    setCompareSheetA('');
-                    setCompareSheetB('');
-                }
-            }}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <Dialog
+                open={showCompareDialog}
+                onOpenChange={(open) => {
+                    setShowCompareDialog(open);
+                    if (!open) {
+                        setComparisonResult(null);
+                        setCompareSheetA('');
+                        setCompareSheetB('');
+                    }
+                }}
+            >
+                <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <GitCompare className="h-5 w-5 text-violet-600" />
                             AI Drawing Comparison
                         </DialogTitle>
-                        <DialogDescription>
-                            Select two revisions to compare. AI will analyze the drawings and identify changes.
-                        </DialogDescription>
+                        <DialogDescription>Select two revisions to compare. AI will analyze the drawings and identify changes.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-auto space-y-4 py-4">
+                    <div className="flex-1 space-y-4 overflow-auto py-4">
                         {/* Sheet Selection */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -1376,20 +1423,23 @@ export default function DrawingSetShow() {
 
                         {/* Results */}
                         {comparisonResult && (
-                            <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
+                            <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
                                 {/* Summary */}
                                 <div>
-                                    <h4 className="font-semibold text-sm mb-1">Summary</h4>
+                                    <h4 className="mb-1 text-sm font-semibold">Summary</h4>
                                     <p className="text-sm text-slate-700">{comparisonResult.summary}</p>
-                                    <div className="flex gap-2 mt-2">
-                                        <Badge variant="outline">
-                                            {comparisonResult.change_count} changes found
-                                        </Badge>
-                                        <Badge variant="outline" className={
-                                            comparisonResult.confidence === 'high' ? 'bg-green-50 text-green-700' :
-                                            comparisonResult.confidence === 'medium' ? 'bg-amber-50 text-amber-700' :
-                                            'bg-red-50 text-red-700'
-                                        }>
+                                    <div className="mt-2 flex gap-2">
+                                        <Badge variant="outline">{comparisonResult.change_count} changes found</Badge>
+                                        <Badge
+                                            variant="outline"
+                                            className={
+                                                comparisonResult.confidence === 'high'
+                                                    ? 'bg-green-50 text-green-700'
+                                                    : comparisonResult.confidence === 'medium'
+                                                      ? 'bg-amber-50 text-amber-700'
+                                                      : 'bg-red-50 text-red-700'
+                                            }
+                                        >
                                             {comparisonResult.confidence} confidence
                                         </Badge>
                                     </div>
@@ -1398,37 +1448,27 @@ export default function DrawingSetShow() {
                                 {/* Changes List with Selection */}
                                 {comparisonResult.changes.length > 0 && (
                                     <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-semibold text-sm">Detailed Changes</h4>
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <h4 className="text-sm font-semibold">Detailed Changes</h4>
                                             <div className="flex gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-7 text-xs"
-                                                    onClick={handleSelectAllChanges}
-                                                >
+                                                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleSelectAllChanges}>
                                                     Select All
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-7 text-xs"
-                                                    onClick={handleDeselectAllChanges}
-                                                >
+                                                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleDeselectAllChanges}>
                                                     Deselect All
                                                 </Button>
                                             </div>
                                         </div>
-                                        <div className="space-y-2 max-h-[250px] overflow-auto">
+                                        <div className="max-h-[250px] space-y-2 overflow-auto">
                                             {comparisonResult.changes.map((change, idx) => (
                                                 <div
                                                     key={idx}
-                                                    className={`p-3 rounded border cursor-pointer transition-colors ${
+                                                    className={`cursor-pointer rounded border p-3 transition-colors ${
                                                         selectedChanges.has(idx)
                                                             ? 'border-violet-400 bg-violet-50'
                                                             : change.potential_change_order
-                                                                ? 'border-amber-300 bg-amber-50'
-                                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                                              ? 'border-amber-300 bg-amber-50'
+                                                              : 'border-slate-200 bg-white hover:border-slate-300'
                                                     }`}
                                                     onClick={() => handleToggleChange(idx)}
                                                 >
@@ -1439,41 +1479,35 @@ export default function DrawingSetShow() {
                                                             className="mt-1"
                                                         />
                                                         <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="mb-1 flex items-center gap-2">
                                                                 <Badge variant="secondary" className="text-xs">
                                                                     {change.type}
                                                                 </Badge>
                                                                 <Badge
                                                                     variant="outline"
                                                                     className={
-                                                                        change.impact === 'high' ? 'text-red-600' :
-                                                                        change.impact === 'medium' ? 'text-amber-600' :
-                                                                        'text-slate-600'
+                                                                        change.impact === 'high'
+                                                                            ? 'text-red-600'
+                                                                            : change.impact === 'medium'
+                                                                              ? 'text-amber-600'
+                                                                              : 'text-slate-600'
                                                                     }
                                                                 >
                                                                     {change.impact} impact
                                                                 </Badge>
                                                                 {change.potential_change_order && (
-                                                                    <Badge className="bg-amber-500 text-white text-xs">
-                                                                        Potential Change Order
-                                                                    </Badge>
+                                                                    <Badge className="bg-amber-500 text-xs text-white">Potential Change Order</Badge>
                                                                 )}
                                                             </div>
                                                             <p className="text-sm">{change.description}</p>
-                                                            <p className="text-xs text-muted-foreground mt-1">
-                                                                Location: {change.location}
-                                                            </p>
-                                                            {change.reason && (
-                                                                <p className="text-xs text-amber-700 mt-1">
-                                                                    {change.reason}
-                                                                </p>
-                                                            )}
+                                                            <p className="text-muted-foreground mt-1 text-xs">Location: {change.location}</p>
+                                                            {change.reason && <p className="mt-1 text-xs text-amber-700">{change.reason}</p>}
                                                         </div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="mt-2 text-sm text-muted-foreground">
+                                        <div className="text-muted-foreground mt-2 text-sm">
                                             {selectedChanges.size} of {comparisonResult.changes.length} changes selected
                                         </div>
                                     </div>
@@ -1481,13 +1515,13 @@ export default function DrawingSetShow() {
 
                                 {/* Notes */}
                                 {comparisonResult.notes && (
-                                    <div className="text-sm text-muted-foreground border-t pt-2">
+                                    <div className="text-muted-foreground border-t pt-2 text-sm">
                                         <strong>AI Notes:</strong> {comparisonResult.notes}
                                     </div>
                                 )}
 
                                 {/* Regenerate Section */}
-                                <div className="border-t pt-4 space-y-3">
+                                <div className="space-y-3 border-t pt-4">
                                     <div>
                                         <Label className="text-sm font-medium">Refine Analysis (Optional)</Label>
                                         <Textarea
@@ -1497,13 +1531,7 @@ export default function DrawingSetShow() {
                                             className="mt-1.5 h-20 text-sm"
                                         />
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleRegenerate}
-                                        disabled={comparing}
-                                        className="w-full"
-                                    >
+                                    <Button variant="outline" size="sm" onClick={handleRegenerate} disabled={comparing} className="w-full">
                                         <RotateCcw className="mr-2 h-4 w-4" />
                                         Regenerate Analysis
                                     </Button>
@@ -1514,10 +1542,11 @@ export default function DrawingSetShow() {
                         {/* Loading State */}
                         {comparing && (
                             <div className="flex items-center justify-center py-12">
-                                <div className="text-center space-y-3">
-                                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-violet-600" />
-                                    <p className="text-sm text-muted-foreground">
-                                        AI is analyzing the drawings...<br />
+                                <div className="space-y-3 text-center">
+                                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-violet-600" />
+                                    <p className="text-muted-foreground text-sm">
+                                        AI is analyzing the drawings...
+                                        <br />
                                         This may take 30-60 seconds.
                                     </p>
                                 </div>
@@ -1681,7 +1710,7 @@ function PreviewWithOverlays({
                                 selectedTemplate.crop_rect.x,
                                 selectedTemplate.crop_rect.y,
                                 selectedTemplate.crop_rect.w,
-                                selectedTemplate.crop_rect.h
+                                selectedTemplate.crop_rect.h,
                             )}
                         >
                             <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1 text-[10px] font-semibold text-white">
@@ -1694,16 +1723,9 @@ function PreviewWithOverlays({
                     {template && (
                         <div
                             className="pointer-events-none absolute border-2 border-dashed border-amber-500 bg-amber-500/10"
-                            style={toPixelStyle(
-                                template.crop_rect.x,
-                                template.crop_rect.y,
-                                template.crop_rect.w,
-                                template.crop_rect.h
-                            )}
+                            style={toPixelStyle(template.crop_rect.x, template.crop_rect.y, template.crop_rect.w, template.crop_rect.h)}
                         >
-                            <span className="absolute -top-5 left-0 rounded bg-amber-500 px-1 text-[10px] text-white">
-                                Used: {template.name}
-                            </span>
+                            <span className="absolute -top-5 left-0 rounded bg-amber-500 px-1 text-[10px] text-white">Used: {template.name}</span>
                         </div>
                     )}
 
@@ -1763,7 +1785,7 @@ function PreviewWithOverlays({
                                     style={pixelStyle}
                                 >
                                     <span
-                                        className={`absolute -top-4 left-0 whitespace-nowrap rounded px-1 text-[9px] text-white ${colors.border.replace('border-', 'bg-')}`}
+                                        className={`absolute -top-4 left-0 rounded px-1 text-[9px] whitespace-nowrap text-white ${colors.border.replace('border-', 'bg-')}`}
                                     >
                                         {colors.label}
                                     </span>
@@ -1827,20 +1849,17 @@ function CaptureBoxCanvas({
     const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(initialRect);
     const [imageLoaded, setImageLoaded] = useState(false);
 
-    const getMousePos = useCallback(
-        (e: React.MouseEvent<HTMLDivElement>) => {
-            const container = containerRef.current;
-            const img = imageRef.current;
-            if (!container || !img) return { x: 0, y: 0 };
+    const getMousePos = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        const container = containerRef.current;
+        const img = imageRef.current;
+        if (!container || !img) return { x: 0, y: 0 };
 
-            const rect = img.getBoundingClientRect();
-            return {
-                x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
-                y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
-            };
-        },
-        [],
-    );
+        const rect = img.getBoundingClientRect();
+        return {
+            x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+            y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
+        };
+    }, []);
 
     const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         const pos = getMousePos(e);
@@ -2052,11 +2071,11 @@ function FieldMappingCanvas({
     const bgPosY = -cropRect.y * bgHeight;
 
     return (
-        <div ref={parentRef} className="relative w-full h-full flex flex-col items-center justify-center">
+        <div ref={parentRef} className="relative flex h-full w-full flex-col items-center justify-center">
             {/* Container that shows only the crop region using CSS background */}
             <div
                 ref={containerRef}
-                className={`relative overflow-hidden rounded-lg border-2 ${activeField ? 'border-slate-400 cursor-crosshair' : 'border-slate-300 cursor-default'} shadow-lg`}
+                className={`relative overflow-hidden rounded-lg border-2 ${activeField ? 'cursor-crosshair border-slate-400' : 'cursor-default border-slate-300'} shadow-lg`}
                 style={{
                     width: containerWidth,
                     height: containerHeight,
@@ -2094,9 +2113,7 @@ function FieldMappingCanvas({
                                         height: `${rect.h * 100}%`,
                                     }}
                                 >
-                                    <span
-                                        className={`absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${colors.solid}`}
-                                    >
+                                    <span className={`absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${colors.solid}`}>
                                         {labels[field]}
                                     </span>
                                 </div>
@@ -2106,7 +2123,7 @@ function FieldMappingCanvas({
                         {/* Current drawing rectangle */}
                         {currentDrawRect && activeField && (
                             <div
-                                className={`absolute border-2 border-dashed pointer-events-none ${fieldColors[activeField]?.border || 'border-gray-500'} ${fieldColors[activeField]?.bg || 'bg-gray-500/20'}`}
+                                className={`pointer-events-none absolute border-2 border-dashed ${fieldColors[activeField]?.border || 'border-gray-500'} ${fieldColors[activeField]?.bg || 'bg-gray-500/20'}`}
                                 style={{
                                     left: `${currentDrawRect.x * 100}%`,
                                     top: `${currentDrawRect.y * 100}%`,
@@ -2121,7 +2138,7 @@ function FieldMappingCanvas({
                 {!imageLoaded && (
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
                         <div className="text-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-2" />
+                            <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-slate-400" />
                             <p className="text-slate-500">Loading title block...</p>
                         </div>
                     </div>

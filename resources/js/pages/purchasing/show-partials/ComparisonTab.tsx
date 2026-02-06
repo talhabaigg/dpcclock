@@ -320,32 +320,61 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
             {showDebug && debug && (
                 <Card className="bg-slate-50 p-4 text-xs">
                     <p className="font-semibold">Debug Info:</p>
-                    <p>Local items: {debug.local_count} | Premier items: {debug.premier_count} | Invoice lines: {debug.invoice_lines_count ?? 0}</p>
+                    <p>
+                        Local items: {debug.local_count} | Premier items: {debug.premier_count} | Invoice lines: {debug.invoice_lines_count ?? 0}
+                    </p>
 
                     <div className="mt-3 grid grid-cols-2 gap-4">
                         <div className="rounded border bg-white p-2">
                             <p className="font-semibold text-green-700">Local Sample:</p>
-                            {Array.isArray(debug.local_sample) ? debug.local_sample.map((item, i) => (
-                                <div key={i} className="mt-1 border-t pt-1">
-                                    <p><span className="text-muted-foreground">Line:</span> {item.line_number ?? 'null'}</p>
-                                    <p><span className="text-muted-foreground">Code:</span> {item.code || 'null'}</p>
-                                    <p><span className="text-muted-foreground">Desc:</span> {item.description || 'null'}</p>
-                                    <p><span className="text-muted-foreground">Qty:</span> {item.qty} @ {formatCurrency(item.unit_cost)}</p>
-                                    <p><span className="text-muted-foreground">Price List:</span> <span className="font-medium text-blue-600">{item.price_list ?? 'null'}</span></p>
-                                </div>
-                            )) : <pre className="text-red-500">{JSON.stringify(debug.local_sample, null, 2)}</pre>}
+                            {Array.isArray(debug.local_sample) ? (
+                                debug.local_sample.map((item, i) => (
+                                    <div key={i} className="mt-1 border-t pt-1">
+                                        <p>
+                                            <span className="text-muted-foreground">Line:</span> {item.line_number ?? 'null'}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Code:</span> {item.code || 'null'}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Desc:</span> {item.description || 'null'}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Qty:</span> {item.qty} @ {formatCurrency(item.unit_cost)}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Price List:</span>{' '}
+                                            <span className="font-medium text-blue-600">{item.price_list ?? 'null'}</span>
+                                        </p>
+                                    </div>
+                                ))
+                            ) : (
+                                <pre className="text-red-500">{JSON.stringify(debug.local_sample, null, 2)}</pre>
+                            )}
                         </div>
 
                         <div className="rounded border bg-white p-2">
                             <p className="font-semibold text-blue-700">Premier Sample:</p>
-                            {Array.isArray(debug.premier_sample) ? debug.premier_sample.map((item, i) => (
-                                <div key={i} className="mt-1 border-t pt-1">
-                                    <p><span className="text-muted-foreground">Line:</span> {item.line_number ?? 'null'}</p>
-                                    <p><span className="text-muted-foreground">Desc:</span> {item.description || 'null'}</p>
-                                    <p><span className="text-muted-foreground">Qty:</span> {item.qty} @ {formatCurrency(item.unit_cost)}</p>
-                                </div>
-                            )) : <pre className="text-red-500">{JSON.stringify(debug.premier_sample, null, 2)}</pre>}
-                            {Array.isArray(debug.premier_sample) && debug.premier_sample.length === 0 && <p className="text-red-500">No Premier data received!</p>}
+                            {Array.isArray(debug.premier_sample) ? (
+                                debug.premier_sample.map((item, i) => (
+                                    <div key={i} className="mt-1 border-t pt-1">
+                                        <p>
+                                            <span className="text-muted-foreground">Line:</span> {item.line_number ?? 'null'}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Desc:</span> {item.description || 'null'}
+                                        </p>
+                                        <p>
+                                            <span className="text-muted-foreground">Qty:</span> {item.qty} @ {formatCurrency(item.unit_cost)}
+                                        </p>
+                                    </div>
+                                ))
+                            ) : (
+                                <pre className="text-red-500">{JSON.stringify(debug.premier_sample, null, 2)}</pre>
+                            )}
+                            {Array.isArray(debug.premier_sample) && debug.premier_sample.length === 0 && (
+                                <p className="text-red-500">No Premier data received!</p>
+                            )}
                         </div>
                     </div>
 
@@ -353,7 +382,9 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     {debug.invoice_lines_sample && debug.invoice_lines_sample.length > 0 && (
                         <div className="mt-3 rounded border bg-white p-2">
                             <p className="font-semibold text-purple-700">Invoice Lines Sample ({debug.invoice_lines_count} total):</p>
-                            <pre className="mt-1 max-h-40 overflow-auto text-xs bg-gray-50 p-1 rounded">{JSON.stringify(debug.invoice_lines_sample, null, 2)}</pre>
+                            <pre className="mt-1 max-h-40 overflow-auto rounded bg-gray-50 p-1 text-xs">
+                                {JSON.stringify(debug.invoice_lines_sample, null, 2)}
+                            </pre>
                         </div>
                     )}
 
@@ -382,12 +413,10 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                             <p className="text-xs">
                                 Method: <code className="bg-gray-100 px-1">{debug.invoice_query.method}</code>
                             </p>
-                            <p className="text-xs mt-1">
+                            <p className="mt-1 text-xs">
                                 PO Number: <code className="bg-gray-100 px-1">{debug.invoice_query.po_number || 'N/A'}</code>
                             </p>
-                            <p className="text-xs mt-1 font-medium">
-                                Invoices found: {debug.invoice_query.invoices_found}
-                            </p>
+                            <p className="mt-1 text-xs font-medium">Invoices found: {debug.invoice_query.invoices_found}</p>
                         </div>
                     )}
 
@@ -395,27 +424,33 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     {debug.description_comparison && debug.description_comparison.length > 0 && (
                         <div className="mt-3 rounded border bg-white p-2">
                             <p className="font-semibold text-indigo-700">Matching Scores (Local → Invoice)</p>
-                            <p className="text-xs text-muted-foreground mb-2">Threshold: 30% | Matches by: description OR cost</p>
-                            <div className="space-y-3 max-h-80 overflow-auto">
+                            <p className="text-muted-foreground mb-2 text-xs">Threshold: 30% | Matches by: description OR cost</p>
+                            <div className="max-h-80 space-y-3 overflow-auto">
                                 {debug.description_comparison.map((item, i) => (
                                     <div key={i} className="border-b pb-2">
                                         <p className="text-xs font-medium text-blue-700">
                                             Local: "{item.local_desc}"
                                             <span className="text-muted-foreground ml-1">(${item.local_total?.toFixed(2)})</span>
                                         </p>
-                                        <p className="text-xs text-muted-foreground ml-2">Words: [{item.local_words?.join(', ')}]</p>
-                                        <div className="ml-4 mt-1 space-y-1">
+                                        <p className="text-muted-foreground ml-2 text-xs">Words: [{item.local_words?.join(', ')}]</p>
+                                        <div className="mt-1 ml-4 space-y-1">
                                             {item.invoice_matches.map((match, j) => (
-                                                <div key={j} className="flex items-center gap-2 text-xs flex-wrap">
-                                                    <span className={cn(
-                                                        'font-mono px-1 rounded font-bold',
-                                                        (match.best_desc >= 30 || match.cost_match) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                    )}>
+                                                <div key={j} className="flex flex-wrap items-center gap-2 text-xs">
+                                                    <span
+                                                        className={cn(
+                                                            'rounded px-1 font-mono font-bold',
+                                                            match.best_desc >= 30 || match.cost_match
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : 'bg-red-100 text-red-700',
+                                                        )}
+                                                    >
                                                         {match.best_desc}%
                                                     </span>
-                                                    <span className="text-muted-foreground">(str:{match.similar_text}% word:{match.word_match}%)</span>
+                                                    <span className="text-muted-foreground">
+                                                        (str:{match.similar_text}% word:{match.word_match}%)
+                                                    </span>
                                                     {match.cost_match && (
-                                                        <span className="bg-blue-100 text-blue-700 px-1 rounded font-bold">
+                                                        <span className="rounded bg-blue-100 px-1 font-bold text-blue-700">
                                                             💰 {match.cost_match}
                                                         </span>
                                                     )}
@@ -441,7 +476,12 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     icon={AlertCircle}
                     variant={summary.modified_count > 0 ? 'warning' : 'default'}
                 />
-                <SummaryCard title="Added in Premier" value={summary.added_count} icon={Plus} variant={summary.added_count > 0 ? 'warning' : 'default'} />
+                <SummaryCard
+                    title="Added in Premier"
+                    value={summary.added_count}
+                    icon={Plus}
+                    variant={summary.added_count > 0 ? 'warning' : 'default'}
+                />
                 <SummaryCard title="Removed" value={summary.removed_count} icon={Minus} variant={summary.removed_count > 0 ? 'danger' : 'default'} />
             </div>
 
@@ -450,24 +490,26 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
             <Card className="bg-muted/30 p-4">
                 <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                        <p className="text-muted-foreground text-xs uppercase tracking-wide">Original (Local)</p>
+                        <p className="text-muted-foreground text-xs tracking-wide uppercase">Original (Local)</p>
                         <p className="text-xl font-bold text-blue-700">{formatCurrency(local_total)}</p>
                     </div>
                     <div>
-                        <p className="text-muted-foreground text-xs uppercase tracking-wide">Premier PO</p>
+                        <p className="text-muted-foreground text-xs tracking-wide uppercase">Premier PO</p>
                         <p className="text-xl font-bold text-green-700">{formatCurrency(premier_total)}</p>
                         {poVariance !== 0 && (
                             <p className={cn('text-xs', poVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                                {poVariance > 0 ? '+' : ''}{formatCurrency(poVariance)} from original
+                                {poVariance > 0 ? '+' : ''}
+                                {formatCurrency(poVariance)} from original
                             </p>
                         )}
                     </div>
                     <div>
-                        <p className="text-muted-foreground text-xs uppercase tracking-wide">Invoiced</p>
+                        <p className="text-muted-foreground text-xs tracking-wide uppercase">Invoiced</p>
                         <p className="text-xl font-bold text-purple-700">{formatCurrency(invoice_total)}</p>
                         {invoice_total > 0 && invoiceVariance !== 0 && (
                             <p className={cn('text-xs', invoiceVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                                {invoiceVariance > 0 ? '+' : ''}{formatCurrency(invoiceVariance)} from PO
+                                {invoiceVariance > 0 ? '+' : ''}
+                                {formatCurrency(invoiceVariance)} from PO
                             </p>
                         )}
                     </div>
@@ -511,7 +553,9 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                     {inv.status && (
                                         <>
                                             <span className="text-muted-foreground">•</span>
-                                            <Badge variant="outline" className="text-xs">{inv.status}</Badge>
+                                            <Badge variant="outline" className="text-xs">
+                                                {inv.status}
+                                            </Badge>
                                         </>
                                     )}
                                 </div>
@@ -532,11 +576,21 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                         <Table className="min-w-[1600px]">
                             <TableHeader>
                                 <TableRow className="border-b-2">
-                                    <TableHead rowSpan={2} className="w-[80px] border-r bg-muted/30 align-middle">Status</TableHead>
-                                    <TableHead rowSpan={2} className="min-w-[180px] border-r bg-muted/30 align-middle">Description</TableHead>
-                                    <TableHead colSpan={4} className="border-r bg-blue-50 text-center text-blue-700">Original (Local)</TableHead>
-                                    <TableHead colSpan={4} className="border-r bg-green-50 text-center text-green-700">Premier PO</TableHead>
-                                    <TableHead colSpan={4} className="border-r bg-purple-50 text-center text-purple-700">Invoiced</TableHead>
+                                    <TableHead rowSpan={2} className="bg-muted/30 w-[80px] border-r align-middle">
+                                        Status
+                                    </TableHead>
+                                    <TableHead rowSpan={2} className="bg-muted/30 min-w-[180px] border-r align-middle">
+                                        Description
+                                    </TableHead>
+                                    <TableHead colSpan={4} className="border-r bg-blue-50 text-center text-blue-700">
+                                        Original (Local)
+                                    </TableHead>
+                                    <TableHead colSpan={4} className="border-r bg-green-50 text-center text-green-700">
+                                        Premier PO
+                                    </TableHead>
+                                    <TableHead colSpan={4} className="border-r bg-purple-50 text-center text-purple-700">
+                                        Invoiced
+                                    </TableHead>
                                 </TableRow>
                                 <TableRow className="border-b-2">
                                     <TableHead className="w-[50px] text-right text-xs text-blue-600">Qty</TableHead>
@@ -588,13 +642,17 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
 
                                             {/* Description */}
                                             <TableCell className="max-w-[200px] border-r">
-                                                <div className="whitespace-normal break-words text-sm">
+                                                <div className="text-sm break-words whitespace-normal">
                                                     {displayItem?.line_number && (
                                                         <span className="text-muted-foreground mr-1 text-xs">#{displayItem.line_number}</span>
                                                     )}
                                                     {displayItem?.code && <span className="font-medium">{displayItem.code}</span>}
-                                                    {displayItem?.code && displayItem?.description && <span className="text-muted-foreground mx-1">-</span>}
-                                                    <span>{displayItem?.description || <span className="text-muted-foreground italic">No desc</span>}</span>
+                                                    {displayItem?.code && displayItem?.description && (
+                                                        <span className="text-muted-foreground mx-1">-</span>
+                                                    )}
+                                                    <span>
+                                                        {displayItem?.description || <span className="text-muted-foreground italic">No desc</span>}
+                                                    </span>
                                                 </div>
                                             </TableCell>
 
@@ -606,9 +664,9 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                     <span className="text-muted-foreground">—</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-left max-w-[120px]">
+                                            <TableCell className="max-w-[120px] text-left">
                                                 {item.local?.price_list != null && item.local.price_list !== '' ? (
-                                                    <span className="text-blue-600 text-xs whitespace-normal break-words block">
+                                                    <span className="block text-xs break-words whitespace-normal text-blue-600">
                                                         {String(item.local.price_list)}
                                                     </span>
                                                 ) : (
@@ -638,8 +696,14 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                             {item.premier.qty}
                                                         </span>
                                                         {hasQtyChange && item.variances && (
-                                                            <div className={cn('text-xs', item.variances.qty.difference > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                                                                {item.variances.qty.difference > 0 ? '+' : ''}{item.variances.qty.difference}
+                                                            <div
+                                                                className={cn(
+                                                                    'text-xs',
+                                                                    item.variances.qty.difference > 0 ? 'text-rose-600' : 'text-emerald-600',
+                                                                )}
+                                                            >
+                                                                {item.variances.qty.difference > 0 ? '+' : ''}
+                                                                {item.variances.qty.difference}
                                                             </div>
                                                         )}
                                                     </div>
@@ -654,8 +718,14 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                             {formatCurrency(item.premier.unit_cost)}
                                                         </span>
                                                         {hasUnitChange && item.variances && (
-                                                            <div className={cn('text-xs', item.variances.unit_cost.difference > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                                                                {item.variances.unit_cost.difference > 0 ? '+' : ''}{formatCurrency(item.variances.unit_cost.difference)}
+                                                            <div
+                                                                className={cn(
+                                                                    'text-xs',
+                                                                    item.variances.unit_cost.difference > 0 ? 'text-rose-600' : 'text-emerald-600',
+                                                                )}
+                                                            >
+                                                                {item.variances.unit_cost.difference > 0 ? '+' : ''}
+                                                                {formatCurrency(item.variances.unit_cost.difference)}
                                                             </div>
                                                         )}
                                                     </div>
@@ -675,15 +745,26 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                             <TableCell className="border-r text-right tabular-nums">
                                                 {item.premier && item.local ? (
                                                     hasTotalChange && item.variances ? (
-                                                        <div className={cn('text-xs font-medium', totalVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                                                            <div>{totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}</div>
-                                                            <div className="text-muted-foreground">({variancePct > 0 ? '+' : ''}{variancePct.toFixed(1)}%)</div>
+                                                        <div
+                                                            className={cn(
+                                                                'text-xs font-medium',
+                                                                totalVariance > 0 ? 'text-rose-600' : 'text-emerald-600',
+                                                            )}
+                                                        >
+                                                            <div>
+                                                                {totalVariance > 0 ? '+' : ''}
+                                                                {formatCurrency(totalVariance)}
+                                                            </div>
+                                                            <div className="text-muted-foreground">
+                                                                ({variancePct > 0 ? '+' : ''}
+                                                                {variancePct.toFixed(1)}%)
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-emerald-600 text-xs">—</span>
+                                                        <span className="text-xs text-emerald-600">—</span>
                                                     )
                                                 ) : item.status === 'added' ? (
-                                                    <span className="text-blue-600 text-xs">New</span>
+                                                    <span className="text-xs text-blue-600">New</span>
                                                 ) : (
                                                     <span className="text-muted-foreground">—</span>
                                                 )}
@@ -709,7 +790,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                     <div>
                                                         <span className="font-medium text-purple-700">{formatCurrency(item.invoice.total_cost)}</span>
                                                         {item.invoice.invoice_number && (
-                                                            <div className="text-xs text-muted-foreground">{item.invoice.invoice_number}</div>
+                                                            <div className="text-muted-foreground text-xs">{item.invoice.invoice_number}</div>
                                                         )}
                                                     </div>
                                                 ) : (
@@ -721,17 +802,23 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                 {item.premier ? (
                                                     hasInvoice ? (
                                                         Math.abs(remaining) < 0.01 ? (
-                                                            <span className="text-emerald-600 text-xs font-medium">Fully Invoiced</span>
+                                                            <span className="text-xs font-medium text-emerald-600">Fully Invoiced</span>
                                                         ) : (
-                                                            <div className={cn('text-xs font-medium', remaining > 0 ? 'text-amber-600' : 'text-rose-600')}>
-                                                                <div>{remaining > 0 ? '' : '+'}{formatCurrency(Math.abs(remaining))}</div>
-                                                                <div className="text-muted-foreground">
-                                                                    {remaining > 0 ? 'remaining' : 'over'}
+                                                            <div
+                                                                className={cn(
+                                                                    'text-xs font-medium',
+                                                                    remaining > 0 ? 'text-amber-600' : 'text-rose-600',
+                                                                )}
+                                                            >
+                                                                <div>
+                                                                    {remaining > 0 ? '' : '+'}
+                                                                    {formatCurrency(Math.abs(remaining))}
                                                                 </div>
+                                                                <div className="text-muted-foreground">{remaining > 0 ? 'remaining' : 'over'}</div>
                                                             </div>
                                                         )
                                                     ) : (
-                                                        <span className="text-amber-600 text-xs">Not invoiced</span>
+                                                        <span className="text-xs text-amber-600">Not invoiced</span>
                                                     )
                                                 ) : (
                                                     <span className="text-muted-foreground text-xs">—</span>

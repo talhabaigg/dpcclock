@@ -27,7 +27,9 @@ class ProcessDrawingSetJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 60;
+
     public int $timeout = 600; // 10 minutes for large PDFs
 
     public function __construct(
@@ -38,8 +40,9 @@ class ProcessDrawingSetJob implements ShouldQueue
     {
         $drawingSet = DrawingSet::find($this->drawingSetId);
 
-        if (!$drawingSet) {
+        if (! $drawingSet) {
             Log::error('Drawing set not found', ['id' => $this->drawingSetId]);
+
             return;
         }
 
@@ -57,15 +60,15 @@ class ProcessDrawingSetJob implements ShouldQueue
             }
 
             // Validate PDF header (should start with %PDF-)
-            if (!str_starts_with($pdfContent, '%PDF-')) {
+            if (! str_starts_with($pdfContent, '%PDF-')) {
                 throw new \RuntimeException('Invalid PDF file - does not have PDF header');
             }
 
-            $tempPdfPath = sys_get_temp_dir() . '/drawing_set_' . $drawingSet->id . '.pdf';
+            $tempPdfPath = sys_get_temp_dir().'/drawing_set_'.$drawingSet->id.'.pdf';
             file_put_contents($tempPdfPath, $pdfContent);
 
             // Verify file was written
-            if (!file_exists($tempPdfPath) || filesize($tempPdfPath) === 0) {
+            if (! file_exists($tempPdfPath) || filesize($tempPdfPath) === 0) {
                 throw new \RuntimeException('Failed to write PDF to temp location');
             }
 
@@ -115,24 +118,24 @@ class ProcessDrawingSetJob implements ShouldQueue
     private function processPage(DrawingSet $drawingSet, QaStageDrawing $sheet, string $tempPdfPath): void
     {
         $pageNumber = $sheet->page_number;
-        $tempOutputDir = sys_get_temp_dir() . '/drawing_set_' . $drawingSet->id . '_pages';
+        $tempOutputDir = sys_get_temp_dir().'/drawing_set_'.$drawingSet->id.'_pages';
 
-        if (!is_dir($tempOutputDir)) {
+        if (! is_dir($tempOutputDir)) {
             mkdir($tempOutputDir, 0755, true);
         }
 
         try {
             // Render page to PNG using pdftoppm (Poppler)
-            $outputPrefix = $tempOutputDir . '/page';
+            $outputPrefix = $tempOutputDir.'/page';
             $pngPath = $this->renderPageToPng($tempPdfPath, $pageNumber, $outputPrefix);
 
-            if (!$pngPath || !file_exists($pngPath)) {
+            if (! $pngPath || ! file_exists($pngPath)) {
                 throw new \RuntimeException("Failed to render page {$pageNumber} to PNG");
             }
 
             // Get image dimensions
             $dimensions = getimagesize($pngPath);
-            if (!$dimensions) {
+            if (! $dimensions) {
                 throw new \RuntimeException("Failed to get dimensions for page {$pageNumber}");
             }
 
@@ -142,8 +145,8 @@ class ProcessDrawingSetJob implements ShouldQueue
             $sizeBucket = TitleBlockTemplate::createSizeBucket($width, $height);
 
             // Upload PNG to S3
-            $s3Key = 'drawing-previews/' . $drawingSet->project_id . '/' .
-                     $drawingSet->id . '/page_' . str_pad($pageNumber, 4, '0', STR_PAD_LEFT) . '.png';
+            $s3Key = 'drawing-previews/'.$drawingSet->project_id.'/'.
+                     $drawingSet->id.'/page_'.str_pad($pageNumber, 4, '0', STR_PAD_LEFT).'.png';
 
             Storage::disk('s3')->put($s3Key, file_get_contents($pngPath), [
                 'ContentType' => 'image/png',
@@ -153,8 +156,8 @@ class ProcessDrawingSetJob implements ShouldQueue
             $thumbnailS3Key = null;
             $thumbnailPath = $this->generateThumbnail($pngPath, $tempOutputDir, $pageNumber);
             if ($thumbnailPath && file_exists($thumbnailPath)) {
-                $thumbnailS3Key = 'drawing-thumbnails/' . $drawingSet->project_id . '/' .
-                         $drawingSet->id . '/thumb_' . str_pad($pageNumber, 4, '0', STR_PAD_LEFT) . '.jpg';
+                $thumbnailS3Key = 'drawing-thumbnails/'.$drawingSet->project_id.'/'.
+                         $drawingSet->id.'/thumb_'.str_pad($pageNumber, 4, '0', STR_PAD_LEFT).'.jpg';
 
                 Storage::disk('s3')->put($thumbnailS3Key, file_get_contents($thumbnailPath), [
                     'ContentType' => 'image/jpeg',
@@ -199,9 +202,9 @@ class ProcessDrawingSetJob implements ShouldQueue
     /**
      * Render a specific PDF page to PNG using pdftoppm (Poppler).
      *
-     * @param string $pdfPath Path to PDF file
-     * @param int $pageNumber 1-based page number
-     * @param string $outputPrefix Output path prefix
+     * @param  string  $pdfPath  Path to PDF file
+     * @param  int  $pageNumber  1-based page number
+     * @param  string  $outputPrefix  Output path prefix
      * @return string|null Path to generated PNG
      */
     private function renderPageToPng(string $pdfPath, int $pageNumber, string $outputPrefix): ?string
@@ -229,7 +232,7 @@ class ProcessDrawingSetJob implements ShouldQueue
     {
         // Find pdftoppm executable
         $pdftoppm = $this->findPdftoppm();
-        if (!$pdftoppm) {
+        if (! $pdftoppm) {
             return null;
         }
 
@@ -246,20 +249,21 @@ class ProcessDrawingSetJob implements ShouldQueue
 
         $result = Process::timeout(120)->run($command);
 
-        if (!$result->successful()) {
+        if (! $result->successful()) {
             Log::warning('pdftoppm failed', [
                 'command' => $command,
                 'output' => $result->output(),
                 'error' => $result->errorOutput(),
             ]);
+
             return null;
         }
 
         // pdftoppm creates files like: outputPrefix-01.png or outputPrefix-1.png
         $possibleFiles = [
-            $outputPrefix . '-' . $pageNumber . '.png',
-            $outputPrefix . '-' . str_pad($pageNumber, 2, '0', STR_PAD_LEFT) . '.png',
-            $outputPrefix . '-' . str_pad($pageNumber, 3, '0', STR_PAD_LEFT) . '.png',
+            $outputPrefix.'-'.$pageNumber.'.png',
+            $outputPrefix.'-'.str_pad($pageNumber, 2, '0', STR_PAD_LEFT).'.png',
+            $outputPrefix.'-'.str_pad($pageNumber, 3, '0', STR_PAD_LEFT).'.png',
         ];
 
         foreach ($possibleFiles as $file) {
@@ -269,8 +273,8 @@ class ProcessDrawingSetJob implements ShouldQueue
         }
 
         // Try glob as fallback
-        $files = glob($outputPrefix . '-*.png');
-        if (!empty($files)) {
+        $files = glob($outputPrefix.'-*.png');
+        if (! empty($files)) {
             return $files[0];
         }
 
@@ -340,11 +344,11 @@ class ProcessDrawingSetJob implements ShouldQueue
             }
         }
 
-        if (!$magickCommand) {
+        if (! $magickCommand) {
             return null;
         }
 
-        $outputPath = $outputPrefix . '-' . $pageNumber . '.png';
+        $outputPath = $outputPrefix.'-'.$pageNumber.'.png';
 
         // ImageMagick uses 0-based page index in brackets
         $command = sprintf(
@@ -374,18 +378,18 @@ class ProcessDrawingSetJob implements ShouldQueue
      */
     private function tryImagickExtension(string $pdfPath, int $pageNumber, string $outputPrefix): ?string
     {
-        if (!extension_loaded('imagick')) {
+        if (! extension_loaded('imagick')) {
             return null;
         }
 
         try {
-            $imagick = new \Imagick();
+            $imagick = new \Imagick;
             $imagick->setResolution(300, 300);
-            $imagick->readImage($pdfPath . '[' . ($pageNumber - 1) . ']'); // 0-based index
+            $imagick->readImage($pdfPath.'['.($pageNumber - 1).']'); // 0-based index
             $imagick->setImageFormat('png');
             $imagick->setImageCompressionQuality(90);
 
-            $outputPath = $outputPrefix . '-' . $pageNumber . '.png';
+            $outputPath = $outputPrefix.'-'.$pageNumber.'.png';
             $imagick->writeImage($outputPath);
             $imagick->clear();
             $imagick->destroy();
@@ -408,7 +412,7 @@ class ProcessDrawingSetJob implements ShouldQueue
      */
     private function generateThumbnail(string $pngPath, string $outputDir, int $pageNumber): ?string
     {
-        $thumbnailPath = $outputDir . '/thumb_' . $pageNumber . '.jpg';
+        $thumbnailPath = $outputDir.'/thumb_'.$pageNumber.'.jpg';
         $targetWidth = 300;
 
         try {
@@ -449,7 +453,7 @@ class ProcessDrawingSetJob implements ShouldQueue
     {
         // Check if magick command is available
         $checkResult = Process::run(PHP_OS_FAMILY === 'Windows' ? 'where magick 2>nul' : 'which convert 2>/dev/null');
-        if (!$checkResult->successful()) {
+        if (! $checkResult->successful()) {
             return false;
         }
 

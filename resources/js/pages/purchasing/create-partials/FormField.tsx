@@ -16,7 +16,7 @@ interface FormFieldProps {
 export function FormField({ label, icon: Icon, required, tooltip, children }: FormFieldProps) {
     return (
         <div className="space-y-1">
-            <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                 {Icon && <Icon className="h-3 w-3" />}
                 {label}
                 {required && (
@@ -27,7 +27,7 @@ export function FormField({ label, icon: Icon, required, tooltip, children }: Fo
                 {tooltip && (
                     <Tooltip>
                         <TooltipTrigger>
-                            <HelpCircle className="h-3 w-3 text-muted-foreground/50" />
+                            <HelpCircle className="text-muted-foreground/50 h-3 w-3" />
                         </TooltipTrigger>
                         <TooltipContent side="top">
                             <p className="text-xs">{tooltip}</p>
@@ -49,12 +49,7 @@ interface TextInputFieldProps extends Omit<FormFieldProps, 'children'> {
 export function TextInputField({ label, icon, required, tooltip, value, onChange, placeholder }: TextInputFieldProps) {
     return (
         <FormField label={label} icon={icon} required={required} tooltip={tooltip}>
-            <Input
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="h-9 text-sm"
-                placeholder={placeholder}
-            />
+            <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-9 text-sm" placeholder={placeholder} />
         </FormField>
     );
 }

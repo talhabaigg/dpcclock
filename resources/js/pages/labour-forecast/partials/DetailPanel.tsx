@@ -27,8 +27,6 @@ interface HourRowData {
 const WEEK_COL_WIDTH = 90;
 
 interface DetailPanelProps {
-    parentId: string;
-    parentLabel: string;
     weeks: Week[];
     hoursPerWeek: number;
     headcountByWeek: { [weekKey: string]: number };
@@ -47,8 +45,6 @@ interface DetailPanelProps {
 }
 
 export const DetailPanel = ({
-    parentId,
-    parentLabel,
     weeks,
     hoursPerWeek,
     headcountByWeek,
@@ -70,9 +66,7 @@ export const DetailPanel = ({
         {
             type: 'ordinary',
             label: 'Ordinary Hours',
-            values: Object.fromEntries(
-                weeks.map((w) => [w.key, (headcountByWeek[w.key] || 0) * hoursPerWeek])
-            ),
+            values: Object.fromEntries(weeks.map((w) => [w.key, (headcountByWeek[w.key] || 0) * hoursPerWeek])),
             editable: true,
             colorClass: 'bg-teal-500',
         },
@@ -109,7 +103,7 @@ export const DetailPanel = ({
             values: phByWeek,
             editable: true,
             colorClass: 'bg-indigo-500',
-        }
+        },
     );
 
     const handleCellChange = useCallback(
@@ -133,7 +127,7 @@ export const DetailPanel = ({
                     break;
             }
         },
-        [onOrdinaryHoursChange, onOvertimeChange, onLeaveChange, onRdoChange, onPhChange]
+        [onOrdinaryHoursChange, onOvertimeChange, onLeaveChange, onRdoChange, onPhChange],
     );
 
     // Calculate totals for each row
@@ -183,16 +177,12 @@ export const DetailPanel = ({
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="bg-slate-100 dark:bg-slate-800/80">
-                            <th className="w-[140px] border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            <th className="w-[140px] border-r border-b border-slate-200 px-3 py-2 text-left text-xs font-semibold tracking-wider text-slate-500 uppercase dark:border-slate-700 dark:text-slate-400">
                                 Hour Type
                             </th>
                             <th className="border-b border-slate-200 p-0 dark:border-slate-700">
                                 {/* Scrollable week headers - synced */}
-                                <div
-                                    ref={localScrollRef}
-                                    className="overflow-x-auto"
-                                    style={{ scrollbarWidth: 'none' }}
-                                >
+                                <div ref={localScrollRef} className="overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
                                     <div className="flex" style={{ minWidth: weeks.length * WEEK_COL_WIDTH }}>
                                         {weeks.map((week, idx) => (
                                             <div
@@ -202,26 +192,23 @@ export const DetailPanel = ({
                                                 }`}
                                                 style={{ width: WEEK_COL_WIDTH, minWidth: WEEK_COL_WIDTH }}
                                             >
-                                                <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500">W.E</span>
+                                                <span className="text-[10px] text-slate-400 uppercase dark:text-slate-500">W.E</span>
                                                 <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{week.label}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </th>
-                            <th className="w-[100px] border-b border-l border-slate-200 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            <th className="w-[100px] border-b border-l border-slate-200 px-3 py-2 text-center text-xs font-semibold tracking-wider text-slate-500 uppercase dark:border-slate-700 dark:text-slate-400">
                                 Total
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         {hourRows.map((row, rowIdx) => (
-                            <tr
-                                key={row.type}
-                                className={rowIdx % 2 === 0 ? 'bg-white dark:bg-slate-800/30' : 'bg-slate-50 dark:bg-slate-800/60'}
-                            >
+                            <tr key={row.type} className={rowIdx % 2 === 0 ? 'bg-white dark:bg-slate-800/30' : 'bg-slate-50 dark:bg-slate-800/60'}>
                                 {/* Row Label */}
-                                <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">
+                                <td className="border-r border-b border-slate-200 px-3 py-2 dark:border-slate-700">
                                     <div className="flex items-center gap-2">
                                         <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${row.colorClass}`} />
                                         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{row.label}</span>
@@ -260,7 +247,7 @@ export const DetailPanel = ({
                                                             step={row.type === 'ordinary' ? hoursPerWeek : 1}
                                                             value={row.values[week.key] || 0}
                                                             onChange={(e) => handleCellChange(row.type, week.key, e.target.value)}
-                                                            className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-center text-sm text-slate-700 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:focus:bg-slate-600"
+                                                            className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-center text-sm text-slate-700 transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:focus:bg-slate-600"
                                                         />
                                                     ) : (
                                                         <span className="text-sm text-slate-600 dark:text-slate-300">

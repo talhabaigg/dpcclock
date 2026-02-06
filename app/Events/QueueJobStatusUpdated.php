@@ -12,9 +12,13 @@ class QueueJobStatusUpdated implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets;
 
     public string $jobId;
+
     public string $jobName;
+
     public string $status;
+
     public ?string $message;
+
     public ?array $metadata;
 
     /**

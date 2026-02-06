@@ -146,9 +146,7 @@ export function buildCostColumnDefs({
                                 editable: false,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isCurrentMonth
-                                    ? 'text-right border-l-2 border-sky-400'
-                                    : 'text-right',
+                                cellClass: isCurrentMonth ? 'text-right border-l-2 border-sky-400' : 'text-right',
                                 valueFormatter: (p: any) =>
                                     p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
@@ -232,7 +230,8 @@ export function buildCostColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
-                            cellClass: 'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-l-[3px] border-slate-400 dark:border-slate-500',
+                            cellClass:
+                                'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-l-[3px] border-slate-400 dark:border-slate-500',
                             headerClass: 'ag-right-aligned-header',
                         },
                         {
@@ -257,7 +256,8 @@ export function buildCostColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
-                            cellClass: 'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-r-[3px] border-slate-400 dark:border-slate-500',
+                            cellClass:
+                                'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-r-[3px] border-slate-400 dark:border-slate-500',
                         },
                     ],
                 },
@@ -279,14 +279,12 @@ export function buildCostColumnDefs({
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isCurrentMonth
-                                    ? 'text-right border-l-2 border-sky-400'
-                                    : 'text-right',
+                                cellClass: isCurrentMonth ? 'text-right border-l-2 border-sky-400' : 'text-right',
                                 valueGetter: isOverlapMonth
                                     ? (p: any) => {
-                                        // For current month in forecast, use separate forecast field
-                                        return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                    }
+                                          // For current month in forecast, use separate forecast field
+                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
+                                      }
                                     : undefined,
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {
@@ -558,9 +556,7 @@ export function buildRevenueColumnDefs({
                                 editable: false,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isCurrentMonth
-                                    ? 'text-right border-l-2 border-sky-400'
-                                    : 'text-right',
+                                cellClass: isCurrentMonth ? 'text-right border-l-2 border-sky-400' : 'text-right',
                                 valueFormatter: (p: any) =>
                                     p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
                             },
@@ -648,7 +644,8 @@ export function buildRevenueColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 }),
-                            cellClass: 'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-l-[3px] border-slate-400 dark:border-slate-500',
+                            cellClass:
+                                'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-l-[3px] border-slate-400 dark:border-slate-500',
                             headerClass: 'ag-right-aligned-header',
                         },
                         {
@@ -693,7 +690,8 @@ export function buildRevenueColumnDefs({
                             },
                             valueFormatter: (p: any) =>
                                 p.value == null ? '' : `${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
-                            cellClass: 'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-r-[3px] border-slate-400 dark:border-slate-500',
+                            cellClass:
+                                'bg-slate-100 dark:bg-slate-800 font-semibold text-right border-r-[3px] border-slate-400 dark:border-slate-500',
                         },
                     ],
                 },
@@ -715,14 +713,12 @@ export function buildRevenueColumnDefs({
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
-                                cellClass: isCurrentMonth
-                                    ? 'text-right border-l-2 border-sky-400'
-                                    : 'text-right',
+                                cellClass: isCurrentMonth ? 'text-right border-l-2 border-sky-400' : 'text-right',
                                 valueGetter: isOverlapMonth
                                     ? (p: any) => {
-                                        // For current month in forecast, use separate forecast field
-                                        return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
-                                    }
+                                          // For current month in forecast, use separate forecast field
+                                          return toNumberOrNull(p.data?.[`forecast_${m}`]) ?? null;
+                                      }
                                     : undefined,
                                 valueParser: (p: any) => toNumberOrNull(p.newValue),
                                 valueSetter: (p: any) => {

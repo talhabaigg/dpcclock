@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Location;
-use Illuminate\Http\Request;
-
 
 class LocationItemController extends Controller
 {
@@ -13,7 +11,7 @@ class LocationItemController extends Controller
         $location->load('materialItems.supplier');
 
         return inertia('location-items/index', [
-            'location' => $location
+            'location' => $location,
         ]);
 
     }
@@ -32,11 +30,10 @@ class LocationItemController extends Controller
                 ? \Storage::disk('s3')->temporaryUrl($upload->failed_file_path, now()->addMinutes(60))
                 : null;
 
-
         });
 
         return inertia('location-price-list-uploads/index', [
-            'location' => $location
+            'location' => $location,
         ]);
     }
 }

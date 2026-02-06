@@ -36,7 +36,7 @@ export function screenToDrawingPoint(
     screenPoint: Point2D,
     viewport: ViewportState,
     containerRect: DOMRect,
-    layerDimensions: LayerDimensions
+    layerDimensions: LayerDimensions,
 ): Point2D {
     // Screen point is relative to container
     const containerX = screenPoint.x;
@@ -64,11 +64,7 @@ export function screenToDrawingPoint(
  * @param layerDimensions - Drawing layer dimensions
  * @returns Point in screen/container coordinates (pixels)
  */
-export function drawingToScreenPoint(
-    drawingPoint: Point2D,
-    viewport: ViewportState,
-    layerDimensions: LayerDimensions
-): Point2D {
+export function drawingToScreenPoint(drawingPoint: Point2D, viewport: ViewportState, layerDimensions: LayerDimensions): Point2D {
     // Denormalize from 0-1 to drawing units
     const drawingX = drawingPoint.x * layerDimensions.width;
     const drawingY = drawingPoint.y * layerDimensions.height;
@@ -110,7 +106,7 @@ export function eventToDrawingPoint(
     event: MouseEvent | React.MouseEvent,
     containerRect: DOMRect,
     viewport: ViewportState,
-    layerDimensions: LayerDimensions
+    layerDimensions: LayerDimensions,
 ): Point2D {
     const screenPoint = getContainerRelativePoint(event, containerRect);
     return screenToDrawingPoint(screenPoint, viewport, containerRect, layerDimensions);

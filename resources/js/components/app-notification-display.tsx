@@ -49,22 +49,10 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
 
                     case 'JobForecastStatus':
                     case 'LabourForecastStatus':
-                        return (
-                            <JobForecastStatusNotification
-                                key={notification.id}
-                                notification={notification}
-                                onDismiss={handleDismiss}
-                            />
-                        );
+                        return <JobForecastStatusNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
 
                     case 'RequisitionSentToOffice':
-                        return (
-                            <RequisitionSentToOfficeNotification
-                                key={notification.id}
-                                notification={notification}
-                                onDismiss={handleDismiss}
-                            />
-                        );
+                        return <RequisitionSentToOfficeNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
 
                     default:
                         return (

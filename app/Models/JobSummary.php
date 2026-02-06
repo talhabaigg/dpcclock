@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class JobSummary extends Model
 {
     protected $table = 'job_summaries';
+
     protected $fillable = [
         'job_number',
         'company_code',

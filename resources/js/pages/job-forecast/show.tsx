@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { shadcnTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
+import { shadcnDarkTheme, shadcnTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -755,9 +755,7 @@ const ShowJobForecastPage = ({
         }
 
         // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes
-            .filter((node) => node.data.is_orphaned)
-            .map((node) => node.data.cost_item as string);
+        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
         if (orphanedCostItems.length > 0) {
             setPendingOrphanedCostItemsToDelete((prev) => ({
                 ...prev,
@@ -790,9 +788,7 @@ const ShowJobForecastPage = ({
         }
 
         // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes
-            .filter((node) => node.data.is_orphaned)
-            .map((node) => node.data.cost_item as string);
+        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
         if (orphanedCostItems.length > 0) {
             setPendingOrphanedCostItemsToDelete((prev) => ({
                 ...prev,

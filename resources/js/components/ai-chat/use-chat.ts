@@ -13,9 +13,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
-    const [conversationId, setConversationId] = useState<string | null>(
-        options.conversationId ?? null
-    );
+    const [conversationId, setConversationId] = useState<string | null>(options.conversationId ?? null);
 
     const isStreamingRef = useRef(false);
     const lastUserMessageRef = useRef<string | null>(null);
@@ -71,8 +69,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                                   content: m.content + event.data.delta,
                                                   status: 'streaming',
                                               }
-                                            : m
-                                    )
+                                            : m,
+                                    ),
                                 );
                             }
                             break;
@@ -83,11 +81,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                 setConversationId(event.data.conversation_id);
                             }
                             setMessages((prev) => {
-                                const updated = prev.map((m) =>
-                                    m.id === assistantId
-                                        ? { ...m, status: 'complete' as const }
-                                        : m
-                                );
+                                const updated = prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m));
                                 const completedMessage = updated.find((m) => m.id === assistantId);
                                 if (completedMessage && onMessageComplete) {
                                     onMessageComplete(completedMessage);
@@ -98,9 +92,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
                         case 'error': {
                             hasError = true;
-                            const errorMessage = new Error(
-                                event.data.error || 'An error occurred'
-                            );
+                            const errorMessage = new Error(event.data.error || 'An error occurred');
                             setError(errorMessage);
                             setMessages((prev) =>
                                 prev.map((m) =>
@@ -110,8 +102,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                               content: event.data.error || 'Sorry, something went wrong. Please try again.',
                                               status: 'error',
                                           }
-                                        : m
-                                )
+                                        : m,
+                                ),
                             );
                             onError?.(errorMessage);
                             break;
@@ -131,7 +123,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                           content: m.content || 'No response received. Please try again.',
                                           status: m.content ? 'complete' : 'error',
                                       }
-                                    : m
+                                    : m,
                             );
                         }
                         return prev;
@@ -148,8 +140,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                   content: 'Sorry, something went wrong. Please try again.',
                                   status: 'error',
                               }
-                            : m
-                    )
+                            : m,
+                    ),
                 );
                 onError?.(errorInstance);
             } finally {
@@ -157,7 +149,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 isStreamingRef.current = false;
             }
         },
-        [conversationId, isLoading, onError, onMessageComplete]
+        [conversationId, isLoading, onError, onMessageComplete],
     );
 
     const regenerateLastMessage = useCallback(async () => {
@@ -191,11 +183,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         isStreamingRef.current = false;
         chatService.stopGeneration();
         setIsLoading(false);
-        setMessages((prev) =>
-            prev.map((m) =>
-                m.status === 'streaming' ? { ...m, status: 'complete' as const } : m
-            )
-        );
+        setMessages((prev) => prev.map((m) => (m.status === 'streaming' ? { ...m, status: 'complete' as const } : m)));
     }, []);
 
     return {

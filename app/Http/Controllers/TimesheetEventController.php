@@ -4,13 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateTimesheetForGivenEvent;
 use App\Jobs\GenerateTimesheetForTodaysEvent;
-use App\Models\Kiosk;
+use App\Models\TimesheetEvent;
 use Illuminate\Http\Request;
-use \App\Models\TimesheetEvent;
 
 class TimesheetEventController extends Controller
 {
-
     public function store(Request $request)
     {
 
@@ -19,9 +17,9 @@ class TimesheetEventController extends Controller
             'type' => 'string',
             'start' => 'string',
             'end' => 'nullable|string',
-            'state' => 'string'
+            'state' => 'string',
         ]);
-        if (!$validated['end']) {
+        if (! $validated['end']) {
             $validated['end'] = $validated['start'];
         }
 
@@ -39,17 +37,16 @@ class TimesheetEventController extends Controller
             'type' => 'nullable|string',
             'start' => 'required|string',
             'end' => 'nullable|string',
-            'state' => 'required|string'
+            'state' => 'required|string',
         ]);
 
-
-        if (!$validated['end']) {
+        if (! $validated['end']) {
             $validated['end'] = $validated['start'];
         }
 
         $event = TimesheetEvent::find($validated['id']);
 
-        if (!$event) {
+        if (! $event) {
             return response()->json(['error' => 'Event not found'], 404);
         }
 
@@ -61,7 +58,7 @@ class TimesheetEventController extends Controller
             'state' => $validated['state'],
         ]);
 
-        return redirect()->back()->with('success', $event->title . ' event was updated');
+        return redirect()->back()->with('success', $event->title.' event was updated');
     }
 
     public function generateTimesheetForToday($kiosk)
@@ -74,6 +71,7 @@ class TimesheetEventController extends Controller
             return redirect()->back()->with('error', 'No events found for today');
         }
         GenerateTimesheetForTodaysEvent::dispatch($kiosk, $events);
+
         return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully');
     }
 
@@ -82,18 +80,19 @@ class TimesheetEventController extends Controller
         $employees = $request->input('employeeIds', []);
         // dd($employees, $eventId, $kioskId);
         $event = TimesheetEvent::find($eventId);
-        if (!$event) {
+        if (! $event) {
             return redirect()->back()->with('error', 'Event not found');
         }
         GenerateTimesheetForGivenEvent::dispatch($kioskId, $event, collect($employees));
-        return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully for event: ' . $event->title);
+
+        return redirect()->back()->with('success', 'Timesheet generation job dispatched successfully for event: '.$event->title);
     }
 
     public function destroy(TimesheetEvent $event)
     {
         $eventTitle = $event->title;
         $event->delete();
+
         return redirect()->back()->with('success', "Event '$eventTitle' deleted successfully.");
     }
-
 }

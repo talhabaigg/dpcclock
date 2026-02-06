@@ -6,18 +6,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Spatie\Activitylog\Traits\CausesActivity;
-use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
 use NotificationChannels\WebPush\HasPushSubscriptions;
+use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\LaravelPasskeys\Models\Concerns\HasPasskeys;
 use Spatie\LaravelPasskeys\Models\Concerns\InteractsWithPasskeys;
+use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements HasPasskeys
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, CausesActivity, HasOneTimePasswords, HasPushSubscriptions, InteractsWithPasskeys;
+    use CausesActivity, HasApiTokens, HasFactory, HasOneTimePasswords, HasPushSubscriptions, HasRoles, InteractsWithPasskeys, Notifiable;
 
     /**
      * The attributes that are mass assignable.

@@ -61,7 +61,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         enableToolSelector = true,
         className,
     },
-    ref
+    ref,
 ) {
     const [value, setValue] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
@@ -94,11 +94,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     const handleSubmit = useCallback(() => {
         if (!value.trim() || disabled) return;
 
-        onSubmit(
-            value.trim(),
-            attachments.length > 0 ? attachments : undefined,
-            selectedTool || undefined
-        );
+        onSubmit(value.trim(), attachments.length > 0 ? attachments : undefined, selectedTool || undefined);
         setValue('');
         setAttachments([]);
         setSelectedTool(null);
@@ -109,7 +105,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         }
     }, [value, attachments, disabled, onSubmit, selectedTool]);
 
-    const selectedToolData = AVAILABLE_TOOLS.find(t => t.id === selectedTool);
+    const selectedToolData = AVAILABLE_TOOLS.find((t) => t.id === selectedTool);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -120,7 +116,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 }
             }
         },
-        [handleSubmit, isLoading]
+        [handleSubmit, isLoading],
     );
 
     const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,11 +141,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     <div className="flex items-center gap-2 rounded-full bg-violet-500/10 px-3 py-1.5 text-sm text-violet-600 dark:text-violet-400">
                         <selectedToolData.icon className="size-3.5" />
                         <span>Using: {selectedToolData.name}</span>
-                        <button
-                            type="button"
-                            onClick={() => setSelectedTool(null)}
-                            className="ml-1 hover:text-violet-700 dark:hover:text-violet-300"
-                        >
+                        <button type="button" onClick={() => setSelectedTool(null)} className="ml-1 hover:text-violet-700 dark:hover:text-violet-300">
                             <X className="size-3.5" />
                         </button>
                     </div>
@@ -160,17 +152,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
             {attachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2 px-2">
                     {attachments.map((file, index) => (
-                        <div
-                            key={`${file.name}-${index}`}
-                            className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"
-                        >
+                        <div key={`${file.name}-${index}`} className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm">
                             <Paperclip className="text-muted-foreground size-3.5" />
                             <span className="max-w-[150px] truncate">{file.name}</span>
-                            <button
-                                type="button"
-                                onClick={() => removeAttachment(index)}
-                                className="text-muted-foreground hover:text-foreground"
-                            >
+                            <button type="button" onClick={() => removeAttachment(index)} className="text-muted-foreground hover:text-foreground">
                                 <X className="size-3.5" />
                             </button>
                         </div>
@@ -182,174 +167,160 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
             <div className="relative">
                 {/* Rainbow gradient border effect */}
                 <div
-                    className={cn(
-                        'absolute -inset-[1px] rounded-3xl opacity-0 blur-sm transition-opacity duration-300',
-                        isFocused && 'opacity-60'
-                    )}
+                    className={cn('absolute -inset-[1px] rounded-3xl opacity-0 blur-sm transition-opacity duration-300', isFocused && 'opacity-60')}
                     style={{
                         background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
                         backgroundSize: '200% 100%',
                         animation: 'rainbow-shift 8s linear infinite',
                     }}
                 />
-            <div
-                className={cn(
-                    'relative flex items-center gap-3 rounded-3xl border border-border/50 bg-card px-4 py-3 shadow-sm transition-all duration-200',
-                    isFocused && 'border-border shadow-md'
-                )}
-            >
-                {/* Plus button with tools dropdown */}
-                {enableToolSelector && (
-                    <DropdownMenu>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild>
+                <div
+                    className={cn(
+                        'border-border/50 bg-card relative flex items-center gap-3 rounded-3xl border px-4 py-3 shadow-sm transition-all duration-200',
+                        isFocused && 'border-border shadow-md',
+                    )}
+                >
+                    {/* Plus button with tools dropdown */}
+                    {enableToolSelector && (
+                        <DropdownMenu>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className={cn(
+                                                'size-9 shrink-0 rounded-full transition-colors',
+                                                selectedTool
+                                                    ? 'bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                                            )}
+                                            disabled={disabled || isLoading}
+                                        >
+                                            <Plus className="size-5" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent>Tools</TooltipContent>
+                            </Tooltip>
+                            <DropdownMenuContent align="start" className="w-64">
+                                <DropdownMenuLabel>Select a tool to use</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {AVAILABLE_TOOLS.map((tool) => {
+                                    const Icon = tool.icon;
+                                    const isSelected = selectedTool === tool.id;
+                                    return (
+                                        <DropdownMenuItem
+                                            key={tool.id}
+                                            onClick={() => setSelectedTool(isSelected ? null : tool.id)}
+                                            className="flex items-center gap-3 py-2"
+                                        >
+                                            <Icon className={cn('size-4', isSelected && 'text-violet-500')} />
+                                            <div className="flex-1">
+                                                <div className={cn('text-sm font-medium', isSelected && 'text-violet-600 dark:text-violet-400')}>
+                                                    {tool.name}
+                                                </div>
+                                                <div className="text-muted-foreground text-xs">{tool.description}</div>
+                                            </div>
+                                            {isSelected && <Check className="size-4 text-violet-500" />}
+                                        </DropdownMenuItem>
+                                    );
+                                })}
+                                {selectedTool && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => setSelectedTool(null)} className="text-muted-foreground">
+                                            <X className="mr-2 size-4" />
+                                            Clear selection
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+
+                    {/* Attachment button */}
+                    {enableAttachments && (
+                        <>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={handleFileSelect}
+                                accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                            />
+                            <Tooltip>
+                                <TooltipTrigger asChild>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className={cn(
-                                            'size-9 shrink-0 rounded-full transition-colors',
-                                            selectedTool
-                                                ? 'bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                                        )}
+                                        className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 shrink-0 rounded-full"
+                                        onClick={() => fileInputRef.current?.click()}
                                         disabled={disabled || isLoading}
                                     >
-                                        <Plus className="size-5" />
+                                        <Paperclip className="size-5" />
                                     </Button>
-                                </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent>Tools</TooltipContent>
-                        </Tooltip>
-                        <DropdownMenuContent align="start" className="w-64">
-                            <DropdownMenuLabel>Select a tool to use</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {AVAILABLE_TOOLS.map((tool) => {
-                                const Icon = tool.icon;
-                                const isSelected = selectedTool === tool.id;
-                                return (
-                                    <DropdownMenuItem
-                                        key={tool.id}
-                                        onClick={() => setSelectedTool(isSelected ? null : tool.id)}
-                                        className="flex items-center gap-3 py-2"
-                                    >
-                                        <Icon className={cn('size-4', isSelected && 'text-violet-500')} />
-                                        <div className="flex-1">
-                                            <div className={cn('text-sm font-medium', isSelected && 'text-violet-600 dark:text-violet-400')}>
-                                                {tool.name}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">{tool.description}</div>
-                                        </div>
-                                        {isSelected && <Check className="size-4 text-violet-500" />}
-                                    </DropdownMenuItem>
-                                );
-                            })}
-                            {selectedTool && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        onClick={() => setSelectedTool(null)}
-                                        className="text-muted-foreground"
-                                    >
-                                        <X className="size-4 mr-2" />
-                                        Clear selection
-                                    </DropdownMenuItem>
-                                </>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-
-                {/* Attachment button */}
-                {enableAttachments && (
-                    <>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileSelect}
-                            accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-                        />
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 shrink-0 rounded-full"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={disabled || isLoading}
-                                >
-                                    <Paperclip className="size-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Attach file</TooltipContent>
-                        </Tooltip>
-                    </>
-                )}
-
-                {/* Textarea - using plain textarea for cleaner look */}
-                <textarea
-                    ref={textareaRef}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value.slice(0, maxLength))}
-                    onKeyDown={handleKeyDown}
-                    onFocus={() => setIsFocused(true)}
-                    onBlur={() => setIsFocused(false)}
-                    placeholder={placeholder}
-                    disabled={disabled || isLoading}
-                    className={cn(
-                        'min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none',
-                        'placeholder:text-muted-foreground/60',
-                        'disabled:cursor-not-allowed disabled:opacity-50'
+                                </TooltipTrigger>
+                                <TooltipContent>Attach file</TooltipContent>
+                            </Tooltip>
+                        </>
                     )}
-                    rows={1}
-                />
 
-                {/* Submit/Stop button */}
-                <div className="flex shrink-0 items-center">
-                    {isLoading ? (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="outline"
-                                    className="size-9 rounded-full"
-                                    onClick={onStop}
-                                >
-                                    <Square className="size-4" fill="currentColor" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Stop generating</TooltipContent>
-                        </Tooltip>
-                    ) : (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    size="icon"
-                                    className={cn(
-                                        'size-9 rounded-full transition-all',
-                                        canSubmit
-                                            ? 'bg-foreground text-background shadow-md hover:bg-foreground/90 hover:scale-105'
-                                            : 'bg-muted text-muted-foreground cursor-not-allowed'
-                                    )}
-                                    onClick={handleSubmit}
-                                    disabled={!canSubmit}
-                                >
-                                    <ArrowUp className="size-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                {canSubmit ? 'Send message' : 'Type a message'}
-                            </TooltipContent>
-                        </Tooltip>
-                    )}
+                    {/* Textarea - using plain textarea for cleaner look */}
+                    <textarea
+                        ref={textareaRef}
+                        value={value}
+                        onChange={(e) => setValue(e.target.value.slice(0, maxLength))}
+                        onKeyDown={handleKeyDown}
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        placeholder={placeholder}
+                        disabled={disabled || isLoading}
+                        className={cn(
+                            'max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none',
+                            'placeholder:text-muted-foreground/60',
+                            'disabled:cursor-not-allowed disabled:opacity-50',
+                        )}
+                        rows={1}
+                    />
+
+                    {/* Submit/Stop button */}
+                    <div className="flex shrink-0 items-center">
+                        {isLoading ? (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button type="button" size="icon" variant="outline" className="size-9 rounded-full" onClick={onStop}>
+                                        <Square className="size-4" fill="currentColor" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Stop generating</TooltipContent>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        className={cn(
+                                            'size-9 rounded-full transition-all',
+                                            canSubmit
+                                                ? 'bg-foreground text-background hover:bg-foreground/90 shadow-md hover:scale-105'
+                                                : 'bg-muted text-muted-foreground cursor-not-allowed',
+                                        )}
+                                        onClick={handleSubmit}
+                                        disabled={!canSubmit}
+                                    >
+                                        <ArrowUp className="size-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{canSubmit ? 'Send message' : 'Type a message'}</TooltipContent>
+                            </Tooltip>
+                        )}
+                    </div>
                 </div>
-            </div>
             </div>
 
             {/* Character count */}

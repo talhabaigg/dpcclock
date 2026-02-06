@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState } from 'react';
 
 interface Location {
     id: number;
@@ -21,28 +21,26 @@ export function LocationSearchEditor({ value, onValueChange, stopEditing, locati
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    const filteredLocations = locations.filter((location) =>
-        location.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredLocations = locations.filter((location) => location.name.toLowerCase().includes(search.toLowerCase()));
 
     const selectedLocation = locations.find((loc) => String(loc.id) === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="ghost" role="combobox" aria-expanded={open} className="w-full justify-between border-0 bg-transparent hover:bg-transparent">
+                <Button
+                    variant="ghost"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between border-0 bg-transparent hover:bg-transparent"
+                >
                     {selectedLocation ? selectedLocation.name : 'Search Location'}
                     <ChevronsUpDown className="opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0">
                 <Command>
-                    <CommandInput
-                        placeholder="Search location..."
-                        className="h-9"
-                        value={search}
-                        onValueChange={setSearch}
-                    />
+                    <CommandInput placeholder="Search location..." className="h-9" value={search} onValueChange={setSearch} />
                     <CommandList>
                         <CommandEmpty>No location found.</CommandEmpty>
                         <CommandGroup>

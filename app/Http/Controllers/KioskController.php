@@ -3,27 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Events\EmployeeClockedEvent;
+use App\Models\Clock;
+use App\Models\Employee;
+use App\Models\Kiosk;
 use App\Models\TimesheetEvent;
 use App\Models\User;
-use Carbon\Carbon;
-use Event;
-use Hash;
-use Inertia\Inertia;
-use App\Models\Clock;
-use App\Models\Kiosk;
-use Inertia\Response;
-use App\Models\Employee;
-use App\Models\Location;
-use Illuminate\Support\Str;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cookie;
-use Illuminate\Support\Facades\Redirect;
 use App\Services\KioskService;
+use Hash;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
+use Inertia\Response;
 use Session;
-
 
 class KioskController extends Controller
 {
@@ -36,6 +31,7 @@ class KioskController extends Controller
     {
         $this->kioskService = $kioskService;
     }
+
     public function index()
     {
         if (Auth::user()->hasRole('admin')) {
@@ -46,13 +42,11 @@ class KioskController extends Controller
             ]);
         }
 
-
         $kiosks = Auth::user()->managedKiosks()->with('location', 'employees')->get();
+
         return Inertia::render('kiosks/index', [
             'kiosks' => $kiosks,
         ]);
-
-
 
     }
 
@@ -77,7 +71,7 @@ class KioskController extends Controller
      */
     public function show(Kiosk $kiosk)
     {
-        if (!$kiosk->is_active) {
+        if (! $kiosk->is_active) {
             return Inertia::render('kiosks/error/kiosk-disabled', [
                 'error' => 'Kiosk is currently active. Please try again later.',
             ]);
@@ -105,8 +99,6 @@ class KioskController extends Controller
         //     return $employee;
         // });
 
-
-
         broadcast(new EmployeeClockedEvent($kiosk->id, $employees))->toOthers();
 
         return Inertia::render('kiosks/show', [
@@ -115,7 +107,6 @@ class KioskController extends Controller
             'adminMode' => $adminMode,
         ]);
     }
-
 
     // Helper function to check if the token is valid in the cookie
     // private function isValidKioskToken()
@@ -128,7 +119,6 @@ class KioskController extends Controller
     //     return $token === $cachedToken;  // Compare cookie token with cached token
     // }
 
-
     /**
      * Show the form for editing the specified resource.
      */
@@ -140,13 +130,11 @@ class KioskController extends Controller
                 $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
             },
             'relatedKiosks',
-            'managers'
+            'managers',
         ]);
 
         $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>=', now())->get();
         $users = User::all();
-
-
 
         return Inertia::render('kiosks/edit', [
             'kiosk' => $kiosk,
@@ -175,7 +163,6 @@ class KioskController extends Controller
         return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Employees added to kiosk successfully.');
     }
 
-
     public function updateZones(Request $request, Kiosk $kiosk)
     {
         $data = $request->validate([
@@ -188,7 +175,7 @@ class KioskController extends Controller
 
         foreach ($data['zones'] as $entry) {
             $eh_employee = Employee::find($entry['employee_id']);
-            if (!$eh_employee) {
+            if (! $eh_employee) {
                 return redirect()->back()->with('error', 'Employee not found.');
             } else {
                 $kiosk->employees()->updateExistingPivot($eh_employee->eh_employee_id, [
@@ -222,7 +209,7 @@ class KioskController extends Controller
     public function toggleActive(Kiosk $kiosk)
     {
 
-        $kiosk->is_active = !$kiosk->is_active;
+        $kiosk->is_active = ! $kiosk->is_active;
         $kiosk->save();
 
         // Optionally, you can return a response or redirect
@@ -235,12 +222,13 @@ class KioskController extends Controller
             'type' => 'required|in:laser,insulation,setout',
         ]);
 
-        $field = $data['type'] . '_allowance_enabled';
-        $kiosk->$field = !$kiosk->$field;
+        $field = $data['type'].'_allowance_enabled';
+        $kiosk->$field = ! $kiosk->$field;
         $kiosk->save();
 
-        return redirect()->back()->with('success', ucfirst($data['type']) . ' allowance setting updated successfully.');
+        return redirect()->back()->with('success', ucfirst($data['type']).' allowance setting updated successfully.');
     }
+
     /**
      * Remove the specified resource from storage.
      */
@@ -253,11 +241,10 @@ class KioskController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk");
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
+        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/kiosk');
         $kioskData = $response->json();
         // $locationData = array_slice($locationData, 0, length: 1);
-
 
         foreach ($kioskData as $kiosk) {
             Kiosk::updateOrCreate([
@@ -267,6 +254,7 @@ class KioskController extends Controller
                 'eh_location_id' => $kiosk['locationId'] ?? null,
             ]);
         }
+
         return redirect()->back()->with('success', 'Kiosks synced successfully from Employment Hero.');
 
     }
@@ -276,7 +264,7 @@ class KioskController extends Controller
         $apiKey = env('PAYROLL_API_KEY');
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
         ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk/$kioskId/staff");
         $kioskEmployees = $response->json();
         $employeeIds = collect($kioskEmployees)->pluck('employeeId')->toArray();
@@ -290,11 +278,6 @@ class KioskController extends Controller
 
         return redirect()->route('kiosks.show', $kiosk->id)->with('success', 'Kiosk employees synced successfully from Employment Hero.');
     }
-
-
-
-
-
 
     public function validateToken($kioskId, Request $request)
     {
@@ -327,12 +310,12 @@ class KioskController extends Controller
         ]);
 
         $user = Auth::user();
-        if (!$user || !$user->admin_pin) {
+        if (! $user || ! $user->admin_pin) {
             return Redirect::back()->withErrors(['pin' => 'Admin PIN not set.']);
         }
 
         // Stored as bcrypt hash
-        if (!Hash::check($validated['pin'], $user->admin_pin)) {
+        if (! Hash::check($validated['pin'], $user->admin_pin)) {
             // Return a 422-style error so Inertia shows it nicely
             return Redirect::back()->withErrors(['pin' => 'Invalid PIN.']);
         }

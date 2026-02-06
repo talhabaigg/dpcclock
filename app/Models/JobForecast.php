@@ -34,8 +34,11 @@ class JobForecast extends Model
 
     // Status constants
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SUBMITTED = 'submitted';
+
     public const STATUS_FINALIZED = 'finalized';
 
     public const STATUSES = [
@@ -146,7 +149,7 @@ class JobForecast extends Model
     // Status transition methods
     public function markAsDraft(User $user): bool
     {
-        if (!in_array($this->status, [self::STATUS_PENDING, self::STATUS_SUBMITTED])) {
+        if (! in_array($this->status, [self::STATUS_PENDING, self::STATUS_SUBMITTED])) {
             return false;
         }
 
@@ -159,7 +162,7 @@ class JobForecast extends Model
 
     public function submit(User $user): bool
     {
-        if (!$this->canBeSubmitted()) {
+        if (! $this->canBeSubmitted()) {
             return false;
         }
 
@@ -173,7 +176,7 @@ class JobForecast extends Model
 
     public function finalize(User $user): bool
     {
-        if (!$this->canBeFinalized()) {
+        if (! $this->canBeFinalized()) {
             return false;
         }
 
@@ -188,7 +191,7 @@ class JobForecast extends Model
 
     public function reject(User $user, ?string $reason = null): bool
     {
-        if (!$this->canBeRejected()) {
+        if (! $this->canBeRejected()) {
             return false;
         }
 

@@ -52,13 +52,7 @@ const safeNumber = (value: number | null | undefined): number => {
     return Number(value);
 };
 
-export default function TurnoverForecastIndex({
-    data,
-    months,
-    lastActualMonth,
-    fyLabel,
-    monthlyTargets,
-}: TurnoverForecastProps) {
+export default function TurnoverForecastIndex({ data, months, lastActualMonth, fyLabel, monthlyTargets }: TurnoverForecastProps) {
     // Load excluded jobs from local storage
     const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(() => {
         try {
@@ -201,7 +195,7 @@ export default function TurnoverForecastIndex({
                 revenueVariance: 0,
                 completedTurnoverYTD: 0,
                 forecastRevenueYTG: 0,
-            }
+            },
         );
     }, [filteredData, filteredMonths]);
 
@@ -268,7 +262,7 @@ export default function TurnoverForecastIndex({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-3">
                             {/* View Mode Toggle */}
-                            <div className="flex gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-1">
+                            <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50/50 p-1 dark:border-slate-700 dark:bg-slate-800/50">
                                 <Button
                                     size="sm"
                                     variant={viewMode === 'revenue-only' ? 'default' : 'ghost'}
@@ -359,12 +353,12 @@ export default function TurnoverForecastIndex({
                 </div>
 
                 {/* Summary Visual */}
-                <div className="group relative overflow-hidden rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 via-white to-slate-50 dark:from-blue-950/30 dark:via-gray-900 dark:to-slate-900 p-6 shadow-sm transition-all hover:shadow-md">
+                <div className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 shadow-sm transition-all hover:shadow-md dark:border-blue-800 dark:from-blue-950/30 dark:via-gray-900 dark:to-slate-900">
                     <div className="flex items-start justify-between">
                         <div className="flex-1 space-y-1">
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400 cursor-help">
+                                    <div className="inline-flex cursor-help items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400">
                                         FY Turnover Progress
                                         <HelpCircle className="h-3.5 w-3.5 opacity-60" />
                                     </div>
@@ -372,27 +366,25 @@ export default function TurnoverForecastIndex({
                                 <HoverCardContent className="w-80" side="right">
                                     <div className="space-y-2">
                                         <h4 className="font-semibold">FY Turnover Progress</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Sum of all revenue for the selected period, calculated as:
-                                        </p>
-                                        <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-1">
-                                            <li><strong>Completed YTD:</strong> Actual revenue claimed (from billing data)</li>
-                                            <li><strong>Work in Hand:</strong> Forecasted revenue for months without actuals</li>
+                                        <p className="text-muted-foreground text-sm">Sum of all revenue for the selected period, calculated as:</p>
+                                        <ul className="text-muted-foreground list-disc space-y-1 pl-4 text-sm">
+                                            <li>
+                                                <strong>Completed YTD:</strong> Actual revenue claimed (from billing data)
+                                            </li>
+                                            <li>
+                                                <strong>Work in Hand:</strong> Forecasted revenue for months without actuals
+                                            </li>
                                         </ul>
-                                        <p className="text-xs text-muted-foreground/80 pt-1 border-t">
+                                        <p className="text-muted-foreground/80 border-t pt-1 text-xs">
                                             For each month, actuals are used if available; otherwise forecasts are used.
                                         </p>
                                     </div>
                                 </HoverCardContent>
                             </HoverCard>
-                            <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                                {formatCurrency(totalFY)}
-                            </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                                Completed YTD + Work in Hand {fyLabel}
-                            </div>
+                            <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{formatCurrency(totalFY)}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">Completed YTD + Work in Hand {fyLabel}</div>
                         </div>
-                        <div className="rounded-lg bg-blue-100 dark:bg-blue-900/50 p-2.5">
+                        <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/50">
                             <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 15l3-3 3 2 4-5" />
                             </svg>
@@ -420,13 +412,13 @@ export default function TurnoverForecastIndex({
                         </div>
 
                         {/* Legend */}
-                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3 dark:text-slate-400">
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="flex items-center gap-2 cursor-help">
+                                    <div className="flex cursor-help items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-500" />
                                         <div>
-                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                                                 Completed Turnover YTD
                                                 <HelpCircle className="h-3 w-3 opacity-50" />
                                             </div>
@@ -435,18 +427,19 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-72">
-                                    <h4 className="font-semibold mb-1">Completed Turnover YTD</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Actual revenue that has been claimed and billed. This comes from billing data (ArProgressBillingSummary) for months where claims have been submitted.
+                                    <h4 className="mb-1 font-semibold">Completed Turnover YTD</h4>
+                                    <p className="text-muted-foreground text-sm">
+                                        Actual revenue that has been claimed and billed. This comes from billing data (ArProgressBillingSummary) for
+                                        months where claims have been submitted.
                                     </p>
                                 </HoverCardContent>
                             </HoverCard>
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="flex items-center gap-2 cursor-help">
+                                    <div className="flex cursor-help items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500" />
                                         <div>
-                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                                                 Work in Hand {fyLabel}
                                                 <HelpCircle className="h-3 w-3 opacity-50" />
                                             </div>
@@ -455,18 +448,19 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-72">
-                                    <h4 className="font-semibold mb-1">Work in Hand</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Forecasted revenue for months that don't yet have actual billing data. These are projections from job forecasts that are expected to be claimed in the future.
+                                    <h4 className="mb-1 font-semibold">Work in Hand</h4>
+                                    <p className="text-muted-foreground text-sm">
+                                        Forecasted revenue for months that don't yet have actual billing data. These are projections from job
+                                        forecasts that are expected to be claimed in the future.
                                     </p>
                                 </HoverCardContent>
                             </HoverCard>
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="flex items-center gap-2 cursor-help">
+                                    <div className="flex cursor-help items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-500" />
                                         <div>
-                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                                                 Budget Balance to Achieve
                                                 <HelpCircle className="h-3 w-3 opacity-50" />
                                             </div>
@@ -475,9 +469,10 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-72">
-                                    <h4 className="font-semibold mb-1">Budget Balance to Achieve</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        The gap between the budget target and current turnover progress. Calculated as: Budget Target - (Completed + Work in Hand). Shows how much more revenue is needed to meet the budget.
+                                    <h4 className="mb-1 font-semibold">Budget Balance to Achieve</h4>
+                                    <p className="text-muted-foreground text-sm">
+                                        The gap between the budget target and current turnover progress. Calculated as: Budget Target - (Completed +
+                                        Work in Hand). Shows how much more revenue is needed to meet the budget.
                                     </p>
                                 </HoverCardContent>
                             </HoverCard>
@@ -497,13 +492,13 @@ export default function TurnoverForecastIndex({
                             />
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-2 dark:text-slate-400">
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="flex items-center gap-2 cursor-help">
+                                    <div className="flex cursor-help items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-500" />
                                         <div>
-                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                                                 Budget Turnover YTD
                                                 <HelpCircle className="h-3 w-3 opacity-50" />
                                             </div>
@@ -512,18 +507,19 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-72">
-                                    <h4 className="font-semibold mb-1">Budget Turnover YTD</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        The cumulative monthly revenue targets from the start of the period up to (but not including) the current month. This represents what should have been achieved by now according to budget.
+                                    <h4 className="mb-1 font-semibold">Budget Turnover YTD</h4>
+                                    <p className="text-muted-foreground text-sm">
+                                        The cumulative monthly revenue targets from the start of the period up to (but not including) the current
+                                        month. This represents what should have been achieved by now according to budget.
                                     </p>
                                 </HoverCardContent>
                             </HoverCard>
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="flex items-center gap-2 cursor-help">
+                                    <div className="flex cursor-help items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-600" />
                                         <div>
-                                            <div className="font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                                                 Budget Turnover {fyLabel}
                                                 <HelpCircle className="h-3 w-3 opacity-50" />
                                             </div>
@@ -532,9 +528,10 @@ export default function TurnoverForecastIndex({
                                     </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-72">
-                                    <h4 className="font-semibold mb-1">Budget Turnover Total</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        The total revenue target for the entire selected period. Sum of all monthly revenue targets set in the Company Monthly Revenue Targets.
+                                    <h4 className="mb-1 font-semibold">Budget Turnover Total</h4>
+                                    <p className="text-muted-foreground text-sm">
+                                        The total revenue target for the entire selected period. Sum of all monthly revenue targets set in the Company
+                                        Monthly Revenue Targets.
                                     </p>
                                 </HoverCardContent>
                             </HoverCard>
@@ -561,32 +558,36 @@ export default function TurnoverForecastIndex({
                     <p>
                         Showing {filteredData.length} of {data.length} projects
                         <span className="mx-2">|</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">SWCP: {filteredData.filter((d) => d.company === 'SWCP').length}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                            SWCP: {filteredData.filter((d) => d.company === 'SWCP').length}
+                        </span>
                         <span className="mx-1">/</span>
                         <span className="text-blue-600 dark:text-blue-400">GRE: {filteredData.filter((d) => d.company === 'GRE').length}</span>
                         <span className="mx-1">/</span>
-                        <span className="text-violet-600 dark:text-violet-400">Forecast: {filteredData.filter((d) => d.company === 'Forecast').length}</span>
+                        <span className="text-violet-600 dark:text-violet-400">
+                            Forecast: {filteredData.filter((d) => d.company === 'Forecast').length}
+                        </span>
                     </p>
                 </div>
             </div>
 
             {/* Filter Dialog */}
             <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-                <DialogContent className="max-h-[90vh] sm:max-h-[80vh] w-[95vw] sm:max-w-2xl overflow-hidden flex flex-col">
+                <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col overflow-hidden sm:max-h-[80vh] sm:max-w-2xl">
                     <DialogHeader className="pb-2">
                         <DialogTitle className="flex items-center justify-between">
                             <span>Filter Jobs</span>
-                            <span className="text-sm font-normal text-muted-foreground">
+                            <span className="text-muted-foreground text-sm font-normal">
                                 {filteredData.length}/{data.length} selected
                             </span>
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                    <div className="flex-1 space-y-4 overflow-y-auto pr-1">
                         {/* Quick Filters - Grid layout for mobile */}
                         <div className="space-y-3">
-                            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quick Filters</div>
-                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Quick Filters</div>
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                                 <Button
                                     variant={excludedJobIds.size === 0 ? 'default' : 'outline'}
                                     className="h-10 sm:h-9"
@@ -611,7 +612,7 @@ export default function TurnoverForecastIndex({
                                             ? 'default'
                                             : 'outline'
                                     }
-                                    className="h-10 sm:h-9 border-emerald-300 dark:border-emerald-700 text-xs sm:text-sm"
+                                    className="h-10 border-emerald-300 text-xs sm:h-9 sm:text-sm dark:border-emerald-700"
                                     onClick={() => {
                                         const nonSwcpIds = data.filter((r) => r.company !== 'SWCP').map((r) => `${r.type}-${r.id}`);
                                         setExcludedJobIds(new Set(nonSwcpIds));
@@ -627,7 +628,7 @@ export default function TurnoverForecastIndex({
                                             ? 'default'
                                             : 'outline'
                                     }
-                                    className="h-10 sm:h-9 border-blue-300 dark:border-blue-700 text-xs sm:text-sm"
+                                    className="h-10 border-blue-300 text-xs sm:h-9 sm:text-sm dark:border-blue-700"
                                     onClick={() => {
                                         const nonGreIds = data.filter((r) => r.company !== 'GRE').map((r) => `${r.type}-${r.id}`);
                                         setExcludedJobIds(new Set(nonGreIds));
@@ -643,7 +644,7 @@ export default function TurnoverForecastIndex({
                                             ? 'default'
                                             : 'outline'
                                     }
-                                    className="h-10 sm:h-9 border-violet-300 dark:border-violet-700 text-xs sm:text-sm"
+                                    className="h-10 border-violet-300 text-xs sm:h-9 sm:text-sm dark:border-violet-700"
                                     onClick={() => {
                                         const nonForecastIds = data.filter((r) => r.company !== 'Forecast').map((r) => `${r.type}-${r.id}`);
                                         setExcludedJobIds(new Set(nonForecastIds));
@@ -655,28 +656,29 @@ export default function TurnoverForecastIndex({
                         </div>
 
                         {/* Individual Selection */}
-                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Select Individual Jobs</div>
+                        <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Select Individual Jobs</div>
 
                         {/* SWCP Jobs */}
                         {data.filter((row) => row.company === 'SWCP').length > 0 && (
-                            <Collapsible defaultOpen className="rounded-lg border border-emerald-200 dark:border-emerald-800 overflow-hidden">
-                                <CollapsibleTrigger className="flex items-center justify-between w-full p-3 sm:p-2 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 transition-colors">
+                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-emerald-50 p-3 transition-colors hover:bg-emerald-100 sm:p-2 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                                        <div className="h-3 w-3 rounded-full bg-emerald-500" />
                                         <span className="font-semibold text-emerald-800 dark:text-emerald-300">SWCP</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            ({data.filter((r) => r.company === 'SWCP' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/{data.filter((r) => r.company === 'SWCP').length})
+                                        <span className="text-muted-foreground text-sm">
+                                            ({data.filter((r) => r.company === 'SWCP' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
+                                            {data.filter((r) => r.company === 'SWCP').length})
                                         </span>
                                     </div>
-                                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
-                                    <div className="p-2 space-y-1 bg-emerald-50/50 dark:bg-emerald-950/20">
-                                        <div className="flex gap-2 pb-2 border-b border-emerald-200 dark:border-emerald-800">
+                                    <div className="space-y-1 bg-emerald-50/50 p-2 dark:bg-emerald-950/20">
+                                        <div className="flex gap-2 border-b border-emerald-200 pb-2 dark:border-emerald-800">
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const swcpIds = data.filter((r) => r.company === 'SWCP').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -691,7 +693,7 @@ export default function TurnoverForecastIndex({
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const swcpIds = data.filter((r) => r.company === 'SWCP').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -713,7 +715,7 @@ export default function TurnoverForecastIndex({
                                                     <label
                                                         key={key}
                                                         htmlFor={key}
-                                                        className="flex items-center gap-3 p-2 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 cursor-pointer transition-colors active:bg-emerald-200 dark:active:bg-emerald-900/50"
+                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-emerald-100 active:bg-emerald-200 dark:hover:bg-emerald-900/30 dark:active:bg-emerald-900/50"
                                                     >
                                                         <Checkbox
                                                             id={key}
@@ -723,7 +725,7 @@ export default function TurnoverForecastIndex({
                                                         />
                                                         <span className="flex-1 text-sm leading-tight">
                                                             {row.job_name}
-                                                            <span className="block text-xs text-muted-foreground">{row.job_number}</span>
+                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
                                                         </span>
                                                     </label>
                                                 );
@@ -735,24 +737,25 @@ export default function TurnoverForecastIndex({
 
                         {/* GRE Jobs */}
                         {data.filter((row) => row.company === 'GRE').length > 0 && (
-                            <Collapsible defaultOpen className="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
-                                <CollapsibleTrigger className="flex items-center justify-between w-full p-3 sm:p-2 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors">
+                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-blue-200 dark:border-blue-800">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-blue-50 p-3 transition-colors hover:bg-blue-100 sm:p-2 dark:bg-blue-950/30 dark:hover:bg-blue-950/50">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                                        <div className="h-3 w-3 rounded-full bg-blue-500" />
                                         <span className="font-semibold text-blue-800 dark:text-blue-300">GRE</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            ({data.filter((r) => r.company === 'GRE' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/{data.filter((r) => r.company === 'GRE').length})
+                                        <span className="text-muted-foreground text-sm">
+                                            ({data.filter((r) => r.company === 'GRE' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
+                                            {data.filter((r) => r.company === 'GRE').length})
                                         </span>
                                     </div>
-                                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
-                                    <div className="p-2 space-y-1 bg-blue-50/50 dark:bg-blue-950/20">
-                                        <div className="flex gap-2 pb-2 border-b border-blue-200 dark:border-blue-800">
+                                    <div className="space-y-1 bg-blue-50/50 p-2 dark:bg-blue-950/20">
+                                        <div className="flex gap-2 border-b border-blue-200 pb-2 dark:border-blue-800">
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const greIds = data.filter((r) => r.company === 'GRE').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -767,7 +770,7 @@ export default function TurnoverForecastIndex({
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const greIds = data.filter((r) => r.company === 'GRE').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -789,7 +792,7 @@ export default function TurnoverForecastIndex({
                                                     <label
                                                         key={key}
                                                         htmlFor={key}
-                                                        className="flex items-center gap-3 p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer transition-colors active:bg-blue-200 dark:active:bg-blue-900/50"
+                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-blue-100 active:bg-blue-200 dark:hover:bg-blue-900/30 dark:active:bg-blue-900/50"
                                                     >
                                                         <Checkbox
                                                             id={key}
@@ -799,7 +802,7 @@ export default function TurnoverForecastIndex({
                                                         />
                                                         <span className="flex-1 text-sm leading-tight">
                                                             {row.job_name}
-                                                            <span className="block text-xs text-muted-foreground">{row.job_number}</span>
+                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
                                                         </span>
                                                     </label>
                                                 );
@@ -811,24 +814,25 @@ export default function TurnoverForecastIndex({
 
                         {/* Forecast Projects */}
                         {data.filter((row) => row.company === 'Forecast').length > 0 && (
-                            <Collapsible defaultOpen className="rounded-lg border border-violet-200 dark:border-violet-800 overflow-hidden">
-                                <CollapsibleTrigger className="flex items-center justify-between w-full p-3 sm:p-2 bg-violet-50 dark:bg-violet-950/30 hover:bg-violet-100 dark:hover:bg-violet-950/50 transition-colors">
+                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-violet-200 dark:border-violet-800">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-violet-50 p-3 transition-colors hover:bg-violet-100 sm:p-2 dark:bg-violet-950/30 dark:hover:bg-violet-950/50">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-violet-500" />
+                                        <div className="h-3 w-3 rounded-full bg-violet-500" />
                                         <span className="font-semibold text-violet-800 dark:text-violet-300">Forecast</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            ({data.filter((r) => r.company === 'Forecast' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/{data.filter((r) => r.company === 'Forecast').length})
+                                        <span className="text-muted-foreground text-sm">
+                                            ({data.filter((r) => r.company === 'Forecast' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
+                                            {data.filter((r) => r.company === 'Forecast').length})
                                         </span>
                                     </div>
-                                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
-                                    <div className="p-2 space-y-1 bg-violet-50/50 dark:bg-violet-950/20">
-                                        <div className="flex gap-2 pb-2 border-b border-violet-200 dark:border-violet-800">
+                                    <div className="space-y-1 bg-violet-50/50 p-2 dark:bg-violet-950/20">
+                                        <div className="flex gap-2 border-b border-violet-200 pb-2 dark:border-violet-800">
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const forecastIds = data.filter((r) => r.company === 'Forecast').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -843,7 +847,7 @@ export default function TurnoverForecastIndex({
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const forecastIds = data.filter((r) => r.company === 'Forecast').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -865,7 +869,7 @@ export default function TurnoverForecastIndex({
                                                     <label
                                                         key={key}
                                                         htmlFor={key}
-                                                        className="flex items-center gap-3 p-2 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/30 cursor-pointer transition-colors active:bg-violet-200 dark:active:bg-violet-900/50"
+                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-violet-100 active:bg-violet-200 dark:hover:bg-violet-900/30 dark:active:bg-violet-900/50"
                                                     >
                                                         <Checkbox
                                                             id={key}
@@ -875,7 +879,7 @@ export default function TurnoverForecastIndex({
                                                         />
                                                         <span className="flex-1 text-sm leading-tight">
                                                             {row.job_name}
-                                                            <span className="block text-xs text-muted-foreground">{row.job_number}</span>
+                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
                                                         </span>
                                                     </label>
                                                 );
@@ -887,24 +891,25 @@ export default function TurnoverForecastIndex({
 
                         {/* Unknown/Other Jobs */}
                         {data.filter((row) => row.company === 'Unknown').length > 0 && (
-                            <Collapsible className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                <CollapsibleTrigger className="flex items-center justify-between w-full p-3 sm:p-2 bg-slate-50 dark:bg-slate-900/30 hover:bg-slate-100 dark:hover:bg-slate-900/50 transition-colors">
+                            <Collapsible className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-slate-50 p-3 transition-colors hover:bg-slate-100 sm:p-2 dark:bg-slate-900/30 dark:hover:bg-slate-900/50">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-slate-500" />
+                                        <div className="h-3 w-3 rounded-full bg-slate-500" />
                                         <span className="font-semibold text-slate-700 dark:text-slate-300">Other</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            ({data.filter((r) => r.company === 'Unknown' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/{data.filter((r) => r.company === 'Unknown').length})
+                                        <span className="text-muted-foreground text-sm">
+                                            ({data.filter((r) => r.company === 'Unknown' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
+                                            {data.filter((r) => r.company === 'Unknown').length})
                                         </span>
                                     </div>
-                                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
-                                    <div className="p-2 space-y-1 bg-slate-50/50 dark:bg-slate-950/20">
-                                        <div className="flex gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                                    <div className="space-y-1 bg-slate-50/50 p-2 dark:bg-slate-950/20">
+                                        <div className="flex gap-2 border-b border-slate-200 pb-2 dark:border-slate-700">
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const unknownIds = data.filter((r) => r.company === 'Unknown').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -919,7 +924,7 @@ export default function TurnoverForecastIndex({
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 px-3 text-xs flex-1"
+                                                className="h-8 flex-1 px-3 text-xs"
                                                 onClick={() => {
                                                     const unknownIds = data.filter((r) => r.company === 'Unknown').map((r) => `${r.type}-${r.id}`);
                                                     setExcludedJobIds((prev) => {
@@ -941,7 +946,7 @@ export default function TurnoverForecastIndex({
                                                     <label
                                                         key={key}
                                                         htmlFor={key}
-                                                        className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800/30 cursor-pointer transition-colors active:bg-slate-200 dark:active:bg-slate-800/50"
+                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-slate-100 active:bg-slate-200 dark:hover:bg-slate-800/30 dark:active:bg-slate-800/50"
                                                     >
                                                         <Checkbox
                                                             id={key}
@@ -951,7 +956,7 @@ export default function TurnoverForecastIndex({
                                                         />
                                                         <span className="flex-1 text-sm leading-tight">
                                                             {row.job_name}
-                                                            <span className="block text-xs text-muted-foreground">{row.job_number}</span>
+                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
                                                         </span>
                                                     </label>
                                                 );
@@ -963,8 +968,8 @@ export default function TurnoverForecastIndex({
                     </div>
 
                     {/* Footer with Done button for mobile */}
-                    <div className="pt-3 border-t mt-2 sm:hidden">
-                        <Button className="w-full h-11" onClick={() => setFilterDialogOpen(false)}>
+                    <div className="mt-2 border-t pt-3 sm:hidden">
+                        <Button className="h-11 w-full" onClick={() => setFilterDialogOpen(false)}>
                             Done
                         </Button>
                     </div>

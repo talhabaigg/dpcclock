@@ -15,7 +15,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Job to extract metadata from a single drawing sheet using AWS Textract.
@@ -30,7 +29,9 @@ class ExtractSheetMetadataJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 60;
+
     public int $timeout = 300; // 5 minutes
 
     public function __construct(
@@ -55,17 +56,19 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
         $sheet = QaStageDrawing::with('drawingSet')->find($this->sheetId);
 
-        if (!$sheet) {
+        if (! $sheet) {
             Log::error('Sheet not found for extraction', ['id' => $this->sheetId]);
+
             return;
         }
 
-        if (!$sheet->page_preview_s3_key) {
+        if (! $sheet->page_preview_s3_key) {
             Log::error('Sheet has no preview image', ['id' => $this->sheetId]);
             $sheet->update([
                 'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
                 'extraction_errors' => ['error' => 'No preview image available'],
             ]);
+
             return;
         }
 
@@ -86,7 +89,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 'sheet_id' => $sheet->id,
                 'width' => $sheet->page_width_px,
                 'height' => $sheet->page_height_px,
-                'estimated_memory' => number_format($imageSizeBytes / 1024 / 1024, 1) . ' MB',
+                'estimated_memory' => number_format($imageSizeBytes / 1024 / 1024, 1).' MB',
             ]);
         }
 
@@ -126,7 +129,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             }
 
             // Attempt 2: Try auto-selected templates if no preferred template was used
-            if (!$usedPreferredTemplate && $projectId) {
+            if (! $usedPreferredTemplate && $projectId) {
                 $templates = TitleBlockTemplate::findBestMatches(
                     $projectId,
                     $sheet->page_orientation,
@@ -159,7 +162,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             }
 
             // Attempt 2: Try heuristic crop if no template succeeded (skip for large images)
-            if ((!$bestResult || !$bestResult['passes']) && !$skipHeuristicCropping) {
+            if ((! $bestResult || ! $bestResult['passes']) && ! $skipHeuristicCropping) {
                 $result = $this->extractWithHeuristic(
                     $sheet, $textract, $cropService, $validator
                 );
@@ -174,7 +177,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             }
 
             // Attempt 3: Try full page if still no success
-            if (!$bestResult || !$bestResult['passes']) {
+            if (! $bestResult || ! $bestResult['passes']) {
                 $result = $this->extractFullPage(
                     $sheet, $textract, $validator
                 );
@@ -190,7 +193,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 $bestResult = $this->compareBestResult($bestResult, $result);
 
                 // Preserve flags on best result if this was the result chosen
-                if ($bestResult === $result || ($bestResult && !isset($bestResult['skipped_heuristic_cropping']))) {
+                if ($bestResult === $result || ($bestResult && ! isset($bestResult['skipped_heuristic_cropping']))) {
                     $bestResult['skipped_heuristic_cropping'] = $skipHeuristicCropping;
                 }
             }
@@ -229,11 +232,11 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'sheet_id' => $sheet->id,
             'template_id' => $template->id,
             'crop_rect' => $template->crop_rect,
-            'has_field_mappings' => !empty($template->field_mappings),
+            'has_field_mappings' => ! empty($template->field_mappings),
         ]);
 
         // If template has field mappings, extract directly from those regions
-        if (!empty($template->field_mappings)) {
+        if (! empty($template->field_mappings)) {
             return $this->extractWithFieldMappings(
                 $sheet, $template, $textract, $cropService, $validator
             );
@@ -247,8 +250,9 @@ class ExtractSheetMetadataJob implements ShouldQueue
             's3'
         );
 
-        if (!$croppedBytes) {
+        if (! $croppedBytes) {
             Log::warning('Template crop failed', ['sheet_id' => $sheet->id, 'template_id' => $template->id]);
+
             return [
                 'passes' => false,
                 'error' => 'Failed to crop image with template',
@@ -271,7 +275,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'error' => $textractResult['error'] ?? null,
         ]);
 
-        if (!$textractResult['success']) {
+        if (! $textractResult['success']) {
             return [
                 'passes' => false,
                 'error' => $textractResult['error'] ?? 'Textract extraction failed',
@@ -327,7 +331,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         ]);
 
         foreach (['drawing_number', 'drawing_title', 'revision'] as $fieldName) {
-            if (!isset($fieldMappings[$fieldName])) {
+            if (! isset($fieldMappings[$fieldName])) {
                 Log::info("Field mapping not set for: {$fieldName}", [
                     'sheet_id' => $sheet->id,
                 ]);
@@ -337,6 +341,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                     'source_alias' => $fieldName,
                     'boundingBox' => null,
                 ];
+
                 continue;
             }
 
@@ -380,7 +385,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 ]);
             }
 
-            if (!$fieldRect) {
+            if (! $fieldRect) {
                 Log::warning('Invalid field mapping format - no valid coordinates', [
                     'sheet_id' => $sheet->id,
                     'field' => $fieldName,
@@ -392,6 +397,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                     'source_alias' => $fieldName,
                     'boundingBox' => null,
                 ];
+
                 continue;
             }
 
@@ -420,7 +426,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                 's3'
             );
 
-            if (!$fieldCroppedBytes) {
+            if (! $fieldCroppedBytes) {
                 Log::warning('Field crop failed', [
                     'sheet_id' => $sheet->id,
                     'field' => $fieldName,
@@ -432,6 +438,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                     'source_alias' => $fieldName,
                     'boundingBox' => null,
                 ];
+
                 continue;
             }
 
@@ -488,8 +495,8 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * images that Textract cannot detect text in. This method ensures regions
      * meet minimum size thresholds by adding symmetric padding.
      *
-     * @param array $rect {x, y, w, h} normalized coordinates (0-1)
-     * @param string $fieldName For logging purposes
+     * @param  array  $rect  {x, y, w, h} normalized coordinates (0-1)
+     * @param  string  $fieldName  For logging purposes
      * @return array Padded rect (clamped to 0-1 bounds)
      */
     private function addPaddingToSmallRegion(array $rect, string $fieldName): array
@@ -516,7 +523,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         $needsWidthPadding = $w < $minWidth;
         $needsHeightPadding = $h < $minHeight;
 
-        if (!$needsWidthPadding && !$needsHeightPadding) {
+        if (! $needsWidthPadding && ! $needsHeightPadding) {
             return $rect;
         }
 
@@ -574,7 +581,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             's3'
         );
 
-        if (!$croppedBytes) {
+        if (! $croppedBytes) {
             return [
                 'passes' => false,
                 'error' => 'Failed to crop image with heuristic',
@@ -585,7 +592,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         // Extract with Textract
         $textractResult = $textract->extractFromBytes($croppedBytes);
 
-        if (!$textractResult['success']) {
+        if (! $textractResult['success']) {
             return [
                 'passes' => false,
                 'error' => $textractResult['error'] ?? 'Textract extraction failed',
@@ -616,7 +623,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         // Extract directly from S3
         $textractResult = $textract->extractFromS3($sheet->page_preview_s3_key);
 
-        if (!$textractResult['success']) {
+        if (! $textractResult['success']) {
             return [
                 'passes' => false,
                 'error' => $textractResult['error'] ?? 'Textract extraction failed',
@@ -646,11 +653,11 @@ class ExtractSheetMetadataJob implements ShouldQueue
         }
 
         // Prefer passing results
-        if ($new['passes'] && !$current['passes']) {
+        if ($new['passes'] && ! $current['passes']) {
             return $new;
         }
 
-        if (!$new['passes'] && $current['passes']) {
+        if (! $new['passes'] && $current['passes']) {
             return $current;
         }
 
@@ -671,7 +678,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
         array $allAttempts,
         bool $skippedHeuristicCropping = false
     ): void {
-        if ($result === null || !isset($result['fields'])) {
+        if ($result === null || ! isset($result['fields'])) {
             $sheet->update([
                 'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
                 'extraction_errors' => [
@@ -679,6 +686,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
                     'attempts' => $allAttempts,
                 ],
             ]);
+
             return;
         }
 
@@ -813,7 +821,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
         // Get project ID from drawing set
         $projectId = $sheet->drawingSet?->project_id;
-        if (!$projectId) {
+        if (! $projectId) {
             return;
         }
 

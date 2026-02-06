@@ -1,7 +1,7 @@
 'use client';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable, SortingState, getSortedRowModel } from '@tanstack/react-table';
+import { ColumnDef, SortingState, flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
 import React from 'react';
 
 interface DataTableProps<TData, TValue> {
@@ -45,7 +45,7 @@ export function DataTable<TData, TValue>({ columns, data, onRowClick }: DataTabl
                             <TableRow
                                 key={row.id}
                                 data-state={row.getIsSelected() && 'selected'}
-                                className={onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''}
+                                className={onRowClick ? 'hover:bg-muted/50 cursor-pointer' : ''}
                                 onClick={() => onRowClick?.(row.original)}
                             >
                                 {row.getVisibleCells().map((cell) => (

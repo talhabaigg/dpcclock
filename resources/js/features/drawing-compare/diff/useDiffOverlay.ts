@@ -65,7 +65,7 @@ export function useDiffOverlay(
     candidateCanvasRef: React.RefObject<HTMLCanvasElement>,
     cssTransform: string | undefined,
     isAligned: boolean,
-    options: UseDiffOverlayOptions = {}
+    options: UseDiffOverlayOptions = {},
 ): UseDiffOverlayReturn {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
@@ -95,7 +95,7 @@ export function useDiffOverlay(
         const candidateCanvas = candidateCanvasRef.current;
 
         if (!baseCanvas || !candidateCanvas) {
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Canvas references not available',
@@ -106,7 +106,7 @@ export function useDiffOverlay(
 
         // Validate that both canvases have valid dimensions (are actually rendered)
         if (baseCanvas.width === 0 || baseCanvas.height === 0) {
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Base canvas not ready',
@@ -116,7 +116,7 @@ export function useDiffOverlay(
         }
 
         if (candidateCanvas.width === 0 || candidateCanvas.height === 0) {
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Candidate canvas not ready',
@@ -131,7 +131,7 @@ export function useDiffOverlay(
         const candidateCtx = candidateCanvas.getContext('2d', { willReadFrequently: true });
 
         if (!baseCtx || !candidateCtx) {
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Could not get canvas contexts',
@@ -155,7 +155,7 @@ export function useDiffOverlay(
 
         if (!baseHasContent) {
             console.warn('Diff computation: Base canvas appears empty (transparent)');
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Base canvas appears empty',
@@ -166,7 +166,7 @@ export function useDiffOverlay(
 
         if (!candidateHasContent) {
             console.warn('Diff computation: Candidate canvas appears empty (transparent)');
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 isComputing: false,
                 error: 'Candidate canvas appears empty',
@@ -179,15 +179,24 @@ export function useDiffOverlay(
         const widthRatio = baseCanvas.width / candidateCanvas.width;
         const heightRatio = baseCanvas.height / candidateCanvas.height;
         if (widthRatio < 0.9 || widthRatio > 1.1 || heightRatio < 0.9 || heightRatio > 1.1) {
-            console.warn('Diff computation: Canvas dimensions significantly different - base:', baseCanvas.width, 'x', baseCanvas.height, 'candidate:', candidateCanvas.width, 'x', candidateCanvas.height);
+            console.warn(
+                'Diff computation: Canvas dimensions significantly different - base:',
+                baseCanvas.width,
+                'x',
+                baseCanvas.height,
+                'candidate:',
+                candidateCanvas.width,
+                'x',
+                candidateCanvas.height,
+            );
         }
 
         // If not aligned, use identity transform (no transformation)
-        const effectiveTransform = (isAligned && cssTransform) ? cssTransform : 'translate(0%, 0%) rotate(0deg) scale(1)';
+        const effectiveTransform = isAligned && cssTransform ? cssTransform : 'translate(0%, 0%) rotate(0deg) scale(1)';
 
         const computeId = ++computeIdRef.current;
 
-        setState(prev => ({ ...prev, isComputing: true, error: null }));
+        setState((prev) => ({ ...prev, isComputing: true, error: null }));
 
         // Use requestAnimationFrame to avoid blocking UI
         requestAnimationFrame(() => {
@@ -198,12 +207,7 @@ export function useDiffOverlay(
 
             try {
                 // Render the candidate with transform applied to match base dimensions
-                const transformedCandidate = renderTransformedCanvas(
-                    candidateCanvas,
-                    effectiveTransform,
-                    baseCanvas.width,
-                    baseCanvas.height
-                );
+                const transformedCandidate = renderTransformedCanvas(candidateCanvas, effectiveTransform, baseCanvas.width, baseCanvas.height);
 
                 // Compute the diff mask
                 const result = computeDiffMask(baseCanvas, transformedCandidate, {
@@ -225,14 +229,14 @@ export function useDiffOverlay(
                         ctx.putImageData(result.maskData, 0, 0);
                     }
 
-                    setState(prev => ({
+                    setState((prev) => ({
                         ...prev,
                         isComputing: false,
                         diffResult: result,
                         error: null,
                     }));
                 } else {
-                    setState(prev => ({
+                    setState((prev) => ({
                         ...prev,
                         isComputing: false,
                         error: 'Failed to compute diff',
@@ -245,7 +249,7 @@ export function useDiffOverlay(
                 }
 
                 console.error('Diff computation error:', e);
-                setState(prev => ({
+                setState((prev) => ({
                     ...prev,
                     isComputing: false,
                     error: e instanceof Error ? e.message : 'Unknown error',
@@ -280,7 +284,7 @@ export function useDiffOverlay(
 
     // Toggle diff visibility
     const toggleDiff = useCallback(() => {
-        setState(prev => {
+        setState((prev) => {
             const newShowDiff = !prev.showDiff;
             return { ...prev, showDiff: newShowDiff };
         });
@@ -288,12 +292,12 @@ export function useDiffOverlay(
 
     // Set diff visibility
     const setShowDiff = useCallback((show: boolean) => {
-        setState(prev => ({ ...prev, showDiff: show }));
+        setState((prev) => ({ ...prev, showDiff: show }));
     }, []);
 
     // Set sensitivity
     const setSensitivity = useCallback((value: number) => {
-        setState(prev => ({ ...prev, sensitivity: value }));
+        setState((prev) => ({ ...prev, sensitivity: value }));
     }, []);
 
     // Recompute when showDiff is enabled (works with or without alignment)
@@ -322,10 +326,9 @@ export function useDiffOverlay(
     useEffect(() => {
         if (state.showDiff) {
             // Clear the current diff result to prevent showing stale data during zoom
-            setState(prev => ({ ...prev, diffResult: null }));
+            setState((prev) => ({ ...prev, diffResult: null }));
             debouncedRecompute();
         }
-     
     }, [opts.scale]); // Only depend on scale, not on state.showDiff or debouncedRecompute to avoid loops
 
     // Cleanup

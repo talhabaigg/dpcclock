@@ -24,8 +24,8 @@ export type DiffOptions = {
 
 const DEFAULT_OPTIONS: DiffOptions = {
     threshold: 30,
-    baseOnlyColor: { r: 0, g: 100, b: 255, a: 255 },       // Bright Blue - content in base only (removed)
-    candidateOnlyColor: { r: 255, g: 0, b: 100, a: 255 },  // Bright Magenta/Red - content in candidate only (added)
+    baseOnlyColor: { r: 0, g: 100, b: 255, a: 255 }, // Bright Blue - content in base only (removed)
+    candidateOnlyColor: { r: 255, g: 0, b: 100, a: 255 }, // Bright Magenta/Red - content in candidate only (added)
 };
 
 /**
@@ -34,11 +34,7 @@ const DEFAULT_OPTIONS: DiffOptions = {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function _pixelDiff(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
     // Use maximum channel difference for more sensitive detection
-    return Math.max(
-        Math.abs(r1 - r2),
-        Math.abs(g1 - g2),
-        Math.abs(b1 - b2)
-    );
+    return Math.max(Math.abs(r1 - r2), Math.abs(g1 - g2), Math.abs(b1 - b2));
 }
 
 /**
@@ -52,7 +48,7 @@ function _pixelDiff(r1: number, g1: number, b1: number, r2: number, g2: number, 
 export function computeDiffMask(
     baseCanvas: HTMLCanvasElement,
     candidateCanvas: HTMLCanvasElement,
-    options: Partial<DiffOptions> = {}
+    options: Partial<DiffOptions> = {},
 ): DiffResult | null {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
@@ -106,12 +102,7 @@ export function computeDiffMask(
         const a2 = candidatePixels[i + 3];
 
         // Calculate the maximum channel difference
-        const diff = Math.max(
-            Math.abs(r1 - r2),
-            Math.abs(g1 - g2),
-            Math.abs(b1 - b2),
-            Math.abs(a1 - a2)
-        );
+        const diff = Math.max(Math.abs(r1 - r2), Math.abs(g1 - g2), Math.abs(b1 - b2), Math.abs(a1 - a2));
 
         // If difference exceeds threshold, determine which side has the content
         if (diff > opts.threshold) {
@@ -174,7 +165,7 @@ export function computeDiffMask(
             // Apply color based on closest diff type
             if (closestType > 0) {
                 // Calculate alpha based on distance (closer = more opaque)
-                const alphaMultiplier = 1 - (minDist / (dilationRadius + 1));
+                const alphaMultiplier = 1 - minDist / (dilationRadius + 1);
                 const color = closestType === 1 ? opts.baseOnlyColor : opts.candidateOnlyColor;
 
                 maskPixels[i] = color.r;
@@ -216,7 +207,7 @@ export function renderTransformedCanvas(
     sourceCanvas: HTMLCanvasElement,
     cssTransform: string,
     targetWidth: number,
-    targetHeight: number
+    targetHeight: number,
 ): HTMLCanvasElement {
     const outputCanvas = document.createElement('canvas');
     outputCanvas.width = targetWidth;

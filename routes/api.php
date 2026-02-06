@@ -4,13 +4,12 @@ use App\Http\Controllers\Api\QaStageController;
 use App\Http\Controllers\Api\QaStageDrawingController;
 use App\Http\Controllers\Api\QaStageDrawingObservationController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\PurchasingController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PurchasingController;
 use Illuminate\Validation\ValidationException;
-
 
 // Public authentication routes
 Route::post('/login', function (Request $request) {
@@ -46,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('employee/updated', function (\Illuminate\Http\Request $request) {
         \Illuminate\Support\Facades\Log::info('Employee updated webhook received:', $request->all());
+
         return response()->json(['message' => 'Employee updated successfully']);
     });
 
@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Logged out successfully']);
     });
 

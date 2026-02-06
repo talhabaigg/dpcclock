@@ -2,11 +2,11 @@
 export { AiChat } from './ai-chat';
 export { ChatInput } from './chat-input';
 export { ChatMessage } from './chat-message';
-export { ChatWelcome } from './chat-welcome';
-export { VoiceCallModal } from './voice-call-modal';
 export { chatService } from './chat-service';
+export { ChatWelcome } from './chat-welcome';
 export { useChat } from './use-chat';
 export { useVoiceCall } from './use-voice-call';
+export { VoiceCallModal } from './voice-call-modal';
 
 // Types
 export type {
@@ -20,9 +20,4 @@ export type {
     UseChatReturn,
 } from './types';
 
-export type {
-    VoiceCallStatus,
-    VoiceCallEvent,
-    UseVoiceCallOptions,
-    UseVoiceCallReturn,
-} from './use-voice-call';
+export type { UseVoiceCallOptions, UseVoiceCallReturn, VoiceCallEvent, VoiceCallStatus } from './use-voice-call';

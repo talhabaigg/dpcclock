@@ -69,7 +69,7 @@ export type CashInAdjustment = {
 export type CashOutSource = {
     job_number: string;
     cost_item: string;
-    vendor: string | null;  // null for forecast data (only actuals have vendor)
+    vendor: string | null; // null for forecast data (only actuals have vendor)
     month: string;
     amount: number;
     source: DataSource;

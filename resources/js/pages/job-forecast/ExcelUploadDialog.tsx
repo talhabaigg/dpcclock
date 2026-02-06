@@ -20,14 +20,7 @@ interface ExcelUploadDialogProps {
     onImportData: (data: { costItem: string; percentages: Record<string, number> }[]) => void;
 }
 
-export function ExcelUploadDialog({
-    open,
-    onOpenChange,
-    costGridData,
-    displayMonths,
-    forecastMonths,
-    onImportData,
-}: ExcelUploadDialogProps) {
+export function ExcelUploadDialog({ open, onOpenChange, costGridData, displayMonths, forecastMonths, onImportData }: ExcelUploadDialogProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -42,25 +35,11 @@ export function ExcelUploadDialog({
         const rows: any[] = [];
 
         // Header row
-        const headers = [
-            'Cost Item',
-            'Description',
-            'Budget',
-            'Actuals To Date',
-            'Remaining $',
-            ...forecastMonths.map(formatMonthHeader),
-        ];
+        const headers = ['Cost Item', 'Description', 'Budget', 'Actuals To Date', 'Remaining $', ...forecastMonths.map(formatMonthHeader)];
         rows.push(headers);
 
         // Add instruction row
-        const instructions = [
-            '↓ Enter cumulative % of budget in the forecast columns →',
-            '',
-            '',
-            '',
-            '',
-            ...forecastMonths.map(() => '← % →'),
-        ];
+        const instructions = ['↓ Enter cumulative % of budget in the forecast columns →', '', '', '', '', ...forecastMonths.map(() => '← % →')];
         rows.push(instructions);
 
         // Data rows
@@ -98,14 +77,7 @@ export function ExcelUploadDialog({
                 return percentage > 0 ? Math.round(percentage * 10) / 10 : ''; // Round to 1 decimal
             });
 
-            const dataRow = [
-                row.cost_item,
-                row.cost_item_description || '',
-                budget,
-                actualsToDate,
-                remaining,
-                ...forecastPercentages,
-            ];
+            const dataRow = [row.cost_item, row.cost_item_description || '', budget, actualsToDate, remaining, ...forecastPercentages];
             rows.push(dataRow);
         });
 
@@ -226,8 +198,8 @@ export function ExcelUploadDialog({
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Step 2: Fill in Forecast Percentages</Label>
                         <p className="text-muted-foreground text-sm">
-                            In Excel, enter the <strong>cumulative percentage of budget</strong> you want to reach by each forecast
-                            month. For example, if you want to reach 50% of budget by February, enter 50 in the Feb column.
+                            In Excel, enter the <strong>cumulative percentage of budget</strong> you want to reach by each forecast month. For
+                            example, if you want to reach 50% of budget by February, enter 50 in the Feb column.
                         </p>
                     </div>
 
@@ -247,11 +219,7 @@ export function ExcelUploadDialog({
                             className="hidden"
                             disabled={uploading}
                         />
-                        <Button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full"
-                            disabled={uploading}
-                        >
+                        <Button onClick={() => fileInputRef.current?.click()} className="w-full" disabled={uploading}>
                             <Upload className="mr-2 h-4 w-4" />
                             {uploading ? 'Uploading...' : 'Upload Completed File'}
                         </Button>
@@ -266,9 +234,9 @@ export function ExcelUploadDialog({
                         </div>
                     )}
 
-                    <div className="bg-muted rounded-md p-3 text-xs text-muted-foreground">
-                        <strong>Note:</strong> After uploading, review the grid to ensure data was imported correctly, then
-                        click "Save Forecast" to persist your changes.
+                    <div className="bg-muted text-muted-foreground rounded-md p-3 text-xs">
+                        <strong>Note:</strong> After uploading, review the grid to ensure data was imported correctly, then click "Save Forecast" to
+                        persist your changes.
                     </div>
                 </div>
             </DialogContent>

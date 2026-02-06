@@ -2,16 +2,14 @@
 
 namespace App\Services;
 
-use Auth;
-use Illuminate\Support\Facades\Storage;
-use Log;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Models\Requisition;
-use App\Models\MaterialItem;
-use Maatwebsite\Excel\Excel as ExcelFormat;
-use Illuminate\Support\Collection;
-use Carbon\Carbon;
 use App\Models\Location;
+use App\Models\MaterialItem;
+use App\Models\Requisition;
+use Auth;
+use Carbon\Carbon;
+use Log;
+use Maatwebsite\Excel\Excel as ExcelFormat;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ExcelExportService
 {
@@ -19,17 +17,18 @@ class ExcelExportService
     {
         $datetime = now()->format('YmdHis');
         $parentId = Location::where('id', $requisition->project_number)->value('eh_parent_id');
-        Log::info('Parent ID: ' . $parentId);
+        Log::info('Parent ID: '.$parentId);
         $companyCodes = [
             '1149031' => 'SWC',
             '1198645' => 'GREEN',
-            '1249093' => 'SWCP'
+            '1249093' => 'SWCP',
         ];
         $company = $companyCodes[$parentId] ?? null;
 
         $fileName = "PO-{$requisition->po_number}{$datetime}_{$company}.csv";
 
-        Excel::store(new class ($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
+        Excel::store(new class($requisition) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings
+        {
             protected $requisition;
 
             public function __construct($requisition)
@@ -67,7 +66,7 @@ class ExcelExportService
                     'GL Division',
                     'GL SubAccount',
                     'Tax Group',
-                    'Discount %'
+                    'Discount %',
                 ];
             }
 
@@ -78,12 +77,13 @@ class ExcelExportService
                 return collect($requisition->lineItems)->map(function ($lineItem, $index) use ($requisition) {
                     $materialItem = MaterialItem::where('code', $lineItem->item_code)->first();
                     $costcode = $materialItem?->costcode;
-                    $formattedCostcode = $costcode ? substr($costcode, 0, 2) . '-' . substr($costcode, 2) : 'N/A';
-                    $po_number = $requisition->location?->external_id . '-PO-' . $requisition->id;
-                    $lineItemValue = $lineItem->code ? $lineItem->code . '-' . $lineItem->description : $lineItem->description;
+                    $formattedCostcode = $costcode ? substr($costcode, 0, 2).'-'.substr($costcode, 2) : 'N/A';
+                    $po_number = $requisition->location?->external_id.'-PO-'.$requisition->id;
+                    $lineItemValue = $lineItem->code ? $lineItem->code.'-'.$lineItem->description : $lineItem->description;
+
                     return [
                         'AP',
-                        'PO' . $requisition->po_number ?? $po_number,
+                        'PO'.$requisition->po_number ?? $po_number,
                         $requisition->supplier?->code ?? 'N/A',
                         $requisition->location?->external_id ?? 'N/A',
                         $requisition->order_reference ?? '',
@@ -109,7 +109,7 @@ class ExcelExportService
                         '',
                         '',
                         'GST',
-                        ''
+                        '',
                     ];
                 });
             }

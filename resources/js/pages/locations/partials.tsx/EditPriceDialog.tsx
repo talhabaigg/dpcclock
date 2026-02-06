@@ -16,14 +16,7 @@ interface EditPriceDialogProps {
     isLocked: boolean;
 }
 
-export default function EditPriceDialog({
-    locationId,
-    materialItemId,
-    code,
-    description,
-    currentPrice,
-    isLocked,
-}: EditPriceDialogProps) {
+export default function EditPriceDialog({ locationId, materialItemId, code, description, currentPrice, isLocked }: EditPriceDialogProps) {
     const [open, setOpen] = useState(false);
 
     const form = useForm({
@@ -62,7 +55,7 @@ export default function EditPriceDialog({
                 <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 text-muted-foreground opacity-0 transition-all hover:text-primary group-hover:opacity-100"
+                    className="text-muted-foreground hover:text-primary h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
                 >
                     <Pencil className="h-4 w-4" />
                 </Button>
@@ -71,16 +64,16 @@ export default function EditPriceDialog({
                 <DialogHeader>
                     <DialogTitle>Edit Price</DialogTitle>
                     <DialogDescription>
-                        Update the price for <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{code}</code>
+                        Update the price for <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{code}</code>
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <div className="space-y-4 py-4">
-                        <div className="text-sm text-muted-foreground line-clamp-2">{description}</div>
+                        <div className="text-muted-foreground line-clamp-2 text-sm">{description}</div>
                         <div className="space-y-2">
                             <Label htmlFor="price">Unit Cost Override</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">$</span>
                                 <Input
                                     id="price"
                                     type="number"
@@ -92,20 +85,14 @@ export default function EditPriceDialog({
                                     autoFocus
                                 />
                             </div>
-                            {form.errors.unit_cost_override && (
-                                <p className="text-sm text-destructive">{form.errors.unit_cost_override}</p>
-                            )}
+                            {form.errors.unit_cost_override && <p className="text-destructive text-sm">{form.errors.unit_cost_override}</p>}
                         </div>
                         <div className="flex items-center justify-between rounded-lg border p-3">
                             <div className="space-y-0.5">
                                 <Label htmlFor="lock-price">Lock Price</Label>
-                                <p className="text-xs text-muted-foreground">Prevent automatic price updates</p>
+                                <p className="text-muted-foreground text-xs">Prevent automatic price updates</p>
                             </div>
-                            <Switch
-                                id="lock-price"
-                                checked={form.data.is_locked}
-                                onCheckedChange={(checked) => form.setData('is_locked', checked)}
-                            />
+                            <Switch id="lock-price" checked={form.data.is_locked} onCheckedChange={(checked) => form.setData('is_locked', checked)} />
                         </div>
                     </div>
                     <DialogFooter>
@@ -115,7 +102,7 @@ export default function EditPriceDialog({
                         <Button type="submit" disabled={form.processing}>
                             {form.processing ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Saving...
                                 </>
                             ) : (

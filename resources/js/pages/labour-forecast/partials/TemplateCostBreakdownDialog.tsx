@@ -35,18 +35,14 @@ interface TemplateCostBreakdownDialogProps {
     template: ConfiguredTemplate | null;
 }
 
-export const TemplateCostBreakdownDialog = ({
-    open,
-    onOpenChange,
-    template,
-}: TemplateCostBreakdownDialogProps) => {
+export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: TemplateCostBreakdownDialogProps) => {
     if (!template?.cost_breakdown) return null;
 
     const breakdown = template.cost_breakdown;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Calculator className="h-5 w-5" />
@@ -124,16 +120,26 @@ export const TemplateCostBreakdownDialog = ({
                                             <span className="text-slate-600 dark:text-slate-400">
                                                 {customAllowance.name}
                                                 <span className="ml-1 text-xs text-slate-400">
-                                                    ({formatCurrency(customAllowance.rate)}/{customAllowance.rate_type === 'hourly' ? 'hr x 40' : customAllowance.rate_type === 'daily' ? 'day x 5' : 'week'})
+                                                    ({formatCurrency(customAllowance.rate)}/
+                                                    {customAllowance.rate_type === 'hourly'
+                                                        ? 'hr x 40'
+                                                        : customAllowance.rate_type === 'daily'
+                                                          ? 'day x 5'
+                                                          : 'week'}
+                                                    )
                                                 </span>
                                             </span>
-                                            <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(customAllowance.weekly)}</span>
+                                            <span className="font-medium text-green-600 dark:text-green-400">
+                                                {formatCurrency(customAllowance.weekly)}
+                                            </span>
                                         </div>
                                     ))}
                                 </>
                             )}
                             {breakdown.allowances.total === 0 && (
-                                <p className="text-xs text-slate-500 italic">No allowances applied. Configure shift conditions or add custom allowances.</p>
+                                <p className="text-xs text-slate-500 italic">
+                                    No allowances applied. Configure shift conditions or add custom allowances.
+                                </p>
                             )}
                             <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
                                 <span className="font-medium text-slate-700 dark:text-slate-300">Total Allowances</span>
@@ -148,9 +154,7 @@ export const TemplateCostBreakdownDialog = ({
                     <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
                         <div className="flex justify-between text-sm">
                             <span className="font-medium text-indigo-700 dark:text-indigo-300">Gross Wages (Base + Allowances)</span>
-                            <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                                {formatCurrency(breakdown.gross_wages)}
-                            </span>
+                            <span className="font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(breakdown.gross_wages)}</span>
                         </div>
                     </div>
 
@@ -232,9 +236,7 @@ export const TemplateCostBreakdownDialog = ({
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">
-                                        Payroll Tax ({breakdown.on_costs.payroll_tax_rate}%)
-                                    </span>
+                                    <span className="text-slate-600 dark:text-slate-400">Payroll Tax ({breakdown.on_costs.payroll_tax_rate}%)</span>
                                     <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                         {breakdown.cost_codes.payroll_tax}
                                     </span>
@@ -243,9 +245,7 @@ export const TemplateCostBreakdownDialog = ({
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">
-                                        WorkCover ({breakdown.on_costs.workcover_rate}%)
-                                    </span>
+                                    <span className="text-slate-600 dark:text-slate-400">WorkCover ({breakdown.on_costs.workcover_rate}%)</span>
                                     <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                         {breakdown.cost_codes.workcover}
                                     </span>
@@ -254,9 +254,7 @@ export const TemplateCostBreakdownDialog = ({
                             </div>
                             <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
                                 <span className="font-medium text-slate-700 dark:text-slate-300">Total On-Costs</span>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                                    {formatCurrency(breakdown.on_costs.total)}
-                                </span>
+                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatCurrency(breakdown.on_costs.total)}</span>
                             </div>
                         </div>
                     </div>

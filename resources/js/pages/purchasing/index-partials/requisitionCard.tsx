@@ -1,12 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useInitials } from '@/hooks/use-initials';
 import { Link } from '@inertiajs/react';
 import { CircleCheck, EllipsisVertical, TruckIcon } from 'lucide-react';
@@ -36,15 +30,15 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
     const cost = Number(requisition.line_items_sum_total_cost) || 0;
 
     return (
-        <Link href={`/requisition/${requisition.id}`} className="block min-w-0 max-w-full">
-            <Card className="group relative overflow-hidden border-l-4 border-l-transparent bg-white transition-all duration-200 hover:border-l-blue-500 hover:shadow-md active:scale-[0.99] dark:border-border dark:bg-card dark:hover:border-l-blue-400 dark:hover:bg-muted/50">
+        <Link href={`/requisition/${requisition.id}`} className="block max-w-full min-w-0">
+            <Card className="group dark:border-border dark:bg-card dark:hover:bg-muted/50 relative overflow-hidden border-l-4 border-l-transparent bg-white transition-all duration-200 hover:border-l-blue-500 hover:shadow-md active:scale-[0.99] dark:hover:border-l-blue-400">
                 {/* Status indicator dot */}
                 <div className={`absolute top-3 right-3 h-3 w-3 rounded-full md:h-2.5 md:w-2.5 ${statusConfig.bg}`} title={statusConfig.text} />
 
                 <div className="p-3 sm:p-3">
                     {/* Row 1: Amount + PO */}
                     <div className="mb-2 flex items-baseline justify-between gap-2">
-                        <span className="text-lg font-bold tabular-nums text-slate-900 sm:text-xl dark:text-white">
+                        <span className="text-lg font-bold text-slate-900 tabular-nums sm:text-xl dark:text-white">
                             ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         {requisition.po_number ? (
@@ -58,10 +52,8 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
 
                     {/* Row 2: Supplier */}
                     <div className="mb-2 flex items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
-                            {requisition.supplier?.name}
-                        </span>
-                        <span className="hidden shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 sm:inline dark:bg-muted dark:text-slate-400">
+                        <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{requisition.supplier?.name}</span>
+                        <span className="dark:bg-muted hidden shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 sm:inline dark:text-slate-400">
                             {requisition.supplier?.code}
                         </span>
                     </div>
@@ -84,16 +76,24 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                 </div>
 
                 {/* Footer: Actions */}
-                <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-3 py-2 sm:py-1.5 dark:border-border dark:bg-muted/30">
-                    <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>
-                        {statusConfig.text}
-                    </span>
-                    <div className="flex items-center gap-1 sm:gap-0.5" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                <div className="dark:border-border dark:bg-muted/30 flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-3 py-2 sm:py-1.5">
+                    <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>{statusConfig.text}</span>
+                    <div
+                        className="flex items-center gap-1 sm:gap-0.5"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }}
+                    >
                         <AddNoteButton requisition_id={requisition.id} />
 
                         {requisition.status === 'success' && (
                             <Link href={`/requisition/${requisition.id}/mark-sent-to-supplier`}>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-emerald-100 hover:text-emerald-600 sm:h-6 sm:w-6 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-400">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-emerald-100 hover:text-emerald-600 sm:h-6 sm:w-6 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-400"
+                                >
                                     <CircleCheck className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                 </Button>
                             </Link>
@@ -106,7 +106,11 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 sm:h-6 sm:w-6 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 sm:h-6 sm:w-6 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                >
                                     <EllipsisVertical className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -124,7 +128,9 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
                                 </Link>
                                 <DropdownMenuSeparator />
                                 <Link href={`/requisition/${requisition.id}/delete`}>
-                                    <DropdownMenuItem className="py-2.5 text-sm text-red-600 focus:text-red-600 sm:py-1.5 sm:text-xs">Delete</DropdownMenuItem>
+                                    <DropdownMenuItem className="py-2.5 text-sm text-red-600 focus:text-red-600 sm:py-1.5 sm:text-xs">
+                                        Delete
+                                    </DropdownMenuItem>
                                 </Link>
                             </DropdownMenuContent>
                         </DropdownMenu>

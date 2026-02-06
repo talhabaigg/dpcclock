@@ -10,9 +10,8 @@ use App\Models\JobForecast;
 use App\Models\JobForecastData;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
-use App\Models\Location;
 use App\Models\LabourForecast;
-use Illuminate\Http\Request;
+use App\Models\Location;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -26,7 +25,7 @@ class TurnoverForecastController extends Controller
 
         while ($current <= $endMonth) {
             $months[] = $current;
-            $current = date('Y-m', strtotime($current . '-01 +1 month'));
+            $current = date('Y-m', strtotime($current.'-01 +1 month'));
         }
 
         return $months;
@@ -59,7 +58,7 @@ class TurnoverForecastController extends Controller
         })->whereNotNull('external_id');
 
         // Filter by kiosk access if user is not admin or backoffice
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
@@ -96,7 +95,7 @@ class TurnoverForecastController extends Controller
                 ->sum('amount');
 
             // Load project manager name
-            $projectManager = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->value('project_manager') ?? "Not Assigned";
+            $projectManager = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->value('project_manager') ?? 'Not Assigned';
 
             // Load Over Under Billing
             $over_under_billing = JobSummary::where('job_number', $jobNumber)
@@ -134,19 +133,17 @@ class TurnoverForecastController extends Controller
                 ->pluck('amount', 'month')
                 ->toArray();
 
-
-
             // ============ FORECAST DATA ============
             // Find last actual month across both cost and revenue
-            $lastCostMonth = !empty($costActuals) ? max(array_keys($costActuals)) : null;
-            $lastRevenueMonth = !empty($revenueActuals) ? max(array_keys($revenueActuals)) : null;
+            $lastCostMonth = ! empty($costActuals) ? max(array_keys($costActuals)) : null;
+            $lastRevenueMonth = ! empty($revenueActuals) ? max(array_keys($revenueActuals)) : null;
             $lastActualMonth = max($lastCostMonth, $lastRevenueMonth);
 
             // Track global earliest and determine latest forecast month
-            if (!empty($costActuals) || !empty($revenueActuals)) {
+            if (! empty($costActuals) || ! empty($revenueActuals)) {
                 $firstMonth = min(
-                    !empty($costActuals) ? min(array_keys($costActuals)) : '9999-99',
-                    !empty($revenueActuals) ? min(array_keys($revenueActuals)) : '9999-99'
+                    ! empty($costActuals) ? min(array_keys($costActuals)) : '9999-99',
+                    ! empty($revenueActuals) ? min(array_keys($revenueActuals)) : '9999-99'
                 );
                 if ($earliestActualMonth === null || $firstMonth < $earliestActualMonth) {
                     $earliestActualMonth = $firstMonth;
@@ -159,7 +156,7 @@ class TurnoverForecastController extends Controller
                 ->latest('forecast_month')
                 ->first();
             $jobForecastId = $currentJobForecast?->id;
-            if (!$jobForecastId) {
+            if (! $jobForecastId) {
                 $jobForecastId = JobForecast::where('job_number', $jobNumber)
                     ->latest('forecast_month')
                     ->value('id');
@@ -194,10 +191,10 @@ class TurnoverForecastController extends Controller
             }
 
             // Track latest forecast month
-            if (!empty($costForecast) || !empty($revenueForecast)) {
+            if (! empty($costForecast) || ! empty($revenueForecast)) {
                 $lastForecast = max(
-                    !empty($costForecast) ? max(array_keys($costForecast)) : '0000-00',
-                    !empty($revenueForecast) ? max(array_keys($revenueForecast)) : '0000-00'
+                    ! empty($costForecast) ? max(array_keys($costForecast)) : '0000-00',
+                    ! empty($revenueForecast) ? max(array_keys($revenueForecast)) : '0000-00'
                 );
                 if ($latestForecastMonth === null || $lastForecast > $latestForecastMonth) {
                     $latestForecastMonth = $lastForecast;
@@ -278,14 +275,14 @@ class TurnoverForecastController extends Controller
                     // Use week_ending to determine the month this entry belongs to
                     $monthKey = $entry->week_ending->format('Y-m');
 
-                    if (!isset($monthlyHeadcounts[$monthKey])) {
+                    if (! isset($monthlyHeadcounts[$monthKey])) {
                         $monthlyHeadcounts[$monthKey] = 0;
                         $monthlyWeekCounts[$monthKey] = [];
                     }
 
                     // Track headcount per week to calculate average
                     $weekKey = $entry->week_ending->format('Y-m-d');
-                    if (!isset($monthlyWeekCounts[$monthKey][$weekKey])) {
+                    if (! isset($monthlyWeekCounts[$monthKey][$weekKey])) {
                         $monthlyWeekCounts[$monthKey][$weekKey] = 0;
                     }
                     $monthlyWeekCounts[$monthKey][$weekKey] += (float) $entry->headcount;
@@ -402,10 +399,10 @@ class TurnoverForecastController extends Controller
                 ->toArray();
 
             // Track latest forecast month
-            if (!empty($costForecast) || !empty($revenueForecast)) {
+            if (! empty($costForecast) || ! empty($revenueForecast)) {
                 $lastForecast = max(
-                    !empty($costForecast) ? max(array_keys($costForecast)) : '0000-00',
-                    !empty($revenueForecast) ? max(array_keys($revenueForecast)) : '0000-00'
+                    ! empty($costForecast) ? max(array_keys($costForecast)) : '0000-00',
+                    ! empty($revenueForecast) ? max(array_keys($revenueForecast)) : '0000-00'
                 );
                 if ($latestForecastMonth === null || $lastForecast > $latestForecastMonth) {
                     $latestForecastMonth = $lastForecast;
@@ -505,7 +502,7 @@ class TurnoverForecastController extends Controller
         $endMonth = $latestForecastMonth ?? date('Y-m');
 
         // If we have actuals but no forecasts, extend to at least 12 months from now
-        if ($earliestActualMonth && !$latestForecastMonth) {
+        if ($earliestActualMonth && ! $latestForecastMonth) {
             $endMonth = date('Y-m', strtotime('+12 months'));
         }
 
@@ -515,19 +512,19 @@ class TurnoverForecastController extends Controller
         $monthlyTargets = CompanyMonthlyRevenueTarget::whereIn('month', $allMonths)
             ->get()
             ->pluck('target_amount', 'month')
-            ->map(fn($amount) => (float) $amount)
+            ->map(fn ($amount) => (float) $amount)
             ->toArray();
 
         // Determine the last actual month globally (for coloring columns)
         $lastActualMonthGlobal = null;
         foreach ($combinedData as $row) {
-            if (!empty($row['revenue_actuals'])) {
+            if (! empty($row['revenue_actuals'])) {
                 $lastActual = max(array_keys($row['revenue_actuals']));
                 if ($lastActualMonthGlobal === null || $lastActual > $lastActualMonthGlobal) {
                     $lastActualMonthGlobal = $lastActual;
                 }
             }
-            if (!empty($row['cost_actuals'])) {
+            if (! empty($row['cost_actuals'])) {
                 $lastActual = max(array_keys($row['cost_actuals']));
                 if ($lastActualMonthGlobal === null || $lastActual > $lastActualMonthGlobal) {
                     $lastActualMonthGlobal = $lastActual;
@@ -543,7 +540,7 @@ class TurnoverForecastController extends Controller
             'latestForecastMonth' => $latestForecastMonth,
             'fyStartDate' => $fyStartDate,
             'fyEndDate' => $fyEndDate,
-            'fyLabel' => "FY{$fyStartYear}-" . substr($fyEndYear, 2, 2),
+            'fyLabel' => "FY{$fyStartYear}-".substr($fyEndYear, 2, 2),
             'monthlyTargets' => $monthlyTargets,
         ]);
     }

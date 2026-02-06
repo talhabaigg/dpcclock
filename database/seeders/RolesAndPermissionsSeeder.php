@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -458,7 +458,7 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     public static function getCategories(): array
     {
-        return array_keys((new self())->permissionsByCategory);
+        return array_keys((new self)->permissionsByCategory);
     }
 
     /**
@@ -466,6 +466,6 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     public static function getPermissionsByCategory(): array
     {
-        return (new self())->permissionsByCategory;
+        return (new self)->permissionsByCategory;
     }
 }

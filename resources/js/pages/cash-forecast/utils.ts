@@ -19,8 +19,7 @@ export const GENERAL_COST_LABELS: Record<string, string> = {
 /**
  * Format a number as currency without decimal places
  */
-export const formatAmount = (value: number): string =>
-    value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+export const formatAmount = (value: number): string => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 /**
  * Format a number as compact currency (e.g., $1.2M, $500K)
@@ -66,7 +65,7 @@ export const addMonthsToString = (month: string, delta: number): string => {
 export const getCostItemLabel = (
     costItem: string | undefined | null,
     description?: string | null,
-    costCodeDescriptions?: Record<string, string>
+    costCodeDescriptions?: Record<string, string>,
 ): string => {
     if (!costItem || typeof costItem !== 'string') {
         return 'Other';

@@ -83,11 +83,12 @@ class DrawingFile extends Model
      */
     public function getFileUrlAttribute(): ?string
     {
-        if (!$this->storage_path) {
+        if (! $this->storage_path) {
             return null;
         }
+
         // Use relative URL to avoid CORS issues
-        return '/storage/' . $this->storage_path;
+        return '/storage/'.$this->storage_path;
     }
 
     /**
@@ -98,6 +99,7 @@ class DrawingFile extends Model
         if ($this->mime_type) {
             return str_contains(strtolower($this->mime_type), 'pdf');
         }
+
         return str_ends_with(strtolower($this->original_name ?? ''), '.pdf');
     }
 
@@ -109,6 +111,7 @@ class DrawingFile extends Model
         if ($this->mime_type) {
             return str_starts_with(strtolower($this->mime_type), 'image/');
         }
+
         return (bool) preg_match('/\.(png|jpe?g|gif|webp|bmp)$/i', $this->original_name ?? '');
     }
 

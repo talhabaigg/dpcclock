@@ -104,7 +104,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                 {/* Loading Overlay */}
                 {processing && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-8 shadow-2xl">
+                        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
                             <div className="flex flex-col items-center justify-center gap-4">
                                 <div className="relative">
                                     <div className="h-14 w-14 rounded-full border-4 border-gray-200 dark:border-gray-700" />
@@ -122,14 +122,12 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                 {/* Success Overlay */}
                 {showSuccess && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                        <div className="rounded-2xl border border-green-200 dark:border-green-800 bg-white dark:bg-gray-900 p-8 shadow-2xl">
+                        <div className="rounded-2xl border border-green-200 bg-white p-8 shadow-2xl dark:border-green-800 dark:bg-gray-900">
                             <div className="flex flex-col items-center justify-center gap-4">
                                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50">
                                     <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
                                 </div>
-                                <p className="text-lg font-semibold text-green-600 dark:text-green-400">
-                                    {flashSuccess ?? 'Saved successfully!'}
-                                </p>
+                                <p className="text-lg font-semibold text-green-600 dark:text-green-400">{flashSuccess ?? 'Saved successfully!'}</p>
                             </div>
                         </div>
                     </div>
@@ -158,36 +156,36 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
 
                 {/* Stats Cards */}
                 <div className="grid gap-4 sm:grid-cols-3">
-                    <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-gray-900">
+                    <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white dark:border-blue-800 dark:from-blue-950/30 dark:to-gray-900">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Annual Target</CardTitle>
-                            <div className="rounded-lg bg-blue-100 dark:bg-blue-900/50 p-2">
+                            <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/50">
                                 <Target className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalTarget)}</div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{currentFYLabel}</p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{currentFYLabel}</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-gray-900">
+                    <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white dark:border-emerald-800 dark:from-emerald-950/30 dark:to-gray-900">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Monthly Average</CardTitle>
-                            <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/50 p-2">
+                            <div className="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/50">
                                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                             </div>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCompactCurrency(monthlyAverage)}</div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Per active month</p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Per active month</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/30 dark:to-gray-900">
+                    <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-white dark:border-purple-800 dark:from-purple-950/30 dark:to-gray-900">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Months Configured</CardTitle>
-                            <div className="rounded-lg bg-purple-100 dark:bg-purple-900/50 p-2">
+                            <div className="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/50">
                                 <Calculator className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </div>
                         </CardHeader>
@@ -195,7 +193,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                                 {filledMonths} <span className="text-base font-normal text-gray-500 dark:text-gray-400">/ 12</span>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">With targets set</p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">With targets set</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -203,10 +201,10 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                 {/* Budget Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <Card className="overflow-hidden">
-                        <CardHeader className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+                        <CardHeader className="border-b border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/50">
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="rounded-lg bg-blue-100 dark:bg-blue-900/50 p-2">
+                                    <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/50">
                                         <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                     </div>
                                     <div>
@@ -214,7 +212,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                         <CardDescription>Enter budget targets for each month of {currentFYLabel}</CardDescription>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 rounded-lg bg-white dark:bg-gray-900 px-4 py-2 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
                                     <span className="text-sm text-gray-500 dark:text-gray-400">Annual Total:</span>
                                     <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalTarget)}</span>
                                 </div>
@@ -224,7 +222,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
                                 <div className="min-w-[800px]">
                                     {/* Month Headers */}
-                                    <div className="grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-xs font-semibold tracking-wide uppercase">
+                                    <div className="grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] border-b border-gray-200 bg-gray-50 text-xs font-semibold tracking-wide uppercase dark:border-gray-700 dark:bg-gray-800/50">
                                         {months.map((month, index) => {
                                             const isQ1 = index < 3;
                                             const isQ2 = index >= 3 && index < 6;
@@ -239,7 +237,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                             return (
                                                 <div
                                                     key={month}
-                                                    className={`border-r border-gray-200 dark:border-gray-700 px-3 py-3 text-center text-gray-600 dark:text-gray-400 ${index % 3 === 0 ? `border-l-2 ${quarterColor}` : ''}`}
+                                                    className={`border-r border-gray-200 px-3 py-3 text-center text-gray-600 dark:border-gray-700 dark:text-gray-400 ${index % 3 === 0 ? `border-l-2 ${quarterColor}` : ''}`}
                                                 >
                                                     {formatMonthShort(month)}
                                                 </div>
@@ -258,7 +256,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                                 <Tooltip key={month}>
                                                     <TooltipTrigger asChild>
                                                         <div
-                                                            className={`border-r border-gray-200 dark:border-gray-700 px-2 py-3 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
+                                                            className={`border-r border-gray-200 px-2 py-3 dark:border-gray-700 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
                                                         >
                                                             <Input
                                                                 type="number"
@@ -273,7 +271,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                                                 }
                                                                 className={`h-9 w-full min-w-[70px] text-right text-sm font-medium transition-colors ${
                                                                     hasValue
-                                                                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 focus:border-blue-400'
+                                                                        ? 'border-blue-200 bg-blue-50 focus:border-blue-400 dark:border-blue-800 dark:bg-blue-950/30'
                                                                         : 'bg-white dark:bg-gray-900'
                                                                 }`}
                                                                 disabled={!isAdmin}
@@ -298,7 +296,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                             return (
                                                 <div
                                                     key={`display-${month}`}
-                                                    className={`border-r border-gray-200 dark:border-gray-700 px-2 py-2 text-center text-xs text-gray-500 dark:text-gray-400 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
+                                                    className={`border-r border-gray-200 px-2 py-2 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
                                                 >
                                                     {value > 0 ? formatCompactCurrency(value) : '-'}
                                                 </div>
@@ -314,18 +312,12 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                     </Card>
 
                     {/* Action Bar */}
-                    <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3">
+                    <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
                         {isAdmin ? (
                             <>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Make sure to save your changes after editing targets.
-                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Make sure to save your changes after editing targets.</p>
                                 <Button type="submit" disabled={processing} className="gap-2">
-                                    {processing ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Save className="h-4 w-4" />
-                                    )}
+                                    {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                     Save Targets
                                 </Button>
                             </>

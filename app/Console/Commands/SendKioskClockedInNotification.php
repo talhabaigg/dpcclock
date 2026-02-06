@@ -2,11 +2,9 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\User;
-use App\Notifications\KioskClockedInNotification;
-use App\Models\Employee;
 use App\Models\Kiosk;
+use App\Notifications\KioskClockedInNotification;
+use Illuminate\Console\Command;
 use Log;
 
 class SendKioskClockedInNotification extends Command
@@ -48,7 +46,7 @@ class SendKioskClockedInNotification extends Command
                         $query->whereNull('clock_out')
                             ->where('eh_kiosk_id', $kiosk->eh_kiosk_id)
                             ->whereDate('clock_in', $today); // Only include clocks from today
-                    }
+                    },
                 ])
                 ->get();
 
@@ -60,6 +58,7 @@ class SendKioskClockedInNotification extends Command
                 foreach ($kiosk->managers as $manager) {
                     if ($manager->disable_kiosk_notifications) {
                         Log::info("Skipping notification for manager {$manager->id} - notifications disabled.");
+
                         continue;
                     }
                     $manager->notify(new KioskClockedInNotification($employees->toArray(), $kiosk->name));

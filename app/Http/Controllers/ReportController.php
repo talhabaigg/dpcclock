@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\RequisitionLineItem;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ReportController extends Controller
@@ -18,10 +17,8 @@ class ReportController extends Controller
             ->has('requisition') // ✅ only include items with a related requisition
             ->get();
 
-
         return Inertia::render('reports/reqLineItems', [
             'lineItems' => $lineItems,
         ]);
     }
-
 }

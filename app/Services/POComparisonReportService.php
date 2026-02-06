@@ -3,11 +3,10 @@
 namespace App\Services;
 
 use App\Jobs\SyncPremierPoLinesJob;
+use App\Models\Location;
 use App\Models\PremierPoLine;
 use App\Models\Requisition;
-use App\Models\Location;
 use App\Models\Supplier;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -17,7 +16,7 @@ class POComparisonReportService
 
     public function __construct()
     {
-        $this->comparisonService = new POComparisonService();
+        $this->comparisonService = new POComparisonService;
     }
 
     /**
@@ -29,28 +28,28 @@ class POComparisonReportService
             ->whereNotNull('po_number');
 
         // Apply same filters as getReportData
-        if (!empty($filters['location_id'])) {
+        if (! empty($filters['location_id'])) {
             $query->where('project_number', $filters['location_id']);
         }
 
-        if (!empty($filters['supplier_id'])) {
+        if (! empty($filters['supplier_id'])) {
             $query->where('supplier_number', $filters['supplier_id']);
         }
 
-        if (!empty($filters['date_from'])) {
+        if (! empty($filters['date_from'])) {
             $query->whereDate('created_at', '>=', $filters['date_from']);
         }
 
-        if (!empty($filters['date_to'])) {
+        if (! empty($filters['date_to'])) {
             $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['po_number'])) {
-            $query->where('po_number', 'like', '%' . $filters['po_number'] . '%');
+        if (! empty($filters['po_number'])) {
+            $query->where('po_number', 'like', '%'.$filters['po_number'].'%');
         }
 
         $requisitions = $query->orderByDesc('created_at')->get();
@@ -63,7 +62,7 @@ class POComparisonReportService
         foreach ($requisitions as $requisition) {
             $hasCachedData = PremierPoLine::where('premier_po_id', $requisition->premier_po_id)->exists();
 
-            if (!$hasCachedData) {
+            if (! $hasCachedData) {
                 $missing++;
             } elseif (PremierPoLine::isStale($requisition->premier_po_id, $staleMinutes)) {
                 $stale++;
@@ -93,28 +92,28 @@ class POComparisonReportService
             ->whereNotNull('po_number');
 
         // Apply same filters as getReportData
-        if (!empty($filters['location_id'])) {
+        if (! empty($filters['location_id'])) {
             $query->where('project_number', $filters['location_id']);
         }
 
-        if (!empty($filters['supplier_id'])) {
+        if (! empty($filters['supplier_id'])) {
             $query->where('supplier_number', $filters['supplier_id']);
         }
 
-        if (!empty($filters['date_from'])) {
+        if (! empty($filters['date_from'])) {
             $query->whereDate('created_at', '>=', $filters['date_from']);
         }
 
-        if (!empty($filters['date_to'])) {
+        if (! empty($filters['date_to'])) {
             $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['po_number'])) {
-            $query->where('po_number', 'like', '%' . $filters['po_number'] . '%');
+        if (! empty($filters['po_number'])) {
+            $query->where('po_number', 'like', '%'.$filters['po_number'].'%');
         }
 
         $requisitions = $query->orderByDesc('created_at')->get();
@@ -126,7 +125,7 @@ class POComparisonReportService
         foreach ($requisitions as $requisition) {
             // Check if data is missing or stale
             $hasCachedData = PremierPoLine::where('premier_po_id', $requisition->premier_po_id)->exists();
-            $needsSync = !$hasCachedData || PremierPoLine::isStale($requisition->premier_po_id, $staleMinutes);
+            $needsSync = ! $hasCachedData || PremierPoLine::isStale($requisition->premier_po_id, $staleMinutes);
 
             if ($needsSync) {
                 SyncPremierPoLinesJob::dispatch($requisition->premier_po_id, $requisition->id);
@@ -163,28 +162,28 @@ class POComparisonReportService
             ->whereNotNull('po_number');
 
         // Apply filters
-        if (!empty($filters['location_id'])) {
+        if (! empty($filters['location_id'])) {
             $query->where('project_number', $filters['location_id']);
         }
 
-        if (!empty($filters['supplier_id'])) {
+        if (! empty($filters['supplier_id'])) {
             $query->where('supplier_number', $filters['supplier_id']);
         }
 
-        if (!empty($filters['date_from'])) {
+        if (! empty($filters['date_from'])) {
             $query->whereDate('created_at', '>=', $filters['date_from']);
         }
 
-        if (!empty($filters['date_to'])) {
+        if (! empty($filters['date_to'])) {
             $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['po_number'])) {
-            $query->where('po_number', 'like', '%' . $filters['po_number'] . '%');
+        if (! empty($filters['po_number'])) {
+            $query->where('po_number', 'like', '%'.$filters['po_number'].'%');
         }
 
         // Get all matching requisitions - data is cached so no API timeout concerns
@@ -225,14 +224,14 @@ class POComparisonReportService
                 $variance = $premierTotal - $localTotal;
 
                 // Filter by variance threshold if specified
-                if (!empty($filters['min_variance'])) {
+                if (! empty($filters['min_variance'])) {
                     if (abs($variance) < floatval($filters['min_variance'])) {
                         continue;
                     }
                 }
 
                 // Filter by only discrepancies
-                if (!empty($filters['only_discrepancies']) && !$hasVariance) {
+                if (! empty($filters['only_discrepancies']) && ! $hasVariance) {
                     continue;
                 }
 
@@ -255,7 +254,7 @@ class POComparisonReportService
                     // Check for price list violations - items with a PROJECT price list that have price changes
                     // Note: 'base_price' is standard pricing, not a contracted project price
                     $priceList = $item['local']['price_list'] ?? null;
-                    $hasProjectPriceList = !empty($priceList) && strtolower(trim($priceList)) !== 'base_price';
+                    $hasProjectPriceList = ! empty($priceList) && strtolower(trim($priceList)) !== 'base_price';
                     $hasUnitCostChange = isset($item['variances']['unit_cost']['difference'])
                         && abs($item['variances']['unit_cost']['difference']) > 0.001;
 
@@ -298,7 +297,7 @@ class POComparisonReportService
                 }
 
                 // Add violations to the global list
-                if (!empty($poViolations)) {
+                if (! empty($poViolations)) {
                     $priceListViolations[] = [
                         'po_number' => $requisition->po_number,
                         'supplier' => $requisition->supplier?->name,
@@ -344,6 +343,7 @@ class POComparisonReportService
                     'requisition_id' => $requisition->id,
                     'error' => $e->getMessage(),
                 ]);
+
                 continue;
             }
         }
@@ -470,7 +470,7 @@ class POComparisonReportService
         $monthlyTrends = [];
         foreach ($items as $item) {
             $month = date('Y-m', strtotime($item['requisition']['created_at']));
-            if (!isset($monthlyTrends[$month])) {
+            if (! isset($monthlyTrends[$month])) {
                 $monthlyTrends[$month] = [
                     'po_count' => 0,
                     'total_variance' => 0,
@@ -502,7 +502,7 @@ class POComparisonReportService
         $supplierVariances = [];
         foreach ($items as $item) {
             $supplierName = $item['supplier']['name'] ?? 'Unknown';
-            if (!isset($supplierVariances[$supplierName])) {
+            if (! isset($supplierVariances[$supplierName])) {
                 $supplierVariances[$supplierName] = [
                     'total_variance' => 0,
                     'po_count' => 0,
@@ -522,14 +522,14 @@ class POComparisonReportService
         }
         unset($data);
 
-        uasort($supplierVariances, fn($a, $b) => abs($b['total_variance']) <=> abs($a['total_variance']));
+        uasort($supplierVariances, fn ($a, $b) => abs($b['total_variance']) <=> abs($a['total_variance']));
         $summary['top_suppliers_by_variance'] = array_slice($supplierVariances, 0, 10, true);
 
         // Get top variances by location
         $locationVariances = [];
         foreach ($items as $item) {
             $locationName = $item['location']['name'] ?? 'Unknown';
-            if (!isset($locationVariances[$locationName])) {
+            if (! isset($locationVariances[$locationName])) {
                 $locationVariances[$locationName] = [
                     'total_variance' => 0,
                     'po_count' => 0,
@@ -548,15 +548,15 @@ class POComparisonReportService
         }
         unset($data);
 
-        uasort($locationVariances, fn($a, $b) => abs($b['total_variance']) <=> abs($a['total_variance']));
+        uasort($locationVariances, fn ($a, $b) => abs($b['total_variance']) <=> abs($a['total_variance']));
         $summary['top_locations_by_variance'] = array_slice($locationVariances, 0, 10, true);
 
         // Get significant individual PO discrepancies (increased to 25, lowered threshold to $100)
-        $significantPOs = array_filter($items, fn($item) => abs($item['totals']['variance']) > 100);
-        usort($significantPOs, fn($a, $b) => abs($b['totals']['variance']) <=> abs($a['totals']['variance']));
+        $significantPOs = array_filter($items, fn ($item) => abs($item['totals']['variance']) > 100);
+        usort($significantPOs, fn ($a, $b) => abs($b['totals']['variance']) <=> abs($a['totals']['variance']));
         $significantPOs = array_slice($significantPOs, 0, 25);
 
-        $summary['significant_po_discrepancies'] = array_map(fn($po) => [
+        $summary['significant_po_discrepancies'] = array_map(fn ($po) => [
             'po_number' => $po['requisition']['po_number'],
             'supplier' => $po['supplier']['name'],
             'location' => $po['location']['name'],

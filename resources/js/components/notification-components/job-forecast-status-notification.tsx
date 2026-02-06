@@ -133,18 +133,14 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
                     <div className="min-w-0 flex-1">
                         {/* Title and badge */}
                         <div className="flex items-center gap-2">
-                            <h4 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {title || 'Forecast Update'}
-                            </h4>
+                            <h4 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{title || 'Forecast Update'}</h4>
                             <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
                                 {badgeText}
                             </span>
                         </div>
 
                         {/* Body text */}
-                        {body && (
-                            <p className="mt-0.5 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{body}</p>
-                        )}
+                        {body && <p className="mt-0.5 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{body}</p>}
 
                         {/* Meta info row */}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-500">
@@ -169,12 +165,7 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
                         {/* Action button - show if we have location_id */}
                         {location_id && (
                             <div className="mt-3">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleViewForecast}
-                                    className="h-8 gap-1.5 text-xs font-medium"
-                                >
+                                <Button variant="outline" size="sm" onClick={handleViewForecast} className="h-8 gap-1.5 text-xs font-medium">
                                     View Forecast
                                     <ChevronRight className="h-3.5 w-3.5" />
                                 </Button>

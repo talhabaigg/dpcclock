@@ -9,7 +9,6 @@ import { memo, useCallback, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import remarkGfm from 'remark-gfm';
 import {
     Bar,
     BarChart,
@@ -20,11 +19,12 @@ import {
     LineChart,
     Pie,
     PieChart,
-    ResponsiveContainer,
     Tooltip as RechartsTooltip,
+    ResponsiveContainer,
     XAxis,
     YAxis,
 } from 'recharts';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from './types';
 
 interface ChatMessageProps {
@@ -35,13 +35,7 @@ interface ChatMessageProps {
 }
 
 // Code block component with syntax highlighting and copy button
-function CodeBlock({
-    language,
-    children,
-}: {
-    language: string;
-    children: string;
-}) {
+function CodeBlock({ language, children }: { language: string; children: string }) {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {
@@ -58,9 +52,7 @@ function CodeBlock({
         <div className="group/code relative my-4 overflow-hidden rounded-lg border border-zinc-700">
             {/* Header with language and copy button */}
             <div className="flex items-center justify-between bg-zinc-800 px-4 py-2">
-                <span className="text-xs font-medium text-zinc-400">
-                    {language || 'code'}
-                </span>
+                <span className="text-xs font-medium text-zinc-400">{language || 'code'}</span>
                 <Button
                     variant="ghost"
                     size="sm"
@@ -250,20 +242,25 @@ function ChartBlock({ data }: { data: ChartData }) {
     }, [data.title, isDownloading]);
 
     // Custom tooltip component for better styling
-    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
+    const CustomTooltip = ({
+        active,
+        payload,
+        label,
+    }: {
+        active?: boolean;
+        payload?: Array<{ name: string; value: number; color: string }>;
+        label?: string;
+    }) => {
         if (!active || !payload || !payload.length) return null;
 
         return (
-            <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
-                <p className="mb-1 text-xs font-medium text-foreground">{label}</p>
+            <div className="border-border bg-popover rounded-lg border px-3 py-2 shadow-lg">
+                <p className="text-foreground mb-1 text-xs font-medium">{label}</p>
                 {payload.map((entry, index) => (
                     <div key={index} className="flex items-center gap-2 text-xs">
-                        <div
-                            className="size-2.5 rounded-full"
-                            style={{ backgroundColor: entry.color }}
-                        />
+                        <div className="size-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
                         <span className="text-muted-foreground">{entry.name}:</span>
-                        <span className="font-medium text-foreground">{formatValue(entry.value)}</span>
+                        <span className="text-foreground font-medium">{formatValue(entry.value)}</span>
                     </div>
                 ))}
             </div>
@@ -277,22 +274,16 @@ function ChartBlock({ data }: { data: ChartData }) {
     };
 
     return (
-        <div className="group/chart my-4 overflow-hidden rounded-xl border border-border/50 bg-card shadow-sm">
+        <div className="group/chart border-border/50 bg-card my-4 overflow-hidden rounded-xl border shadow-sm">
             {/* Header with title and download button */}
-            <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-3">
-                {data.title ? (
-                    <h4 className="text-sm font-semibold text-foreground">
-                        {data.title}
-                    </h4>
-                ) : (
-                    <div />
-                )}
+            <div className="border-border/50 bg-muted/30 flex items-center justify-between border-b px-4 py-3">
+                {data.title ? <h4 className="text-foreground text-sm font-semibold">{data.title}</h4> : <div />}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/chart:opacity-100"
+                            className="text-muted-foreground hover:bg-muted hover:text-foreground h-7 gap-1.5 px-2 text-xs opacity-0 transition-opacity group-hover/chart:opacity-100"
                             onClick={handleDownload}
                             disabled={isDownloading}
                         >
@@ -306,17 +297,8 @@ function ChartBlock({ data }: { data: ChartData }) {
             <div ref={chartRef} className="h-[320px] w-full p-4">
                 <ResponsiveContainer width="100%" height="100%">
                     {data.type === 'bar' ? (
-                        <BarChart
-                            data={chartData}
-                            margin={{ top: 10, right: 20, left: 10, bottom: 60 }}
-                            barCategoryGap="20%"
-                        >
-                            <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="hsl(var(--border))"
-                                opacity={0.3}
-                                vertical={false}
-                            />
+                        <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }} barCategoryGap="20%">
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
                             <XAxis
                                 dataKey="name"
                                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -335,20 +317,13 @@ function ChartBlock({ data }: { data: ChartData }) {
                                 tickFormatter={formatValue}
                                 width={60}
                             />
-                            <RechartsTooltip
-                                content={<CustomTooltip />}
-                                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
-                            />
-                            <Legend
-                                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
-                                iconType="circle"
-                                iconSize={8}
-                            />
+                            <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }} />
+                            <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} iconType="circle" iconSize={8} />
                             {data.datasets?.map((dataset, index) => (
                                 <Bar
                                     key={dataset.label}
                                     dataKey={dataset.label}
-                                    fill={dataset.backgroundColor as string || CHART_COLORS[index % CHART_COLORS.length]}
+                                    fill={(dataset.backgroundColor as string) || CHART_COLORS[index % CHART_COLORS.length]}
                                     radius={[4, 4, 0, 0]}
                                     maxBarSize={50}
                                 />
@@ -356,12 +331,7 @@ function ChartBlock({ data }: { data: ChartData }) {
                         </BarChart>
                     ) : data.type === 'line' ? (
                         <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }}>
-                            <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="hsl(var(--border))"
-                                opacity={0.3}
-                                vertical={false}
-                            />
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
                             <XAxis
                                 dataKey="name"
                                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -384,17 +354,13 @@ function ChartBlock({ data }: { data: ChartData }) {
                                 content={<CustomTooltip />}
                                 cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '4 4' }}
                             />
-                            <Legend
-                                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
-                                iconType="circle"
-                                iconSize={8}
-                            />
+                            <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} iconType="circle" iconSize={8} />
                             {data.datasets?.map((dataset, index) => (
                                 <Line
                                     key={dataset.label}
                                     type="monotone"
                                     dataKey={dataset.label}
-                                    stroke={dataset.backgroundColor as string || CHART_COLORS[index % CHART_COLORS.length]}
+                                    stroke={(dataset.backgroundColor as string) || CHART_COLORS[index % CHART_COLORS.length]}
                                     strokeWidth={2}
                                     dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
                                     activeDot={{ r: 6, strokeWidth: 2 }}
@@ -448,16 +414,8 @@ function ChartBlock({ data }: { data: ChartData }) {
                                     />
                                 ))}
                             </Pie>
-                            <RechartsTooltip
-                                content={<CustomTooltip />}
-                            />
-                            <Legend
-                                wrapperStyle={{ fontSize: '11px' }}
-                                iconType="circle"
-                                iconSize={8}
-                                layout="horizontal"
-                                verticalAlign="bottom"
-                            />
+                            <RechartsTooltip content={<CustomTooltip />} />
+                            <Legend wrapperStyle={{ fontSize: '11px' }} iconType="circle" iconSize={8} layout="horizontal" verticalAlign="bottom" />
                         </PieChart>
                     )}
                 </ResponsiveContainer>
@@ -534,14 +492,9 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
 
     if (imageError) {
         return (
-            <div className="my-4 rounded-xl border border-border/50 bg-card p-6 text-center text-muted-foreground">
+            <div className="border-border/50 bg-card text-muted-foreground my-4 rounded-xl border p-6 text-center">
                 <p>Failed to load generated image</p>
-                <a
-                    href={data.image_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline text-sm"
-                >
+                <a href={data.image_url} target="_blank" rel="noopener noreferrer" className="text-primary text-sm hover:underline">
                     Open in new tab
                 </a>
             </div>
@@ -549,20 +502,16 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
     }
 
     return (
-        <div className="group/image my-4 rounded-xl border border-border/50 bg-card p-4 shadow-sm">
+        <div className="group/image border-border/50 bg-card my-4 rounded-xl border p-4 shadow-sm">
             {/* Header with prompt and download button */}
             <div className="mb-3 flex items-start justify-between gap-4">
-                {data.revised_prompt && (
-                    <p className="text-xs text-muted-foreground italic line-clamp-2 flex-1">
-                        "{data.revised_prompt}"
-                    </p>
-                )}
+                {data.revised_prompt && <p className="text-muted-foreground line-clamp-2 flex-1 text-xs italic">"{data.revised_prompt}"</p>}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground shrink-0 opacity-0 transition-opacity hover:text-foreground group-hover/image:opacity-100"
+                            className="text-muted-foreground hover:text-foreground h-7 shrink-0 gap-1.5 px-2 text-xs opacity-0 transition-opacity group-hover/image:opacity-100"
                             onClick={handleDownload}
                             disabled={isDownloading}
                         >
@@ -575,12 +524,12 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
             </div>
 
             {/* Image container */}
-            <div className="relative overflow-hidden rounded-lg bg-muted/30">
+            <div className="bg-muted/30 relative overflow-hidden rounded-lg">
                 {!imageLoaded && (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-2">
                             <div className="size-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-                            <span className="text-xs text-muted-foreground">Loading image...</span>
+                            <span className="text-muted-foreground text-xs">Loading image...</span>
                         </div>
                     </div>
                 )}
@@ -588,8 +537,8 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
                     src={data.image_url}
                     alt={data.revised_prompt || 'AI Generated Image'}
                     className={cn(
-                        'w-full h-auto max-h-[500px] object-contain transition-opacity duration-300',
-                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                        'h-auto max-h-[500px] w-full object-contain transition-opacity duration-300',
+                        imageLoaded ? 'opacity-100' : 'opacity-0',
                     )}
                     onLoad={() => setImageLoaded(true)}
                     onError={() => setImageError(true)}
@@ -599,21 +548,14 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
             {/* Size badge */}
             {data.size && (
                 <div className="mt-2 text-right">
-                    <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                        {data.size}
-                    </span>
+                    <span className="text-muted-foreground bg-muted/50 rounded px-2 py-0.5 text-[10px]">{data.size}</span>
                 </div>
             )}
         </div>
     );
 }
 
-export const ChatMessage = memo(function ChatMessage({
-    message,
-    isLatest = false,
-    onRegenerate,
-    showTimestamp = false,
-}: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ message, isLatest = false, onRegenerate, showTimestamp = false }: ChatMessageProps) {
     const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
     const isStreaming = message.status === 'streaming';
@@ -638,12 +580,7 @@ export const ChatMessage = memo(function ChatMessage({
     };
 
     return (
-        <div
-            className={cn(
-                'group relative flex gap-3 px-4 py-4 transition-colors',
-                isUser ? 'bg-transparent' : 'bg-muted/30'
-            )}
-        >
+        <div className={cn('group relative flex gap-3 px-4 py-4 transition-colors', isUser ? 'bg-transparent' : 'bg-muted/30')}>
             {/* Avatar */}
             <div className="flex-shrink-0">
                 <Avatar className={cn('size-8', isUser ? 'bg-primary' : 'bg-gradient-to-br from-violet-500 to-purple-600')}>
@@ -657,14 +594,8 @@ export const ChatMessage = memo(function ChatMessage({
             <div className="min-w-0 flex-1 space-y-2">
                 {/* Header */}
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">
-                        {isUser ? 'You' : 'Superior AI'}
-                    </span>
-                    {showTimestamp && (
-                        <span className="text-muted-foreground text-xs">
-                            {formatTime(message.timestamp)}
-                        </span>
-                    )}
+                    <span className="text-sm font-semibold">{isUser ? 'You' : 'Superior AI'}</span>
+                    {showTimestamp && <span className="text-muted-foreground text-xs">{formatTime(message.timestamp)}</span>}
                 </div>
 
                 {/* Message Content */}
@@ -708,11 +639,7 @@ export const ChatMessage = memo(function ChatMessage({
                                         }
                                     }
 
-                                    return (
-                                        <CodeBlock language={language}>
-                                            {codeString}
-                                        </CodeBlock>
-                                    );
+                                    return <CodeBlock language={language}>{codeString}</CodeBlock>;
                                 },
                                 // Pre tag - let CodeBlock handle the styling
                                 pre({ children }) {
@@ -730,11 +657,7 @@ export const ChatMessage = memo(function ChatMessage({
                                     return <thead className="bg-muted/50">{children}</thead>;
                                 },
                                 th({ children }) {
-                                    return (
-                                        <th className="border-b px-4 py-2 text-left font-semibold">
-                                            {children}
-                                        </th>
-                                    );
+                                    return <th className="border-b px-4 py-2 text-left font-semibold">{children}</th>;
                                 },
                                 td({ children }) {
                                     return <td className="border-b px-4 py-2">{children}</td>;
@@ -742,12 +665,7 @@ export const ChatMessage = memo(function ChatMessage({
                                 // Links
                                 a({ href, children }) {
                                     return (
-                                        <a
-                                            href={href}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary hover:underline"
-                                        >
+                                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                                             {children}
                                         </a>
                                     );
@@ -765,11 +683,7 @@ export const ChatMessage = memo(function ChatMessage({
                                 },
                                 // Blockquotes
                                 blockquote({ children }) {
-                                    return (
-                                        <blockquote className="border-primary/50 my-2 border-l-4 pl-4 italic">
-                                            {children}
-                                        </blockquote>
-                                    );
+                                    return <blockquote className="border-primary/50 my-2 border-l-4 pl-4 italic">{children}</blockquote>;
                                 },
                             }}
                         >
@@ -778,9 +692,7 @@ export const ChatMessage = memo(function ChatMessage({
                     )}
 
                     {/* Streaming cursor */}
-                    {isStreaming && message.content && (
-                        <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />
-                    )}
+                    {isStreaming && message.content && <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />}
                 </div>
 
                 {/* Action buttons - shown on hover for assistant messages */}
@@ -794,11 +706,7 @@ export const ChatMessage = memo(function ChatMessage({
                                     className="text-muted-foreground hover:text-foreground h-7 px-2"
                                     onClick={handleCopy}
                                 >
-                                    {copied ? (
-                                        <Check className="size-3.5" />
-                                    ) : (
-                                        <Copy className="size-3.5" />
-                                    )}
+                                    {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
@@ -834,14 +742,14 @@ function StreamingIndicator({ forceTool }: { forceTool?: string }) {
             <div className="space-y-4">
                 {/* Animated generating image text */}
                 <div className="flex items-center gap-2">
-                    <ImageIcon className="size-4 text-pink-500 animate-pulse" />
-                    <span className="bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                    <ImageIcon className="size-4 animate-pulse text-pink-500" />
+                    <span className="animate-pulse bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 bg-clip-text text-sm font-medium text-transparent">
                         Generating image...
                     </span>
                 </div>
 
                 {/* Image placeholder with animated border */}
-                <div className="relative w-64 h-64 rounded-xl overflow-hidden">
+                <div className="relative h-64 w-64 overflow-hidden rounded-xl">
                     {/* Animated gradient border */}
                     <div
                         className="absolute inset-0 rounded-xl"
@@ -852,18 +760,18 @@ function StreamingIndicator({ forceTool }: { forceTool?: string }) {
                             padding: '2px',
                         }}
                     >
-                        <div className="w-full h-full rounded-xl bg-card" />
+                        <div className="bg-card h-full w-full rounded-xl" />
                     </div>
 
                     {/* Inner content */}
-                    <div className="absolute inset-[2px] rounded-xl bg-muted/30 flex flex-col items-center justify-center gap-3">
+                    <div className="bg-muted/30 absolute inset-[2px] flex flex-col items-center justify-center gap-3 rounded-xl">
                         {/* Spinning loader */}
                         <div className="relative size-12">
                             <div className="absolute inset-0 rounded-full border-2 border-pink-500/20" />
-                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-pink-500 animate-spin" />
+                            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-pink-500" />
                             <ImageIcon className="absolute inset-0 m-auto size-5 text-pink-500/60" />
                         </div>
-                        <span className="text-xs text-muted-foreground">Creating your image...</span>
+                        <span className="text-muted-foreground text-xs">Creating your image...</span>
                     </div>
                 </div>
 
@@ -882,21 +790,21 @@ function StreamingIndicator({ forceTool }: { forceTool?: string }) {
         <div className="space-y-3">
             {/* Animated thinking text with sparkle */}
             <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-violet-500 animate-pulse" />
-                <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent animate-pulse">
+                <Sparkles className="size-4 animate-pulse text-violet-500" />
+                <span className="animate-pulse bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent">
                     Thinking...
                 </span>
             </div>
 
             {/* Skeleton shimmer lines */}
             <div className="space-y-2">
-                <div className="h-4 w-full overflow-hidden rounded bg-muted/50">
+                <div className="bg-muted/50 h-4 w-full overflow-hidden rounded">
                     <div className="ai-shimmer h-full w-full" />
                 </div>
-                <div className="h-4 w-4/5 overflow-hidden rounded bg-muted/50">
+                <div className="bg-muted/50 h-4 w-4/5 overflow-hidden rounded">
                     <div className="ai-shimmer h-full w-full" />
                 </div>
-                <div className="h-4 w-3/5 overflow-hidden rounded bg-muted/50">
+                <div className="bg-muted/50 h-4 w-3/5 overflow-hidden rounded">
                     <div className="ai-shimmer h-full w-full" />
                 </div>
             </div>

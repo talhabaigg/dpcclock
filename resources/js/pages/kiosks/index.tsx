@@ -74,13 +74,13 @@ export default function KiosksList() {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-1">
                         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <Monitor className="h-6 w-6 text-primary" />
+                            <Monitor className="text-primary h-6 w-6" />
                             Kiosks
                         </h1>
                         <p className="text-muted-foreground text-sm">
                             Manage time clock kiosks and employee assignments
                             {selectedCompanyLabel && (
-                                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                <span className="bg-primary/10 text-primary ml-2 rounded-full px-2 py-0.5 text-xs font-medium">
                                     {selectedCompanyLabel}
                                 </span>
                             )}
@@ -90,13 +90,13 @@ export default function KiosksList() {
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-2">
                         <Link href="/kiosks/sync" method="get">
-                            <Button variant="outline" className="gap-2 transition-all hover:border-primary/50" onClick={() => setOpen(true)}>
+                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                 <RefreshCcw className="h-4 w-4" />
                                 Sync Kiosks
                             </Button>
                         </Link>
                         <Link href="/employees/kiosks/update" method="get">
-                            <Button variant="outline" className="gap-2 transition-all hover:border-primary/50" onClick={() => setOpen(true)}>
+                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
                                 <RefreshCcw className="h-4 w-4" />
                                 Sync Employees
                             </Button>
@@ -114,8 +114,8 @@ export default function KiosksList() {
                 )}
 
                 {/* Filters Bar */}
-                <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
                         <Monitor className="h-4 w-4" />
                         <span>
                             {filteredKiosks.length} kiosk{filteredKiosks.length !== 1 ? 's' : ''} found
@@ -134,9 +134,9 @@ export default function KiosksList() {
                 {/* Kiosks Grid */}
                 {filteredKiosks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-                        <Monitor className="h-12 w-12 text-muted-foreground/40" />
+                        <Monitor className="text-muted-foreground/40 h-12 w-12" />
                         <h3 className="mt-4 text-lg font-medium">No kiosks found</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="text-muted-foreground mt-1 text-sm">
                             {searchQuery || filter ? 'Try adjusting your search or filter' : 'Sync kiosks to get started'}
                         </p>
                         {(searchQuery || filter) && (

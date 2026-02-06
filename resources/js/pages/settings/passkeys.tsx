@@ -1,14 +1,10 @@
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
+import { AlertCircle, Fingerprint, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Fingerprint, Trash2, Pencil, Plus, LoaderCircle, AlertCircle } from 'lucide-react';
 
 import HeadingSmall from '@/components/heading-small';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/app-layout';
-import SettingsLayout from '@/layouts/settings/layout';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,15 +15,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/app-layout';
+import SettingsLayout from '@/layouts/settings/layout';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -72,7 +65,7 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
             const response = await fetch(route('passkeys.generate-options'), {
                 credentials: 'same-origin',
                 headers: {
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                 },
             });
             const options = await response.json();
@@ -98,7 +91,7 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                     onFinish: () => {
                         setIsAddingPasskey(false);
                     },
-                }
+                },
             );
         } catch (err: any) {
             console.error('Passkey registration failed:', err);
@@ -126,7 +119,7 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                     setEditPasskey(null);
                     setEditName('');
                 },
-            }
+            },
         );
     };
 
@@ -182,15 +175,8 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                                     className="mt-1"
                                 />
                             </div>
-                            <Button
-                                onClick={handleAddPasskey}
-                                disabled={isAddingPasskey || passkeysSupported === false}
-                            >
-                                {isAddingPasskey ? (
-                                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Plus className="mr-2 h-4 w-4" />
-                                )}
+                            <Button onClick={handleAddPasskey} disabled={isAddingPasskey || passkeysSupported === false}>
+                                {isAddingPasskey ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                                 Add passkey
                             </Button>
                         </div>
@@ -200,22 +186,15 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                     {passkeys.length > 0 ? (
                         <div className="divide-y rounded-md border">
                             {passkeys.map((passkey) => (
-                                <div
-                                    key={passkey.id}
-                                    className="flex items-center justify-between p-4"
-                                >
+                                <div key={passkey.id} className="flex items-center justify-between p-4">
                                     <div className="flex items-center gap-4">
                                         <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-full">
                                             <Fingerprint className="h-5 w-5" />
                                         </div>
                                         <div>
                                             <p className="font-medium">{passkey.name}</p>
-                                            <p className="text-muted-foreground text-sm">
-                                                Created: {formatDate(passkey.created_at)}
-                                            </p>
-                                            <p className="text-muted-foreground text-sm">
-                                                Last used: {formatDate(passkey.last_used_at)}
-                                            </p>
+                                            <p className="text-muted-foreground text-sm">Created: {formatDate(passkey.created_at)}</p>
+                                            <p className="text-muted-foreground text-sm">Last used: {formatDate(passkey.last_used_at)}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -229,11 +208,7 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                                         >
                                             <Pencil className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => setDeleteId(passkey.id)}
-                                        >
+                                        <Button variant="ghost" size="icon" onClick={() => setDeleteId(passkey.id)}>
                                             <Trash2 className="h-4 w-4 text-red-500" />
                                         </Button>
                                     </div>
@@ -260,10 +235,7 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={() => deleteId && handleDeletePasskey(deleteId)}
-                                className="bg-red-600 hover:bg-red-700"
-                            >
+                            <AlertDialogAction onClick={() => deleteId && handleDeletePasskey(deleteId)} className="bg-red-600 hover:bg-red-700">
                                 Delete
                             </AlertDialogAction>
                         </AlertDialogFooter>
@@ -275,18 +247,11 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Edit passkey name</DialogTitle>
-                            <DialogDescription>
-                                Give your passkey a memorable name to help you identify it.
-                            </DialogDescription>
+                            <DialogDescription>Give your passkey a memorable name to help you identify it.</DialogDescription>
                         </DialogHeader>
                         <div className="py-4">
                             <Label htmlFor="edit-name">Name</Label>
-                            <Input
-                                id="edit-name"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="mt-1"
-                            />
+                            <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setEditPasskey(null)}>

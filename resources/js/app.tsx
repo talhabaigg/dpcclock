@@ -1,11 +1,7 @@
 import '../css/app.css';
 import './echo';
 
-import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-} from '@simplewebauthn/browser';
+import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser';
 
 declare global {
     interface Window {

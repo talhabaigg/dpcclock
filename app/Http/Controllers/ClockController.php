@@ -4,22 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Jobs\LoadTimesheetsFromEH;
 use App\Models\Clock;
-use App\Services\TimesheetService;
+use App\Models\Employee;
+use App\Models\Kiosk;
+use App\Models\Location;
+use App\Models\Worktype;
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use App\Models\Kiosk;
-use App\Models\Employee;
-use App\Models\Location;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Response;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
-use Carbon\Carbon;
-use App\Models\Worktype;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
 use Log;
+
 class ClockController extends Controller
 {
     /**
@@ -30,7 +30,7 @@ class ClockController extends Controller
      * Show the form for creating a new resource.
      */
 
-    //show the clock in form
+    // show the clock in form
     public function create($kioskId, $employeeId)
     {
         $kiosk = Kiosk::findOrFail($kioskId);
@@ -43,7 +43,7 @@ class ClockController extends Controller
         ]);
     }
 
-    //store the clock in from kiosk page
+    // store the clock in from kiosk page
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -70,7 +70,7 @@ class ClockController extends Controller
                 ->route('kiosks.show', $data['kioskId'])
                 ->with(
                     'info',
-                    'You are already clocked in since ' . $existingOpenClock->clock_in->format('g:i A')
+                    'You are already clocked in since '.$existingOpenClock->clock_in->format('g:i A')
                 );
         }
 
@@ -85,10 +85,8 @@ class ClockController extends Controller
 
         return redirect()
             ->route('kiosks.show', $data['kioskId'])
-            ->with('success', 'Clocked in successfully at ' . $clock->clock_in->format('g:i A'));
+            ->with('success', 'Clocked in successfully at '.$clock->clock_in->format('g:i A'));
     }
-
-
 
     /**
      * Display the specified resource.
@@ -111,7 +109,6 @@ class ClockController extends Controller
         }
         $weekStart = $weekEnd->copy()->subDays(6)->startOfDay();
 
-
         $selectedLocation = $request->query('location', null);
         $kiosks = Kiosk::with('location')->get();
 
@@ -129,7 +126,7 @@ class ClockController extends Controller
                     'value' => $parent->eh_location_id ?? null,
                 ];
             })
-            ->filter(fn($x) => $x['id'] !== null && $x['value'] !== null)
+            ->filter(fn ($x) => $x['id'] !== null && $x['value'] !== null)
             ->unique('id')   // prevent duplicates when multiple kiosks share a parent
             ->values()
             ->all();
@@ -153,7 +150,7 @@ class ClockController extends Controller
             ->get();
 
         $days = collect(CarbonPeriod::create($weekStart, $weekEnd))
-            ->map(fn($d) => $d->format('Y-m-d'))
+            ->map(fn ($d) => $d->format('Y-m-d'))
             ->values();
         // dd($days);
 
@@ -161,7 +158,7 @@ class ClockController extends Controller
             ->groupBy('eh_employee_id')
             ->map(function ($empClocks, $empId) use ($days) {
                 // Prepare empty day map
-                $dayMap = $days->mapWithKeys(fn($d) => [$d => []])->toArray();
+                $dayMap = $days->mapWithKeys(fn ($d) => [$d => []])->toArray();
 
                 foreach ($empClocks as $clock) {
                     $d = Carbon::parse($clock->clock_in)->format('Y-m-d');
@@ -202,8 +199,7 @@ class ClockController extends Controller
         ]);
     }
 
-
-    //show the edit page for query date and employee id - takes single date editing
+    // show the edit page for query date and employee id - takes single date editing
 
     public function editTimesheet(Request $request)
     {
@@ -216,25 +212,23 @@ class ClockController extends Controller
             ->where('eh_employee_id', $employeeId)
             ->whereDate('clock_in', $parsedDate)
             ->get();
-        $kiosks = Kiosk::with('location')->select('eh_kiosk_id', 'name', 'eh_location_id')->get(); //kiosks for kioskSelector
+        $kiosks = Kiosk::with('location')->select('eh_kiosk_id', 'name', 'eh_location_id')->get(); // kiosks for kioskSelector
         foreach ($kiosks as $kiosk) {
             $kiosk->locations = Location::where('eh_parent_id', $kiosk->eh_location_id)->pluck('external_id')->toArray();
 
         }
 
-
-
         foreach ($clocks as $clock) {
             $kiosk = $clock->kiosk;
             $parent_location = $kiosk?->location->eh_location_id;
 
-
             if ($parent_location) {
                 $locations = Location::where('eh_parent_id', $parent_location)->pluck('external_id')->toArray();
-                $clock->locations = $locations ?? $kiosk?->location->external_id; //locations added for Location selector unique for each line to keep kiosks separate
+                $clock->locations = $locations ?? $kiosk?->location->external_id; // locations added for Location selector unique for each line to keep kiosks separate
             }
         }
-        $locations = Location::pluck('external_id')->toArray(); //all locations for validation if no kiosk selected
+        $locations = Location::pluck('external_id')->toArray(); // all locations for validation if no kiosk selected
+
         // dd($clocks);
         return Inertia::render('timesheets/edit2', [
             'clocks' => $clocks,
@@ -244,7 +238,8 @@ class ClockController extends Controller
         ]);
 
     }
-    //save changes to the timesheets using timesheet management edit page
+
+    // save changes to the timesheets using timesheet management edit page
     public function saveTimesheets(Request $request)
     {
         $validated = $request->validate([
@@ -281,7 +276,7 @@ class ClockController extends Controller
                 $clock = Clock::find($clockData['id']);
 
                 // If found, use its employee ID (only once)
-                if (!$eh_employee_id && $clock) {
+                if (! $eh_employee_id && $clock) {
                     $eh_employee_id = $clock->eh_employee_id;
                 }
 
@@ -291,7 +286,7 @@ class ClockController extends Controller
                     }
                     $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
                     $updateData = [
-                        'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
+                        'clock_in' => $formattedDate.' '.$clockData['clockInHour'].':'.$clockData['clockInMinute'].':00',
                         'eh_location_id' => $eh_location_id ?? null,
                         'eh_kiosk_id' => isset($clockData['eh_kiosk_id']) ? (int) $clockData['eh_kiosk_id'] : null,
                         'insulation_allowance' => $clockData['insulation_allowance'] ?? false,
@@ -299,8 +294,8 @@ class ClockController extends Controller
                         'laser_allowance' => $clockData['laser_allowance'] ?? false,
                     ];
                     // Add clock_out only if both hour and minute are provided
-                    if (!is_null($clockData['clockOutHour']) && !is_null($clockData['clockOutMinute'])) {
-                        $updateData['clock_out'] = $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00';
+                    if (! is_null($clockData['clockOutHour']) && ! is_null($clockData['clockOutMinute'])) {
+                        $updateData['clock_out'] = $formattedDate.' '.$clockData['clockOutHour'].':'.$clockData['clockOutMinute'].':00';
                         $updateData['hours_worked'] = $clockData['hoursWorked'] ?? null;
                     }
 
@@ -309,8 +304,8 @@ class ClockController extends Controller
                     // If no ID, treat as a new clock (e.g., UUID)
                     $eh_location_id = Location::where('external_id', $clockData['location'])->pluck('eh_location_id')->first();
                     $clock2 = Clock::create([
-                        'clock_in' => $formattedDate . ' ' . $clockData['clockInHour'] . ':' . $clockData['clockInMinute'] . ':00',
-                        'clock_out' => $formattedDate . ' ' . $clockData['clockOutHour'] . ':' . $clockData['clockOutMinute'] . ':00',
+                        'clock_in' => $formattedDate.' '.$clockData['clockInHour'].':'.$clockData['clockInMinute'].':00',
+                        'clock_out' => $formattedDate.' '.$clockData['clockOutHour'].':'.$clockData['clockOutMinute'].':00',
                         'eh_employee_id' => $eh_employee_id ?? null,
                         'location' => $clockData['location'] ?? null,
                         'eh_kiosk_id' => $clockData['eh_kiosk_id'] ?? null,
@@ -326,9 +321,9 @@ class ClockController extends Controller
             // Track the clock ID as processed
             $processedClockIds[] = $clockData['id'] ?? null;
         }
+
         return redirect()->back()->with('success', 'Timesheet updated successfully!');
     }
-
 
     /**
      * Update the specified resource in storage.
@@ -341,18 +336,16 @@ class ClockController extends Controller
     {
         if ($clock->status === 'synced' || $clock->eh_timesheet_id !== null) {
             return redirect()->back()->with('error', 'Cannot delete a synced clock entry.');
-        } else if ($clock->status === 'Processed') {
+        } elseif ($clock->status === 'Processed') {
             return redirect()->back()->with('error', 'Cannot delete a processed clock entry.');
         }
-
-
 
         $clock->delete();
 
         return redirect()->back()->with('success', 'Clock entry deleted successfully.');
     }
 
-    //retrieve ongoing clocked in clock and add clockout and generated entries from kiosk
+    // retrieve ongoing clocked in clock and add clockout and generated entries from kiosk
     public function clockout(Request $request)
     {
         $validated = $request->validate([
@@ -365,7 +358,7 @@ class ClockController extends Controller
         $eh_employee_id = Employee::find($validated['employeeId']);
 
         // Ensure employee exists
-        if (!$eh_employee_id) {
+        if (! $eh_employee_id) {
             return response()->json(['error' => 'Employee not found'], 404);
         }
         // dd($validated);
@@ -373,13 +366,13 @@ class ClockController extends Controller
 
         foreach ($validated['entries'] as $entry) {
             // Concatenate level and activity to create locationExternalId
-            $locationExternalId = $entry['activity'] ? $entry['level'] . '-' . $entry['activity'] : $entry['level'];
+            $locationExternalId = $entry['activity'] ? $entry['level'].'-'.$entry['activity'] : $entry['level'];
             $eh_kiosk_id = Kiosk::findOrFail($validated['kioskId'])->eh_kiosk_id;
             // dd($eh_kiosk_id);
             // Find location based on external_id
             $location = Location::where('external_id', $locationExternalId)->pluck('eh_location_id')->first();
 
-            if (!$location) {
+            if (! $location) {
                 return response()->json(['error' => 'Location not found'], 404);
             }
 
@@ -408,7 +401,7 @@ class ClockController extends Controller
                 $firstEntry = false;
             } else {
                 // For subsequent entries, create a new clock entry
-                $clock = new Clock();
+                $clock = new Clock;
                 $clock->eh_kiosk_id = $eh_kiosk_id;
                 $clock->eh_location_id = $location;
                 $clock->eh_employee_id = $eh_employee_id->eh_employee_id;
@@ -425,8 +418,6 @@ class ClockController extends Controller
         return redirect(route('kiosks.show', $validated['kioskId']))->with('success', 'Clocked out successfully.');
     }
 
-
-
     public function syncEhTimesheets()
     {
         // Get clocks that are not synced or have null status
@@ -439,14 +430,14 @@ class ClockController extends Controller
 
         // Check if there are no clocks to sync (i.e., all are already synced)
         if ($clocks->isEmpty()) {
-            dd("All timesheets are synced.");
+            dd('All timesheets are synced.');
         }
 
         $timesheets = [];
         $clockMap = []; // To map employee ID to Clock IDs
 
         foreach ($clocks as $clock) {
-            if (!$clock->clock_out) {
+            if (! $clock->clock_out) {
                 continue;
             }
 
@@ -462,17 +453,16 @@ class ClockController extends Controller
                 ->where('eh_kiosk_id', $clock->eh_kiosk_id)
                 ->first()
                 ?->pivot
-                    ?->zone;
+                ?->zone;
             if ($zone && isset($zoneShiftConditionIds[$zone])) {
                 $shiftConditionIds = array_filter($shiftConditionIds, function ($id) use ($zoneShiftConditionIds) {
-                    return !in_array($id, $zoneShiftConditionIds);
+                    return ! in_array($id, $zoneShiftConditionIds);
                 });
 
                 // Add the correct zone-specific shift condition
                 $shiftConditionIds[] = $zoneShiftConditionIds[$zone];
             }
             $shiftConditionIds = array_values($shiftConditionIds);
-
 
             $allowances = [
                 'insulation_allowance' => '2518038',
@@ -487,12 +477,12 @@ class ClockController extends Controller
             $shiftConditionIds = array_unique($shiftConditionIds);
 
             $timesheetData = [
-                "employeeId" => $employeeId,
-                "startTime" => $clock->clock_in,
-                "endTime" => $clock->clock_out,
-                "locationId" => $clock->location->eh_location_id ?? null,
-                "shiftConditionIds" => $shiftConditionIds,
-                "workTypeId" => optional($clock->employee->worktypes->first())->eh_worktype_id,
+                'employeeId' => $employeeId,
+                'startTime' => $clock->clock_in,
+                'endTime' => $clock->clock_out,
+                'locationId' => $clock->location->eh_location_id ?? null,
+                'shiftConditionIds' => $shiftConditionIds,
+                'workTypeId' => optional($clock->employee->worktypes->first())->eh_worktype_id,
             ];
 
             $timesheets[$employeeId][] = $timesheetData;
@@ -500,9 +490,9 @@ class ClockController extends Controller
         }
         // dd($shiftConditionIds);
 
-        $jsonContent = json_encode(["timesheets" => $timesheets]);
+        $jsonContent = json_encode(['timesheets' => $timesheets]);
         // dd($timesheets);
-        $filePath = 'timesheets_' . now()->format('Ymd_His') . '.json';
+        $filePath = 'timesheets_'.now()->format('Ymd_His').'.json';
 
         // Split the raw timesheets array into chunks of 100
         $timesheetChunks = array_chunk($timesheets, 100, true);
@@ -511,7 +501,7 @@ class ClockController extends Controller
             $chunkData = ['timesheets' => $chunk];
             $syncResult = $this->sync($chunkData);
 
-            if (!$syncResult) {
+            if (! $syncResult) {
                 return redirect()->route('timesheets.converter')->with([
                     'error' => 'Failed to sync data with the API.',
                 ]);
@@ -557,7 +547,7 @@ class ClockController extends Controller
         $header = fgetcsv($handle); // Read header row
 
         // Remove BOM (Byte Order Mark) if it exists in the header
-        $header = array_map(fn($item) => trim($item, "\xEF\xBB\xBF"), $header);
+        $header = array_map(fn ($item) => trim($item, "\xEF\xBB\xBF"), $header);
         $index = 0; // Initialize index
         // Process rows
         while (($row = fgetcsv($handle)) !== false) {
@@ -568,12 +558,10 @@ class ClockController extends Controller
             $this->mapEmployee($rowData);
             $this->mapCostCode($rowData);
             $this->mapTimes($rowData);
-            $excludeCostCodes = ['2471109', '2471108', '2471107']; //the excluded cost codes are leaves and need to skip the default shift conditions
-            if (!in_array($rowData['COST CODE'], $excludeCostCodes)) {
+            $excludeCostCodes = ['2471109', '2471108', '2471107']; // the excluded cost codes are leaves and need to skip the default shift conditions
+            if (! in_array($rowData['COST CODE'], $excludeCostCodes)) {
                 $this->mapShiftConditions($rowData);
             }
-
-
 
             $data[] = $rowData; // Add processed row to data
 
@@ -597,7 +585,7 @@ class ClockController extends Controller
             $employeeId = $item['employeeId'];
 
             // If the employee already exists in the result, append the item, else create a new array for that employee
-            if (!isset($result['timesheets'][$employeeId])) {
+            if (! isset($result['timesheets'][$employeeId])) {
                 $result['timesheets'][$employeeId] = [];
             }
             $result['timesheets'][$employeeId][] = $item;
@@ -614,7 +602,7 @@ class ClockController extends Controller
             // You need to modify this to sync each chunk with the API
             $syncResult = $this->sync($chunkData);
 
-            if (!$syncResult) {
+            if (! $syncResult) {
                 return redirect()->route('timesheets.converter')->with([
                     'error' => 'Failed to sync data with the API.',
                 ]);
@@ -626,14 +614,15 @@ class ClockController extends Controller
         ]);
 
     }
+
     private function sync($chunkData)
     {
         $apiKey = env('PAYROLL_API_KEY');
         // Send POST request to the API with correct headers and JSON data
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk", $chunkData);
+        ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk', $chunkData);
 
         // Check the status code
         if ($response->successful()) {
@@ -646,8 +635,8 @@ class ClockController extends Controller
 
     private function mapLocationData(&$rowData, $index)
     {
-        if (!isset($rowData['JOB NUMBER'])) {
-            dd("JOB NUMBER not found in row $index: " . json_encode($rowData));
+        if (! isset($rowData['JOB NUMBER'])) {
+            dd("JOB NUMBER not found in row $index: ".json_encode($rowData));
         }
 
         $locations = [
@@ -659,13 +648,13 @@ class ClockController extends Controller
             '06-21-0113' => 'TVH00',
         ];
         $locationExternalId = $locations[$rowData['JOB NUMBER']] ?? null;
-        if (!$locationExternalId) {
-            dd("Invalid JOB NUMBER '{$rowData['JOB NUMBER']}' in row $index: " . json_encode($rowData));
+        if (! $locationExternalId) {
+            dd("Invalid JOB NUMBER '{$rowData['JOB NUMBER']}' in row $index: ".json_encode($rowData));
         }
         $rowData['JOB NUMBER'] = $locationExternalId;
         $location = Location::where('external_id', $locationExternalId)->first();
 
-        if (!$location) {
+        if (! $location) {
             dd("Location not found for JOB NUMBER: {$rowData['JOB NUMBER']} in row $index");
         }
 
@@ -675,18 +664,19 @@ class ClockController extends Controller
 
     private function mapEmployee(&$rowData)
     {
-        if (!isset($rowData['EMPLOYEE CODE']) || empty($rowData['EMPLOYEE CODE'])) {
-            dd("EMPLOYEE CODE is missing in row: " . json_encode($rowData));
+        if (! isset($rowData['EMPLOYEE CODE']) || empty($rowData['EMPLOYEE CODE'])) {
+            dd('EMPLOYEE CODE is missing in row: '.json_encode($rowData));
         }
 
         $employeeId = Employee::where('external_id', $rowData['EMPLOYEE CODE'])->value('eh_employee_id');
 
-        if (!$employeeId) {
+        if (! $employeeId) {
             dd("Employee not found for EMPLOYEE CODE: {$rowData['EMPLOYEE CODE']}");
         }
 
         $rowData['EMPLOYEE CODE'] = $employeeId;
     }
+
     private function mapCostCode(&$rowData)
     {
         $costCodes = [
@@ -702,49 +692,47 @@ class ClockController extends Controller
         ];
 
         if (empty($rowData['COST CODE'])) {
-            dd("COST CODE is missing in row: " . json_encode($rowData));
+            dd('COST CODE is missing in row: '.json_encode($rowData));
         }
 
-        if (!isset($costCodes[$rowData['COST CODE']])) {
-            dd("Invalid COST CODE '{$rowData['COST CODE']}' in row: " . json_encode($rowData));
+        if (! isset($costCodes[$rowData['COST CODE']])) {
+            dd("Invalid COST CODE '{$rowData['COST CODE']}' in row: ".json_encode($rowData));
         }
 
         $rowData['COST CODE'] = $costCodes[$rowData['COST CODE']];
     }
 
-
     private function mapTimes(&$rowData)
     {
-        if (!isset($rowData['DATE'], $rowData['HOURS'], $rowData['PAY'])) {
-            dd("Missing one or more required fields (DATE, HOURS, PAY) in row: " . json_encode($rowData));
+        if (! isset($rowData['DATE'], $rowData['HOURS'], $rowData['PAY'])) {
+            dd('Missing one or more required fields (DATE, HOURS, PAY) in row: '.json_encode($rowData));
         }
 
-        if (!is_numeric($rowData['HOURS']) || (float) $rowData['HOURS'] <= 0) {
-            dd("Invalid HOURS value '{$rowData['HOURS']}' in row: " . json_encode($rowData));
+        if (! is_numeric($rowData['HOURS']) || (float) $rowData['HOURS'] <= 0) {
+            dd("Invalid HOURS value '{$rowData['HOURS']}' in row: ".json_encode($rowData));
         }
 
         try {
             $startTime = Carbon::createFromFormat(
                 'd/m/Y H:i:s',
-                $rowData['DATE'] . ($rowData['PAY'] == 131 ? ' 15:30:00' : ' 06:30:00'),
+                $rowData['DATE'].($rowData['PAY'] == 131 ? ' 15:30:00' : ' 06:30:00'),
                 'Australia/Brisbane'
             );
         } catch (\Exception $e) {
-            dd("Invalid DATE format or value: {$rowData['DATE']} in row: " . json_encode($rowData));
+            dd("Invalid DATE format or value: {$rowData['DATE']} in row: ".json_encode($rowData));
         }
 
         $rowData['START_TIME'] = $startTime->format('Y-m-d\TH:i:s');
         $rowData['END_TIME'] = $startTime->copy()->addHours((float) $rowData['HOURS'])->format('Y-m-d\TH:i:s');
     }
 
-
     private function mapShiftConditions(&$rowData)
     {
         // Travel: optional, but must be valid if set
-        if (!empty($rowData['Travel'])) {
+        if (! empty($rowData['Travel'])) {
             $travel = Worktype::where('name', $rowData['Travel'])->value('eh_worktype_id');
-            if (!$travel) {
-                dd("Invalid Travel worktype '{$rowData['Travel']}' in row: " . json_encode($rowData));
+            if (! $travel) {
+                dd("Invalid Travel worktype '{$rowData['Travel']}' in row: ".json_encode($rowData));
             }
             $rowData['Travel'] = $travel;
         } else {
@@ -755,18 +743,17 @@ class ClockController extends Controller
         // Allowance: optional, can be multiple comma-separated values
         $allowanceIds = [];
 
-        if (!empty($rowData['Allowance'])) {
+        if (! empty($rowData['Allowance'])) {
             $allowanceNames = array_map('trim', explode(',', $rowData['Allowance']));
 
             foreach ($allowanceNames as $allowanceName) {
                 $allowanceId = Worktype::where('name', $allowanceName)->value('eh_worktype_id');
-                if (!$allowanceId) {
-                    dd("Invalid Allowance worktype '{$allowanceName}' in row: " . json_encode($rowData));
+                if (! $allowanceId) {
+                    dd("Invalid Allowance worktype '{$allowanceName}' in row: ".json_encode($rowData));
                 }
                 $allowanceIds[] = $allowanceId;
             }
         }
-
 
         // Merge into final shiftConditionIds array
         $defaultShiftConditions = isset($rowData['DEFAULT SHIFT CONDITIONS'])
@@ -790,17 +777,14 @@ class ClockController extends Controller
             ));
         }
 
-
         $rowData['shiftConditionIds'] = array_values($shiftConditionIds);
 
-
     }
-
 
     public function generateKioskToken(Request $request)
     {
         $kioskId = $request->query('kioskId');
-        if (!$kioskId) {
+        if (! $kioskId) {
             return response()->json(['error' => 'kioskId is required'], 400);
         }
 
@@ -820,11 +804,10 @@ class ClockController extends Controller
         return response()->json(['token' => $token]);
     }
 
-
     public function retrieveKioskToken(Request $request)
     {
         $kioskId = $request->query('kioskId');
-        if (!$kioskId) {
+        if (! $kioskId) {
             return response()->json(['error' => 'kioskId is required'], 400);
         }
 
@@ -851,6 +834,7 @@ class ClockController extends Controller
 
         return $this->generateKioskToken($request);
     }
+
     public function viewTimesheet(Request $request)
     {
         $employeeId = $request->query('employeeId', null);
@@ -863,6 +847,7 @@ class ClockController extends Controller
             ->with('location', 'kiosk', 'worktype')
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
+
         // dd($timesheets);
         return Inertia::render('timesheets/show', [
             'timesheets' => $timesheets,
@@ -882,7 +867,7 @@ class ClockController extends Controller
         ]);
         // dd($data);
         $newStartTime = strlen($data['startTime']) === 5
-            ? $data['startTime'] . ':00'
+            ? $data['startTime'].':00'
             : $data['startTime'];
 
         $updated = 0;
@@ -901,7 +886,6 @@ class ClockController extends Controller
             }
         });
 
-
         return redirect()->route('kiosks.show', $kioskId)->with('success', 'Start times updated successfully for selected employees.');
     }
 
@@ -918,17 +902,18 @@ class ClockController extends Controller
         $apiKey = env('PAYROLL_API_KEY');
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Accept' => 'application/json',
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet", [
-                    '$filter' => $filter,
-                    '$orderby' => 'StartTime',
-                    '$top' => 100,
-                    '$skip' => 0,
-                ]);
+        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet', [
+            '$filter' => $filter,
+            '$orderby' => 'StartTime',
+            '$top' => 100,
+            '$skip' => 0,
+        ]);
 
         if ($response->failed()) {
             Log::error('Timesheet sync failed', ['status' => $response->status(), 'body' => $response->body()]);
+
             return [];
         }
 
@@ -941,11 +926,11 @@ class ClockController extends Controller
         foreach ($response->json() as $timesheet) {
             Log::info(json_encode($timesheet, JSON_PRETTY_PRINT));
 
-            $start = !empty($timesheet['startTime']) ? Carbon::parse($timesheet['startTime'], $tz) : null;
-            $end = !empty($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null;
+            $start = ! empty($timesheet['startTime']) ? Carbon::parse($timesheet['startTime'], $tz) : null;
+            $end = ! empty($timesheet['endTime']) ? Carbon::parse($timesheet['endTime'], $tz) : null;
 
             // Resolve location/kiosk (your existing logic)
-            $location = !empty($timesheet['locationId'])
+            $location = ! empty($timesheet['locationId'])
                 ? Location::where('eh_location_id', $timesheet['locationId'])->first()
                 : null;
 
@@ -968,12 +953,12 @@ class ClockController extends Controller
             $externalId = isset($timesheet['externalId']) ? trim((string) $timesheet['externalId']) : null;
 
             $clock = Clock::query()
-                ->when($ehId, fn($q) => $q->orWhere('eh_timesheet_id', $ehId))
-                ->when($externalId, fn($q) => $q->orWhere('uuid', $externalId))
+                ->when($ehId, fn ($q) => $q->orWhere('eh_timesheet_id', $ehId))
+                ->when($externalId, fn ($q) => $q->orWhere('uuid', $externalId))
                 ->first();
 
             // Optional: last-resort fallback if both ids missing
-            if (!$clock && !$ehId && !$externalId && $start) {
+            if (! $clock && ! $ehId && ! $externalId && $start) {
                 $clock = Clock::where('eh_employee_id', $employeeId)
                     ->where('clock_in', $start->toDateTimeString())
                     ->first();
@@ -1029,11 +1014,11 @@ class ClockController extends Controller
         //         ]);
         $weekEnding = $request->query('weekEnding');
         $loadJob = LoadTimesheetsFromEH::dispatch($weekEnding);
+
         return redirect()->back()->with('success', 'Timesheet sync job dispatched for the selected week.');
         // Log::info('Bulk Timesheet Sync Response', ['response' => $response->json()]);
 
     }
-
 
     public function approveAllTimesheets($employeeId, $weekEnding)
     {

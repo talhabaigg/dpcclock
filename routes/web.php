@@ -1,52 +1,52 @@
 <?php
 
+use App\Http\Controllers\AllowanceTypeController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\DrawingIndexController;
+use App\Http\Controllers\DrawingSetController;
+use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
-use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\KioskAuthController;
+use App\Http\Controllers\KioskController;
+use App\Http\Controllers\LabourForecastController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
+use App\Http\Controllers\MaterialItemController;
+use App\Http\Controllers\OncostController;
+use App\Http\Controllers\PayRateTemplateController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\POComparisonReportController;
+use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\QaStageController;
+use App\Http\Controllers\QaStageDrawingController;
+use App\Http\Controllers\QaStageDrawingObservationController;
 use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SupplierCategoryController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimesheetEventController;
-use App\Http\Controllers\VariationController;
-use App\Http\Controllers\QaStageController;
-use App\Http\Controllers\QaStageDrawingController;
-use App\Http\Controllers\QaStageDrawingObservationController;
-use App\Http\Controllers\DrawingSetController;
 use App\Http\Controllers\TitleBlockTemplateController;
-use App\Http\Controllers\DrawingIndexController;
+use App\Http\Controllers\TurnoverForecastController;
+use App\Http\Controllers\UpdatePricingController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VariationController;
+use App\Http\Controllers\VoiceCallController;
+use App\Http\Controllers\WorktypeController;
+use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Models\Employee;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\KioskController;
-use App\Http\Controllers\WorktypeController;
-use App\Http\Controllers\PurchasingController;
-use App\Http\Controllers\MaterialItemController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\SupplierCategoryController;
-use App\Http\Controllers\UpdatePricingController;
-use App\Http\Controllers\PushSubscriptionController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\LabourForecastController;
-use App\Http\Controllers\PayRateTemplateController;
-use App\Http\Controllers\VoiceCallController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\AllowanceTypeController;
-use App\Http\Controllers\OncostController;
-use App\Http\Controllers\POComparisonReportController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -55,6 +55,7 @@ Route::get('/', function () {
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
     $user->unreadNotifications->markAsRead();
+
     return redirect()->back();
 })->name('notifications.markAllRead');
 
@@ -64,6 +65,7 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
     if ($notification) {
         $notification->markAsRead();
     }
+
     return redirect()->back();
 })->name('notifications.markRead');
 
@@ -671,7 +673,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:materials.view');
 
     // PHP Limits (debug route)
-    Route::get('/php-limits', fn() => response()->json([
+    Route::get('/php-limits', fn () => response()->json([
         'sapi' => php_sapi_name(),
         'upload_max_filesize' => ini_get('upload_max_filesize'),
         'post_max_size' => ini_get('post_max_size'),
@@ -691,6 +693,7 @@ Route::middleware('kiosk.access')->group(function () {
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
         $kiosk = \App\Models\Kiosk::where('eh_kiosk_id', $kioskId)->first();
+
         return redirect()->route('kiosks.show', ['kiosk' => $kiosk?->id ?? $kioskId]);
     });
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskAuthController::class, 'validatePin'])->name('kiosk.validate-pin');
@@ -700,11 +703,12 @@ Route::middleware('kiosk.access')->group(function () {
 
 Route::get('/kiosk', function () {
     $employees = Employee::all();
+
     return Inertia::render('kiosks/show', [
         'employees' => $employees,
     ]);
 })->name('kiosk');
 
-require __DIR__ . '/settings.php';
-require __DIR__ . '/location.php';
-require __DIR__ . '/auth.php';
+require __DIR__.'/settings.php';
+require __DIR__.'/location.php';
+require __DIR__.'/auth.php';

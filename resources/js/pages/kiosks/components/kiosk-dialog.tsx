@@ -14,10 +14,10 @@ interface DialogBoxProps {
 
 const KioskDialogBox: React.FC<DialogBoxProps> = ({ isOpen, onClose, title, description, children, variant = 'default' }) => {
     const icons = {
-        default: <AlertCircle className="h-16 w-16 text-primary" />,
+        default: <AlertCircle className="text-primary h-16 w-16" />,
         success: <CheckCircle2 className="h-16 w-16 text-emerald-500" />,
-        error: <XCircle className="h-16 w-16 text-destructive" />,
-        loading: <Loader2 className="h-16 w-16 animate-spin text-primary" />,
+        error: <XCircle className="text-destructive h-16 w-16" />,
+        loading: <Loader2 className="text-primary h-16 w-16 animate-spin" />,
     };
 
     const titleColors = {
@@ -37,49 +37,38 @@ const KioskDialogBox: React.FC<DialogBoxProps> = ({ isOpen, onClose, title, desc
     return (
         <Dialog open={isOpen} onOpenChange={variant === 'loading' ? undefined : onClose}>
             <DialogContent
-                className={cn(
-                    'max-w-sm gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl',
-                    'touch-manipulation',
-                )}
+                className={cn('max-w-sm gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl', 'touch-manipulation')}
                 hideCloseButton={variant === 'loading'}
             >
                 {/* Icon Section with Background */}
                 <div className={cn('flex items-center justify-center py-8', bgColors[variant])}>
-                    <div className={cn(
-                        'flex h-24 w-24 items-center justify-center rounded-full',
-                        variant === 'error' && 'bg-destructive/10',
-                        variant === 'success' && 'bg-emerald-500/10',
-                        variant === 'default' && 'bg-primary/10',
-                        variant === 'loading' && 'bg-primary/10',
-                    )}>
+                    <div
+                        className={cn(
+                            'flex h-24 w-24 items-center justify-center rounded-full',
+                            variant === 'error' && 'bg-destructive/10',
+                            variant === 'success' && 'bg-emerald-500/10',
+                            variant === 'default' && 'bg-primary/10',
+                            variant === 'loading' && 'bg-primary/10',
+                        )}
+                    >
                         {icons[variant]}
                     </div>
                 </div>
 
                 {/* Content Section */}
-                <div className="flex flex-col items-center px-6 pb-6 pt-4">
+                <div className="flex flex-col items-center px-6 pt-4 pb-6">
                     <DialogHeader className="w-full space-y-2 text-center">
-                        <DialogTitle className={cn('text-xl font-bold', titleColors[variant])}>
-                            {title}
-                        </DialogTitle>
-                        {description && (
-                            <DialogDescription className="text-base text-muted-foreground">
-                                {description}
-                            </DialogDescription>
-                        )}
+                        <DialogTitle className={cn('text-xl font-bold', titleColors[variant])}>{title}</DialogTitle>
+                        {description && <DialogDescription className="text-muted-foreground text-base">{description}</DialogDescription>}
                     </DialogHeader>
 
                     {/* Additional Content */}
-                    {children && (
-                        <div className="mt-4 w-full text-center text-muted-foreground">
-                            {children}
-                        </div>
-                    )}
+                    {children && <div className="text-muted-foreground mt-4 w-full text-center">{children}</div>}
                 </div>
 
                 {/* Action Button */}
                 {variant !== 'loading' && (
-                    <div className="border-t bg-muted/30">
+                    <div className="bg-muted/30 border-t">
                         <Button
                             onClick={onClose}
                             variant="ghost"

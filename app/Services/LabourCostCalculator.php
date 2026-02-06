@@ -3,18 +3,20 @@
 namespace App\Services;
 
 use App\Models\Location;
+use App\Models\LocationPayRateTemplate;
 use App\Models\Oncost;
 use App\Models\PayRateTemplate;
-use App\Models\LocationPayRateTemplate;
 
 class LabourCostCalculator
 {
     // Constants
     const HOURS_PER_WEEK = 40;
+
     const DAYS_PER_WEEK = 5;
 
     // Leave accrual percentages
     const ANNUAL_LEAVE_ACCRUAL = 0.0928;  // 9.28%
+
     const LEAVE_LOADING = 0.0461;          // 4.61%
 
     // Overtime multiplier
@@ -31,6 +33,7 @@ class LabourCostCalculator
         if ($this->oncostsCache === null) {
             $this->oncostsCache = Oncost::active()->ordered()->get()->toArray();
         }
+
         return $this->oncostsCache;
     }
 
@@ -46,13 +49,13 @@ class LabourCostCalculator
     /**
      * Calculate cost breakdown with support for decimal headcount, overtime, leave, RDO, and public holidays
      *
-     * @param Location $location The location
-     * @param LocationPayRateTemplate $config The pay rate template configuration
-     * @param float $headcount Number of workers (can be decimal, e.g., 0.4 for 2 days)
-     * @param float $overtimeHours Total overtime hours
-     * @param float $leaveHours Total leave hours (for oncosts only - wages paid from accruals)
-     * @param float $rdoHours RDO hours (wages NOT costed, accruals and oncosts ARE costed)
-     * @param float $publicHolidayNotWorkedHours Public Holiday hours (all costed, no allowances)
+     * @param  Location  $location  The location
+     * @param  LocationPayRateTemplate  $config  The pay rate template configuration
+     * @param  float  $headcount  Number of workers (can be decimal, e.g., 0.4 for 2 days)
+     * @param  float  $overtimeHours  Total overtime hours
+     * @param  float  $leaveHours  Total leave hours (for oncosts only - wages paid from accruals)
+     * @param  float  $rdoHours  RDO hours (wages NOT costed, accruals and oncosts ARE costed)
+     * @param  float  $publicHolidayNotWorkedHours  Public Holiday hours (all costed, no allowances)
      * @return array Cost breakdown
      */
     public function calculateWithOvertime(
@@ -71,7 +74,7 @@ class LabourCostCalculator
         ]);
 
         $template = $config->payRateTemplate;
-        if (!$template) {
+        if (! $template) {
             return $this->emptyBreakdown(null);
         }
 
@@ -133,6 +136,7 @@ class LabourCostCalculator
                     : (float) $pc->user_supplied_rate;
             }
         }
+
         return 0.0;
     }
 
@@ -187,7 +191,7 @@ class LabourCostCalculator
                     ];
                     break;
 
-                // 'custom' category is handled separately in calculateCustomAllowances
+                    // 'custom' category is handled separately in calculateCustomAllowances
             }
         }
 
@@ -239,7 +243,7 @@ class LabourCostCalculator
         // Filter allowances where paid_to_rdo = true
         $rdoCustomAllowances = [];
         foreach ($config->customAllowances as $allowance) {
-            if (!$allowance->paid_to_rdo) {
+            if (! $allowance->paid_to_rdo) {
                 continue;
             }
 
@@ -286,7 +290,7 @@ class LabourCostCalculator
         preg_match('/zone\s*(\d)/', $worktype, $worktypeZone);
         preg_match('/zone\s*(\d)/', $category, $categoryZone);
 
-        if (!empty($worktypeZone[1]) && !empty($categoryZone[1])) {
+        if (! empty($worktypeZone[1]) && ! empty($categoryZone[1])) {
             return $worktypeZone[1] === $categoryZone[1];
         }
 
@@ -313,10 +317,11 @@ class LabourCostCalculator
         preg_match('/\$[\d.]+[mb]?\s*[-–]\s*\$[\d.]+[mb]?|\$[\d.]+[mb]?\+?|<\s*\$[\d.]+[mb]?/i', $worktype, $worktypeRange);
         preg_match('/\$[\d.]+[mb]?\s*[-–]\s*\$[\d.]+[mb]?|\$[\d.]+[mb]?\+?|<\s*\$[\d.]+[mb]?/i', $category, $categoryRange);
 
-        if (!empty($worktypeRange[0]) && !empty($categoryRange[0])) {
+        if (! empty($worktypeRange[0]) && ! empty($categoryRange[0])) {
             // Normalize the ranges for comparison
             $worktypeNorm = preg_replace('/\s+/', '', strtolower($worktypeRange[0]));
             $categoryNorm = preg_replace('/\s+/', '', strtolower($categoryRange[0]));
+
             return $worktypeNorm === $categoryNorm;
         }
 
@@ -542,7 +547,7 @@ class LabourCostCalculator
         $ordinaryCustomAllowances = 0;
         $customAllowanceDetails = [];
         foreach ($customAllowances as $allowance) {
-            $weekly = match($allowance['rate_type']) {
+            $weekly = match ($allowance['rate_type']) {
                 'hourly' => $allowance['rate'] * $ordinaryHours,
                 'daily' => $allowance['rate'] * self::DAYS_PER_WEEK * $headcount,
                 'weekly' => $allowance['rate'] * $headcount,
@@ -634,7 +639,7 @@ class LabourCostCalculator
         // Super is typically only on ordinary hours (OTE), not overtime
         $superOncost = collect($oncosts)->firstWhere('code', 'SUPER');
         $superAmount = 0;
-        if ($superOncost && !$superOncost['is_percentage']) {
+        if ($superOncost && ! $superOncost['is_percentage']) {
             $superAmount = (float) $superOncost['hourly_rate'] * $ordinaryHours;
         }
 
@@ -700,7 +705,7 @@ class LabourCostCalculator
             // Calculate fixed oncosts prorated by HOURS
             // Each fixed oncost has an hourly rate
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     $leaveAmount = (float) $oncost['hourly_rate'] * $leaveHours;
                     $leaveFixedOncosts += $leaveAmount;
 
@@ -764,7 +769,7 @@ class LabourCostCalculator
 
             // Calculate custom allowances for RDO hours (only those with paid_to_rdo = true)
             foreach ($rdoAllowanceData['custom'] as $allowance) {
-                $amount = match($allowance['rate_type']) {
+                $amount = match ($allowance['rate_type']) {
                     'hourly' => $allowance['rate'] * $rdoHours,
                     'daily' => $allowance['rate'] * $rdoDays,
                     'weekly' => $allowance['rate'], // Full weekly for RDO
@@ -797,7 +802,7 @@ class LabourCostCalculator
             $rdoOncostDetails = [];
 
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     // Fixed oncost: hourly rate × RDO hours
                     $amount = (float) $oncost['hourly_rate'] * $rdoHours;
                     $rdoFixedOncosts += $amount;
@@ -859,7 +864,7 @@ class LabourCostCalculator
             $phOncostDetails = [];
 
             foreach ($oncosts as $oncost) {
-                if (!$oncost['is_percentage']) {
+                if (! $oncost['is_percentage']) {
                     $amount = (float) $oncost['hourly_rate'] * $publicHolidayNotWorkedHours;
                     $phFixedOncosts += $amount;
 

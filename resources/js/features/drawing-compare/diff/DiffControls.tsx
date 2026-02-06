@@ -28,29 +28,18 @@ type DiffControlsProps = {
  * Renders the diff overlay controls.
  * Only enabled when alignment is complete.
  */
-export function DiffControls({
-    state,
-    isAligned,
-    onToggle,
-    onSensitivityChange,
-    onRecompute,
-}: DiffControlsProps) {
+export function DiffControls({ state, isAligned, onToggle, onSensitivityChange, onRecompute }: DiffControlsProps) {
     const { showDiff, sensitivity, isComputing, diffResult } = state;
 
     return (
-        <div className="flex items-center gap-3 rounded-md border px-3 py-2 bg-muted/30">
+        <div className="bg-muted/30 flex items-center gap-3 rounded-md border px-3 py-2">
             {/* Toggle */}
             <div className="flex items-center gap-2">
-                <Diff className="h-4 w-4 text-muted-foreground" />
-                <Label htmlFor="diff-toggle" className="text-sm cursor-pointer">
+                <Diff className="text-muted-foreground h-4 w-4" />
+                <Label htmlFor="diff-toggle" className="cursor-pointer text-sm">
                     Diff
                 </Label>
-                <Switch
-                    id="diff-toggle"
-                    checked={showDiff}
-                    onCheckedChange={onToggle}
-                    disabled={!isAligned}
-                />
+                <Switch id="diff-toggle" checked={showDiff} onCheckedChange={onToggle} disabled={!isAligned} />
             </div>
 
             {/* Controls shown when diff is enabled */}
@@ -58,9 +47,7 @@ export function DiffControls({
                 <>
                     {/* Sensitivity slider */}
                     <div className="flex items-center gap-2">
-                        <Label className="text-xs text-muted-foreground whitespace-nowrap">
-                            Sensitivity
-                        </Label>
+                        <Label className="text-muted-foreground text-xs whitespace-nowrap">Sensitivity</Label>
                         <Slider
                             value={[255 - sensitivity]}
                             onValueChange={(values) => onSensitivityChange(255 - values[0])}
@@ -69,42 +56,23 @@ export function DiffControls({
                             step={5}
                             className="w-20"
                         />
-                        <span className="text-xs text-muted-foreground w-6">
-                            {Math.round(((255 - sensitivity) / 255) * 100)}%
-                        </span>
+                        <span className="text-muted-foreground w-6 text-xs">{Math.round(((255 - sensitivity) / 255) * 100)}%</span>
                     </div>
 
                     {/* Recompute button */}
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={onRecompute}
-                        disabled={isComputing}
-                        title="Recompute diff"
-                    >
-                        {isComputing ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Diff className="h-4 w-4" />
-                        )}
+                    <Button type="button" size="sm" variant="ghost" onClick={onRecompute} disabled={isComputing} title="Recompute diff">
+                        {isComputing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Diff className="h-4 w-4" />}
                     </Button>
 
                     {/* Stats */}
                     {diffResult && !isComputing && (
-                        <span className="text-xs text-muted-foreground">
-                            {diffResult.diffPercentage.toFixed(1)}% changed
-                        </span>
+                        <span className="text-muted-foreground text-xs">{diffResult.diffPercentage.toFixed(1)}% changed</span>
                     )}
                 </>
             )}
 
             {/* Hint when not aligned */}
-            {!isAligned && (
-                <span className="text-xs text-muted-foreground">
-                    Complete alignment first
-                </span>
-            )}
+            {!isAligned && <span className="text-muted-foreground text-xs">Complete alignment first</span>}
         </div>
     );
 }

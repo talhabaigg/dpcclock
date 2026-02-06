@@ -26,14 +26,7 @@ type MousePosition = {
  * A magnifying lens that shows a zoomed preview of the area under the cursor.
  * Useful for precise point placement during alignment.
  */
-export function MagnifierLens({
-    active,
-    sourceElement,
-    containerElement,
-    magnification = 3,
-    size = 120,
-    borderColor = 'blue',
-}: MagnifierLensProps) {
+export function MagnifierLens({ active, sourceElement, containerElement, magnification = 3, size = 120, borderColor = 'blue' }: MagnifierLensProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [mousePos, setMousePos] = useState<MousePosition | null>(null);
     const animationFrameRef = useRef<number | null>(null);
@@ -93,12 +86,7 @@ export function MagnifierLens({
         const sourceRelativeY = mousePos.clientY - sourceRect.top;
 
         // Check if mouse is over the source element
-        if (
-            sourceRelativeX < 0 ||
-            sourceRelativeX > sourceRect.width ||
-            sourceRelativeY < 0 ||
-            sourceRelativeY > sourceRect.height
-        ) {
+        if (sourceRelativeX < 0 || sourceRelativeX > sourceRect.width || sourceRelativeY < 0 || sourceRelativeY > sourceRect.height) {
             // Clear canvas if not over source
             ctx.clearRect(0, 0, size, size);
             ctx.fillStyle = '#1f2937';
@@ -144,12 +132,10 @@ export function MagnifierLens({
         const halfSample = sampleSize / 2;
 
         // Scale factor from source to sample
-        const sampleScaleX = sourceElement instanceof HTMLCanvasElement
-            ? sourceElement.width / sourceRect.width
-            : sourceElement.naturalWidth / sourceRect.width;
-        const sampleScaleY = sourceElement instanceof HTMLCanvasElement
-            ? sourceElement.height / sourceRect.height
-            : sourceElement.naturalHeight / sourceRect.height;
+        const sampleScaleX =
+            sourceElement instanceof HTMLCanvasElement ? sourceElement.width / sourceRect.width : sourceElement.naturalWidth / sourceRect.width;
+        const sampleScaleY =
+            sourceElement instanceof HTMLCanvasElement ? sourceElement.height / sourceRect.height : sourceElement.naturalHeight / sourceRect.height;
 
         const srcX = Math.max(0, sourceX - halfSample * sampleScaleX);
         const srcY = Math.max(0, sourceY - halfSample * sampleScaleY);
@@ -162,17 +148,7 @@ export function MagnifierLens({
 
         // Draw magnified portion
         try {
-            ctx.drawImage(
-                sourceElement,
-                srcX,
-                srcY,
-                srcW,
-                srcH,
-                0,
-                0,
-                size,
-                size
-            );
+            ctx.drawImage(sourceElement, srcX, srcY, srcW, srcH, 0, 0, size, size);
         } catch {
             // Handle cross-origin or other errors silently
             ctx.fillStyle = '#374151';
@@ -256,7 +232,7 @@ export function MagnifierLens({
 
     return (
         <div
-            className={`absolute pointer-events-none z-50 rounded-lg border-2 shadow-xl overflow-hidden ${borderColorClass}`}
+            className={`pointer-events-none absolute z-50 overflow-hidden rounded-lg border-2 shadow-xl ${borderColorClass}`}
             style={{
                 left: lensX,
                 top: lensY,
@@ -264,16 +240,9 @@ export function MagnifierLens({
                 height: size,
             }}
         >
-            <canvas
-                ref={canvasRef}
-                width={size}
-                height={size}
-                className="block"
-            />
+            <canvas ref={canvasRef} width={size} height={size} className="block" />
             {/* Magnification label */}
-            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1 rounded">
-                {magnification}x
-            </div>
+            <div className="absolute right-1 bottom-1 rounded bg-black/70 px-1 text-xs text-white">{magnification}x</div>
         </div>
     );
 }

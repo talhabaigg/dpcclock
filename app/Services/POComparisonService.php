@@ -10,7 +10,7 @@ class POComparisonService
 
     public function __construct()
     {
-        $this->premierService = new PremierPurchaseOrderService();
+        $this->premierService = new PremierPurchaseOrderService;
     }
 
     /**
@@ -19,12 +19,12 @@ class POComparisonService
      */
     public function compare(Requisition $requisition, bool $skipDebugCalls = true): array
     {
-        if (!$requisition->premier_po_id) {
+        if (! $requisition->premier_po_id) {
             throw new \Exception('Requisition has not been synced with Premier');
         }
 
         // Load local line items
-        $localLines = $requisition->lineItems->map(fn($item) => [
+        $localLines = $requisition->lineItems->map(fn ($item) => [
             'id' => $item->id,
             'line_number' => $item->serial_number,
             'code' => $item->code,
@@ -46,7 +46,7 @@ class POComparisonService
         $premierLines = $this->normalizePremierLines($premierLines);
 
         // Fetch invoices and invoice lines by PO number
-        $poNumber = $requisition->po_number ? 'PO' . $requisition->po_number : null;
+        $poNumber = $requisition->po_number ? 'PO'.$requisition->po_number : null;
         $invoices = $poNumber ? $this->premierService->getInvoicesByPoNumber($poNumber) : [];
         $invoiceLines = $poNumber ? $this->premierService->getInvoiceLinesByPoNumber($poNumber) : [];
         $invoiceSummary = $this->summarizeInvoices($invoices);
@@ -64,7 +64,7 @@ class POComparisonService
         $descriptionComparison = [];
         foreach ($localLines as $local) {
             $localDesc = $local['code']
-                ? strtolower(trim($local['code'] . '-' . ($local['description'] ?? '')))
+                ? strtolower(trim($local['code'].'-'.($local['description'] ?? '')))
                 : strtolower(trim($local['description'] ?? ''));
 
             $localWords = $this->extractSignificantWords($localDesc);
@@ -130,7 +130,7 @@ class POComparisonService
         ];
 
         // Only make additional API calls for detailed debug if not skipped
-        if (!$skipDebugCalls) {
+        if (! $skipDebugCalls) {
             $debug['premier_raw_sample'] = $this->getRawPremierSample($requisition->premier_po_id);
             $debug['premier_deleted_lines'] = $this->getDeletedLines($requisition->premier_po_id);
         }
@@ -161,7 +161,7 @@ class POComparisonService
             ];
         }
 
-        $invoiceList = array_map(fn($inv) => [
+        $invoiceList = array_map(fn ($inv) => [
             'invoice_number' => $inv['InvoiceNumber'] ?? null,
             'invoice_date' => $inv['InvoiceDate'] ?? null,
             'total' => (float) ($inv['InvoiceTotal'] ?? 0),
@@ -183,7 +183,7 @@ class POComparisonService
     protected function getRawPremierSample(string $premierPoId): ?array
     {
         try {
-            $authService = new PremierAuthenticationService();
+            $authService = new PremierAuthenticationService;
             $token = $authService->getAccessToken();
             $baseUrl = env('PREMIER_SWAGGER_API_URL');
 
@@ -213,6 +213,7 @@ class POComparisonService
                         'items' => $data,
                     ];
                 }
+
                 // Nested but first element is array
                 return [
                     'total_count' => count($data[0]),
@@ -243,7 +244,7 @@ class POComparisonService
      */
     protected function normalizePremierLines(array $premierLines): array
     {
-        return array_map(fn($line) => [
+        return array_map(fn ($line) => [
             'id' => $line['PurchaseOrderLineId'] ?? null,
             'line_number' => $line['Line'] ?? null,
             'code' => null, // Premier uses ItemId (UUID), not code
@@ -308,7 +309,7 @@ class POComparisonService
 
         // Find Premier lines not matched (added in Premier)
         foreach ($premierLines as $index => $premierLine) {
-            if (!in_array($index, $matchedPremierIndices)) {
+            if (! in_array($index, $matchedPremierIndices)) {
                 // Try to find invoice for this added premier line
                 $invoiceLine = $this->findMatchingInvoiceLine(null, $premierLine, $invoiceLines, $matchedInvoiceIndices);
                 if ($invoiceLine !== null) {
@@ -342,7 +343,7 @@ class POComparisonService
 
         // Get reference values from local or premier
         $refLine = $localLine ?? $premierLine;
-        if (!$refLine) {
+        if (! $refLine) {
             return null;
         }
 
@@ -350,14 +351,14 @@ class POComparisonService
         $searchDesc = '';
         if ($localLine) {
             $searchDesc = $localLine['code']
-                ? strtolower(trim($localLine['code'] . '-' . ($localLine['description'] ?? '')))
+                ? strtolower(trim($localLine['code'].'-'.($localLine['description'] ?? '')))
                 : strtolower(trim($localLine['description'] ?? ''));
         } elseif ($premierLine) {
             $searchDesc = strtolower(trim($premierLine['description'] ?? ''));
         }
 
         // Extract significant words (3+ chars, not numbers)
-        $searchWords = !empty($searchDesc) ? $this->extractSignificantWords($searchDesc) : [];
+        $searchWords = ! empty($searchDesc) ? $this->extractSignificantWords($searchDesc) : [];
 
         // Get cost values for cost-based matching
         $refUnitCost = (float) ($refLine['unit_cost'] ?? 0);
@@ -378,7 +379,7 @@ class POComparisonService
 
             // Strategy 1: Description-based matching
             $invDesc = strtolower(trim($invLine['line_description'] ?? ''));
-            if (!empty($searchDesc) && !empty($invDesc)) {
+            if (! empty($searchDesc) && ! empty($invDesc)) {
                 // Calculate similar_text score
                 similar_text($searchDesc, $invDesc, $similarTextPercent);
 
@@ -433,6 +434,7 @@ class POComparisonService
         }
 
         $matched = $invoiceLines[$bestIndex];
+
         return [
             'matched_index' => $bestIndex,
             'description' => $matched['line_description'],
@@ -456,7 +458,7 @@ class POComparisonService
         foreach ($words as $word) {
             $word = preg_replace('/[^a-z0-9]/', '', $word);
             // Keep words that are 3+ chars and not purely numeric
-            if (strlen($word) >= 3 && !ctype_digit($word)) {
+            if (strlen($word) >= 3 && ! ctype_digit($word)) {
                 $significant[] = $word;
             }
         }
@@ -541,11 +543,11 @@ class POComparisonService
 
         // Build local description the same way it was sent to Premier (CODE-Description)
         $localDesc = $local['code']
-            ? strtolower(trim($local['code'] . '-' . ($local['description'] ?? '')))
+            ? strtolower(trim($local['code'].'-'.($local['description'] ?? '')))
             : strtolower(trim($local['description'] ?? ''));
         $premierDesc = strtolower(trim($premier['description'] ?? ''));
 
-        if (!empty($localDesc) && !empty($premierDesc)) {
+        if (! empty($localDesc) && ! empty($premierDesc)) {
             similar_text($localDesc, $premierDesc, $descPercent);
             // If line numbers match, description similarity adds up to 0.5 more
             // If line numbers don't match, description similarity can give up to 0.7

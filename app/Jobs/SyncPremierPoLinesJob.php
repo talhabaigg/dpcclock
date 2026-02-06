@@ -21,6 +21,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 30;
 
     public function __construct(
@@ -30,7 +31,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
 
     public function handle(): void
     {
-        $service = new PremierPurchaseOrderService();
+        $service = new PremierPurchaseOrderService;
 
         try {
             // Clear cache to get fresh data
@@ -38,7 +39,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
 
             // If we don't have requisition_id, try to find it
             $requisitionId = $this->requisitionId;
-            if (!$requisitionId) {
+            if (! $requisitionId) {
                 $requisition = Requisition::where('premier_po_id', $this->premierPoId)->first();
                 $requisitionId = $requisition?->id;
             }
@@ -60,6 +61,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
                 Log::info('SyncPremierPoLinesJob: No lines returned from Premier', [
                     'premier_po_id' => $this->premierPoId,
                 ]);
+
                 return;
             }
 
@@ -74,7 +76,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
 
             foreach ($lines as $line) {
                 $lineId = $line['PurchaseOrderLineId'] ?? null;
-                if (!$lineId) {
+                if (! $lineId) {
                     continue;
                 }
 
@@ -102,7 +104,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
 
             // Delete lines that no longer exist in Premier
             $deletedLineIds = array_diff($existingLineIds, $updatedLineIds);
-            if (!empty($deletedLineIds)) {
+            if (! empty($deletedLineIds)) {
                 PremierPoLine::whereIn('premier_line_id', $deletedLineIds)->delete();
 
                 Log::info('SyncPremierPoLinesJob: Deleted stale lines', [
@@ -139,7 +141,7 @@ class SyncPremierPoLinesJob implements ShouldQueue
             // Get sync context (filtered PO IDs) from cache
             $syncContext = Cache::get('premier_sync_context');
 
-            if ($syncContext && !empty($syncContext['po_ids'])) {
+            if ($syncContext && ! empty($syncContext['po_ids'])) {
                 // Use filtered PO IDs from sync context
                 $poIdsToSync = $syncContext['po_ids'];
                 $total = count($poIdsToSync);

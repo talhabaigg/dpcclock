@@ -17,11 +17,15 @@ class ProcessDrawingJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 60;
+
     public int $timeout = 300; // 5 minutes
 
     protected int $drawingId;
+
     protected bool $generateDiff;
+
     protected bool $extractMetadata;
 
     /**
@@ -41,8 +45,9 @@ class ProcessDrawingJob implements ShouldQueue
     {
         $drawing = QaStageDrawing::find($this->drawingId);
 
-        if (!$drawing) {
+        if (! $drawing) {
             Log::warning('ProcessDrawingJob: Drawing not found', ['id' => $this->drawingId]);
+
             return;
         }
 
@@ -74,7 +79,7 @@ class ProcessDrawingJob implements ShouldQueue
             ]);
 
             $results['metadata'] = $metadataResult['success'];
-            if (!$metadataResult['success']) {
+            if (! $metadataResult['success']) {
                 $results['errors'][] = $metadataResult['error'] ?? 'Metadata extraction failed';
             }
         }

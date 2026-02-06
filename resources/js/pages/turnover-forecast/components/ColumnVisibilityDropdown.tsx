@@ -21,16 +21,8 @@ interface ColumnVisibilityDropdownProps {
     onHideAll: () => void;
 }
 
-export function ColumnVisibilityDropdown({
-    columnGroups,
-    onToggle,
-    onShowAll,
-    onHideAll,
-}: ColumnVisibilityDropdownProps) {
-    const hiddenCount = columnGroups.reduce(
-        (count, group) => count + group.columns.filter((c) => !c.visible).length,
-        0
-    );
+export function ColumnVisibilityDropdown({ columnGroups, onToggle, onShowAll, onHideAll }: ColumnVisibilityDropdownProps) {
+    const hiddenCount = columnGroups.reduce((count, group) => count + group.columns.filter((c) => !c.visible).length, 0);
 
     return (
         <DropdownMenu>
@@ -39,13 +31,11 @@ export function ColumnVisibilityDropdown({
                     <Columns3 className="h-4 w-4" />
                     <span className="hidden sm:inline">Columns</span>
                     {hiddenCount > 0 && (
-                        <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
-                            {hiddenCount}
-                        </span>
+                        <span className="bg-primary/10 text-primary ml-1 rounded-full px-1.5 py-0.5 text-xs font-medium">{hiddenCount}</span>
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 max-h-80 overflow-y-auto">
+            <DropdownMenuContent align="end" className="max-h-80 w-56 overflow-y-auto">
                 <div className="flex gap-1 p-2">
                     <Button
                         size="sm"
@@ -54,7 +44,7 @@ export function ColumnVisibilityDropdown({
                             e.preventDefault();
                             onShowAll();
                         }}
-                        className="flex-1 h-7 text-xs"
+                        className="h-7 flex-1 text-xs"
                     >
                         Show All
                     </Button>
@@ -65,7 +55,7 @@ export function ColumnVisibilityDropdown({
                             e.preventDefault();
                             onHideAll();
                         }}
-                        className="flex-1 h-7 text-xs"
+                        className="h-7 flex-1 text-xs"
                     >
                         Hide All
                     </Button>
@@ -73,9 +63,7 @@ export function ColumnVisibilityDropdown({
                 <DropdownMenuSeparator />
                 {columnGroups.map((group) => (
                     <div key={group.label}>
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">
-                            {group.label}
-                        </DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-muted-foreground text-xs">{group.label}</DropdownMenuLabel>
                         {group.columns.map((col) => (
                             <DropdownMenuCheckboxItem
                                 key={col.id}

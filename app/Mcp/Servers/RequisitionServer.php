@@ -11,7 +11,6 @@ use Laravel\Mcp\Server;
 
 class RequisitionServer extends Server
 {
-
     public string $serverName = 'Requisition Server';
 
     public string $serverVersion = '1.0.0';

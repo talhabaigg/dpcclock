@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AllowanceType;
 use App\Models\JobCostDetail;
 use App\Models\JobReportByCostItemAndCostType;
-use App\Models\Location;
 use App\Models\JobSummary;
 use App\Models\LabourForecast;
 use App\Models\LabourForecastEntry;
+use App\Models\Location;
 use App\Models\LocationPayRateTemplate;
 use App\Models\LocationTemplateAllowance;
 use App\Models\PayRateTemplate;
@@ -33,7 +33,7 @@ class LabourForecastController extends Controller
         })->whereNotNull('external_id');
 
         // Filter by kiosk access if user is not admin or backoffice
-        if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
             // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
@@ -116,7 +116,7 @@ class LabourForecastController extends Controller
         $location->load('worktypes');
 
         // Initialize cost calculator
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
 
         // Get configured pay rate templates for this location
         $configuredTemplates = $location->labourForecastTemplates()
@@ -213,7 +213,7 @@ class LabourForecastController extends Controller
             // Group entries by template ID
             foreach ($forecast->entries as $entry) {
                 $templateId = $entry->location_pay_rate_template_id;
-                if (!isset($savedData['entries'][$templateId])) {
+                if (! isset($savedData['entries'][$templateId])) {
                     $savedData['entries'][$templateId] = [
                         'hourly_rate' => $entry->hourly_rate,
                         'weeks' => [],
@@ -295,7 +295,7 @@ class LabourForecastController extends Controller
         $forecastMonth = Carbon::parse($request->forecast_month)->startOfMonth();
 
         // Load cost calculator for snapshot
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
         $location->load('worktypes');
 
         DB::transaction(function () use ($request, $location, $user, $forecastMonth, $costCalculator) {
@@ -312,7 +312,7 @@ class LabourForecastController extends Controller
             );
 
             // Only allow editing if draft
-            if (!$forecast->isEditable() && $forecast->wasRecentlyCreated === false) {
+            if (! $forecast->isEditable() && $forecast->wasRecentlyCreated === false) {
                 abort(403, 'This forecast has been submitted and cannot be edited.');
             }
 
@@ -324,7 +324,9 @@ class LabourForecastController extends Controller
                 $templateConfig = LocationPayRateTemplate::with('payRateTemplate.payCategories.payCategory')
                     ->find($entryData['template_id']);
 
-                if (!$templateConfig) continue;
+                if (! $templateConfig) {
+                    continue;
+                }
 
                 foreach ($entryData['weeks'] as $weekData) {
                     $headcount = (float) $weekData['headcount'];
@@ -376,7 +378,7 @@ class LabourForecastController extends Controller
             abort(403);
         }
 
-        if (!$forecast->canBeSubmitted()) {
+        if (! $forecast->canBeSubmitted()) {
             return redirect()->back()->with('error', 'This forecast cannot be submitted.');
         }
 
@@ -403,7 +405,7 @@ class LabourForecastController extends Controller
             abort(403);
         }
 
-        if (!$forecast->canBeApproved()) {
+        if (! $forecast->canBeApproved()) {
             return redirect()->back()->with('error', 'This forecast cannot be approved.');
         }
 
@@ -436,7 +438,7 @@ class LabourForecastController extends Controller
             'reason' => 'required|string|max:500',
         ]);
 
-        if (!$forecast->canBeApproved()) {
+        if (! $forecast->canBeApproved()) {
             return redirect()->back()->with('error', 'This forecast cannot be rejected.');
         }
 
@@ -588,7 +590,7 @@ class LabourForecastController extends Controller
             $updateData['leave_markups_job_costed'] = $request->boolean('leave_markups_job_costed');
         }
 
-        if (!empty($updateData)) {
+        if (! empty($updateData)) {
             $template->update($updateData);
         }
 
@@ -664,7 +666,7 @@ class LabourForecastController extends Controller
             ->with('entries')
             ->first();
 
-        if (!$previousForecast) {
+        if (! $previousForecast) {
             return redirect()->back()->with('error', 'No approved forecast found for this location.');
         }
 
@@ -684,7 +686,7 @@ class LabourForecastController extends Controller
             $weekEndingKey = $entry->week_ending->format('Y-m-d');
 
             // Store entry indexed by template and week_ending for exact matching
-            if (!isset($entriesByTemplateAndWeek[$templateId])) {
+            if (! isset($entriesByTemplateAndWeek[$templateId])) {
                 $entriesByTemplateAndWeek[$templateId] = [];
             }
             $entriesByTemplateAndWeek[$templateId][$weekEndingKey] = $entry;
@@ -701,11 +703,11 @@ class LabourForecastController extends Controller
             ->first();
 
         if ($existingForecast) {
-            return redirect()->back()->with('error', 'Cannot overwrite submitted or approved forecast for ' . $targetMonth->format('F Y'));
+            return redirect()->back()->with('error', 'Cannot overwrite submitted or approved forecast for '.$targetMonth->format('F Y'));
         }
 
         $user = Auth::user();
-        $costCalculator = new LabourCostCalculator();
+        $costCalculator = new LabourCostCalculator;
         $location->load('worktypes');
 
         // Get configured templates for this location
@@ -722,7 +724,7 @@ class LabourForecastController extends Controller
                 'forecast_month' => $targetMonth,
             ],
             [
-                'notes' => 'Copied from ' . $previousForecast->forecast_month->format('F Y') . ' forecast',
+                'notes' => 'Copied from '.$previousForecast->forecast_month->format('F Y').' forecast',
                 'created_by' => $user->id,
                 'status' => 'draft',
             ]
@@ -799,7 +801,7 @@ class LabourForecastController extends Controller
         $weekNum = 1;
         while ($currentDate <= $endDate) {
             $weeks[] = [
-                'key' => 'week_' . $weekNum,
+                'key' => 'week_'.$weekNum,
                 'label' => $currentDate->format('d/m/Y'),
                 'weekEnding' => $currentDate->format('Y-m-d'),
             ];
@@ -826,7 +828,7 @@ class LabourForecastController extends Controller
         $forecastId = $request->query('forecast_id') ? (int) $request->query('forecast_id') : null;
 
         // Get variance data
-        $varianceService = new LabourVarianceService();
+        $varianceService = new LabourVarianceService;
         $varianceData = $varianceService->getVarianceData($location, $targetMonth, $forecastId);
 
         // Get all forecasts for this location (for the forecast selector)
@@ -917,7 +919,7 @@ class LabourForecastController extends Controller
                 ->first();
 
             // Fallback: If no forecast has this week's entry, try to find forecast for that month
-            if (!$forecast) {
+            if (! $forecast) {
                 $forecastMonth = $weekEnding->copy()->startOfMonth();
                 $forecast = LabourForecast::where('location_id', $location->id)
                     ->where('forecast_month', $forecastMonth)
@@ -926,7 +928,7 @@ class LabourForecastController extends Controller
             }
         }
 
-        if (!$forecast) {
+        if (! $forecast) {
             return response()->json([
                 'error' => 'No forecast found for this week',
                 'location' => $location->name,
@@ -941,7 +943,7 @@ class LabourForecastController extends Controller
 
         if ($weekEntries->isEmpty()) {
             // Get all week endings that DO have data for debugging
-            $availableWeeks = $forecast->entries->pluck('week_ending')->map(fn($w) => $w->format('Y-m-d'))->unique()->values();
+            $availableWeeks = $forecast->entries->pluck('week_ending')->map(fn ($w) => $w->format('Y-m-d'))->unique()->values();
 
             return response()->json([
                 'error' => 'No forecast entries found for this week',
@@ -960,7 +962,9 @@ class LabourForecastController extends Controller
 
         foreach ($weekEntries as $entry) {
             $templateConfig = $entry->template;
-            if (!$templateConfig) continue;
+            if (! $templateConfig) {
+                continue;
+            }
 
             $costBreakdown = $entry->cost_breakdown_snapshot ?? [];
 
@@ -1018,7 +1022,7 @@ class LabourForecastController extends Controller
             'templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
         ]);
 
-        $calculator = new LabourCostCalculator();
+        $calculator = new LabourCostCalculator;
         $totalCost = 0;
 
         foreach ($request->templates as $templateData) {
@@ -1027,7 +1031,7 @@ class LabourForecastController extends Controller
                 ->where('id', $templateData['template_id'])
                 ->first();
 
-            if (!$templateConfig) {
+            if (! $templateConfig) {
                 continue;
             }
 
@@ -1076,7 +1080,7 @@ class LabourForecastController extends Controller
             'weeks.*.templates.*.public_holiday_not_worked_hours' => 'nullable|numeric|min:0',
         ]);
 
-        $calculator = new LabourCostCalculator();
+        $calculator = new LabourCostCalculator;
         $results = [];
 
         // Pre-fetch all template configs for this location to avoid N+1 queries
@@ -1091,7 +1095,7 @@ class LabourForecastController extends Controller
             foreach ($weekData['templates'] as $templateData) {
                 $templateConfig = $templateConfigs->get($templateData['template_id']);
 
-                if (!$templateConfig) {
+                if (! $templateConfig) {
                     continue;
                 }
 
@@ -1175,7 +1179,7 @@ class LabourForecastController extends Controller
             foreach ($forecast->entries as $entry) {
                 $prefix = $entry->template?->cost_code_prefix;
                 if ($prefix && in_array($prefix, $labourPrefixes)) {
-                    if (!isset($forecastByPrefix[$prefix])) {
+                    if (! isset($forecastByPrefix[$prefix])) {
                         $forecastByPrefix[$prefix] = 0;
                     }
                     $forecastByPrefix[$prefix] += $entry->weekly_cost ?? 0;
@@ -1190,22 +1194,22 @@ class LabourForecastController extends Controller
 
             // Get EAC - sum of estimate_at_completion for wages and oncosts
             $wagesEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->where('cost_item', 'like', $wagesPrefix.'-%')
                 ->sum('estimate_at_completion');
 
             $oncostsEac = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->where('cost_item', 'like', $oncostsPrefix.'-%')
                 ->sum('estimate_at_completion');
 
             $eac = $wagesEac + $oncostsEac;
 
             // Get cost to date (claimed) from JobCostDetail
             $wagesClaimed = JobCostDetail::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $wagesPrefix . '-%')
+                ->where('cost_item', 'like', $wagesPrefix.'-%')
                 ->sum('amount');
 
             $oncostsClaimed = JobCostDetail::where('job_number', $jobNumber)
-                ->where('cost_item', 'like', $oncostsPrefix . '-%')
+                ->where('cost_item', 'like', $oncostsPrefix.'-%')
                 ->sum('amount');
 
             $claimed = $wagesClaimed + $oncostsClaimed;
@@ -1220,8 +1224,8 @@ class LabourForecastController extends Controller
             if ($eac > 0 || $claimed > 0) {
                 // Find primary wages cost code for display
                 $wagesCode = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                    ->where('cost_item', 'like', $wagesPrefix . '-%')
-                    ->first()?->cost_item ?? ($wagesPrefix . '-xxxx');
+                    ->where('cost_item', 'like', $wagesPrefix.'-%')
+                    ->first()?->cost_item ?? ($wagesPrefix.'-xxxx');
 
                 $series[] = [
                     'prefix' => $prefix,

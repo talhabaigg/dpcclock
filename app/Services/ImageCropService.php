@@ -4,9 +4,9 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
+use Intervention\Image\ImageManager;
 
 /**
  * Service for cropping images for title block extraction.
@@ -33,18 +33,18 @@ class ImageCropService
     {
         // Prefer Imagick for better quality, fall back to GD
         if (extension_loaded('imagick')) {
-            $this->imageManager = new ImageManager(new ImagickDriver());
+            $this->imageManager = new ImageManager(new ImagickDriver);
         } else {
-            $this->imageManager = new ImageManager(new GdDriver());
+            $this->imageManager = new ImageManager(new GdDriver);
         }
     }
 
     /**
      * Crop an image using normalized coordinates.
      *
-     * @param string $imagePath Path to source image (local or S3)
-     * @param array $cropRect Normalized crop rect {x, y, w, h} where values are 0..1
-     * @param string|null $disk Storage disk ('local', 's3', etc.)
+     * @param  string  $imagePath  Path to source image (local or S3)
+     * @param  array  $cropRect  Normalized crop rect {x, y, w, h} where values are 0..1
+     * @param  string|null  $disk  Storage disk ('local', 's3', etc.)
      * @return string|null Cropped image as PNG bytes, or null on failure
      */
     public function cropImage(string $imagePath, array $cropRect, ?string $disk = null): ?string
@@ -53,8 +53,9 @@ class ImageCropService
             // Read image
             if ($disk) {
                 $imageData = Storage::disk($disk)->get($imagePath);
-                if (!$imageData) {
+                if (! $imageData) {
                     Log::error('Failed to read image from storage', ['path' => $imagePath, 'disk' => $disk]);
+
                     return null;
                 }
                 $image = $this->imageManager->read($imageData);
@@ -90,6 +91,7 @@ class ImageCropService
                 'crop_rect' => $cropRect,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -97,8 +99,8 @@ class ImageCropService
     /**
      * Crop using the default heuristic region (bottom-right).
      *
-     * @param string $imagePath Path to source image
-     * @param string|null $disk Storage disk
+     * @param  string  $imagePath  Path to source image
+     * @param  string|null  $disk  Storage disk
      * @return string|null Cropped image as PNG bytes
      */
     public function cropHeuristic(string $imagePath, ?string $disk = null): ?string
@@ -109,8 +111,8 @@ class ImageCropService
     /**
      * Get image dimensions.
      *
-     * @param string $imagePath Path to image
-     * @param string|null $disk Storage disk
+     * @param  string  $imagePath  Path to image
+     * @param  string|null  $disk  Storage disk
      * @return array{width: int, height: int}|null
      */
     public function getImageDimensions(string $imagePath, ?string $disk = null): ?array
@@ -118,7 +120,7 @@ class ImageCropService
         try {
             if ($disk) {
                 $imageData = Storage::disk($disk)->get($imagePath);
-                if (!$imageData) {
+                if (! $imageData) {
                     return null;
                 }
                 $image = $this->imageManager->read($imageData);
@@ -135,6 +137,7 @@ class ImageCropService
                 'path' => $imagePath,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -142,9 +145,9 @@ class ImageCropService
     /**
      * Convert normalized coordinates (0..1) to pixel coordinates.
      *
-     * @param array $normalized {x, y, w, h} normalized 0..1
-     * @param int $imageWidth Image width in pixels
-     * @param int $imageHeight Image height in pixels
+     * @param  array  $normalized  {x, y, w, h} normalized 0..1
+     * @param  int  $imageWidth  Image width in pixels
+     * @param  int  $imageHeight  Image height in pixels
      * @return array{x: int, y: int, w: int, h: int} Pixel coordinates
      */
     public function normalizedToPixels(array $normalized, int $imageWidth, int $imageHeight): array
@@ -160,9 +163,9 @@ class ImageCropService
     /**
      * Convert pixel coordinates to normalized coordinates (0..1).
      *
-     * @param array $pixels {x, y, w, h} pixel coordinates
-     * @param int $imageWidth Image width in pixels
-     * @param int $imageHeight Image height in pixels
+     * @param  array  $pixels  {x, y, w, h} pixel coordinates
+     * @param  int  $imageWidth  Image width in pixels
+     * @param  int  $imageHeight  Image height in pixels
      * @return array{x: float, y: float, w: float, h: float} Normalized coordinates
      */
     public function pixelsToNormalized(array $pixels, int $imageWidth, int $imageHeight): array
@@ -178,9 +181,9 @@ class ImageCropService
     /**
      * Ensure crop region doesn't exceed image bounds.
      *
-     * @param array $pixels Pixel coordinates {x, y, w, h}
-     * @param int $imageWidth Image width
-     * @param int $imageHeight Image height
+     * @param  array  $pixels  Pixel coordinates {x, y, w, h}
+     * @param  int  $imageWidth  Image width
+     * @param  int  $imageHeight  Image height
      * @return array Clamped pixel coordinates
      */
     private function clampToImageBounds(array $pixels, int $imageWidth, int $imageHeight): array
@@ -198,15 +201,15 @@ class ImageCropService
     /**
      * Save cropped image to S3 and return the key.
      *
-     * @param string $croppedBytes PNG image bytes
-     * @param string $prefix S3 key prefix
-     * @param string $filename Base filename (without extension)
+     * @param  string  $croppedBytes  PNG image bytes
+     * @param  string  $prefix  S3 key prefix
+     * @param  string  $filename  Base filename (without extension)
      * @return string|null S3 key on success
      */
     public function saveCroppedToS3(string $croppedBytes, string $prefix, string $filename): ?string
     {
         try {
-            $s3Key = trim($prefix, '/') . '/' . $filename . '_crop.png';
+            $s3Key = trim($prefix, '/').'/'.$filename.'_crop.png';
 
             Storage::disk('s3')->put($s3Key, $croppedBytes, [
                 'ContentType' => 'image/png',
@@ -219,6 +222,7 @@ class ImageCropService
                 'filename' => $filename,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

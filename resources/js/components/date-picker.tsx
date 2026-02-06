@@ -19,12 +19,12 @@ export function DatePickerDemo({ value, onChange }: DatePickerProps) {
                 <button
                     type="button"
                     className={cn(
-                        'flex h-9 w-full items-center gap-2 rounded-md border-0 bg-background/50 px-3 py-1 text-left text-sm shadow-none outline-none transition-colors',
-                        'hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring',
-                        !value && 'text-muted-foreground'
+                        'bg-background/50 flex h-9 w-full items-center gap-2 rounded-md border-0 px-3 py-1 text-left text-sm shadow-none transition-colors outline-none',
+                        'hover:bg-accent focus-visible:ring-ring focus-visible:ring-1',
+                        !value && 'text-muted-foreground',
                     )}
                 >
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <CalendarIcon className="text-muted-foreground h-4 w-4" />
                     {value ? format(value, 'PPP') : <span>Pick a date</span>}
                 </button>
             </PopoverTrigger>

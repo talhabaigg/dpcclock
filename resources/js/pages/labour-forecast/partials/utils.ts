@@ -107,10 +107,7 @@ export const getPublicHolidayFromSaved = (savedWeekData: WeekEntry | number | un
 /**
  * Calculate weekly cost for an allowance based on rate type
  */
-export const calculateAllowanceWeeklyCost = (
-    rate: number,
-    rateType: 'hourly' | 'daily' | 'weekly'
-): number => {
+export const calculateAllowanceWeeklyCost = (rate: number, rateType: 'hourly' | 'daily' | 'weekly'): number => {
     switch (rateType) {
         case 'hourly':
             return rate * 40;

@@ -1,17 +1,17 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { BrickWall, Coins, GraduationCap, Phone, Sparkles, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatInput, ChatInputRef } from './chat-input';
 import { ChatMessage } from './chat-message';
 import { ChatWelcome } from './chat-welcome';
-import { VoiceCallModal } from './voice-call-modal';
 import type { ChatConfig, SuggestedPrompt } from './types';
 import { useChat } from './use-chat';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { VoiceCallModal } from './voice-call-modal';
 
 const DEFAULT_PROMPTS: SuggestedPrompt[] = [
     {
@@ -57,15 +57,7 @@ export function AiChat({
         showTimestamps = false,
     } = config;
 
-    const {
-        messages,
-        isLoading,
-        conversationId,
-        sendMessage,
-        regenerateLastMessage,
-        clearMessages,
-        stopGeneration,
-    } = useChat({
+    const { messages, isLoading, conversationId, sendMessage, regenerateLastMessage, clearMessages, stopGeneration } = useChat({
         conversationId: initialConversationId,
     });
 
@@ -92,14 +84,14 @@ export function AiChat({
         (prompt: string) => {
             sendMessage(prompt);
         },
-        [sendMessage]
+        [sendMessage],
     );
 
     const handleSubmit = useCallback(
         (message: string, _attachments?: File[], forceTool?: string) => {
             sendMessage(message, forceTool);
         },
-        [sendMessage]
+        [sendMessage],
     );
 
     const lastAssistantIndex = messages.findLastIndex((m) => m.role === 'assistant');
@@ -120,12 +112,7 @@ export function AiChat({
                     className="h-full"
                     onVoiceCall={enableVoice ? () => setIsVoiceCallOpen(true) : undefined}
                 />
-                {enableVoice && (
-                    <VoiceCallModal
-                        isOpen={isVoiceCallOpen}
-                        onClose={() => setIsVoiceCallOpen(false)}
-                    />
-                )}
+                {enableVoice && <VoiceCallModal isOpen={isVoiceCallOpen} onClose={() => setIsVoiceCallOpen(false)} />}
             </div>
         );
     }
@@ -185,11 +172,7 @@ export function AiChat({
                                     key={message.id}
                                     message={message}
                                     isLatest={index === lastAssistantIndex}
-                                    onRegenerate={
-                                        index === lastAssistantIndex && !isLoading
-                                            ? regenerateLastMessage
-                                            : undefined
-                                    }
+                                    onRegenerate={index === lastAssistantIndex && !isLoading ? regenerateLastMessage : undefined}
                                     showTimestamp={showTimestamps}
                                 />
                             ))}
@@ -198,7 +181,7 @@ export function AiChat({
                 </ScrollArea>
 
                 {/* Input area - centered and prominent */}
-                <div className="border-border shrink-0 border-t bg-gradient-to-t from-background to-transparent px-4 py-4">
+                <div className="border-border from-background shrink-0 border-t bg-gradient-to-t to-transparent px-4 py-4">
                     <div className="mx-auto max-w-3xl">
                         <ChatInput
                             ref={chatInputRef}
@@ -214,12 +197,7 @@ export function AiChat({
                     </div>
                 </div>
 
-                {enableVoice && (
-                    <VoiceCallModal
-                        isOpen={isVoiceCallOpen}
-                        onClose={() => setIsVoiceCallOpen(false)}
-                    />
-                )}
+                {enableVoice && <VoiceCallModal isOpen={isVoiceCallOpen} onClose={() => setIsVoiceCallOpen(false)} />}
             </div>
         );
     }
@@ -280,11 +258,7 @@ export function AiChat({
                                 key={message.id}
                                 message={message}
                                 isLatest={index === lastAssistantIndex}
-                                onRegenerate={
-                                    index === lastAssistantIndex && !isLoading
-                                        ? regenerateLastMessage
-                                        : undefined
-                                }
+                                onRegenerate={index === lastAssistantIndex && !isLoading ? regenerateLastMessage : undefined}
                                 showTimestamp={showTimestamps}
                             />
                         ))}
@@ -302,17 +276,10 @@ export function AiChat({
                     placeholder={placeholder}
                     enableAttachments={false}
                 />
-                <p className="text-muted-foreground mt-2 text-center text-xs">
-                    Superior AI can make mistakes. Please verify important information.
-                </p>
+                <p className="text-muted-foreground mt-2 text-center text-xs">Superior AI can make mistakes. Please verify important information.</p>
             </div>
 
-            {enableVoice && (
-                <VoiceCallModal
-                    isOpen={isVoiceCallOpen}
-                    onClose={() => setIsVoiceCallOpen(false)}
-                />
-            )}
+            {enableVoice && <VoiceCallModal isOpen={isVoiceCallOpen} onClose={() => setIsVoiceCallOpen(false)} />}
         </div>
     );
 }

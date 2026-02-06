@@ -13,7 +13,7 @@ class OncostController extends Controller
         $oncosts = Oncost::ordered()->get();
 
         return Inertia::render('oncosts/index', [
-            'oncosts' => $oncosts
+            'oncosts' => $oncosts,
         ]);
     }
 
@@ -45,7 +45,7 @@ class OncostController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:oncosts,code,' . $oncost->id,
+            'code' => 'required|string|max:50|unique:oncosts,code,'.$oncost->id,
             'description' => 'nullable|string',
             'weekly_amount' => 'required_if:is_percentage,false|nullable|numeric|min:0',
             'is_percentage' => 'boolean',

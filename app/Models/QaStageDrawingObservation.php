@@ -113,10 +113,10 @@ class QaStageDrawingObservation extends Model
 
     public function getPhotoUrlAttribute()
     {
-        if (!$this->photo_path) {
+        if (! $this->photo_path) {
             return null;
         }
 
-        return '/storage/' . $this->photo_path;
+        return '/storage/'.$this->photo_path;
     }
 }

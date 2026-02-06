@@ -35,11 +35,7 @@ export type AutoAlignResult = {
  * @param candidateCanvas - The candidate/comparison canvas
  * @param tolerance - Size match tolerance (default 0.02 = 2%)
  */
-export function computeAutoAlignment(
-    baseCanvas: HTMLCanvasElement,
-    candidateCanvas: HTMLCanvasElement,
-    tolerance: number = 0.02
-): AutoAlignResult {
+export function computeAutoAlignment(baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement, tolerance: number = 0.02): AutoAlignResult {
     const baseWidth = baseCanvas.width;
     const baseHeight = baseCanvas.height;
     const candidateWidth = candidateCanvas.width;
@@ -112,11 +108,7 @@ export function computeAutoAlignment(
 /**
  * Quick check if two canvases have the same dimensions.
  */
-export function isSameSize(
-    baseCanvas: HTMLCanvasElement,
-    candidateCanvas: HTMLCanvasElement,
-    tolerance: number = 0.02
-): boolean {
+export function isSameSize(baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement, tolerance: number = 0.02): boolean {
     const widthRatio = candidateCanvas.width / baseCanvas.width;
     const heightRatio = candidateCanvas.height / baseCanvas.height;
 

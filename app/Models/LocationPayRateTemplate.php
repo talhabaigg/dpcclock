@@ -79,7 +79,7 @@ class LocationPayRateTemplate extends Model
     public function calculateHourlyRate(): ?float
     {
         $template = $this->payRateTemplate()->with('payCategories.payCategory')->first();
-        if (!$template) {
+        if (! $template) {
             return null;
         }
 

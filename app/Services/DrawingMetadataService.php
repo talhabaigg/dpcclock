@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 class DrawingMetadataService
 {
     private const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
     private const DEFAULT_MODEL = 'gpt-4o'; // Vision-capable model
 
     /**
@@ -22,7 +23,7 @@ class DrawingMetadataService
             // Get the thumbnail or first page image
             $imagePath = $this->getDrawingImage($drawing);
 
-            if (!$imagePath) {
+            if (! $imagePath) {
                 return [
                     'success' => false,
                     'error' => 'Could not get drawing image for analysis',
@@ -36,7 +37,7 @@ class DrawingMetadataService
             // Call OpenAI Vision API
             $response = $this->callOpenAIVision($imageData, $mimeType);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 return $response;
             }
 
@@ -59,15 +60,15 @@ class DrawingMetadataService
             ];
 
             // Update drawing name if AI extracted a title and confidence is high enough
-            if (!empty($metadata['title']) && ($metadata['confidence'] ?? 0) >= 70) {
+            if (! empty($metadata['title']) && ($metadata['confidence'] ?? 0) >= 70) {
                 $drawingUpdates['name'] = $metadata['title'];
             }
 
             // Update revision info
-            if (!empty($metadata['revision'])) {
+            if (! empty($metadata['revision'])) {
                 $drawingUpdates['revision_number'] = $metadata['revision'];
             }
-            if (!empty($metadata['revision_date'])) {
+            if (! empty($metadata['revision_date'])) {
                 $drawingUpdates['revision_date'] = $metadata['revision_date'];
             }
 
@@ -77,7 +78,7 @@ class DrawingMetadataService
             $drawing->refresh();
 
             // Update drawing sheet if we got good data
-            if ($drawing->drawing_sheet_id && !empty($metadata['sheet_number'])) {
+            if ($drawing->drawing_sheet_id && ! empty($metadata['sheet_number'])) {
                 $sheet = DrawingSheet::find($drawing->drawing_sheet_id);
                 if ($sheet) {
                     $this->updateDrawingSheet($sheet, $metadata, $drawing);
@@ -143,8 +144,9 @@ class DrawingMetadataService
             }
         }
 
-        if (!$fullImagePath || !file_exists($fullImagePath)) {
+        if (! $fullImagePath || ! file_exists($fullImagePath)) {
             Log::error('DrawingMetadataService: No image available for AI analysis');
+
             return null;
         }
 
@@ -160,18 +162,20 @@ class DrawingMetadataService
     {
         // Include file modification time and crop version in cache key to bust cache when file or crop params change
         $cropVersion = 'v2'; // Increment when crop dimensions change
-        $fileHash = md5($imagePath . filemtime($imagePath) . $cropVersion);
-        $croppedPath = sys_get_temp_dir() . '/drawing_titleblock_' . $drawingId . '_' . $fileHash . '.png';
+        $fileHash = md5($imagePath.filemtime($imagePath).$cropVersion);
+        $croppedPath = sys_get_temp_dir().'/drawing_titleblock_'.$drawingId.'_'.$fileHash.'.png';
 
         // If already cropped recently, use cached version
         if (file_exists($croppedPath) && filemtime($croppedPath) > time() - 300) {
             Log::debug('Using cached cropped title block', ['path' => $croppedPath]);
+
             return $croppedPath;
         }
 
         $imageInfo = @getimagesize($imagePath);
-        if (!$imageInfo) {
+        if (! $imageInfo) {
             Log::warning('Could not get image size for cropping', ['path' => $imagePath]);
+
             return $imagePath; // Fall back to full image
         }
 
@@ -185,8 +189,9 @@ class DrawingMetadataService
             default => null,
         };
 
-        if (!$source) {
+        if (! $source) {
             Log::warning('Could not load image for cropping', ['path' => $imagePath, 'type' => $type]);
+
             return $imagePath;
         }
 
@@ -223,6 +228,7 @@ class DrawingMetadataService
                 'cropped_size' => "{$cropWidth}x{$cropHeight}",
                 'cropped_path' => $croppedPath,
             ]);
+
             return $croppedPath;
         }
 
@@ -282,7 +288,7 @@ PROMPT;
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
+                'Authorization' => 'Bearer '.$apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(60)->post(self::OPENAI_API_URL, [
                 'model' => self::DEFAULT_MODEL,
@@ -308,7 +314,7 @@ PROMPT;
                 'temperature' => 0.1, // Low temperature for more consistent extraction
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('OpenAI Vision API error', [
                     'status' => $response->status(),
                     'body' => $response->body(),
@@ -316,14 +322,14 @@ PROMPT;
 
                 return [
                     'success' => false,
-                    'error' => 'OpenAI API request failed: ' . $response->status(),
+                    'error' => 'OpenAI API request failed: '.$response->status(),
                 ];
             }
 
             $data = $response->json();
             $content = $data['choices'][0]['message']['content'] ?? null;
 
-            if (!$content) {
+            if (! $content) {
                 return [
                     'success' => false,
                     'error' => 'No content in API response',
@@ -354,8 +360,9 @@ PROMPT;
         // Try to extract JSON from the response
         $jsonMatch = preg_match('/\{[\s\S]*\}/', $content, $matches);
 
-        if (!$jsonMatch) {
+        if (! $jsonMatch) {
             Log::warning('Could not find JSON in AI response', ['content' => $content]);
+
             return [
                 'confidence' => 0,
                 'notes' => 'Could not parse AI response',
@@ -370,6 +377,7 @@ PROMPT;
                 'content' => $matches[0],
                 'error' => json_last_error_msg(),
             ]);
+
             return [
                 'confidence' => 0,
                 'notes' => 'Invalid JSON in AI response',
@@ -401,7 +409,7 @@ PROMPT;
         $extractedSheetNumber = $metadata['sheet_number'] ?? null;
 
         // Check if a different sheet with this sheet_number already exists for this QA stage
-        if (!empty($extractedSheetNumber) && $extractedSheetNumber !== $sheet->sheet_number) {
+        if (! empty($extractedSheetNumber) && $extractedSheetNumber !== $sheet->sheet_number) {
             $existingSheet = DrawingSheet::where('qa_stage_id', $sheet->qa_stage_id)
                 ->where('sheet_number', $extractedSheetNumber)
                 ->where('id', '!=', $sheet->id)
@@ -430,7 +438,7 @@ PROMPT;
 
                 // Update the existing sheet with extracted metadata
                 $existingSheet->update(array_filter([
-                    'title' => ($confidence >= 70 && !empty($metadata['title'])) ? $metadata['title'] : null,
+                    'title' => ($confidence >= 70 && ! empty($metadata['title'])) ? $metadata['title'] : null,
                     'discipline' => $metadata['discipline'] ?? null,
                     'extraction_confidence' => $confidence > 0 ? $confidence : null,
                 ]));
@@ -443,18 +451,18 @@ PROMPT;
         $updates = [];
 
         // Update sheet_number if AI found one (always update - this is authoritative)
-        if (!empty($extractedSheetNumber)) {
+        if (! empty($extractedSheetNumber)) {
             $updates['sheet_number'] = $extractedSheetNumber;
         }
 
         // Update title if AI found one and confidence is high enough
         // This overwrites user-provided filename with actual drawing title
-        if (!empty($metadata['title']) && $confidence >= 70) {
+        if (! empty($metadata['title']) && $confidence >= 70) {
             $updates['title'] = $metadata['title'];
         }
 
         // Update discipline if AI found one
-        if (!empty($metadata['discipline'])) {
+        if (! empty($metadata['discipline'])) {
             $updates['discipline'] = $metadata['discipline'];
         }
 
@@ -462,7 +470,7 @@ PROMPT;
             $updates['extraction_confidence'] = $confidence;
         }
 
-        if (!empty($updates)) {
+        if (! empty($updates)) {
             $sheet->update($updates);
         }
     }
@@ -479,7 +487,7 @@ PROMPT;
                 'revision_date' => $confirmedData['revision_date'] ?? null,
             ]);
 
-            if (!empty($drawingUpdates)) {
+            if (! empty($drawingUpdates)) {
                 $drawing->update($drawingUpdates);
             }
 
@@ -505,6 +513,7 @@ PROMPT;
                 'drawing_id' => $drawing->id,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -516,7 +525,7 @@ PROMPT;
     {
         $key = config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: env('VITE_OPEN_AI_API_KEY');
 
-        if (!$key) {
+        if (! $key) {
             throw new \RuntimeException('OpenAI API key is not configured');
         }
 
@@ -562,6 +571,7 @@ PROMPT;
 
         try {
             $date = new \DateTime($value);
+
             return $date->format('Y-m-d');
         } catch (\Exception $e) {
             return null;

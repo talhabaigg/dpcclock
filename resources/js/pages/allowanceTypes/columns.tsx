@@ -40,7 +40,11 @@ export const allowanceTypesColumns: ColumnDef<AllowanceType>[] = [
         header: 'Description',
         cell: ({ row }) => {
             const description = row.getValue('description') as string | null;
-            return description ? <span className="text-muted-foreground">{description}</span> : <span className="text-muted-foreground italic">-</span>;
+            return description ? (
+                <span className="text-muted-foreground">{description}</span>
+            ) : (
+                <span className="text-muted-foreground italic">-</span>
+            );
         },
     },
     {

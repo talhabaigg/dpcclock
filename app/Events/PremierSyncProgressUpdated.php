@@ -12,11 +12,17 @@ class PremierSyncProgressUpdated implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets;
 
     public int $cached;
+
     public int $total;
+
     public int $missing;
+
     public int $stale;
+
     public float $readyPercent;
+
     public ?string $lastSyncedPo;
+
     public string $status; // 'syncing', 'completed', 'error'
 
     public function __construct(

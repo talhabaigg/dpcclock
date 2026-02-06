@@ -30,11 +30,7 @@ interface SummaryCardsProps {
     isBudgetLoading?: boolean;
 }
 
-export const SummaryCards = ({
-    grandTotalCost,
-    remainingToForecast,
-    isBudgetLoading,
-}: SummaryCardsProps) => {
+export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoading }: SummaryCardsProps) => {
     // Determine color based on remaining to forecast value
     const getRemainingColor = (value: number) => {
         if (value > 0) {
@@ -60,9 +56,7 @@ export const SummaryCards = ({
         };
     };
 
-    const remainingColors = remainingToForecast
-        ? getRemainingColor(remainingToForecast.remainingToForecast)
-        : getRemainingColor(0);
+    const remainingColors = remainingToForecast ? getRemainingColor(remainingToForecast.remainingToForecast) : getRemainingColor(0);
 
     return (
         <div className="mb-4 grid grid-cols-2 gap-4">

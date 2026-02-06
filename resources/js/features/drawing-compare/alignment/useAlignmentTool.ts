@@ -1,12 +1,6 @@
 import { useCallback, useState } from 'react';
-import {
-    AlignmentPoints,
-    computeAlignmentTransform,
-    IDENTITY_TRANSFORM,
-    Point2D,
-    TransformResult,
-} from './computeTransform';
-import { computeAutoAlignment, AutoAlignResult } from './autoAlign';
+import { AutoAlignResult, computeAutoAlignment } from './autoAlign';
+import { AlignmentPoints, computeAlignmentTransform, IDENTITY_TRANSFORM, Point2D, TransformResult } from './computeTransform';
 
 /**
  * Alignment tool state machine states.
@@ -105,11 +99,7 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
     const [points, setPoints] = useState<AlignmentData>({});
     const [transform, setTransform] = useState<TransformResult>(IDENTITY_TRANSFORM);
 
-    const isAligning =
-        state === 'picking_base_A' ||
-        state === 'picking_base_B' ||
-        state === 'picking_candidate_A' ||
-        state === 'picking_candidate_B';
+    const isAligning = state === 'picking_base_A' || state === 'picking_base_B' || state === 'picking_candidate_A' || state === 'picking_candidate_B';
 
     const isAligned = state === 'aligned';
 
@@ -170,7 +160,7 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
             }
             // Ignore clicks on base layer in other states
         },
-        [state]
+        [state],
     );
 
     const handleCandidateClick = useCallback(
@@ -203,7 +193,7 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
             }
             // Ignore clicks on candidate layer in other states
         },
-        [state]
+        [state],
     );
 
     // Fine-tune adjustment: nudge translation
@@ -225,7 +215,7 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
                 };
             });
         },
-        [isAligned]
+        [isAligned],
     );
 
     // Fine-tune adjustment: adjust rotation
@@ -245,7 +235,7 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
                 };
             });
         },
-        [isAligned]
+        [isAligned],
     );
 
     // Fine-tune adjustment: adjust scale
@@ -265,25 +255,22 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
                 };
             });
         },
-        [isAligned]
+        [isAligned],
     );
 
     // Auto-align for same-size drawings
-    const autoAlign = useCallback(
-        (baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement): AutoAlignResult => {
-            const result = computeAutoAlignment(baseCanvas, candidateCanvas);
+    const autoAlign = useCallback((baseCanvas: HTMLCanvasElement, candidateCanvas: HTMLCanvasElement): AutoAlignResult => {
+        const result = computeAutoAlignment(baseCanvas, candidateCanvas);
 
-            if (result.success) {
-                setTransform(result.transform);
-                setState('aligned');
-                // Clear any manual points since we're using auto-align
-                setPoints({});
-            }
+        if (result.success) {
+            setTransform(result.transform);
+            setState('aligned');
+            // Clear any manual points since we're using auto-align
+            setPoints({});
+        }
 
-            return result;
-        },
-        []
-    );
+        return result;
+    }, []);
 
     // Load a previously saved alignment
     const loadSavedAlignment = useCallback((saved: SavedAlignment) => {

@@ -16,6 +16,7 @@ class WorktypeController extends Controller
     public function index()
     {
         $worktypes = Worktype::orderBy('mapping_type', 'desc')->get();
+
         return Inertia::render('worktypes/index', [
             'worktypes' => $worktypes,
         ]);
@@ -73,8 +74,8 @@ class WorktypeController extends Controller
     {
         $apiKey = env('PAYROLL_API_KEY');
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':')  // Manually encode the API key
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/worktype");
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
+        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/worktype');
         $worktypeData = $response->json();
         // $locationData = array_slice($locationData, 0, length: 1);
         foreach ($worktypeData as $worktype) {
@@ -86,6 +87,7 @@ class WorktypeController extends Controller
                 'mapping_type' => $worktype['mappingType'] ?? Str::uuid(),
             ]);
         }
+
         // dd('synced');
         return redirect()->back()->with('success', 'Worktypes synced from Employment Hero.');
 

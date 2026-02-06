@@ -195,12 +195,7 @@ export const ForecastGrid = ({
                     <Button size="sm" variant="default" className="h-6 px-2 text-xs" onClick={() => onFillRight('all')}>
                         To end
                     </Button>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="ml-auto h-6 px-2 text-xs text-slate-500"
-                        onClick={() => onCellSelected(null)}
-                    >
+                    <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs text-slate-500" onClick={() => onCellSelected(null)}>
                         Clear
                     </Button>
                 </div>

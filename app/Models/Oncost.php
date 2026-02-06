@@ -77,7 +77,7 @@ class Oncost extends Model
      */
     public function calculatePercentage(float $taxableBase): float
     {
-        if (!$this->is_percentage || !$this->percentage_rate) {
+        if (! $this->is_percentage || ! $this->percentage_rate) {
             return 0;
         }
 
@@ -89,7 +89,7 @@ class Oncost extends Model
      */
     public function getFormattedWeeklyAttribute(): string
     {
-        return '$' . number_format((float) $this->weekly_amount, 2);
+        return '$'.number_format((float) $this->weekly_amount, 2);
     }
 
     /**
@@ -97,7 +97,7 @@ class Oncost extends Model
      */
     public function getFormattedHourlyAttribute(): string
     {
-        return '$' . number_format((float) $this->hourly_rate, 4);
+        return '$'.number_format((float) $this->hourly_rate, 4);
     }
 
     /**
@@ -105,10 +105,10 @@ class Oncost extends Model
      */
     public function getFormattedPercentageAttribute(): ?string
     {
-        if (!$this->is_percentage || !$this->percentage_rate) {
+        if (! $this->is_percentage || ! $this->percentage_rate) {
             return null;
         }
 
-        return number_format((float) $this->percentage_rate * 100, 2) . '%';
+        return number_format((float) $this->percentage_rate * 100, 2).'%';
     }
 }

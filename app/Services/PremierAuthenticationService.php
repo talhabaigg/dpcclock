@@ -2,19 +2,19 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class PremierAuthenticationService
 {
     protected string $authUrl = 'https://api.jonas-premier.com/Authenticate';
+
     protected string $cacheKey = 'premier_api_access_token';
 
     /**
      * Get a valid Premier API token (cached for 29 minutes).
      *
-     * @return string
      * @throws \Exception
      */
     public function getAccessToken(): string
@@ -41,7 +41,7 @@ class PremierAuthenticationService
 
             $accessToken = $data['access_token'] ?? null;
 
-            if (!$accessToken) {
+            if (! $accessToken) {
                 throw new \Exception('Access token missing in response.');
             }
 

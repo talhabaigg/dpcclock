@@ -13,23 +13,17 @@ export default function TaskLevelDisplay({ task }: TaskLevelDisplayProps) {
     const activityName = task.activity ? task.activity.slice(4) : 'No activity';
 
     return (
-        <div
-            className={cn(
-                'rounded-2xl border-2 bg-card p-4',
-                'hover:bg-accent cursor-pointer transition-colors',
-                'touch-manipulation',
-            )}
-        >
+        <div className={cn('bg-card rounded-2xl border-2 p-4', 'hover:bg-accent cursor-pointer transition-colors', 'touch-manipulation')}>
             {/* Mobile: Stacked layout */}
             <div className="flex flex-col gap-3 sm:hidden">
                 {/* Level */}
                 <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                        <Layers className="h-5 w-5 text-primary" />
+                    <div className="bg-primary/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl">
+                        <Layers className="text-primary h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-muted-foreground">Level</p>
-                        <p className="truncate text-base font-bold text-foreground">{levelName}</p>
+                        <p className="text-muted-foreground text-xs font-medium">Level</p>
+                        <p className="text-foreground truncate text-base font-bold">{levelName}</p>
                     </div>
                 </div>
 
@@ -39,8 +33,8 @@ export default function TaskLevelDisplay({ task }: TaskLevelDisplayProps) {
                         <Wrench className="h-5 w-5 text-emerald-500" />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-muted-foreground">Activity</p>
-                        <p className="truncate text-base font-bold text-foreground">{activityName}</p>
+                        <p className="text-muted-foreground text-xs font-medium">Activity</p>
+                        <p className="text-foreground truncate text-base font-bold">{activityName}</p>
                     </div>
                 </div>
             </div>
@@ -49,16 +43,16 @@ export default function TaskLevelDisplay({ task }: TaskLevelDisplayProps) {
             <div className="hidden sm:flex sm:items-center sm:gap-4">
                 {/* Level */}
                 <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                        <Layers className="h-5 w-5 text-primary" />
+                    <div className="bg-primary/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl">
+                        <Layers className="text-primary h-5 w-5" />
                     </div>
                     <div>
-                        <p className="text-xs font-medium text-muted-foreground">Level</p>
-                        <p className="text-base font-bold text-foreground">{levelName}</p>
+                        <p className="text-muted-foreground text-xs font-medium">Level</p>
+                        <p className="text-foreground text-base font-bold">{levelName}</p>
                     </div>
                 </div>
 
-                <div className="h-8 w-px bg-border" />
+                <div className="bg-border h-8 w-px" />
 
                 {/* Activity */}
                 <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -66,8 +60,8 @@ export default function TaskLevelDisplay({ task }: TaskLevelDisplayProps) {
                         <Wrench className="h-5 w-5 text-emerald-500" />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-muted-foreground">Activity</p>
-                        <p className="truncate text-base font-bold text-foreground">{activityName}</p>
+                        <p className="text-muted-foreground text-xs font-medium">Activity</p>
+                        <p className="text-foreground truncate text-base font-bold">{activityName}</p>
                     </div>
                 </div>
             </div>

@@ -58,7 +58,7 @@ class PasskeyController extends Controller
                 $data['passkey'],
                 $data['options'],
                 $request->getHost(),
-                ['name' => $data['name'] ?? 'Passkey ' . Str::random(6)],
+                ['name' => $data['name'] ?? 'Passkey '.Str::random(6)],
             );
 
             return redirect()->back()->with('success', 'Passkey registered successfully.');

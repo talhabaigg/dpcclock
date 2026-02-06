@@ -92,12 +92,7 @@ export default function DrawingsIndex() {
                 const title = drawing.title?.toLowerCase() || '';
                 const drawingNumber = drawing.revision?.drawing_number?.toLowerCase() || '';
                 const drawingTitle = drawing.revision?.drawing_title?.toLowerCase() || '';
-                return (
-                    sheetNumber.includes(query) ||
-                    title.includes(query) ||
-                    drawingNumber.includes(query) ||
-                    drawingTitle.includes(query)
-                );
+                return sheetNumber.includes(query) || title.includes(query) || drawingNumber.includes(query) || drawingTitle.includes(query);
             });
         }
 
@@ -192,11 +187,7 @@ export default function DrawingsIndex() {
                 <div className="w-full max-w-md">
                     <Label className="mb-2 block text-sm">Search</Label>
                     <div className="relative">
-                        <InputSearch
-                            searchQuery={searchQuery}
-                            setSearchQuery={setSearchQuery}
-                            searchName="drawing number or title"
-                        />
+                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="drawing number or title" />
                     </div>
                 </div>
 
@@ -237,47 +228,27 @@ export default function DrawingsIndex() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="-ml-3 h-8"
-                                    onClick={() => handleSort('sheet_number')}
-                                >
+                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('sheet_number')}>
                                     Drawing Number
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
                             <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="-ml-3 h-8"
-                                    onClick={() => handleSort('title')}
-                                >
+                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('title')}>
                                     Title
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
                             <TableHead>Current Revision</TableHead>
                             <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="-ml-3 h-8"
-                                    onClick={() => handleSort('revision_count')}
-                                >
+                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('revision_count')}>
                                     Revisions
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
                             <TableHead>Discipline</TableHead>
                             <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="-ml-3 h-8"
-                                    onClick={() => handleSort('created_at')}
-                                >
+                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
                                     Created
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
@@ -288,26 +259,18 @@ export default function DrawingsIndex() {
                     <TableBody>
                         {filteredDrawings.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-muted-foreground text-center py-8">
-                                    {hasActiveFilters
-                                        ? 'No drawings match your search criteria.'
-                                        : 'No drawings found for this project.'}
+                                <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                                    {hasActiveFilters ? 'No drawings match your search criteria.' : 'No drawings found for this project.'}
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredDrawings.map((drawing) => (
                                 <TableRow key={drawing.id}>
-                                    <TableCell className="font-medium">
-                                        {drawing.sheet_number || drawing.revision?.drawing_number || '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                        {drawing.title || drawing.revision?.drawing_title || '-'}
-                                    </TableCell>
+                                    <TableCell className="font-medium">{drawing.sheet_number || drawing.revision?.drawing_number || '-'}</TableCell>
+                                    <TableCell>{drawing.title || drawing.revision?.drawing_title || '-'}</TableCell>
                                     <TableCell>
                                         {drawing.revision?.revision_number ? (
-                                            <Badge variant="outline">
-                                                Rev {drawing.revision.revision_number}
-                                            </Badge>
+                                            <Badge variant="outline">Rev {drawing.revision.revision_number}</Badge>
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
                                         )}
@@ -322,9 +285,7 @@ export default function DrawingsIndex() {
                                             <span className="text-muted-foreground">-</span>
                                         )}
                                     </TableCell>
-                                    <TableCell>
-                                        {format(new Date(drawing.created_at), 'dd MMM yyyy')}
-                                    </TableCell>
+                                    <TableCell>{format(new Date(drawing.created_at), 'dd MMM yyyy')}</TableCell>
                                     <TableCell>
                                         {drawing.revision?.id ? (
                                             <Link href={`/qa-stage-drawings/${drawing.revision.id}`}>

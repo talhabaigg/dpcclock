@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Run the migrations.
      *
@@ -32,7 +33,7 @@ return new class extends Migration {
             });
         }
 
-        Log::info("Completed migration of drawings to page-based structure");
+        Log::info('Completed migration of drawings to page-based structure');
     }
 
     /**
@@ -108,7 +109,7 @@ return new class extends Migration {
                 'drawing_file_id' => $fileId,
                 'page_number' => $page,
                 'page_label' => null,
-                'name' => $originalDrawing->name . " - Page {$page}",
+                'name' => $originalDrawing->name." - Page {$page}",
                 'revision_number' => $originalDrawing->revision_number,
                 'revision_date' => $originalDrawing->revision_date,
                 'revision_notes' => $originalDrawing->revision_notes,
@@ -176,7 +177,7 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Log::warning("Rolling back page-based migration - this will delete additional page drawings");
+        Log::warning('Rolling back page-based migration - this will delete additional page drawings');
 
         // Find all drawings that were created as additional pages (page_number > 1)
         // and have a drawing_file_id

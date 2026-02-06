@@ -87,15 +87,17 @@ export default function ResetPin() {
     ) => (
         <div className="space-y-3">
             <div className="flex items-center gap-2">
-                <div className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full',
-                    isValid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary/10 text-primary',
-                )}>
+                <div
+                    className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-full',
+                        isValid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary/10 text-primary',
+                    )}
+                >
                     {isValid ? <CheckCircle2 className="h-4 w-4" /> : icon}
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-foreground">{label}</p>
-                    <p className="text-xs text-muted-foreground">{description}</p>
+                    <p className="text-foreground text-sm font-medium">{label}</p>
+                    <p className="text-muted-foreground text-xs">{description}</p>
                 </div>
             </div>
             <div className="flex items-center justify-center gap-3">
@@ -112,7 +114,7 @@ export default function ResetPin() {
                                 className={cn(
                                     'h-14 w-14 rounded-xl border-2 text-center text-xl font-bold',
                                     'bg-background transition-all duration-200',
-                                    'focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none',
+                                    'focus:border-primary focus:ring-primary/20 focus:ring-2 focus:outline-none',
                                     'touch-manipulation',
                                     isFilled ? 'border-primary/50 bg-primary/5' : 'border-border',
                                     isValid && 'border-emerald-500/50 bg-emerald-500/5',
@@ -130,7 +132,7 @@ export default function ResetPin() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-14 w-14 rounded-xl text-muted-foreground hover:text-destructive touch-manipulation"
+                    className="text-muted-foreground hover:text-destructive h-14 w-14 touch-manipulation rounded-xl"
                     onClick={() => {
                         form.setData(field, form.data[field].slice(0, -1));
                     }}
@@ -202,17 +204,9 @@ export default function ResetPin() {
             />
 
             {/* Back Button */}
-            <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
+            <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
                 <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                            'h-12 w-12 rounded-full',
-                            'hover:bg-accent',
-                            'touch-manipulation',
-                        )}
-                    >
+                    <Button variant="ghost" size="icon" className={cn('h-12 w-12 rounded-full', 'hover:bg-accent', 'touch-manipulation')}>
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -222,16 +216,12 @@ export default function ResetPin() {
             <Card className="w-full max-w-md border-0 shadow-none sm:border sm:shadow-lg">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-4">
-                        <Avatar className="h-16 w-16 border-4 border-primary/20 shadow-lg">
-                            <AvatarFallback className="bg-primary/10 text-xl font-semibold text-primary">
-                                {getInitials(employee.name)}
-                            </AvatarFallback>
+                        <Avatar className="border-primary/20 h-16 w-16 border-4 shadow-lg">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
                         </Avatar>
                     </div>
                     <CardTitle className="text-xl font-bold">Reset Your PIN</CardTitle>
-                    <CardDescription>
-                        Hi {employee.name.split(' ')[0]}, enter the PIN from your email and set a new PIN
-                    </CardDescription>
+                    <CardDescription>Hi {employee.name.split(' ')[0]}, enter the PIN from your email and set a new PIN</CardDescription>
                 </CardHeader>
 
                 <CardContent>
@@ -269,20 +259,15 @@ export default function ResetPin() {
                         )}
 
                         {/* Error Messages */}
-                        {form.errors.confirm_pin && (
-                            <p className="text-center text-sm text-destructive">{form.errors.confirm_pin}</p>
-                        )}
+                        {form.errors.confirm_pin && <p className="text-destructive text-center text-sm">{form.errors.confirm_pin}</p>}
                         {form.data.confirm_pin.length > 0 && form.data.new_pin !== form.data.confirm_pin && (
-                            <p className="text-center text-sm text-destructive">PINs do not match</p>
+                            <p className="text-destructive text-center text-sm">PINs do not match</p>
                         )}
 
                         {/* Submit Button */}
                         <Button
                             type="submit"
-                            className={cn(
-                                'h-14 w-full rounded-xl text-base font-semibold',
-                                'touch-manipulation transition-all',
-                            )}
+                            className={cn('h-14 w-full rounded-xl text-base font-semibold', 'touch-manipulation transition-all')}
                             disabled={!canSubmit}
                         >
                             Reset PIN
@@ -294,7 +279,7 @@ export default function ResetPin() {
     );
 
     return isMobile ? (
-        <div className="min-h-screen bg-background">{content}</div>
+        <div className="bg-background min-h-screen">{content}</div>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={false}>
             {content}

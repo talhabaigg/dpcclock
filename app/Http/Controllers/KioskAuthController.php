@@ -2,22 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
+use App\Models\Clock;
+use App\Models\Employee;
+use App\Models\Kiosk;
+use App\Models\Location;
+use App\Services\KioskService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Models\Clock;
-use App\Models\Kiosk;
-use App\Models\Employee;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Http;
-use App\Models\Location;
-use App\Models\User;
-use Illuminate\Support\Facades\Cookie;
-use App\Services\KioskService;
-use Session;
 
 class KioskAuthController extends Controller
 {
@@ -28,11 +23,9 @@ class KioskAuthController extends Controller
         $this->kioskService = $kioskService;
     }
 
-
     public function showPinPage($kioskId, $employeeId): Response
     {
         $adminMode = $this->kioskService->isAdminModeActive();
-
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
@@ -43,6 +36,7 @@ class KioskAuthController extends Controller
             // dd('admin mode active');
             return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
         }
+
         // dd('reached');
         return Inertia::render('kiosks/auth/pin', [
             'kioskId' => $kioskId,
@@ -60,6 +54,7 @@ class KioskAuthController extends Controller
         $adminMode = $this->kioskService->isAdminModeActive();
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
+
             return Inertia::render('kiosks/clocking/out', [
                 'kioskId' => $kioskId,
                 'employeeId' => $employeeId,
@@ -76,6 +71,7 @@ class KioskAuthController extends Controller
 
         $location = $kiosk->location;
         $locations = Location::where('eh_parent_id', $location->eh_location_id)->pluck('external_id')->toArray();
+
         // dd('reached here');
         return Inertia::render('kiosks/clocking/in', [
             'kioskId' => $kioskId,
@@ -88,7 +84,6 @@ class KioskAuthController extends Controller
         ]);
     }
 
-
     public function validatePin($kioskId, $employeeId, Request $request)
     {
         // Frontend sends database IDs for this route
@@ -98,26 +93,24 @@ class KioskAuthController extends Controller
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
 
-
         if (env('APP_ENV') === 'local') {
             $pin = $request->input('pin');
             $localPinCheck = $this->verifyLocalPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-            if (!$localPinCheck) {
+            if (! $localPinCheck) {
                 return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
             }
 
         } else {
             $pin = $request->input('pin');
             $ehPinCheck = $this->verifyKioskPin($kiosk->eh_kiosk_id, $employee->eh_employee_id, $pin);
-            if (!$ehPinCheck) {
+            if (! $ehPinCheck) {
                 return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
             }
         }
 
-
-
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
+
             return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
         }
 
@@ -132,8 +125,10 @@ class KioskAuthController extends Controller
         if ($employee && $employee->pin === $pin) {
             return true;
         }
+
         return false;
     }
+
     public function getKioskEmployeesWithClockedInState($kioskId)
     {
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
@@ -145,8 +140,10 @@ class KioskAuthController extends Controller
                 ->whereNull('clock_out');
 
             $employee->clocked_in = $clockedInQuery->exists();
+
             return $employee;
         });
+
         return $employees;
     }
 
@@ -173,7 +170,7 @@ class KioskAuthController extends Controller
             'pin' => (string) $pin,
         ];
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
         ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk/$kioskId/checkpin", $request);
 
@@ -185,9 +182,11 @@ class KioskAuthController extends Controller
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
+
             return false;
         }
     }
+
     public function showResetPinPage($kioskId, $employeeId): Response
     {
 
@@ -197,7 +196,7 @@ class KioskAuthController extends Controller
         $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
 
         $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
-        if ($response == "Pin reset email sent successfully.") {
+        if ($response == 'Pin reset email sent successfully.') {
             session()->flash('success', 'Pin reset email sent successfully.');
         } else {
             session()->flash('error', 'Failed to reset pin. Please try again.');
@@ -222,11 +221,12 @@ class KioskAuthController extends Controller
         // dd($validated, $kioskId, $employeeId);
         $response = $this->changePinRequest($employeeId, $kioskId, $validated['email_pin'], $validated['new_pin']);
         $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->pluck('id')->first();
-        if ($response == "Pin changed successfully.") {
+        if ($response == 'Pin changed successfully.') {
             session()->flash('success', 'Pin changed successfully.');
         } else {
             session()->flash('error', 'Failed to change pin. Please try again.');
         }
+
         return Redirect::route('kiosks.show', ['kiosk' => $kiosk]);
 
     }
@@ -241,21 +241,23 @@ class KioskAuthController extends Controller
         ];
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
         ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk/$kioskId/changepin", $request);
 
         if ($response->successful()) {
-            return "Pin changed successfully.";
+            return 'Pin changed successfully.';
         } else {
             // Handle the error response
             Log::error('Failed to change employee pin', [
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            return "Failed to change pin. Please try again.";
+
+            return 'Failed to change pin. Please try again.';
         }
     }
+
     private function resetPinRequest($employeeId, $kioskId)
     {
         $apiKey = env('PAYROLL_API_KEY');
@@ -264,19 +266,20 @@ class KioskAuthController extends Controller
         ];
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
         ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk/$kioskId/emailreset", $request);
 
         if ($response->successful()) {
-            return "Pin reset email sent successfully.";
+            return 'Pin reset email sent successfully.';
         } else {
             // Handle the error response
             Log::error('Failed to reset employee pin', [
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            return "Failed to reset pin. Please try again.";
+
+            return 'Failed to reset pin. Please try again.';
         }
 
     }

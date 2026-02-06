@@ -1,4 +1,4 @@
-import type { ColDef, IHeaderParams, ValueGetterParams, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, ICellRendererParams, IHeaderParams, ValueGetterParams } from 'ag-grid-community';
 import type { Week } from './types';
 const WeekHeader = (props: IHeaderParams) => {
     return (
@@ -25,7 +25,8 @@ const StatusBadge = ({ status }: { status: string | null }) => {
         },
         approved: {
             label: 'Approved',
-            className: 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+            className:
+                'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
         },
         rejected: {
             label: 'Rejected',
@@ -136,7 +137,7 @@ export const buildLabourForecastColumnDefs = (onCostClick?: (locationId: number,
                 return (
                     <a
                         href={`/location/${id}/labour-forecast/show`}
-                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
                     >
                         Open
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -172,7 +173,15 @@ interface ExpandCollapseProps {
 }
 
 // Custom header for Work Type column with expand/collapse all buttons
-const WorkTypeHeader = ({ onExpandAll, onCollapseAll, isAllExpanded }: { onExpandAll?: () => void; onCollapseAll?: () => void; isAllExpanded?: boolean }) => {
+const WorkTypeHeader = ({
+    onExpandAll,
+    onCollapseAll,
+    isAllExpanded,
+}: {
+    onExpandAll?: () => void;
+    onCollapseAll?: () => void;
+    isAllExpanded?: boolean;
+}) => {
     return (
         <div className="flex w-full items-center justify-between">
             <span>Work Type</span>
@@ -211,11 +220,7 @@ const WorkTypeHeader = ({ onExpandAll, onCollapseAll, isAllExpanded }: { onExpan
     );
 };
 
-export const buildLabourForecastShowColumnDefs = (
-    weeks: Week[],
-    selectedMonth?: string,
-    expandCollapseProps?: ExpandCollapseProps
-): ColDef[] => {
+export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?: string, expandCollapseProps?: ExpandCollapseProps): ColDef[] => {
     const isCalculatingCosts = expandCollapseProps?.isCalculatingCosts ?? false;
     const cols: ColDef[] = [
         {
@@ -328,7 +333,8 @@ export const buildLabourForecastShowColumnDefs = (
                 if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-center text-emerald-700 dark:text-emerald-300';
                 if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold text-center';
-                if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
+                if (params.data?.isCostRow)
+                    return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
                 if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 font-medium';
                 if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
                 if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 italic';
@@ -390,14 +396,20 @@ export const buildLabourForecastShowColumnDefs = (
         width: 120,
         editable: false,
         cellClass: (params) => {
-            if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-center text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30';
-            if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30';
-            if (params.data?.isTotal && params.data?.isLeaveRow) return 'font-bold text-center text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30';
-            if (params.data?.isTotal && params.data?.isRdoRow) return 'font-bold text-center text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30';
-            if (params.data?.isTotal && params.data?.isPublicHolidayRow) return 'font-bold text-center text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30';
+            if (params.data?.isTotal && params.data?.isOrdinaryRow)
+                return 'font-bold text-center text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30';
+            if (params.data?.isTotal && params.data?.isOvertimeRow)
+                return 'font-bold text-center text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30';
+            if (params.data?.isTotal && params.data?.isLeaveRow)
+                return 'font-bold text-center text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30';
+            if (params.data?.isTotal && params.data?.isRdoRow)
+                return 'font-bold text-center text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30';
+            if (params.data?.isTotal && params.data?.isPublicHolidayRow)
+                return 'font-bold text-center text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30';
             if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
             if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
-            if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 font-medium';
+            if (params.data?.isOrdinaryRow)
+                return 'text-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 font-medium';
             if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20';
             if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20';
             if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20';
@@ -418,7 +430,13 @@ export const buildLabourForecastShowColumnDefs = (
             }
 
             // For ordinary, overtime, leave, RDO, or PH rows, just sum the hours directly
-            if (params.data.isOrdinaryRow || params.data.isOvertimeRow || params.data.isLeaveRow || params.data.isRdoRow || params.data.isPublicHolidayRow) {
+            if (
+                params.data.isOrdinaryRow ||
+                params.data.isOvertimeRow ||
+                params.data.isLeaveRow ||
+                params.data.isRdoRow ||
+                params.data.isPublicHolidayRow
+            ) {
                 let totalHours = 0;
                 currentMonthWeeks.forEach((week) => {
                     totalHours += Number(params.data[week.key]) || 0;

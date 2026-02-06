@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 type UnmappedRow = {
     job_number: string;
@@ -19,8 +19,7 @@ type Props = {
     endMonth: string;
 };
 
-const formatAmount = (value: number) =>
-    value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const formatMonthHeader = (month: string) => {
     const [year, monthNum] = month.split('-');
@@ -46,18 +45,14 @@ const UnmappedCashForecast = ({ rows, months, startMonth, endMonth }: Props) => 
     }, [rows]);
 
     const updateRange = (nextStart: string, nextEnd: string) => {
-        router.get(
-            '/cash-forecast/unmapped',
-            { start_month: nextStart, end_month: nextEnd },
-            { preserveScroll: true, replace: true },
-        );
+        router.get('/cash-forecast/unmapped', { start_month: nextStart, end_month: nextEnd }, { preserveScroll: true, replace: true });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Unmapped Transactions" />
             <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h1 className="text-lg font-semibold text-slate-800">Unmapped Transactions</h1>
@@ -68,7 +63,7 @@ const UnmappedCashForecast = ({ rows, months, startMonth, endMonth }: Props) => 
                             <select
                                 value={startMonth}
                                 onChange={(e) => updateRange(e.target.value, endMonth)}
-                                className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                className="rounded-md border border-slate-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500"
                             >
                                 {months.map((month) => (
                                     <option key={`start-${month}`} value={month}>
@@ -80,7 +75,7 @@ const UnmappedCashForecast = ({ rows, months, startMonth, endMonth }: Props) => 
                             <select
                                 value={endMonth}
                                 onChange={(e) => updateRange(startMonth, e.target.value)}
-                                className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                className="rounded-md border border-slate-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500"
                             >
                                 {months.map((month) => (
                                     <option key={`end-${month}`} value={month}>
@@ -95,23 +90,22 @@ const UnmappedCashForecast = ({ rows, months, startMonth, endMonth }: Props) => 
                             <span className="font-semibold text-slate-700">{totals.count}</span> rows
                         </div>
                         <div>
-                            Total amount:{' '}
-                            <span className="font-semibold text-slate-700">${formatAmount(totals.amount)}</span>
+                            Total amount: <span className="font-semibold text-slate-700">${formatAmount(totals.amount)}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 min-w-[110px]">Month</th>
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 min-w-[120px]">Job</th>
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 min-w-[110px]">Cost Item</th>
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 min-w-[220px]">Description</th>
-                                    <th className="px-4 py-3 text-left font-semibold text-slate-600 min-w-[90px]">Source</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-slate-600 min-w-[120px]">Amount</th>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                    <th className="min-w-[110px] px-4 py-3 text-left font-semibold text-slate-600">Month</th>
+                                    <th className="min-w-[120px] px-4 py-3 text-left font-semibold text-slate-600">Job</th>
+                                    <th className="min-w-[110px] px-4 py-3 text-left font-semibold text-slate-600">Cost Item</th>
+                                    <th className="min-w-[220px] px-4 py-3 text-left font-semibold text-slate-600">Description</th>
+                                    <th className="min-w-[90px] px-4 py-3 text-left font-semibold text-slate-600">Source</th>
+                                    <th className="min-w-[120px] px-4 py-3 text-right font-semibold text-slate-600">Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -125,13 +119,11 @@ const UnmappedCashForecast = ({ rows, months, startMonth, endMonth }: Props) => 
                                 {rows.map((row, index) => (
                                     <tr key={`${row.job_number}-${row.cost_item}-${row.month}-${index}`} className="border-b border-slate-100">
                                         <td className="px-4 py-2 text-slate-600">{formatMonthHeader(row.month)}</td>
-                                        <td className="px-4 py-2 text-slate-600 font-mono text-xs">{row.job_number}</td>
+                                        <td className="px-4 py-2 font-mono text-xs text-slate-600">{row.job_number}</td>
                                         <td className="px-4 py-2 text-slate-600">{row.cost_item}</td>
                                         <td className="px-4 py-2 text-slate-500">{row.description ?? '-'}</td>
                                         <td className="px-4 py-2 text-slate-500 capitalize">{row.source}</td>
-                                        <td className="px-4 py-2 text-right text-slate-700 font-medium">
-                                            ${formatAmount(row.amount)}
-                                        </td>
+                                        <td className="px-4 py-2 text-right font-medium text-slate-700">${formatAmount(row.amount)}</td>
                                     </tr>
                                 ))}
                             </tbody>

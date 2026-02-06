@@ -140,8 +140,8 @@ class TitleBlockTemplate extends Model
     /**
      * Calculate match score for a given sheet based on orientation and size.
      *
-     * @param string|null $orientation 'portrait' or 'landscape'
-     * @param string|null $sizeBucket e.g., "7016x4961"
+     * @param  string|null  $orientation  'portrait' or 'landscape'
+     * @param  string|null  $sizeBucket  e.g., "7016x4961"
      * @return int Score (higher is better match)
      */
     public function calculateMatchScore(?string $orientation, ?string $sizeBucket): int
@@ -194,7 +194,7 @@ class TitleBlockTemplate extends Model
      */
     private function parseSizeBucket(?string $bucket): ?array
     {
-        if (!$bucket) {
+        if (! $bucket) {
             return null;
         }
 
@@ -210,12 +210,6 @@ class TitleBlockTemplate extends Model
 
     /**
      * Find best matching templates for a given project and sheet characteristics.
-     *
-     * @param int $projectId
-     * @param string|null $orientation
-     * @param string|null $sizeBucket
-     * @param int $limit
-     * @return \Illuminate\Database\Eloquent\Collection
      */
     public static function findBestMatches(
         int $projectId,
@@ -233,6 +227,7 @@ class TitleBlockTemplate extends Model
         // Score and sort templates
         $scored = $templates->map(function ($template) use ($orientation, $sizeBucket) {
             $template->match_score = $template->calculateMatchScore($orientation, $sizeBucket);
+
             return $template;
         })->filter(function ($template) {
             return $template->match_score > 0;

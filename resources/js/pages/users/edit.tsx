@@ -277,15 +277,9 @@ export default function UserEdit() {
                             <div className="space-y-2">
                                 <Label>Add Kiosk</Label>
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                    <Select
-                                        value={selectedKiosk}
-                                        onValueChange={setSelectedKiosk}
-                                        disabled={availableKiosks.length === 0}
-                                    >
+                                    <Select value={selectedKiosk} onValueChange={setSelectedKiosk} disabled={availableKiosks.length === 0}>
                                         <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[200px]">
-                                            <SelectValue
-                                                placeholder={availableKiosks.length === 0 ? 'No kiosks available' : 'Select Kiosk'}
-                                            />
+                                            <SelectValue placeholder={availableKiosks.length === 0 ? 'No kiosks available' : 'Select Kiosk'} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {availableKiosks.map((kiosk) => (
@@ -320,15 +314,11 @@ export default function UserEdit() {
                                     <Label>Managed Kiosks</Label>
                                     <div className="flex flex-wrap gap-2">
                                         {data.managed_kiosks.map((kiosk) => (
-                                            <Badge
-                                                key={kiosk.id}
-                                                variant="secondary"
-                                                className="flex h-8 items-center gap-1.5 pr-1.5 text-sm sm:h-7"
-                                            >
+                                            <Badge key={kiosk.id} variant="secondary" className="flex h-8 items-center gap-1.5 pr-1.5 text-sm sm:h-7">
                                                 {kiosk.name}
                                                 <button
                                                     type="button"
-                                                    className="hover:bg-destructive hover:text-destructive-foreground ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
+                                                    className="hover:bg-destructive hover:text-destructive-foreground ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full transition-colors focus:ring-2 focus:ring-offset-1 focus:outline-none"
                                                     onClick={() =>
                                                         setRemoveDialog({
                                                             open: true,
@@ -373,8 +363,8 @@ export default function UserEdit() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Remove Kiosk</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to remove <strong>{removeDialog.kioskName}</strong> from this user's managed kiosks?
-                            They will no longer receive notifications for this kiosk.
+                            Are you sure you want to remove <strong>{removeDialog.kioskName}</strong> from this user's managed kiosks? They will no
+                            longer receive notifications for this kiosk.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

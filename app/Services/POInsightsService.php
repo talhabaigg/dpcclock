@@ -2,13 +2,14 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
 class POInsightsService
 {
     private string $apiKey;
+
     private string $model;
 
     public function __construct()
@@ -22,7 +23,7 @@ class POInsightsService
      */
     public function generateInsights(array $summaryData, ?string $conversationId = null): array
     {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             return [
                 'success' => false,
                 'error' => 'OpenAI API key not configured',
@@ -31,13 +32,13 @@ class POInsightsService
         }
 
         // Generate conversation ID if not provided
-        $conversationId = $conversationId ?: 'po_insights_' . md5(json_encode($summaryData) . time());
+        $conversationId = $conversationId ?: 'po_insights_'.md5(json_encode($summaryData).time());
 
         // Check cache for existing conversation
-        $cacheKey = 'po_conversation_' . $conversationId;
+        $cacheKey = 'po_conversation_'.$conversationId;
         $cached = Cache::get($cacheKey);
 
-        if ($cached && !empty($cached['response'])) {
+        if ($cached && ! empty($cached['response'])) {
             return [
                 'success' => true,
                 'response' => $cached['response'],
@@ -61,7 +62,7 @@ class POInsightsService
             ];
 
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(90)->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $this->model,
@@ -78,7 +79,7 @@ class POInsightsService
 
                 return [
                     'success' => false,
-                    'error' => 'Failed to generate insights: ' . $response->body(),
+                    'error' => 'Failed to generate insights: '.$response->body(),
                     'response' => null,
                 ];
             }
@@ -109,7 +110,7 @@ class POInsightsService
 
             return [
                 'success' => false,
-                'error' => 'Failed to generate insights: ' . $e->getMessage(),
+                'error' => 'Failed to generate insights: '.$e->getMessage(),
                 'response' => null,
             ];
         }
@@ -120,7 +121,7 @@ class POInsightsService
      */
     public function askFollowUp(string $conversationId, string $question): array
     {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             return [
                 'success' => false,
                 'error' => 'OpenAI API key not configured',
@@ -128,10 +129,10 @@ class POInsightsService
             ];
         }
 
-        $cacheKey = 'po_conversation_' . $conversationId;
+        $cacheKey = 'po_conversation_'.$conversationId;
         $conversation = Cache::get($cacheKey);
 
-        if (!$conversation) {
+        if (! $conversation) {
             return [
                 'success' => false,
                 'error' => 'Conversation not found or expired. Please generate new insights first.',
@@ -145,7 +146,7 @@ class POInsightsService
             $messages[] = ['role' => 'user', 'content' => $question];
 
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(90)->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $this->model,
@@ -162,7 +163,7 @@ class POInsightsService
 
                 return [
                     'success' => false,
-                    'error' => 'Failed to process follow-up: ' . $response->body(),
+                    'error' => 'Failed to process follow-up: '.$response->body(),
                     'response' => null,
                 ];
             }
@@ -188,7 +189,7 @@ class POInsightsService
 
             return [
                 'success' => false,
-                'error' => 'Failed to process follow-up: ' . $e->getMessage(),
+                'error' => 'Failed to process follow-up: '.$e->getMessage(),
                 'response' => null,
             ];
         }
@@ -199,7 +200,7 @@ class POInsightsService
      */
     private function getSystemPrompt(): string
     {
-        return <<<PROMPT
+        return <<<'PROMPT'
 You are an elite procurement analyst and trusted advisor for a construction company. You communicate like a senior consultant having a direct conversation with the CFO or Operations Director.
 
 YOUR COMMUNICATION STYLE:
@@ -258,88 +259,88 @@ PROMPT;
 
         // Overview
         $prompt .= "## The Big Picture\n";
-        $prompt .= "We have **" . ($overview['total_purchase_orders'] ?? 0) . " purchase orders** in this dataset.\n";
-        $prompt .= "- " . ($overview['pos_with_discrepancies'] ?? 0) . " have discrepancies (" . ($overview['discrepancy_rate'] ?? 0) . "% rate)\n";
-        $prompt .= "- Original value: $" . number_format($financial['total_original_value'] ?? 0, 0) . "\n";
-        $prompt .= "- Current value in Premier: $" . number_format($financial['total_premier_value'] ?? 0, 0) . "\n";
-        $prompt .= "- Already invoiced: $" . number_format($financial['total_invoiced_value'] ?? 0, 0) . "\n";
-        $prompt .= "- **Net variance: $" . number_format($financial['net_variance'] ?? 0, 0) . "** (" . ($financial['variance_percentage'] ?? 0) . "%)\n\n";
+        $prompt .= 'We have **'.($overview['total_purchase_orders'] ?? 0)." purchase orders** in this dataset.\n";
+        $prompt .= '- '.($overview['pos_with_discrepancies'] ?? 0).' have discrepancies ('.($overview['discrepancy_rate'] ?? 0)."% rate)\n";
+        $prompt .= '- Original value: $'.number_format($financial['total_original_value'] ?? 0, 0)."\n";
+        $prompt .= '- Current value in Premier: $'.number_format($financial['total_premier_value'] ?? 0, 0)."\n";
+        $prompt .= '- Already invoiced: $'.number_format($financial['total_invoiced_value'] ?? 0, 0)."\n";
+        $prompt .= '- **Net variance: $'.number_format($financial['net_variance'] ?? 0, 0).'** ('.($financial['variance_percentage'] ?? 0)."%)\n\n";
 
         // Variance distribution
-        if (!empty($varianceDistribution)) {
+        if (! empty($varianceDistribution)) {
             $prompt .= "## Variance Distribution\n";
-            $prompt .= "- No variance: " . ($varianceDistribution['no_variance'] ?? 0) . " POs\n";
-            $prompt .= "- Minor (<$100): " . ($varianceDistribution['minor_under_100'] ?? 0) . " POs\n";
-            $prompt .= "- Small ($100-500): " . ($varianceDistribution['small_100_to_500'] ?? 0) . " POs\n";
-            $prompt .= "- Medium ($500-1K): " . ($varianceDistribution['medium_500_to_1000'] ?? 0) . " POs\n";
-            $prompt .= "- Large ($1K-5K): " . ($varianceDistribution['large_1000_to_5000'] ?? 0) . " POs\n";
-            $prompt .= "- Major (>$5K): " . ($varianceDistribution['major_over_5000'] ?? 0) . " POs\n\n";
+            $prompt .= '- No variance: '.($varianceDistribution['no_variance'] ?? 0)." POs\n";
+            $prompt .= '- Minor (<$100): '.($varianceDistribution['minor_under_100'] ?? 0)." POs\n";
+            $prompt .= '- Small ($100-500): '.($varianceDistribution['small_100_to_500'] ?? 0)." POs\n";
+            $prompt .= '- Medium ($500-1K): '.($varianceDistribution['medium_500_to_1000'] ?? 0)." POs\n";
+            $prompt .= '- Large ($1K-5K): '.($varianceDistribution['large_1000_to_5000'] ?? 0)." POs\n";
+            $prompt .= '- Major (>$5K): '.($varianceDistribution['major_over_5000'] ?? 0)." POs\n\n";
         }
 
         // Line item changes
         $prompt .= "## What Changed\n";
-        $prompt .= "Line items: " . ($changes['items_unchanged'] ?? 0) . " unchanged, ";
-        $prompt .= ($changes['items_modified'] ?? 0) . " modified, ";
-        $prompt .= ($changes['items_added_in_premier'] ?? 0) . " added after order, ";
-        $prompt .= ($changes['items_removed_from_premier'] ?? 0) . " removed\n\n";
+        $prompt .= 'Line items: '.($changes['items_unchanged'] ?? 0).' unchanged, ';
+        $prompt .= ($changes['items_modified'] ?? 0).' modified, ';
+        $prompt .= ($changes['items_added_in_premier'] ?? 0).' added after order, ';
+        $prompt .= ($changes['items_removed_from_premier'] ?? 0)." removed\n\n";
 
-        $prompt .= "Price changes: " . ($trends['unit_cost_increases'] ?? 0) . " increases vs " . ($trends['unit_cost_decreases'] ?? 0) . " decreases\n";
-        $prompt .= "Quantity changes: " . ($trends['quantity_increases'] ?? 0) . " increases vs " . ($trends['quantity_decreases'] ?? 0) . " decreases\n\n";
+        $prompt .= 'Price changes: '.($trends['unit_cost_increases'] ?? 0).' increases vs '.($trends['unit_cost_decreases'] ?? 0)." decreases\n";
+        $prompt .= 'Quantity changes: '.($trends['quantity_increases'] ?? 0).' increases vs '.($trends['quantity_decreases'] ?? 0)." decreases\n\n";
 
         // Price list violations
-        if (!empty($priceListCompliance) && ($priceListCompliance['violations_count'] ?? 0) > 0) {
+        if (! empty($priceListCompliance) && ($priceListCompliance['violations_count'] ?? 0) > 0) {
             $prompt .= "## ⚠️ Price List Violations\n";
-            $prompt .= "**" . $priceListCompliance['violations_count'] . " items** with contracted prices have been changed.\n";
-            $prompt .= "Financial impact: **$" . number_format($priceListCompliance['violation_total_value'], 0) . "**\n\n";
+            $prompt .= '**'.$priceListCompliance['violations_count']." items** with contracted prices have been changed.\n";
+            $prompt .= 'Financial impact: **$'.number_format($priceListCompliance['violation_total_value'], 0)."**\n\n";
         }
 
         // Monthly trends
-        if (!empty($monthlyTrends)) {
+        if (! empty($monthlyTrends)) {
             $prompt .= "## Monthly Trends\n";
             foreach ($monthlyTrends as $month => $mData) {
-                $prompt .= "- {$month}: " . $mData['po_count'] . " POs, ";
-                $prompt .= "$" . number_format($mData['total_variance'], 0) . " variance ";
-                $prompt .= "(" . $mData['variance_percent'] . "%), ";
-                $prompt .= $mData['discrepancy_rate'] . "% had issues\n";
+                $prompt .= "- {$month}: ".$mData['po_count'].' POs, ';
+                $prompt .= '$'.number_format($mData['total_variance'], 0).' variance ';
+                $prompt .= '('.$mData['variance_percent'].'%), ';
+                $prompt .= $mData['discrepancy_rate']."% had issues\n";
             }
             $prompt .= "\n";
         }
 
         // Supplier comparison
-        if (!empty($supplierVars)) {
+        if (! empty($supplierVars)) {
             $prompt .= "## Supplier Comparison\n";
             foreach ($supplierVars as $name => $sData) {
                 $avgPerPo = $sData['po_count'] > 0 ? $sData['total_variance'] / $sData['po_count'] : 0;
-                $prompt .= "- **{$name}**: $" . number_format($sData['total_variance'], 0);
-                $prompt .= " across " . $sData['po_count'] . " POs";
-                $prompt .= " (" . $sData['variance_percent'] . "% rate)";
-                $prompt .= " | Avg: $" . number_format($avgPerPo, 0) . "/PO\n";
+                $prompt .= "- **{$name}**: $".number_format($sData['total_variance'], 0);
+                $prompt .= ' across '.$sData['po_count'].' POs';
+                $prompt .= ' ('.$sData['variance_percent'].'% rate)';
+                $prompt .= ' | Avg: $'.number_format($avgPerPo, 0)."/PO\n";
             }
             $prompt .= "\n";
         }
 
         // Project comparison
-        if (!empty($locationVars)) {
+        if (! empty($locationVars)) {
             $prompt .= "## Project Comparison\n";
             foreach ($locationVars as $name => $lData) {
-                $prompt .= "- **{$name}**: $" . number_format($lData['total_variance'], 0);
-                $prompt .= " across " . $lData['po_count'] . " POs";
-                $prompt .= " (" . $lData['variance_percent'] . "% rate)\n";
+                $prompt .= "- **{$name}**: $".number_format($lData['total_variance'], 0);
+                $prompt .= ' across '.$lData['po_count'].' POs';
+                $prompt .= ' ('.$lData['variance_percent']."% rate)\n";
             }
             $prompt .= "\n";
         }
 
         // Significant POs
-        if (!empty($significantPOs)) {
+        if (! empty($significantPOs)) {
             $prompt .= "## Notable POs (for pattern detection)\n";
             foreach (array_slice($significantPOs, 0, 15) as $po) {
-                $prompt .= "- **PO" . $po['po_number'] . "** | " . ($po['supplier'] ?? '?');
-                $prompt .= " | " . ($po['location'] ?? '?');
-                $prompt .= " | $" . number_format($po['original_value'], 0) . " → $" . number_format($po['current_value'], 0);
-                $prompt .= " (**" . ($po['variance'] >= 0 ? '+' : '') . "$" . number_format($po['variance'], 0) . "**)";
-                $prompt .= " | +" . $po['items_added'] . " added, -" . $po['items_removed'] . " removed, " . $po['items_modified'] . " modified";
-                if (!empty($po['created_at'])) {
-                    $prompt .= " | " . date('M Y', strtotime($po['created_at']));
+                $prompt .= '- **PO'.$po['po_number'].'** | '.($po['supplier'] ?? '?');
+                $prompt .= ' | '.($po['location'] ?? '?');
+                $prompt .= ' | $'.number_format($po['original_value'], 0).' → $'.number_format($po['current_value'], 0);
+                $prompt .= ' (**'.($po['variance'] >= 0 ? '+' : '').'$'.number_format($po['variance'], 0).'**)';
+                $prompt .= ' | +'.$po['items_added'].' added, -'.$po['items_removed'].' removed, '.$po['items_modified'].' modified';
+                if (! empty($po['created_at'])) {
+                    $prompt .= ' | '.date('M Y', strtotime($po['created_at']));
                 }
                 $prompt .= "\n";
             }
@@ -348,7 +349,7 @@ PROMPT;
 
         $prompt .= "---\n\n";
         $prompt .= "Based on this data, give me your analysis. What are the hidden patterns? Which suppliers should I be concerned about? What process issues does this reveal? What should I investigate further?\n\n";
-        $prompt .= "Speak to me like a trusted advisor - be direct, specific, and actionable.";
+        $prompt .= 'Speak to me like a trusted advisor - be direct, specific, and actionable.';
 
         return $prompt;
     }
@@ -362,13 +363,13 @@ PROMPT;
         $apiKey = $this->apiKey;
         $model = $this->model;
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             return function () {
                 $this->sendSSEData(['error' => 'OpenAI API key not configured']);
             };
         }
 
-        $conversationId = $conversationId ?: 'po_insights_' . md5(json_encode($summaryData) . time());
+        $conversationId = $conversationId ?: 'po_insights_'.md5(json_encode($summaryData).time());
         $prompt = $this->buildPrompt($summaryData);
         $systemPrompt = $this->getSystemPrompt();
 
@@ -384,7 +385,7 @@ PROMPT;
 
             try {
                 $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Authorization' => 'Bearer '.$apiKey,
                     'Content-Type' => 'application/json',
                     'Accept' => 'text/event-stream',
                 ])->withOptions(['stream' => true])
@@ -398,17 +399,19 @@ PROMPT;
                     ]);
 
                 if ($response->failed()) {
-                    $this->sendSSEData(['error' => 'OpenAI API request failed: ' . $response->status()]);
+                    $this->sendSSEData(['error' => 'OpenAI API request failed: '.$response->status()]);
+
                     return;
                 }
 
                 $stream = $response->toPsrResponse()->getBody();
                 $buffer = '';
 
-                while (!$stream->eof()) {
+                while (! $stream->eof()) {
                     $chunk = $stream->read(1024);
                     if ($chunk === '' || $chunk === false) {
                         usleep(20000);
+
                         continue;
                     }
 
@@ -429,7 +432,7 @@ PROMPT;
                         }
 
                         $event = json_decode($payload, true);
-                        if (!is_array($event)) {
+                        if (! is_array($event)) {
                             continue;
                         }
 
@@ -443,7 +446,7 @@ PROMPT;
 
                 // Store conversation context for follow-ups
                 if ($fullText !== '') {
-                    $cacheKey = 'po_conversation_' . $conversationId;
+                    $cacheKey = 'po_conversation_'.$conversationId;
                     Cache::put($cacheKey, [
                         'response' => $fullText,
                         'messages' => [
@@ -458,7 +461,7 @@ PROMPT;
 
             } catch (\Exception $e) {
                 Log::error('POInsightsService streaming error', ['error' => $e->getMessage()]);
-                $this->sendSSEData(['error' => 'Streaming failed: ' . $e->getMessage()]);
+                $this->sendSSEData(['error' => 'Streaming failed: '.$e->getMessage()]);
             }
         };
     }
@@ -472,16 +475,16 @@ PROMPT;
         $apiKey = $this->apiKey;
         $model = $this->model;
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             return function () {
                 $this->sendSSEData(['error' => 'OpenAI API key not configured']);
             };
         }
 
-        $cacheKey = 'po_conversation_' . $conversationId;
+        $cacheKey = 'po_conversation_'.$conversationId;
         $conversation = Cache::get($cacheKey);
 
-        if (!$conversation) {
+        if (! $conversation) {
             return function () {
                 $this->sendSSEData(['error' => 'Conversation not found or expired. Please start a new analysis.']);
             };
@@ -497,7 +500,7 @@ PROMPT;
 
             try {
                 $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Authorization' => 'Bearer '.$apiKey,
                     'Content-Type' => 'application/json',
                     'Accept' => 'text/event-stream',
                 ])->withOptions(['stream' => true])
@@ -511,17 +514,19 @@ PROMPT;
                     ]);
 
                 if ($response->failed()) {
-                    $this->sendSSEData(['error' => 'OpenAI API request failed: ' . $response->status()]);
+                    $this->sendSSEData(['error' => 'OpenAI API request failed: '.$response->status()]);
+
                     return;
                 }
 
                 $stream = $response->toPsrResponse()->getBody();
                 $buffer = '';
 
-                while (!$stream->eof()) {
+                while (! $stream->eof()) {
                     $chunk = $stream->read(1024);
                     if ($chunk === '' || $chunk === false) {
                         usleep(20000);
+
                         continue;
                     }
 
@@ -542,7 +547,7 @@ PROMPT;
                         }
 
                         $event = json_decode($payload, true);
-                        if (!is_array($event)) {
+                        if (! is_array($event)) {
                             continue;
                         }
 
@@ -566,7 +571,7 @@ PROMPT;
 
             } catch (\Exception $e) {
                 Log::error('POInsightsService follow-up streaming error', ['error' => $e->getMessage()]);
-                $this->sendSSEData(['error' => 'Streaming failed: ' . $e->getMessage()]);
+                $this->sendSSEData(['error' => 'Streaming failed: '.$e->getMessage()]);
             }
         };
     }
@@ -590,7 +595,7 @@ PROMPT;
      */
     private function sendSSEData(array $data): void
     {
-        echo 'data: ' . json_encode($data) . "\n\n";
+        echo 'data: '.json_encode($data)."\n\n";
         $this->flushOutput();
     }
 
@@ -600,7 +605,7 @@ PROMPT;
     private function sendSSEEvent(string $event, array $data): void
     {
         echo "event: {$event}\n";
-        echo 'data: ' . json_encode($data) . "\n\n";
+        echo 'data: '.json_encode($data)."\n\n";
         $this->flushOutput();
     }
 
@@ -621,7 +626,7 @@ PROMPT;
     public function clearCache(array $summaryData): void
     {
         // Clear any conversation caches that match this data pattern
-        $pattern = 'po_insights_' . md5(json_encode($summaryData));
-        Cache::forget('po_conversation_' . $pattern);
+        $pattern = 'po_insights_'.md5(json_encode($summaryData));
+        Cache::forget('po_conversation_'.$pattern);
     }
 }

@@ -1,22 +1,18 @@
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatAmount, formatMonthHeader, getCostItemLabel } from '../utils';
-import { SourceIndicator, DataSourceLegend } from './summary-cards';
-import type { MonthNode, CashOutSource, DataSource } from '../types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChevronRight } from 'lucide-react';
+import React from 'react';
+import type { CashOutSource, DataSource, MonthNode } from '../types';
+import { formatAmount, formatMonthHeader, getCostItemLabel } from '../utils';
+import { DataSourceLegend, SourceIndicator } from './summary-cards';
 
 // Icons
 const ExpandIcon = ({ expanded }: { expanded: boolean }) => (
-    <ChevronRight
-        className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
-    />
+    <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
 );
 
-const DotIcon = ({ color }: { color: string }) => (
-    <span className={`w-2 h-2 rounded-full ${color}`} />
-);
+const DotIcon = ({ color }: { color: string }) => <span className={`h-2 w-2 rounded-full ${color}`} />;
 
 // Table Header Component
 type TableHeaderProps = {
@@ -26,26 +22,20 @@ type TableHeaderProps = {
 
 export const CashFlowTableHeader = ({ months, currentMonth }: TableHeaderProps) => (
     <thead>
-        <tr className="bg-muted/50 border-b border-border">
-            <th className="px-4 py-3 text-left font-semibold text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[220px]">
-                Category
-            </th>
+        <tr className="bg-muted/50 border-border border-b">
+            <th className="text-muted-foreground bg-muted/50 sticky left-0 z-10 min-w-[220px] px-4 py-3 text-left font-semibold">Category</th>
             {months.map((month) => (
                 <th
                     key={month.month}
-                    className={`px-3 py-3 text-right font-semibold text-muted-foreground min-w-[95px] ${
+                    className={`text-muted-foreground min-w-[95px] px-3 py-3 text-right font-semibold ${
                         month.month === currentMonth ? 'bg-primary/10' : ''
                     }`}
                 >
                     <div>{formatMonthHeader(month.month)}</div>
-                    {month.month === currentMonth && (
-                        <div className="text-xs font-normal text-primary">Current</div>
-                    )}
+                    {month.month === currentMonth && <div className="text-primary text-xs font-normal">Current</div>}
                 </th>
             ))}
-            <th className="px-4 py-3 text-right font-semibold text-muted-foreground bg-muted min-w-[110px]">
-                Total
-            </th>
+            <th className="text-muted-foreground bg-muted min-w-[110px] px-4 py-3 text-right font-semibold">Total</th>
         </tr>
     </thead>
 );
@@ -60,32 +50,18 @@ type SectionRowProps = {
     currentMonth?: string;
 };
 
-export const CashFlowSectionRow = ({
-    type,
-    expanded,
-    onToggle,
-    months,
-    total,
-    currentMonth,
-}: SectionRowProps) => {
+export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, currentMonth }: SectionRowProps) => {
     const isIn = type === 'in';
     const bgClass = isIn
         ? 'bg-green-50/50 hover:bg-green-50 dark:bg-green-950/30 dark:hover:bg-green-950/50'
         : 'bg-red-50/50 hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/50';
     const textClass = isIn ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400';
     const dotColor = isIn ? 'bg-green-500' : 'bg-red-500';
-    const highlightClass = isIn
-        ? 'bg-green-100/50 dark:bg-green-900/30'
-        : 'bg-red-100/50 dark:bg-red-900/30';
-    const totalBgClass = isIn
-        ? 'bg-green-100/70 dark:bg-green-900/50'
-        : 'bg-red-100/70 dark:bg-red-900/50';
+    const highlightClass = isIn ? 'bg-green-100/50 dark:bg-green-900/30' : 'bg-red-100/50 dark:bg-red-900/30';
+    const totalBgClass = isIn ? 'bg-green-100/70 dark:bg-green-900/50' : 'bg-red-100/70 dark:bg-red-900/50';
 
     return (
-        <tr
-            className={`${bgClass} border-b border-border cursor-pointer transition-colors`}
-            onClick={onToggle}
-        >
+        <tr className={`${bgClass} border-border cursor-pointer border-b transition-colors`} onClick={onToggle}>
             <td className={`px-4 py-3 font-semibold ${textClass} sticky left-0 ${bgClass} z-10`}>
                 <span className="inline-flex items-center gap-2">
                     <ExpandIcon expanded={expanded} />
@@ -94,21 +70,17 @@ export const CashFlowSectionRow = ({
                 </span>
             </td>
             {months.map((month) => {
-                const value = isIn ? month.cash_in?.total ?? 0 : month.cash_out?.total ?? 0;
+                const value = isIn ? (month.cash_in?.total ?? 0) : (month.cash_out?.total ?? 0);
                 return (
                     <td
                         key={month.month}
-                        className={`px-3 py-3 text-right font-medium ${textClass} ${
-                            month.month === currentMonth ? highlightClass : ''
-                        }`}
+                        className={`px-3 py-3 text-right font-medium ${textClass} ${month.month === currentMonth ? highlightClass : ''}`}
                     >
                         {formatAmount(value)}
                     </td>
                 );
             })}
-            <td className={`px-4 py-3 text-right font-bold ${textClass} ${totalBgClass}`}>
-                {formatAmount(total)}
-            </td>
+            <td className={`px-4 py-3 text-right font-bold ${textClass} ${totalBgClass}`}>{formatAmount(total)}</td>
         </tr>
     );
 };
@@ -129,10 +101,7 @@ type CostItemRowProps = {
 };
 
 // Helper to get aggregated source for a cost item across all months
-const getAggregatedSource = (
-    costItemCode: string,
-    cashOutSources: CashOutSource[] | undefined
-): DataSource | 'mixed' | undefined => {
+const getAggregatedSource = (costItemCode: string, cashOutSources: CashOutSource[] | undefined): DataSource | 'mixed' | undefined => {
     if (!cashOutSources) return undefined;
 
     const sources = cashOutSources.filter((s) => s.cost_item === costItemCode);
@@ -161,18 +130,14 @@ export const CostItemRow = ({
     cashOutSources,
 }: CostItemRowProps) => {
     // Get overall source for this cost item (aggregated across all months)
-    const aggregatedSource = flowType === 'cash_out'
-        ? getAggregatedSource(costItemCode, cashOutSources)
-        : undefined;
+    const aggregatedSource = flowType === 'cash_out' ? getAggregatedSource(costItemCode, cashOutSources) : undefined;
 
     // Calculate source data for this cost item for a specific month
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const getMonthSource = (month: string): DataSource | 'mixed' | undefined => {
         if (flowType !== 'cash_out' || !cashOutSources) return undefined;
 
-        const sources = cashOutSources.filter(
-            (s) => s.month === month && s.cost_item === costItemCode
-        );
+        const sources = cashOutSources.filter((s) => s.month === month && s.cost_item === costItemCode);
         if (sources.length === 0) return undefined;
 
         const hasActual = sources.some((s) => s.source === 'actual');
@@ -185,32 +150,15 @@ export const CostItemRow = ({
     };
 
     return (
-        <tr
-            className="border-b border-border bg-background hover:bg-muted/50 cursor-pointer transition-colors"
-            onClick={onToggle}
-        >
-            <td className="px-4 py-2.5 pl-8 text-foreground/80 sticky left-0 bg-background z-10">
+        <tr className="border-border bg-background hover:bg-muted/50 cursor-pointer border-b transition-colors" onClick={onToggle}>
+            <td className="text-foreground/80 bg-background sticky left-0 z-10 px-4 py-2.5 pl-8">
                 <span className="inline-flex items-center gap-2">
-                    {itemCount > 0 ? (
-                        <ExpandIcon expanded={expanded} />
-                    ) : (
-                        <span className="w-4" />
-                    )}
-                    <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {costItemCode}
-                    </span>
-                    <span className="font-medium">
-                        {getCostItemLabel(costItemCode, description, costCodeDescriptions)}
-                    </span>
-                    {itemCount > 0 && (
-                        <span className="text-xs text-muted-foreground">({itemCount} items)</span>
-                    )}
+                    {itemCount > 0 ? <ExpandIcon expanded={expanded} /> : <span className="w-4" />}
+                    <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{costItemCode}</span>
+                    <span className="font-medium">{getCostItemLabel(costItemCode, description, costCodeDescriptions)}</span>
+                    {itemCount > 0 && <span className="text-muted-foreground text-xs">({itemCount} items)</span>}
                     {/* Show aggregated source indicator at cost item level */}
-                    {aggregatedSource && (
-                        <SourceIndicator
-                            source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource}
-                        />
-                    )}
+                    {aggregatedSource && <SourceIndicator source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource} />}
                 </span>
             </td>
             {months.map((month) => {
@@ -220,17 +168,13 @@ export const CostItemRow = ({
                 return (
                     <td
                         key={month.month}
-                        className={`px-3 py-2.5 text-right text-foreground/80 ${
-                            month.month === currentMonth ? 'bg-primary/5' : ''
-                        }`}
+                        className={`text-foreground/80 px-3 py-2.5 text-right ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
                     >
                         <span>{item ? formatAmount(item.total) : '-'}</span>
                     </td>
                 );
             })}
-            <td className="px-4 py-2.5 text-right font-medium text-foreground bg-muted/50">
-                {formatAmount(total)}
-            </td>
+            <td className="text-foreground bg-muted/50 px-4 py-2.5 text-right font-medium">{formatAmount(total)}</td>
         </tr>
     );
 };
@@ -265,24 +209,19 @@ export const JobRow = ({
     const getJobSource = (month: string): DataSource | undefined => {
         if (flowType !== 'cash_out' || !cashOutSources) return undefined;
 
-        const source = cashOutSources.find(
-            (s) => s.month === month && s.cost_item === costItemCode && s.job_number === jobNumber
-        );
+        const source = cashOutSources.find((s) => s.month === month && s.cost_item === costItemCode && s.job_number === jobNumber);
         return source?.source;
     };
 
     return (
-        <tr className="border-b border-border/50 bg-muted/30">
-            <td
-                className="px-4 py-2 text-muted-foreground sticky left-0 bg-muted/30 z-10"
-                style={{ paddingLeft: `${indent}px` }}
-            >
+        <tr className="border-border/50 bg-muted/30 border-b">
+            <td className="text-muted-foreground bg-muted/30 sticky left-0 z-10 px-4 py-2" style={{ paddingLeft: `${indent}px` }}>
                 <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-2">
-                        <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                        <ChevronRight className="text-muted-foreground/50 h-3 w-3" />
                         <span className="font-mono text-xs">{jobNumber}</span>
                         {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                            <Badge variant="secondary" className="text-[10px] tracking-wide uppercase">
                                 Adj
                             </Badge>
                         )}
@@ -295,7 +234,7 @@ export const JobRow = ({
                             e.stopPropagation();
                             onAdjust();
                         }}
-                        className="h-auto p-0 text-[10px] uppercase tracking-wide"
+                        className="h-auto p-0 text-[10px] tracking-wide uppercase"
                     >
                         Adjust
                     </Button>
@@ -310,9 +249,7 @@ export const JobRow = ({
                 return (
                     <td
                         key={month.month}
-                        className={`px-3 py-2 text-right text-muted-foreground text-xs ${
-                            month.month === currentMonth ? 'bg-primary/5' : ''
-                        }`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
                     >
                         <div className="flex items-center justify-end gap-1">
                             {source && <SourceIndicator source={source} className="mr-1" />}
@@ -321,9 +258,7 @@ export const JobRow = ({
                     </td>
                 );
             })}
-            <td className="px-4 py-2 text-right text-muted-foreground text-xs bg-muted/50">
-                {formatAmount(total)}
-            </td>
+            <td className="text-muted-foreground bg-muted/50 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
         </tr>
     );
 };
@@ -340,7 +275,7 @@ type VendorRowProps = {
     months: MonthNode[];
     total: number;
     currentMonth?: string;
-    source?: DataSource;  // 'actual' for real vendors, 'forecast' for "Remaining Forecast"
+    source?: DataSource; // 'actual' for real vendors, 'forecast' for "Remaining Forecast"
 };
 
 export const VendorRow = ({
@@ -351,25 +286,21 @@ export const VendorRow = ({
     months,
     total,
     currentMonth,
-    source = 'actual',  // Default to 'actual' for backward compatibility
+    source = 'actual', // Default to 'actual' for backward compatibility
 }: VendorRowProps) => {
     const isForecast = source === 'forecast';
-    const bgClass = isForecast
-        ? 'bg-amber-50/30 dark:bg-amber-950/20'
-        : 'bg-muted/30';
+    const bgClass = isForecast ? 'bg-amber-50/30 dark:bg-amber-950/20' : 'bg-muted/30';
 
     return (
-        <tr className={`border-b border-border/50 ${bgClass}`}>
-            <td className={`px-4 py-2 pl-16 text-muted-foreground sticky left-0 ${bgClass} z-10`}>
+        <tr className={`border-border/50 border-b ${bgClass}`}>
+            <td className={`text-muted-foreground sticky left-0 px-4 py-2 pl-16 ${bgClass} z-10`}>
                 <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-2">
-                        <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
-                        <span className={`text-xs ${isForecast ? 'italic text-amber-700 dark:text-amber-400' : ''}`}>
-                            {vendor}
-                        </span>
+                        <ChevronRight className="text-muted-foreground/50 h-3 w-3" />
+                        <span className={`text-xs ${isForecast ? 'text-amber-700 italic dark:text-amber-400' : ''}`}>{vendor}</span>
                         <SourceIndicator source={source} />
                         {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                            <Badge variant="secondary" className="text-[10px] tracking-wide uppercase">
                                 Adj
                             </Badge>
                         )}
@@ -384,7 +315,7 @@ export const VendorRow = ({
                                 e.stopPropagation();
                                 onAdjust();
                             }}
-                            className="h-auto p-0 text-[10px] uppercase tracking-wide"
+                            className="h-auto p-0 text-[10px] tracking-wide uppercase"
                         >
                             Adjust
                         </Button>
@@ -392,25 +323,19 @@ export const VendorRow = ({
                 </div>
             </td>
             {months.map((month) => {
-                const costItem = month.cash_out?.cost_items?.find(
-                    (ci) => ci.cost_item === costItemCode
-                );
+                const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
                 const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor);
 
                 return (
                     <td
                         key={month.month}
-                        className={`px-3 py-2 text-right text-muted-foreground text-xs ${
-                            month.month === currentMonth ? 'bg-primary/5' : ''
-                        }`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
                     >
                         <span>{vendorData ? formatAmount(vendorData.total) : '-'}</span>
                     </td>
                 );
             })}
-            <td className="px-4 py-2 text-right text-muted-foreground text-xs bg-muted/50">
-                {formatAmount(total)}
-            </td>
+            <td className="text-muted-foreground bg-muted/50 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
         </tr>
     );
 };
@@ -426,44 +351,31 @@ type VendorJobRowProps = {
     currentMonth?: string;
 };
 
-export const VendorJobRow = ({
-    jobNumber,
-    vendor,
-    costItemCode,
-    months,
-    total,
-    currentMonth,
-}: VendorJobRowProps) => {
+export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, currentMonth }: VendorJobRowProps) => {
     // Jobs under vendors are always from actual data (no source indicator needed - inherited from parent)
     return (
-        <tr className="border-b border-border/30 bg-background">
-            <td className="px-4 py-2 pl-24 text-muted-foreground sticky left-0 bg-background z-10">
+        <tr className="border-border/30 bg-background border-b">
+            <td className="text-muted-foreground bg-background sticky left-0 z-10 px-4 py-2 pl-24">
                 <span className="inline-flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
+                    <span className="bg-muted-foreground/30 h-1.5 w-1.5 rounded-full" />
                     <span className="font-mono text-xs">{jobNumber}</span>
                 </span>
             </td>
             {months.map((month) => {
-                const costItem = month.cash_out?.cost_items?.find(
-                    (ci) => ci.cost_item === costItemCode
-                );
+                const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
                 const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor);
                 const jobData = vendorData?.jobs?.find((j) => j.job_number === jobNumber);
 
                 return (
                     <td
                         key={month.month}
-                        className={`px-3 py-2 text-right text-muted-foreground text-xs ${
-                            month.month === currentMonth ? 'bg-primary/5' : ''
-                        }`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
                     >
                         <span>{jobData ? formatAmount(jobData.total) : '-'}</span>
                     </td>
                 );
             })}
-            <td className="px-4 py-2 text-right text-muted-foreground text-xs bg-muted/30">
-                {formatAmount(total)}
-            </td>
+            <td className="text-muted-foreground bg-muted/30 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
         </tr>
     );
 };
@@ -476,8 +388,8 @@ type NetCashflowRowProps = {
 };
 
 export const NetCashflowRow = ({ months, total, currentMonth }: NetCashflowRowProps) => (
-    <tr className="bg-muted border-b-2 border-border">
-        <td className="px-4 py-3 font-bold text-foreground sticky left-0 bg-muted z-10">
+    <tr className="bg-muted border-border border-b-2">
+        <td className="text-foreground bg-muted sticky left-0 z-10 px-4 py-3 font-bold">
             <span className="inline-flex items-center gap-2">
                 <DotIcon color="bg-muted-foreground" />
                 Net Cashflow
@@ -512,15 +424,9 @@ type RunningBalanceRowProps = {
     currentMonth?: string;
 };
 
-export const RunningBalanceRow = ({
-    months,
-    runningBalances,
-    startingBalance,
-    endingBalance,
-    currentMonth,
-}: RunningBalanceRowProps) => (
-    <tr className="bg-gradient-to-r from-muted/50 to-background">
-        <td className="px-4 py-3 font-semibold text-foreground sticky left-0 bg-muted/50 z-10">
+export const RunningBalanceRow = ({ months, runningBalances, startingBalance, endingBalance, currentMonth }: RunningBalanceRowProps) => (
+    <tr className="from-muted/50 to-background bg-gradient-to-r">
+        <td className="text-foreground bg-muted/50 sticky left-0 z-10 px-4 py-3 font-semibold">
             <span className="inline-flex items-center gap-2">
                 <DotIcon color="bg-blue-500" />
                 Running Balance
@@ -564,8 +470,8 @@ export const CashFlowTableContainer = ({
     showSourceLegend = true,
 }: CashFlowTableContainerProps) => (
     <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border bg-muted/40">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <CardHeader className="border-border bg-muted/40 border-b">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <CardTitle>{title}</CardTitle>
                     <CardDescription>{description}</CardDescription>
@@ -573,7 +479,7 @@ export const CashFlowTableContainer = ({
                 {showSourceLegend && <DataSourceLegend />}
             </div>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="overflow-x-auto p-0">
             <table className="min-w-full text-sm">{children}</table>
         </CardContent>
     </Card>

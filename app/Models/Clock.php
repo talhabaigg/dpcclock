@@ -4,13 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Str;
-use App\Models\Worktype;
-use Spatie\Activitylog\LogOptions;
+
 class Clock extends Model
 {
-    use SoftDeletes, LogsActivity;
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
         'eh_kiosk_id',
         'eh_employee_id',
@@ -26,11 +27,13 @@ class Clock extends Model
         'eh_timesheet_id',
         'uuid',
     ];
+
     protected $casts = [
         'insulation_allowance' => 'boolean',
         'laser_allowance' => 'boolean',
         'setout_allowance' => 'boolean',
     ];
+
     protected static function booted(): void
     {
         static::creating(function (Clock $clock) {
@@ -39,6 +42,7 @@ class Clock extends Model
             }
         });
     }
+
     public function employee()
     {
         return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id');

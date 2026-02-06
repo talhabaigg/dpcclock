@@ -3,23 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostCode;
-use DB;
-use Http;
-use Illuminate\Http\Request;
 use App\Models\Location;
 use App\Services\PremierAuthenticationService;
+use Http;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Log;
+
 class LocationCostcodeController extends Controller
 {
     public function sync(Location $location)
     {
-        $authService = new PremierAuthenticationService();
+        $authService = new PremierAuthenticationService;
         $token = $authService->getAccessToken();
         $company = [
-            '1149031' => '07a4fde9-b0b9-413b-bd50-62f0d7a6f23d', //SWC
-            '1198645' => 'deaca42a-4c52-4255-b97e-ef34ac82cdb7', //GREEN
-            '1249093' => '3341c7c6-2abb-49e1-8a59-839d1bcff972', //SWCP
+            '1149031' => '07a4fde9-b0b9-413b-bd50-62f0d7a6f23d', // SWC
+            '1198645' => 'deaca42a-4c52-4255-b97e-ef34ac82cdb7', // GREEN
+            '1249093' => '3341c7c6-2abb-49e1-8a59-839d1bcff972', // SWCP
         ];
         $companyId = $company[$location->eh_parent_id] ?? null;
         $base_url = env('PREMIER_SWAGGER_API_URL');
@@ -30,7 +29,7 @@ class LocationCostcodeController extends Controller
         ];
         $response = Http::withToken($token)
             ->acceptJson()
-            ->get($base_url . '/api/Job/GetCostItems', $queryParams);
+            ->get($base_url.'/api/Job/GetCostItems', $queryParams);
         $costCodes = CostCode::select('id', 'code')->get();
         if ($response->successful()) {
             $data = $response->json('Data');
@@ -43,6 +42,7 @@ class LocationCostcodeController extends Controller
                         'cost_code_id' => $costCode->id,
                     ];
                 }
+
                 return null;
             })->filter()->values()->toArray();
             // dd($data);
@@ -52,12 +52,13 @@ class LocationCostcodeController extends Controller
             $existingIds = $location->costCodes()->pluck('cost_code_id')->toArray();
 
             // Filter out codes that already exist
-            $newData = collect($data)->filter(fn($item) => !in_array($item['cost_code_id'], $existingIds))->values()->toArray();
+            $newData = collect($data)->filter(fn ($item) => ! in_array($item['cost_code_id'], $existingIds))->values()->toArray();
 
             // Attach only the new ones
-            if (!empty($newData)) {
+            if (! empty($newData)) {
                 $location->costCodes()->attach($newData);
             }
+
             return redirect()->back()->with('success', 'Cost codes synced successfully.');
         } else {
             logger()->error('Failed to fetch cost items', [
@@ -71,7 +72,6 @@ class LocationCostcodeController extends Controller
     public function edit(Location $location)
     {
         $costCodes = $location->costCodes()->orderBy('code')->get();
-
 
         return Inertia::render('locations/costCodeEdit', [
             'location' => $location,
@@ -99,13 +99,12 @@ class LocationCostcodeController extends Controller
                         'dayworks_ratio' => $code['dayworks_ratio'],
                         'waste_ratio' => $code['waste_ratio'],
                         'prelim_type' => $code['prelim_type'],
-                    ]
+                    ],
                 ];
             })
             ->toArray();
 
         $location->costCodes()->sync($syncData);
-
 
         return redirect()->back()->with('success', 'Cost codes updated successfully.');
     }
@@ -115,8 +114,10 @@ class LocationCostcodeController extends Controller
         $costCode = $location->costCodes()->find($id);
         if ($costCode) {
             $location->costCodes()->detach($costCode);
+
             return redirect()->back()->with('success', 'Cost code deleted successfully.');
         }
+
         return redirect()->back()->with('error', 'Cost code not found.');
     }
 
@@ -125,7 +126,7 @@ class LocationCostcodeController extends Controller
         // $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
 
         $location = Location::findOrFail($locationId);
-        $fileName = 'location_cost_code_ratios_' . $location->name . '_' . now()->format('Ymd_His') . '.csv';
+        $fileName = 'location_cost_code_ratios_'.$location->name.'_'.now()->format('Ymd_His').'.csv';
         $filePath = storage_path("app/{$fileName}");
 
         $handle = fopen($filePath, 'w');
@@ -146,13 +147,12 @@ class LocationCostcodeController extends Controller
         foreach ($filteredItems as $item) {
             fputcsv($handle, [
                 $location->external_id,
-                "'" . $item->code,// 👈 prevents Excel auto-conversion
+                "'".$item->code, // 👈 prevents Excel auto-conversion
                 $item->description,
                 $item->pivot->variation_ratio,
                 $item->pivot->dayworks_ratio,
             ]);
         }
-
 
         fclose($handle);
 
@@ -186,13 +186,11 @@ class LocationCostcodeController extends Controller
                         'dayworks_ratio' => floatval($data['dayworks_ratio']) ?? null,
                         'waste_ratio' => floatval($data['waste_ratio']) ?? null,
                         'prelim_type' => $data['prelim_type'] ?? null,
-                    ]
+                    ],
                 ]);
             }
         }
 
-        return back()->with('success', "Uploaded cost code ratios successfully.");
+        return back()->with('success', 'Uploaded cost code ratios successfully.');
     }
-
-
 }

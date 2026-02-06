@@ -36,10 +36,11 @@ class BackfillPremierPoIds extends Command
 
         if (empty($poHeaders)) {
             $this->error('No PO headers returned from Premier API');
+
             return 1;
         }
 
-        $this->info("Found " . count($poHeaders) . " POs in Premier");
+        $this->info('Found '.count($poHeaders).' POs in Premier');
 
         // Step 2: Build a lookup map of PO Number -> Premier PO ID
         $poNumberToId = [];
@@ -57,7 +58,7 @@ class BackfillPremierPoIds extends Command
             }
         }
 
-        $this->info("Built lookup map with " . count($poNumberToId) . " PO numbers");
+        $this->info('Built lookup map with '.count($poNumberToId).' PO numbers');
 
         // Step 3: Find requisitions without premier_po_id but with po_number
         $query = Requisition::whereNull('premier_po_id')
@@ -69,10 +70,11 @@ class BackfillPremierPoIds extends Command
 
         $requisitions = $query->get();
 
-        $this->info("Found " . $requisitions->count() . " requisitions without Premier PO ID");
+        $this->info('Found '.$requisitions->count().' requisitions without Premier PO ID');
 
         if ($requisitions->isEmpty()) {
             $this->info('No requisitions to update');
+
             return 0;
         }
 
@@ -89,7 +91,7 @@ class BackfillPremierPoIds extends Command
             if (isset($poNumberToId[$poNumber])) {
                 $premierData = $poNumberToId[$poNumber];
 
-                if (!$dryRun) {
+                if (! $dryRun) {
                     // Update requisition with Premier PO ID
                     $requisition->premier_po_id = $premierData['premier_po_id'];
                     $requisition->save();
@@ -114,13 +116,13 @@ class BackfillPremierPoIds extends Command
         $this->output->progressFinish();
 
         $this->newLine();
-        $this->info("Results:");
-        $this->info("  - Matched and " . ($dryRun ? "would update" : "updated") . ": {$matched}");
+        $this->info('Results:');
+        $this->info('  - Matched and '.($dryRun ? 'would update' : 'updated').": {$matched}");
         $this->info("  - Not found in Premier: {$notFound}");
 
         if ($dryRun && $matched > 0) {
             $this->newLine();
-            $this->warn("Run without --dry-run to apply changes");
+            $this->warn('Run without --dry-run to apply changes');
         }
 
         return 0;
@@ -129,7 +131,7 @@ class BackfillPremierPoIds extends Command
     protected function fetchAllPremierPoHeaders(): array
     {
         try {
-            $authService = new PremierAuthenticationService();
+            $authService = new PremierAuthenticationService;
             $token = $authService->getAccessToken();
 
             // Fetch all POs - may need pagination for large datasets
@@ -152,7 +154,7 @@ class BackfillPremierPoIds extends Command
                     ]);
 
                 if ($response->failed()) {
-                    $this->error("API request failed: " . $response->body());
+                    $this->error('API request failed: '.$response->body());
                     break;
                 }
 
@@ -176,7 +178,7 @@ class BackfillPremierPoIds extends Command
                 }
 
                 if (empty($items)) {
-                    $this->info("  No more items returned, stopping.");
+                    $this->info('  No more items returned, stopping.');
                     break;
                 }
 
@@ -185,7 +187,7 @@ class BackfillPremierPoIds extends Command
                 $duplicates = 0;
                 foreach ($items as $item) {
                     $poId = $item['PurchaseOrderId'] ?? null;
-                    if ($poId && !isset($seenPoIds[$poId])) {
+                    if ($poId && ! isset($seenPoIds[$poId])) {
                         $seenPoIds[$poId] = true;
                         $allHeaders[] = $item;
                         $newItems++;
@@ -194,17 +196,17 @@ class BackfillPremierPoIds extends Command
                     }
                 }
 
-                $this->info("  Page {$page}: " . count($items) . " items ({$newItems} new, {$duplicates} duplicates) - Total unique: " . count($allHeaders));
+                $this->info("  Page {$page}: ".count($items)." items ({$newItems} new, {$duplicates} duplicates) - Total unique: ".count($allHeaders));
 
                 // If we got all duplicates, the API might be returning the same data
                 if ($newItems === 0) {
-                    $this->warn("  All items on this page were duplicates, stopping pagination.");
+                    $this->warn('  All items on this page were duplicates, stopping pagination.');
                     break;
                 }
 
                 // If we got less than pageSize, we're done
                 if (count($items) < $pageSize) {
-                    $this->info("  Received fewer items than page size, reached end of data.");
+                    $this->info('  Received fewer items than page size, reached end of data.');
                     break;
                 }
 
@@ -221,10 +223,11 @@ class BackfillPremierPoIds extends Command
             return $allHeaders;
 
         } catch (\Exception $e) {
-            $this->error("Exception fetching PO headers: " . $e->getMessage());
+            $this->error('Exception fetching PO headers: '.$e->getMessage());
             Log::error('BackfillPremierPoIds: Failed to fetch headers', [
                 'error' => $e->getMessage(),
             ]);
+
             return [];
         }
     }

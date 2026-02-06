@@ -2,10 +2,9 @@
 
 namespace App\Console\Commands;
 
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Config;
 
 class BackupDatabase extends Command
 {
@@ -50,6 +49,7 @@ class BackupDatabase extends Command
 
         if ($result !== 0) {
             $this->error('Database backup failed.');
+
             return;
         }
 

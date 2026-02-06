@@ -120,17 +120,9 @@ export default function ShowPin() {
             />
 
             {/* Back Button */}
-            <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
+            <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
                 <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                            'h-12 w-12 rounded-full',
-                            'hover:bg-accent',
-                            'touch-manipulation',
-                        )}
-                    >
+                    <Button variant="ghost" size="icon" className={cn('h-12 w-12 rounded-full', 'hover:bg-accent', 'touch-manipulation')}>
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -140,17 +132,11 @@ export default function ShowPin() {
             <div className="flex flex-col items-center">
                 {/* Employee Avatar & Greeting */}
                 <div className="mb-8 flex flex-col items-center">
-                    <Avatar className="mb-4 h-20 w-20 border-4 border-primary/20 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-2xl font-semibold text-primary">
-                            {getInitials(employee.name)}
-                        </AvatarFallback>
+                    <Avatar className="border-primary/20 mb-4 h-20 w-20 border-4 shadow-lg">
+                        <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
                     </Avatar>
-                    <h2 className="text-2xl font-bold text-foreground">
-                        Hi, {employee.name.split(' ')[0]}!
-                    </h2>
-                    <p className="mt-1 text-muted-foreground">
-                        Enter your 4-digit PIN to continue
-                    </p>
+                    <h2 className="text-foreground text-2xl font-bold">Hi, {employee.name.split(' ')[0]}!</h2>
+                    <p className="text-muted-foreground mt-1">Enter your 4-digit PIN to continue</p>
                 </div>
 
                 {/* PIN Entry */}
@@ -161,14 +147,10 @@ export default function ShowPin() {
                     </div>
 
                     {/* Error Message */}
-                    {form.errors.pin && (
-                        <p className="mb-4 text-sm text-destructive">{form.errors.pin}</p>
-                    )}
+                    {form.errors.pin && <p className="text-destructive mb-4 text-sm">{form.errors.pin}</p>}
 
                     {/* Success Message */}
-                    {flash?.success && (
-                        <p className="mb-4 text-sm text-emerald-600">{flash.success}</p>
-                    )}
+                    {flash?.success && <p className="mb-4 text-sm text-emerald-600">{flash.success}</p>}
 
                     {/* Numpad */}
                     <PinNumpad onClick={handleNumClick} disabled={showProcessing} />
@@ -183,7 +165,7 @@ export default function ShowPin() {
     );
 
     return isMobile ? (
-        <div className="min-h-screen bg-background">{content}</div>
+        <div className="bg-background min-h-screen">{content}</div>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
             {content}

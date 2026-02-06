@@ -1,12 +1,5 @@
 <?php
 
-use App\Console\Commands\SendKioskClockedInNotification;
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
-use App\Console\Commands\SyncTimesheets;
-use App\Console\Commands\BackupDatabase;
-
-
 Schedule::command('app:sync-timesheets')
     ->everyFifteenMinutes()
     ->timezone('Australia/Brisbane');

@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
 class RequisitionLineItem extends Model
 {
-
     use HasFactory, LogsActivity;
 
     protected $fillable = [
@@ -25,7 +23,6 @@ class RequisitionLineItem extends Model
         'price_list',
         'is_locked',
     ];
-
 
     public function requisition()
     {

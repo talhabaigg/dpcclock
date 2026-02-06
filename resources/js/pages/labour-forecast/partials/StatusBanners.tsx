@@ -24,12 +24,7 @@ interface StatusBannersProps {
     settingsOpen: boolean;
 }
 
-export const StatusBanners = ({
-    savedForecast,
-    hasConfiguredTemplates,
-    flash,
-    settingsOpen,
-}: StatusBannersProps) => {
+export const StatusBanners = ({ savedForecast, hasConfiguredTemplates, flash, settingsOpen }: StatusBannersProps) => {
     return (
         <>
             {/* Rejection reason display */}
@@ -60,9 +55,7 @@ export const StatusBanners = ({
 
             {/* Flash messages outside dialog */}
             {flash?.success && !settingsOpen && (
-                <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                    {flash.success}
-                </div>
+                <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
             )}
 
             {/* Empty state when no templates configured */}

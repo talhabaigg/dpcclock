@@ -182,7 +182,7 @@ export function RevenueReportDialog({
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
                 pointBorderWidth: 2.5,
                 segment: {
-                    borderColor: (ctx: any) => cumulativeData.revenueIsActual[ctx.p1DataIndex] ? COLORS.revenueActual : COLORS.revenueForecast,
+                    borderColor: (ctx: any) => (cumulativeData.revenueIsActual[ctx.p1DataIndex] ? COLORS.revenueActual : COLORS.revenueForecast),
                     borderDash: (ctx: any) => {
                         const point = accrualData[ctx.p1DataIndex];
                         return point && point.revenueActual === null ? [6, 4] : [];
@@ -211,7 +211,7 @@ export function RevenueReportDialog({
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
                 pointBorderWidth: 2.5,
                 segment: {
-                    borderColor: (ctx: any) => cumulativeData.costIsActual[ctx.p1DataIndex] ? COLORS.costActual : COLORS.costForecast,
+                    borderColor: (ctx: any) => (cumulativeData.costIsActual[ctx.p1DataIndex] ? COLORS.costActual : COLORS.costForecast),
                     borderDash: (ctx: any) => {
                         const point = accrualData[ctx.p1DataIndex];
                         return point && point.costActual === null ? [6, 4] : [];
@@ -872,7 +872,7 @@ export function RevenueReportDialog({
                 {/* Header - indigo accent with subtle gradient */}
                 <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
                     {/* Subtle decorative element */}
-                    <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
+                    <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
                     <div className="relative flex items-center justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3">
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
@@ -917,33 +917,45 @@ export function RevenueReportDialog({
                         </div>
                         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                             <div className="rounded-lg border-l-4 border-blue-500 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:bg-slate-800">
-                                <label className="block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Contract Value</label>
+                                <label className="block text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                                    Contract Value
+                                </label>
                                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                                     ${totalRevenueBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border-l-4 border-green-500 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:bg-slate-800">
-                                <label className="block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Actuals to Date</label>
+                                <label className="block text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                                    Actuals to Date
+                                </label>
                                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                                     ${actualsToDate.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
-                                <div className="mt-1 text-xs font-medium text-green-600 dark:text-green-400">{actualsPercent.toFixed(1)}% Complete</div>
+                                <div className="mt-1 text-xs font-medium text-green-600 dark:text-green-400">
+                                    {actualsPercent.toFixed(1)}% Complete
+                                </div>
                             </div>
 
                             <div className="rounded-lg border-l-4 border-slate-400 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-slate-500 dark:bg-slate-800">
-                                <label className="block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Remaining</label>
+                                <label className="block text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                                    Remaining
+                                </label>
                                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                                     ${(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             </div>
 
                             <div className="rounded-lg border-l-4 border-violet-500 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:bg-slate-800">
-                                <label className="block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Projected Margin</label>
+                                <label className="block text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                                    Projected Margin
+                                </label>
                                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                                     ${finalMargin.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
-                                <div className="mt-1 text-xs font-medium text-violet-600 dark:text-violet-400">{marginPercent.toFixed(1)}% of Revenue</div>
+                                <div className="mt-1 text-xs font-medium text-violet-600 dark:text-violet-400">
+                                    {marginPercent.toFixed(1)}% of Revenue
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1007,7 +1019,9 @@ export function RevenueReportDialog({
                                             <td className="border-t border-slate-100 px-4 py-2.5 text-right font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">
                                                 {(row.cumulativeRevenue - row.cumulativeCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
-                                            <td className="border-t border-slate-100 px-4 py-2.5 text-right text-slate-600 dark:border-slate-700 dark:text-slate-300">{row.percentComplete.toFixed(1)}%</td>
+                                            <td className="border-t border-slate-100 px-4 py-2.5 text-right text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                                                {row.percentComplete.toFixed(1)}%
+                                            </td>
                                             <td className="border-t border-slate-100 px-4 py-2.5 text-right text-slate-600 dark:border-slate-700 dark:text-slate-300">
                                                 {row.remaining.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </td>
@@ -1016,19 +1030,27 @@ export function RevenueReportDialog({
                                 </tbody>
                                 <tfoot className="bg-slate-100 font-bold dark:bg-slate-700">
                                     <tr>
-                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-slate-800 dark:border-slate-600 dark:text-slate-100">TOTAL</td>
-                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">Total to Claim:</td>
+                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-slate-800 dark:border-slate-600 dark:text-slate-100">
+                                            TOTAL
+                                        </td>
+                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">
+                                            Total to Claim:
+                                        </td>
                                         <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-800 dark:border-slate-600 dark:text-slate-100">
                                             {totalRevenueBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                         </td>
-                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">Total Claimed:</td>
+                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">
+                                            Total Claimed:
+                                        </td>
                                         <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-800 dark:border-slate-600 dark:text-slate-100">
                                             {finalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} (
                                             {((finalRevenue / totalRevenueBudget) * 100).toFixed(1)}%)
                                         </td>
                                         <td className="border-t-2 border-slate-300 px-4 py-3 text-right dark:border-slate-600"></td>
                                         <td className="border-t-2 border-slate-300 px-4 py-3 text-right dark:border-slate-600"></td>
-                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">Remaining:</td>
+                                        <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-600 dark:border-slate-600 dark:text-slate-300">
+                                            Remaining:
+                                        </td>
                                         <td className="border-t-2 border-slate-300 px-4 py-3 text-right text-slate-800 dark:border-slate-600 dark:text-slate-100">
                                             {(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                         </td>
@@ -1096,7 +1118,8 @@ export function RevenueReportDialog({
                 {/* Footer */}
                 <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
                     <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines represent forecast values. Click legend items to toggle visibility.
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines
+                        represent forecast values. Click legend items to toggle visibility.
                     </p>
                 </div>
             </DialogContent>

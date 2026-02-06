@@ -100,9 +100,7 @@ export default function RequisitionShow() {
     };
 
     // Check if any line items have base price (not from project list)
-    const hasBasePriceItems = requisition.line_items?.some(
-        (item) => !item.price_list || item.price_list === 'base_price'
-    );
+    const hasBasePriceItems = requisition.line_items?.some((item) => !item.price_list || item.price_list === 'base_price');
 
     // Check if user can process requisitions (send to Premier)
     const canProcessRequisitions = auth?.permissions?.includes('requisitions.process');
@@ -163,17 +161,53 @@ export default function RequisitionShow() {
     const getStatusConfig = (status: string) => {
         switch (status) {
             case 'success':
-                return { bg: 'bg-amber-500', bgLight: 'bg-amber-50 dark:bg-amber-950', text: 'Awaiting', textColor: 'text-amber-600 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' };
+                return {
+                    bg: 'bg-amber-500',
+                    bgLight: 'bg-amber-50 dark:bg-amber-950',
+                    text: 'Awaiting',
+                    textColor: 'text-amber-600 dark:text-amber-400',
+                    border: 'border-amber-200 dark:border-amber-800',
+                };
             case 'sent':
-                return { bg: 'bg-emerald-500', bgLight: 'bg-emerald-50 dark:bg-emerald-950', text: 'Sent', textColor: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800' };
+                return {
+                    bg: 'bg-emerald-500',
+                    bgLight: 'bg-emerald-50 dark:bg-emerald-950',
+                    text: 'Sent',
+                    textColor: 'text-emerald-600 dark:text-emerald-400',
+                    border: 'border-emerald-200 dark:border-emerald-800',
+                };
             case 'pending':
-                return { bg: 'bg-slate-400', bgLight: 'bg-slate-50 dark:bg-slate-900', text: 'Pending', textColor: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-700' };
+                return {
+                    bg: 'bg-slate-400',
+                    bgLight: 'bg-slate-50 dark:bg-slate-900',
+                    text: 'Pending',
+                    textColor: 'text-slate-600 dark:text-slate-400',
+                    border: 'border-slate-200 dark:border-slate-700',
+                };
             case 'failed':
-                return { bg: 'bg-red-500', bgLight: 'bg-red-50 dark:bg-red-950', text: 'Failed', textColor: 'text-red-600 dark:text-red-400', border: 'border-red-200 dark:border-red-800' };
+                return {
+                    bg: 'bg-red-500',
+                    bgLight: 'bg-red-50 dark:bg-red-950',
+                    text: 'Failed',
+                    textColor: 'text-red-600 dark:text-red-400',
+                    border: 'border-red-200 dark:border-red-800',
+                };
             case 'office_review':
-                return { bg: 'bg-purple-500', bgLight: 'bg-purple-50 dark:bg-purple-950', text: 'Waiting for Review', textColor: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' };
+                return {
+                    bg: 'bg-purple-500',
+                    bgLight: 'bg-purple-50 dark:bg-purple-950',
+                    text: 'Waiting for Review',
+                    textColor: 'text-purple-600 dark:text-purple-400',
+                    border: 'border-purple-200 dark:border-purple-800',
+                };
             default:
-                return { bg: 'bg-slate-400', bgLight: 'bg-slate-50 dark:bg-slate-900', text: status, textColor: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-700' };
+                return {
+                    bg: 'bg-slate-400',
+                    bgLight: 'bg-slate-50 dark:bg-slate-900',
+                    text: status,
+                    textColor: 'text-slate-600 dark:text-slate-400',
+                    border: 'border-slate-200 dark:border-slate-700',
+                };
         }
     };
 
@@ -227,7 +261,8 @@ export default function RequisitionShow() {
     };
 
     const statusConfig = getStatusConfig(requisition.status);
-    const totalCost = Number(requisition.line_items_sum_total_cost) || requisition.line_items?.reduce((sum, item) => sum + Number(item.total_cost || 0), 0) || 0;
+    const totalCost =
+        Number(requisition.line_items_sum_total_cost) || requisition.line_items?.reduce((sum, item) => sum + Number(item.total_cost || 0), 0) || 0;
     const itemCount = requisition.line_items?.length || 0;
 
     useEffect(() => {
@@ -276,17 +311,15 @@ export default function RequisitionShow() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />
 
-            <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-background dark:via-background dark:to-background">
+            <div className="dark:from-background dark:via-background dark:to-background flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50">
                 {/* Compact Header Bar */}
-                <div className="sticky top-0 z-10 border-b border-slate-200/60 bg-white/95 backdrop-blur-xl dark:border-border dark:bg-background/95">
+                <div className="dark:border-border dark:bg-background/95 sticky top-0 z-10 border-b border-slate-200/60 bg-white/95 backdrop-blur-xl">
                     <div className="max-w-full px-3 py-3 sm:px-6 md:px-8">
                         {/* Top row: ID, Status, Key Stats */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-lg font-bold text-slate-900 sm:text-xl dark:text-white">
-                                        #{requisition.id}
-                                    </span>
+                                    <span className="text-lg font-bold text-slate-900 sm:text-xl dark:text-white">#{requisition.id}</span>
                                     {requisition.po_number && (
                                         <Badge variant="outline" className="font-mono text-xs font-semibold">
                                             PO{requisition.po_number}
@@ -304,9 +337,9 @@ export default function RequisitionShow() {
                                     <span className="text-slate-500 dark:text-slate-400">Items:</span>
                                     <span className="font-semibold text-slate-900 dark:text-white">{itemCount}</span>
                                 </div>
-                                <div className="hidden h-4 w-px bg-slate-200 sm:block dark:bg-border" />
+                                <div className="dark:bg-border hidden h-4 w-px bg-slate-200 sm:block" />
                                 <div className="flex items-center gap-1">
-                                    <span className="hidden text-slate-500 xs:inline dark:text-slate-400">Total:</span>
+                                    <span className="xs:inline hidden text-slate-500 dark:text-slate-400">Total:</span>
                                     <span className="text-base font-bold text-slate-900 sm:text-lg dark:text-white">
                                         ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </span>
@@ -318,9 +351,24 @@ export default function RequisitionShow() {
                         <div className="-mx-1 mt-3 flex flex-wrap items-center gap-1.5 sm:mx-0 sm:gap-2">
                             <Link
                                 href={`/requisition/${requisition.id}/edit`}
-                                className={requisition.status !== 'pending' && requisition.status !== 'failed' && !(requisition.status === 'office_review' && canApprovePricing) ? 'pointer-events-none' : ''}
+                                className={
+                                    requisition.status !== 'pending' &&
+                                    requisition.status !== 'failed' &&
+                                    !(requisition.status === 'office_review' && canApprovePricing)
+                                        ? 'pointer-events-none'
+                                        : ''
+                                }
                             >
-                                <Button size="sm" variant="outline" disabled={requisition.status !== 'pending' && requisition.status !== 'failed' && !(requisition.status === 'office_review' && canApprovePricing)} className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={
+                                        requisition.status !== 'pending' &&
+                                        requisition.status !== 'failed' &&
+                                        !(requisition.status === 'office_review' && canApprovePricing)
+                                    }
+                                    className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
+                                >
                                     <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     Edit
                                 </Button>
@@ -343,20 +391,24 @@ export default function RequisitionShow() {
                                     <span className="hidden sm:inline">Duplicate</span>
                                 </Button>
                             </Link>
-                            {canProcessRequisitions && (requisition.status === 'pending' || requisition.status === 'failed' || requisition.status === 'office_review') && (
-                                <Link href={`/requisition/${requisition.id}/refresh-pricing`}>
-                                    <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                        <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                        <span className="hidden sm:inline">Refresh Pricing</span>
-                                    </Button>
-                                </Link>
-                            )}
+                            {canProcessRequisitions &&
+                                (requisition.status === 'pending' || requisition.status === 'failed' || requisition.status === 'office_review') && (
+                                    <Link href={`/requisition/${requisition.id}/refresh-pricing`}>
+                                        <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                            <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                            <span className="hidden sm:inline">Refresh Pricing</span>
+                                        </Button>
+                                    </Link>
+                                )}
 
                             <div className="flex-1" />
 
                             {requisition.status === 'failed' && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
-                                    <Button size="sm" className="h-8 gap-1 bg-amber-500 px-2 text-xs text-white hover:bg-amber-600 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                    <Button
+                                        size="sm"
+                                        className="h-8 gap-1 bg-amber-500 px-2 text-xs text-white hover:bg-amber-600 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
+                                    >
                                         <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Retry
                                     </Button>
@@ -365,7 +417,10 @@ export default function RequisitionShow() {
                             {requisition.status === 'pending' && hasBasePriceItems && (
                                 <div className="flex items-center gap-1">
                                     <Link href={`/requisition/${requisition.id}/send-to-office`}>
-                                        <Button size="sm" className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                        <Button
+                                            size="sm"
+                                            className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                        >
                                             <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             Send to Office
                                         </Button>
@@ -373,7 +428,7 @@ export default function RequisitionShow() {
                                     <Dialog>
                                         <DialogTrigger asChild>
                                             <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2 sm:h-9">
-                                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <HelpCircle className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-md">
@@ -382,14 +437,12 @@ export default function RequisitionShow() {
                                                     <Building className="h-5 w-5 text-purple-600" />
                                                     Why Send to Office?
                                                 </DialogTitle>
-                                                <DialogDescription>
-                                                    This requisition requires office review
-                                                </DialogDescription>
+                                                <DialogDescription>This requisition requires office review</DialogDescription>
                                             </DialogHeader>
                                             <div className="mt-4 space-y-4">
-                                                <p className="text-sm text-muted-foreground">
-                                                    This requisition contains items with <strong>base prices</strong> (not from the project price list).
-                                                    These orders require review by an office administrator before being sent to Premier.
+                                                <p className="text-muted-foreground text-sm">
+                                                    This requisition contains items with <strong>base prices</strong> (not from the project price
+                                                    list). These orders require review by an office administrator before being sent to Premier.
                                                 </p>
                                                 <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950/50">
                                                     <p className="text-xs font-medium text-purple-700 dark:text-purple-300">What happens next:</p>
@@ -407,7 +460,10 @@ export default function RequisitionShow() {
                             {requisition.status === 'pending' && !hasBasePriceItems && (
                                 <div className="flex items-center gap-1">
                                     <Link href={`/requisition/${requisition.id}/api-send`}>
-                                        <Button size="sm" className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                        <Button
+                                            size="sm"
+                                            className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                        >
                                             <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             Send to Premier
                                         </Button>
@@ -415,7 +471,7 @@ export default function RequisitionShow() {
                                     <Dialog>
                                         <DialogTrigger asChild>
                                             <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2 sm:h-9">
-                                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <HelpCircle className="text-muted-foreground h-3.5 w-3.5" />
                                             </Button>
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-md">
@@ -424,9 +480,7 @@ export default function RequisitionShow() {
                                                     <Send className="h-5 w-5 text-blue-600" />
                                                     What happens next?
                                                 </DialogTitle>
-                                                <DialogDescription>
-                                                    Understanding the purchase order workflow
-                                                </DialogDescription>
+                                                <DialogDescription>Understanding the purchase order workflow</DialogDescription>
                                             </DialogHeader>
                                             <div className="mt-4 space-y-4">
                                                 {/* Step 1 */}
@@ -435,9 +489,10 @@ export default function RequisitionShow() {
                                                         1
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-semibold text-foreground">Sent to Premier</h4>
-                                                        <p className="mt-0.5 text-sm text-muted-foreground">
-                                                            After clicking send, the order is received in Premier Construction Software (Superior's ERP suite).
+                                                        <h4 className="text-foreground font-semibold">Sent to Premier</h4>
+                                                        <p className="text-muted-foreground mt-0.5 text-sm">
+                                                            After clicking send, the order is received in Premier Construction Software (Superior's
+                                                            ERP suite).
                                                         </p>
                                                     </div>
                                                 </div>
@@ -448,8 +503,8 @@ export default function RequisitionShow() {
                                                         2
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-semibold text-foreground">Admin Review</h4>
-                                                        <p className="mt-0.5 text-sm text-muted-foreground">
+                                                        <h4 className="text-foreground font-semibold">Admin Review</h4>
+                                                        <p className="text-muted-foreground mt-0.5 text-sm">
                                                             A procurement admin will review the requisition and convert it to a purchase order.
                                                         </p>
                                                     </div>
@@ -461,26 +516,36 @@ export default function RequisitionShow() {
                                                         3
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-semibold text-foreground">Sent to Supplier</h4>
-                                                        <p className="mt-0.5 text-sm text-muted-foreground">
-                                                            Once approved, the purchase order is sent to the supplier. The status will update to "Sent".
+                                                        <h4 className="text-foreground font-semibold">Sent to Supplier</h4>
+                                                        <p className="text-muted-foreground mt-0.5 text-sm">
+                                                            Once approved, the purchase order is sent to the supplier. The status will update to
+                                                            "Sent".
                                                         </p>
                                                     </div>
                                                 </div>
 
                                                 {/* Status info */}
-                                                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                                                    <p className="text-xs font-medium text-muted-foreground">Status meanings:</p>
+                                                <div className="border-border bg-muted/30 rounded-lg border p-3">
+                                                    <p className="text-muted-foreground text-xs font-medium">Status meanings:</p>
                                                     <div className="mt-2 flex flex-wrap gap-2">
-                                                        <Badge variant="outline" className="gap-1 border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                                                        >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                                                             Pending
                                                         </Badge>
-                                                        <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="gap-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400"
+                                                        >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                                                             Awaiting
                                                         </Badge>
-                                                        <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                                                        >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                             Sent
                                                         </Badge>
@@ -493,22 +558,31 @@ export default function RequisitionShow() {
                             )}
                             {requisition.status === 'office_review' && canApprovePricing && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
-                                    <Button size="sm" className="h-8 gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
+                                    <Button
+                                        size="sm"
+                                        className="h-8 gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                    >
                                         <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Send to Premier
                                     </Button>
                                 </Link>
                             )}
                             {requisition.status === 'office_review' && !canApprovePricing && (
-                                <Badge variant="outline" className="gap-1 border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400">
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1 border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400"
+                                >
                                     <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                     Waiting for Review
                                 </Badge>
                             )}
                             {requisition.status !== 'pending' && requisition.status !== 'failed' && requisition.status !== 'office_review' && (
-                                <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1 border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                                >
                                     <CircleCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="hidden xs:inline">Sent to</span> Premier
+                                    <span className="xs:inline hidden">Sent to</span> Premier
                                 </Badge>
                             )}
                         </div>
@@ -534,24 +608,27 @@ export default function RequisitionShow() {
                             {/* Mobile: Stacked cards, Desktop: Sidebar */}
                             <div className="flex flex-col gap-3 lg:gap-4">
                                 {/* Details Card */}
-                                <Card className="overflow-hidden border-slate-200/60 dark:border-border">
-                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 px-3 py-2.5 sm:px-4 sm:py-3 dark:border-border dark:bg-muted/30">
+                                <Card className="dark:border-border overflow-hidden border-slate-200/60">
+                                    <CardHeader className="dark:border-border dark:bg-muted/30 border-b border-slate-100 bg-slate-50/50 px-3 py-2.5 sm:px-4 sm:py-3">
                                         <CardTitle className="flex items-center gap-2 text-xs font-semibold text-slate-700 sm:text-sm dark:text-slate-300">
-                                            <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                                            <Package className="h-3.5 w-3.5 text-slate-400 sm:h-4 sm:w-4" />
                                             Details
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {/* Compact grid on mobile, list on desktop */}
-                                        <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4 lg:grid-cols-1 lg:gap-0 lg:bg-transparent dark:bg-border">
+                                        <div className="dark:bg-border grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4 lg:grid-cols-1 lg:gap-0 lg:bg-transparent">
                                             {detailItems.map((item) => (
-                                                <div key={item.label} className="flex items-start gap-2 bg-white px-2.5 py-2 sm:px-3 lg:gap-3 lg:border-b lg:border-slate-100 lg:px-4 lg:py-2.5 lg:last:border-0 dark:bg-card dark:lg:border-border">
+                                                <div
+                                                    key={item.label}
+                                                    className="dark:bg-card dark:lg:border-border flex items-start gap-2 bg-white px-2.5 py-2 sm:px-3 lg:gap-3 lg:border-b lg:border-slate-100 lg:px-4 lg:py-2.5 lg:last:border-0"
+                                                >
                                                     <item.icon className="mt-0.5 h-3 w-3 shrink-0 text-slate-400 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4 dark:text-slate-500" />
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400 sm:text-[10px] lg:text-[11px] dark:text-slate-500">
+                                                        <p className="text-[9px] font-medium tracking-wider text-slate-400 uppercase sm:text-[10px] lg:text-[11px] dark:text-slate-500">
                                                             {item.label}
                                                         </p>
-                                                        <p className="mt-0.5 break-words text-[11px] font-medium text-slate-700 sm:text-xs lg:text-sm dark:text-slate-200">
+                                                        <p className="mt-0.5 text-[11px] font-medium break-words text-slate-700 sm:text-xs lg:text-sm dark:text-slate-200">
                                                             {item.value || <span className="text-slate-400">—</span>}
                                                         </p>
                                                     </div>
@@ -562,11 +639,9 @@ export default function RequisitionShow() {
                                 </Card>
 
                                 {/* Value Summary - Hidden on mobile since it's in header */}
-                                <Card className="hidden border-slate-200/60 bg-gradient-to-br from-blue-50 to-indigo-50 lg:block dark:border-border dark:from-blue-950/30 dark:to-indigo-950/30">
+                                <Card className="dark:border-border hidden border-slate-200/60 bg-gradient-to-br from-blue-50 to-indigo-50 lg:block dark:from-blue-950/30 dark:to-indigo-950/30">
                                     <CardContent className="p-4">
-                                        <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                            Total Value
-                                        </p>
+                                        <p className="text-xs font-medium tracking-wider text-slate-500 uppercase dark:text-slate-400">Total Value</p>
                                         <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
                                             ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                         </p>
@@ -581,10 +656,10 @@ export default function RequisitionShow() {
                         {/* Right Column - Tabs */}
                         <div className="min-w-0">
                             <Tabs defaultValue="items" className="w-full">
-                                <TabsList className="mb-3 inline-flex h-auto w-full max-w-full justify-start overflow-x-auto rounded-lg border border-slate-200/50 bg-slate-100/80 p-1 sm:mb-4 sm:w-auto dark:border-border dark:bg-muted/50">
+                                <TabsList className="dark:border-border dark:bg-muted/50 mb-3 inline-flex h-auto w-full max-w-full justify-start overflow-x-auto rounded-lg border border-slate-200/50 bg-slate-100/80 p-1 sm:mb-4 sm:w-auto">
                                     <TabsTrigger
                                         value="items"
-                                        className="flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all sm:gap-1.5 sm:px-3 sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-card"
+                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <Cuboid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Items
@@ -594,14 +669,14 @@ export default function RequisitionShow() {
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="log"
-                                        className="flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all sm:gap-1.5 sm:px-3 sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-card"
+                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <History className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Activity
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="compare"
-                                        className="flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all sm:gap-1.5 sm:px-3 sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-card"
+                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <GitCompare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Compare
@@ -610,13 +685,13 @@ export default function RequisitionShow() {
 
                                 {/* Line Items Tab */}
                                 <TabsContent value="items" className="mt-0">
-                                    <Card className="max-w-full overflow-hidden border-slate-200/60 dark:border-border">
+                                    <Card className="dark:border-border max-w-full overflow-hidden border-slate-200/60">
                                         <div className="-mx-px overflow-x-auto">
                                             <Table>
                                                 <TableHeader>
-                                                    <TableRow className="border-b border-slate-100 bg-slate-50/80 hover:bg-slate-50/80 dark:border-border dark:bg-muted/30">
+                                                    <TableRow className="dark:border-border dark:bg-muted/30 border-b border-slate-100 bg-slate-50/80 hover:bg-slate-50/80">
                                                         <TableHead
-                                                            className="cursor-pointer whitespace-nowrap px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
+                                                            className="cursor-pointer px-2 py-2 text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
                                                             onClick={() => handleSort('code')}
                                                         >
                                                             <div className="flex items-center gap-1">
@@ -625,7 +700,7 @@ export default function RequisitionShow() {
                                                             </div>
                                                         </TableHead>
                                                         <TableHead
-                                                            className="cursor-pointer whitespace-nowrap px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
+                                                            className="cursor-pointer px-2 py-2 text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
                                                             onClick={() => handleSort('description')}
                                                         >
                                                             <div className="flex items-center gap-1">
@@ -635,7 +710,7 @@ export default function RequisitionShow() {
                                                             </div>
                                                         </TableHead>
                                                         <TableHead
-                                                            className="cursor-pointer whitespace-nowrap px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
+                                                            className="cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
                                                             onClick={() => handleSort('qty')}
                                                         >
                                                             <div className="flex items-center justify-end gap-1">
@@ -644,7 +719,7 @@ export default function RequisitionShow() {
                                                             </div>
                                                         </TableHead>
                                                         <TableHead
-                                                            className="hidden cursor-pointer whitespace-nowrap px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:table-cell sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
+                                                            className="hidden cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:table-cell sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
                                                             onClick={() => handleSort('unit_cost')}
                                                         >
                                                             <div className="flex items-center justify-end gap-1">
@@ -653,7 +728,7 @@ export default function RequisitionShow() {
                                                             </div>
                                                         </TableHead>
                                                         <TableHead
-                                                            className="cursor-pointer whitespace-nowrap px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
+                                                            className="cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
                                                             onClick={() => handleSort('total_cost')}
                                                         >
                                                             <div className="flex items-center justify-end gap-1">
@@ -661,10 +736,10 @@ export default function RequisitionShow() {
                                                                 <ArrowUpDown className="hidden h-3 w-3 opacity-40 sm:block" />
                                                             </div>
                                                         </TableHead>
-                                                        <TableHead className="hidden whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 md:table-cell dark:text-slate-400">
+                                                        <TableHead className="hidden px-4 py-3 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase md:table-cell dark:text-slate-400">
                                                             Cost Code
                                                         </TableHead>
-                                                        <TableHead className="hidden whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 lg:table-cell dark:text-slate-400">
+                                                        <TableHead className="hidden px-4 py-3 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase lg:table-cell dark:text-slate-400">
                                                             Price List
                                                         </TableHead>
                                                     </TableRow>
@@ -678,9 +753,11 @@ export default function RequisitionShow() {
                                                                 item.is_locked
                                                                     ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50'
                                                                     : cn(
-                                                                        index % 2 === 0 ? 'bg-white dark:bg-card' : 'bg-slate-50/50 dark:bg-muted/10',
-                                                                        'hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
-                                                                    ),
+                                                                          index % 2 === 0
+                                                                              ? 'dark:bg-card bg-white'
+                                                                              : 'dark:bg-muted/10 bg-slate-50/50',
+                                                                          'hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
+                                                                      ),
                                                             )}
                                                         >
                                                             <TableCell className="px-2 py-2 font-mono text-xs text-slate-700 sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
@@ -699,11 +776,14 @@ export default function RequisitionShow() {
                                                                     </span>
                                                                 )}
                                                             </TableCell>
-                                                            <TableCell className="px-2 py-2 text-right text-xs font-medium tabular-nums text-slate-700 sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
+                                                            <TableCell className="px-2 py-2 text-right text-xs font-medium text-slate-700 tabular-nums sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
                                                                 {item.qty}
                                                             </TableCell>
-                                                            <TableCell className="hidden px-2 py-2 text-right text-xs tabular-nums text-slate-600 sm:table-cell sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
-                                                                <div className="flex items-center justify-end gap-1.5" title={item.is_locked ? 'Project locked price' : undefined}>
+                                                            <TableCell className="hidden px-2 py-2 text-right text-xs text-slate-600 tabular-nums sm:table-cell sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
+                                                                <div
+                                                                    className="flex items-center justify-end gap-1.5"
+                                                                    title={item.is_locked ? 'Project locked price' : undefined}
+                                                                >
                                                                     {item.is_locked ? (
                                                                         <Lock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                                                                     ) : null}
@@ -712,7 +792,7 @@ export default function RequisitionShow() {
                                                                     </span>
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell className="px-2 py-2 text-right text-xs font-semibold tabular-nums text-slate-900 sm:px-4 sm:py-2.5 sm:text-sm dark:text-white">
+                                                            <TableCell className="px-2 py-2 text-right text-xs font-semibold text-slate-900 tabular-nums sm:px-4 sm:py-2.5 sm:text-sm dark:text-white">
                                                                 ${Number(item.total_cost)?.toFixed(2)}
                                                             </TableCell>
                                                             <TableCell className="hidden px-4 py-2.5 text-sm text-slate-500 md:table-cell dark:text-slate-400">
@@ -724,14 +804,20 @@ export default function RequisitionShow() {
                                                         </TableRow>
                                                     ))}
                                                     {/* Total Row */}
-                                                    <TableRow className="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-border dark:bg-muted/50">
-                                                        <TableCell colSpan={3} className="px-2 py-2.5 text-right text-xs text-slate-700 sm:hidden dark:text-slate-300">
+                                                    <TableRow className="dark:border-border dark:bg-muted/50 border-t-2 border-slate-200 bg-slate-50 font-semibold">
+                                                        <TableCell
+                                                            colSpan={3}
+                                                            className="px-2 py-2.5 text-right text-xs text-slate-700 sm:hidden dark:text-slate-300"
+                                                        >
                                                             Total ({itemCount})
                                                         </TableCell>
-                                                        <TableCell colSpan={4} className="hidden px-4 py-3 text-right text-sm text-slate-700 sm:table-cell dark:text-slate-300">
+                                                        <TableCell
+                                                            colSpan={4}
+                                                            className="hidden px-4 py-3 text-right text-sm text-slate-700 sm:table-cell dark:text-slate-300"
+                                                        >
                                                             Total ({itemCount} items)
                                                         </TableCell>
-                                                        <TableCell className="px-2 py-2.5 text-right text-sm tabular-nums text-slate-900 sm:px-4 sm:py-3 sm:text-base dark:text-white">
+                                                        <TableCell className="px-2 py-2.5 text-right text-sm text-slate-900 tabular-nums sm:px-4 sm:py-3 sm:text-base dark:text-white">
                                                             ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                                         </TableCell>
                                                         <TableCell className="hidden md:table-cell" />
@@ -745,15 +831,19 @@ export default function RequisitionShow() {
 
                                 {/* Activity Log Tab - Timeline Style */}
                                 <TabsContent value="log" className="mt-0">
-                                    <Card className="overflow-hidden border-slate-200/60 dark:border-border">
+                                    <Card className="dark:border-border overflow-hidden border-slate-200/60">
                                         <CardContent className="p-0">
                                             {activities.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-16">
                                                     <div className="mb-3 rounded-full bg-slate-100 p-2.5 sm:mb-4 sm:p-3 dark:bg-slate-800">
                                                         <History className="h-5 w-5 text-slate-400 sm:h-6 sm:w-6 dark:text-slate-500" />
                                                     </div>
-                                                    <p className="text-xs font-medium text-slate-500 sm:text-sm dark:text-slate-400">No activity recorded</p>
-                                                    <p className="mt-1 text-[10px] text-slate-400 sm:text-xs dark:text-slate-500">Activity will appear here once changes are made</p>
+                                                    <p className="text-xs font-medium text-slate-500 sm:text-sm dark:text-slate-400">
+                                                        No activity recorded
+                                                    </p>
+                                                    <p className="mt-1 text-[10px] text-slate-400 sm:text-xs dark:text-slate-500">
+                                                        Activity will appear here once changes are made
+                                                    </p>
                                                 </div>
                                             ) : (
                                                 <div className="relative">
@@ -779,7 +869,12 @@ export default function RequisitionShow() {
                                                                 )}
 
                                                                 {/* Icon */}
-                                                                <div className={cn('relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8', eventConfig.bg)}>
+                                                                <div
+                                                                    className={cn(
+                                                                        'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
+                                                                        eventConfig.bg,
+                                                                    )}
+                                                                >
                                                                     <EventIcon className={cn('h-3 w-3 sm:h-4 sm:w-4', eventConfig.iconColor)} />
                                                                 </div>
 
@@ -788,14 +883,19 @@ export default function RequisitionShow() {
                                                                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                                                         <Badge
                                                                             variant="outline"
-                                                                            className={cn('px-1.5 py-0 text-[10px] font-medium capitalize sm:px-2 sm:py-0.5 sm:text-xs', eventConfig.badgeBg, eventConfig.badgeText, eventConfig.badgeBorder)}
+                                                                            className={cn(
+                                                                                'px-1.5 py-0 text-[10px] font-medium capitalize sm:px-2 sm:py-0.5 sm:text-xs',
+                                                                                eventConfig.badgeBg,
+                                                                                eventConfig.badgeText,
+                                                                                eventConfig.badgeBorder,
+                                                                            )}
                                                                         >
                                                                             {eventConfig.label}
                                                                         </Badge>
                                                                         <span className="hidden text-xs text-slate-400 sm:inline dark:text-slate-500">
                                                                             {activity.log_name}
                                                                         </span>
-                                                                        <span className="text-[10px] tabular-nums text-slate-400 sm:text-xs dark:text-slate-500">
+                                                                        <span className="text-[10px] text-slate-400 tabular-nums sm:text-xs dark:text-slate-500">
                                                                             {new Date(activity.created_at).toLocaleString()}
                                                                         </span>
                                                                     </div>
@@ -808,7 +908,11 @@ export default function RequisitionShow() {
 
                                                                     {/* Collapsible Changes */}
                                                                     {hasChanges && (
-                                                                        <Collapsible open={isExpanded} onOpenChange={() => toggleActivity(activity.id)} className="mt-2 sm:mt-3">
+                                                                        <Collapsible
+                                                                            open={isExpanded}
+                                                                            onOpenChange={() => toggleActivity(activity.id)}
+                                                                            className="mt-2 sm:mt-3"
+                                                                        >
                                                                             <CollapsibleTrigger asChild>
                                                                                 <Button
                                                                                     variant="ghost"
@@ -825,32 +929,50 @@ export default function RequisitionShow() {
                                                                             </CollapsibleTrigger>
                                                                             <CollapsibleContent className="mt-2 space-y-2 sm:space-y-3">
                                                                                 {activity.properties?.attributes && (
-                                                                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3 dark:border-border dark:bg-muted/30">
-                                                                                        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500 sm:mb-2 sm:text-[10px] dark:text-slate-400">
+                                                                                    <div className="dark:border-border dark:bg-muted/30 rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3">
+                                                                                        <p className="mb-1.5 text-[9px] font-semibold tracking-wider text-slate-500 uppercase sm:mb-2 sm:text-[10px] dark:text-slate-400">
                                                                                             New Values
                                                                                         </p>
                                                                                         <div className="grid gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
-                                                                                            {Object.entries(activity.properties.attributes).map(([key, value]) => (
-                                                                                                <div key={key} className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2">
-                                                                                                    <span className="font-medium text-slate-500 dark:text-slate-400">{key}:</span>
-                                                                                                    <span className="break-all text-slate-700 dark:text-slate-200">{String(value)}</span>
-                                                                                                </div>
-                                                                                            ))}
+                                                                                            {Object.entries(activity.properties.attributes).map(
+                                                                                                ([key, value]) => (
+                                                                                                    <div
+                                                                                                        key={key}
+                                                                                                        className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2"
+                                                                                                    >
+                                                                                                        <span className="font-medium text-slate-500 dark:text-slate-400">
+                                                                                                            {key}:
+                                                                                                        </span>
+                                                                                                        <span className="break-all text-slate-700 dark:text-slate-200">
+                                                                                                            {String(value)}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                ),
+                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
                                                                                 {activity.properties?.old && (
                                                                                     <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2 sm:p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                                                                                        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-amber-600 sm:mb-2 sm:text-[10px] dark:text-amber-400">
+                                                                                        <p className="mb-1.5 text-[9px] font-semibold tracking-wider text-amber-600 uppercase sm:mb-2 sm:text-[10px] dark:text-amber-400">
                                                                                             Previous Values
                                                                                         </p>
                                                                                         <div className="grid gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
-                                                                                            {Object.entries(activity.properties.old).map(([key, value]) => (
-                                                                                                <div key={key} className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2">
-                                                                                                    <span className="font-medium text-amber-600 dark:text-amber-400">{key}:</span>
-                                                                                                    <span className="break-all text-amber-700 dark:text-amber-300">{String(value)}</span>
-                                                                                                </div>
-                                                                                            ))}
+                                                                                            {Object.entries(activity.properties.old).map(
+                                                                                                ([key, value]) => (
+                                                                                                    <div
+                                                                                                        key={key}
+                                                                                                        className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2"
+                                                                                                    >
+                                                                                                        <span className="font-medium text-amber-600 dark:text-amber-400">
+                                                                                                            {key}:
+                                                                                                        </span>
+                                                                                                        <span className="break-all text-amber-700 dark:text-amber-300">
+                                                                                                            {String(value)}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                ),
+                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}

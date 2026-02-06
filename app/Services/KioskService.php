@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Clock;
 use App\Models\Kiosk;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
-use App\Models\Clock;
 use Session;
 
 class KioskService
@@ -24,10 +24,11 @@ class KioskService
 
         return $employees->map(function ($employee) use ($activeClocks) {
             $activeClock = $activeClocks->get($employee->eh_employee_id);
-            $employee->clocked_in = !is_null($activeClock);
+            $employee->clocked_in = ! is_null($activeClock);
             $employee->clock_in_time = $activeClock
                 ? Carbon::parse($activeClock->clock_in)->format('h:i A')
                 : null;
+
             return $employee;
         });
     }
@@ -36,13 +37,14 @@ class KioskService
     {
         $adminSession = Session::get('kiosk_admin_mode');
 
-        if (!$adminSession || empty($adminSession['active'])) {
+        if (! $adminSession || empty($adminSession['active'])) {
             return false;
         }
 
         // Check if session expired
         if (now()->greaterThan(Carbon::parse($adminSession['expires_at']))) {
             Session::forget('kiosk_admin_mode');
+
             return false;
         }
 

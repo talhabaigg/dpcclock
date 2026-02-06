@@ -96,9 +96,9 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
             changes.push(
                 <span key="price" className="flex items-center gap-1">
                     <span className="text-muted-foreground">{formatPrice(entry.previous_unit_cost)}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-emerald-600 font-medium">{formatPrice(entry.unit_cost_override)}</span>
-                </span>
+                    <ArrowRight className="text-muted-foreground h-3 w-3" />
+                    <span className="font-medium text-emerald-600">{formatPrice(entry.unit_cost_override)}</span>
+                </span>,
             );
         }
 
@@ -107,11 +107,9 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
             changes.push(
                 <span key="lock" className="flex items-center gap-1 text-xs">
                     <span className="text-muted-foreground">{entry.previous_is_locked ? 'Locked' : 'Unlocked'}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span className={entry.is_locked ? 'text-amber-600' : 'text-blue-600'}>
-                        {entry.is_locked ? 'Locked' : 'Unlocked'}
-                    </span>
-                </span>
+                    <ArrowRight className="text-muted-foreground h-3 w-3" />
+                    <span className={entry.is_locked ? 'text-amber-600' : 'text-blue-600'}>{entry.is_locked ? 'Locked' : 'Unlocked'}</span>
+                </span>,
             );
         }
 
@@ -140,13 +138,13 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
                     Price History
                 </Button>
             </DialogTrigger>
-            <DialogContent className="h-[calc(100vh-4rem)] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] overflow-hidden flex flex-col">
+            <DialogContent className="flex h-[calc(100vh-4rem)] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] flex-col overflow-hidden">
                 <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Price History Log</DialogTitle>
                     <DialogDescription>Complete price change history for {locationName}</DialogDescription>
                 </DialogHeader>
-                <div className="flex-shrink-0 relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative flex-shrink-0">
+                    <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <Input
                         placeholder="Search by code, description, or user..."
                         value={searchQuery}
@@ -154,18 +152,18 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
                         className="pl-10"
                     />
                 </div>
-                <div className="flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
+                <div className="text-muted-foreground flex flex-shrink-0 items-center justify-between text-sm">
                     <span>{filteredHistory.length} record(s)</span>
                     {searchQuery && <span>Filtered from {history.length} total</span>}
                 </div>
-                <div className="flex-1 min-h-0 border rounded-lg overflow-auto">
+                <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
                         </div>
                     ) : filteredHistory.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                            <ClipboardList className="h-8 w-8 mb-2 opacity-40" />
+                        <div className="text-muted-foreground flex flex-col items-center justify-center py-12">
+                            <ClipboardList className="mb-2 h-8 w-8 opacity-40" />
                             <p className="text-sm">{searchQuery ? 'No matching records' : 'No history available'}</p>
                         </div>
                     ) : (
@@ -182,17 +180,12 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
                             </TableHeader>
                             <TableBody>
                                 {filteredHistory.map((entry) => (
-                                    <TableRow
-                                        key={entry.id}
-                                        className={entry.change_type === 'deleted' ? 'bg-red-50/50 dark:bg-red-950/20' : ''}
-                                    >
+                                    <TableRow key={entry.id} className={entry.change_type === 'deleted' ? 'bg-red-50/50 dark:bg-red-950/20' : ''}>
                                         <TableCell className="text-sm whitespace-nowrap">{formatDate(entry.created_at)}</TableCell>
                                         <TableCell>
-                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                                                {entry.material_code}
-                                            </code>
+                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{entry.material_code}</code>
                                         </TableCell>
-                                        <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                                        <TableCell className="text-muted-foreground max-w-[200px] truncate text-sm">
                                             {entry.material_description}
                                         </TableCell>
                                         <TableCell>{getChangeTypeBadge(entry.change_type)}</TableCell>

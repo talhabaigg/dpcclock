@@ -1,8 +1,11 @@
 <?php
+
 namespace App\Services;
+
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Log;
-use Illuminate\Http\Client\Response;
+
 class TimesheetService
 {
     public function deleteTimesheetInEH($timesheetId)
@@ -10,7 +13,7 @@ class TimesheetService
         $apiKey = env('EH_API_KEY');
 
         $apiResponse = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Accept' => 'application/json',
         ])->delete("https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/{$timesheetId}");
         Log::info($apiResponse);

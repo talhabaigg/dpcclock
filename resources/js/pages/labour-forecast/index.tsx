@@ -66,10 +66,7 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
         return locations.filter((location) => {
             // Search filter
             const query = searchQuery.toLowerCase();
-            const matchesSearch =
-                !searchQuery ||
-                location.name.toLowerCase().includes(query) ||
-                location.job_number?.toLowerCase().includes(query);
+            const matchesSearch = !searchQuery || location.name.toLowerCase().includes(query) || location.job_number?.toLowerCase().includes(query);
 
             // Status filter
             const matchesStatus =
@@ -104,7 +101,7 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-1">
                         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <BarChart3 className="h-6 w-6 text-primary" />
+                            <BarChart3 className="text-primary h-6 w-6" />
                             Labour Forecast
                         </h1>
                         <p className="text-muted-foreground text-sm">Manage workforce planning for {currentMonth}</p>
@@ -137,11 +134,9 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Total Jobs</p>
+                                    <p className="text-muted-foreground text-sm font-medium">Total Jobs</p>
                                     <p className="text-3xl font-bold tracking-tight">{stats.totalJobs}</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        {stats.jobsStaffedThisWeek} staffed this week
-                                    </p>
+                                    <p className="text-muted-foreground mt-1 text-xs">{stats.jobsStaffedThisWeek} staffed this week</p>
                                 </div>
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
                                     <Building2 className="h-6 w-6 text-slate-600 dark:text-slate-400" />
@@ -155,11 +150,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Weekly Headcount</p>
+                                    <p className="text-muted-foreground text-sm font-medium">Weekly Headcount</p>
                                     <p className="text-3xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400">
                                         {stats.totalHeadcount.toLocaleString()}
                                     </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">W/E {currentWeekEnding}</p>
+                                    <p className="text-muted-foreground mt-1 text-xs">W/E {currentWeekEnding}</p>
                                 </div>
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30">
                                     <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
@@ -173,11 +168,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Weekly Labour Cost</p>
+                                    <p className="text-muted-foreground text-sm font-medium">Weekly Labour Cost</p>
                                     <p className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
                                         {formatCurrency(stats.totalCost)}
                                     </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">W/E {currentWeekEnding}</p>
+                                    <p className="text-muted-foreground mt-1 text-xs">W/E {currentWeekEnding}</p>
                                 </div>
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
                                     <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
@@ -191,11 +186,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Avg Cost / Head</p>
+                                    <p className="text-muted-foreground text-sm font-medium">Avg Cost / Head</p>
                                     <p className="text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
                                         {formatCurrency(stats.avgCostPerHead)}
                                     </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">Per week</p>
+                                    <p className="text-muted-foreground mt-1 text-xs">Per week</p>
                                 </div>
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
                                     <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400" />
@@ -207,11 +202,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
 
                 {/* Grid Card */}
                 <Card className="overflow-hidden border-0 shadow-md">
-                    <CardHeader className="border-b border-border/50 bg-card px-6 py-4">
+                    <CardHeader className="border-border/50 bg-card border-b px-6 py-4">
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                             <div>
                                 <CardTitle className="flex items-center gap-2 text-lg">
-                                    <MapPin className="h-5 w-5 text-muted-foreground" />
+                                    <MapPin className="text-muted-foreground h-5 w-5" />
                                     Job Forecasts
                                 </CardTitle>
                                 <CardDescription>
@@ -225,11 +220,11 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                     <CardContent className="p-0">
                         {filteredLocations.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16">
-                                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                                    <BarChart3 className="h-8 w-8 text-muted-foreground" />
+                                <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                                    <BarChart3 className="text-muted-foreground h-8 w-8" />
                                 </div>
                                 <h3 className="mb-1 text-lg font-semibold">No forecasts found</h3>
-                                <p className="max-w-sm text-center text-sm text-muted-foreground">
+                                <p className="text-muted-foreground max-w-sm text-center text-sm">
                                     {searchQuery || statusFilter !== 'all'
                                         ? 'Try adjusting your search or filter criteria.'
                                         : 'There are no job locations with labour forecast data for this period.'}
@@ -240,7 +235,7 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                                             setSearchQuery('');
                                             setStatusFilter('all');
                                         }}
-                                        className="mt-4 text-sm font-medium text-primary hover:underline"
+                                        className="text-primary mt-4 text-sm font-medium hover:underline"
                                     >
                                         Clear filters
                                     </button>
@@ -248,7 +243,7 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                             </div>
                         ) : (
                             <div
-                                className="ag-theme-alpine dark:ag-theme-alpine-dark h-[calc(100vh-420px)] min-h-[400px] [&_.ag-header]:border-b [&_.ag-header]:border-border/50"
+                                className="ag-theme-alpine dark:ag-theme-alpine-dark [&_.ag-header]:border-border/50 h-[calc(100vh-420px)] min-h-[400px] [&_.ag-header]:border-b"
                                 style={
                                     {
                                         '--ag-border-color': 'transparent',

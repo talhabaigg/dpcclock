@@ -1,7 +1,7 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,8 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { PlusCircle, Eye, Pencil, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Eye, Pencil, PlusCircle, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Turnover Forecast', href: '/turnover-forecast' },
@@ -42,7 +42,7 @@ type FormData = {
 
 export default function ForecastProjectsIndex({ projects = [] }: { projects: ForecastProject[] }) {
     // Ensure projects is always an array and filter out any invalid entries
-    const validProjects = Array.isArray(projects) ? projects.filter(p => p && typeof p === 'object' && p.id) : [];
+    const validProjects = Array.isArray(projects) ? projects.filter((p) => p && typeof p === 'object' && p.id) : [];
     const { flash, errors } = usePage<{ flash: { success?: string; error?: string }; errors: Record<string, string> }>().props;
     const [showFlash, setShowFlash] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -193,7 +193,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                         <TableBody>
                             {validProjects.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                                    <TableCell colSpan={6} className="text-muted-foreground text-center">
                                         No forecast projects yet. Create one to get started.
                                     </TableCell>
                                 </TableRow>
@@ -238,7 +238,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                     <form onSubmit={handleSubmit}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="name" className="text-right pt-2">
+                                <Label htmlFor="name" className="pt-2 text-right">
                                     Name *
                                 </Label>
                                 <div className="col-span-3">
@@ -253,7 +253,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                                 </div>
                             </div>
                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="project_number" className="text-right pt-2">
+                                <Label htmlFor="project_number" className="pt-2 text-right">
                                     Project # *
                                 </Label>
                                 <div className="col-span-3">
@@ -296,7 +296,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                                 </Select>
                             </div>
                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="start_date" className="text-right pt-2">
+                                <Label htmlFor="start_date" className="pt-2 text-right">
                                     Start Date
                                 </Label>
                                 <div className="col-span-3">
@@ -311,7 +311,7 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                                 </div>
                             </div>
                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="end_date" className="text-right pt-2">
+                                <Label htmlFor="end_date" className="pt-2 text-right">
                                     End Date
                                 </Label>
                                 <div className="col-span-3">

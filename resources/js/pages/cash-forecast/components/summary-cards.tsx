@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatAmount } from '../utils';
 
@@ -27,32 +26,24 @@ const getValueColorClass = (variant: SummaryCardVariant, value: number): string 
     }
 };
 
-export const SummaryCard = ({
-    title,
-    value,
-    description,
-    variant = 'default',
-    prefix = '$',
-}: SummaryCardProps) => {
+export const SummaryCard = ({ title, value, description, variant = 'default', prefix = '$' }: SummaryCardProps) => {
     const colorClass = getValueColorClass(variant, value);
 
     return (
         <Card className="relative overflow-hidden">
             <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-medium uppercase tracking-wide">
-                    {title}
-                </CardDescription>
+                <CardDescription className="text-xs font-medium tracking-wide uppercase">{title}</CardDescription>
                 <CardTitle className={`text-2xl font-bold tabular-nums ${colorClass}`}>
                     {prefix}
                     {formatAmount(value)}
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="text-muted-foreground text-xs">{description}</p>
             </CardContent>
             {variant !== 'default' && (
                 <div
-                    className={`absolute top-0 right-0 w-1 h-full ${
+                    className={`absolute top-0 right-0 h-full w-1 ${
                         variant === 'positive' || (variant === 'dynamic' && value >= 0)
                             ? 'bg-green-500'
                             : variant === 'negative' || (variant === 'dynamic' && value < 0)
@@ -75,45 +66,14 @@ type SummaryCardsGridProps = {
     endingBalance: number;
 };
 
-export const SummaryCardsGrid = ({
-    startingBalance,
-    totalCashIn,
-    totalCashOut,
-    netCashflow,
-    endingBalance,
-}: SummaryCardsGridProps) => {
+export const SummaryCardsGrid = ({ startingBalance, totalCashIn, totalCashOut, netCashflow, endingBalance }: SummaryCardsGridProps) => {
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <SummaryCard
-                title="Starting Balance"
-                value={startingBalance}
-                description="Opening cash position"
-                variant="default"
-            />
-            <SummaryCard
-                title="Total Cash In"
-                value={totalCashIn}
-                description="Revenue + GST collected"
-                variant="positive"
-            />
-            <SummaryCard
-                title="Total Cash Out"
-                value={totalCashOut}
-                description="Wages, costs, vendors, GST"
-                variant="negative"
-            />
-            <SummaryCard
-                title="Net Cashflow"
-                value={netCashflow}
-                description="12-month change"
-                variant="dynamic"
-            />
-            <SummaryCard
-                title="Ending Balance"
-                value={endingBalance}
-                description="Projected position"
-                variant="dynamic"
-            />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <SummaryCard title="Starting Balance" value={startingBalance} description="Opening cash position" variant="default" />
+            <SummaryCard title="Total Cash In" value={totalCashIn} description="Revenue + GST collected" variant="positive" />
+            <SummaryCard title="Total Cash Out" value={totalCashOut} description="Wages, costs, vendors, GST" variant="negative" />
+            <SummaryCard title="Net Cashflow" value={netCashflow} description="12-month change" variant="dynamic" />
+            <SummaryCard title="Ending Balance" value={endingBalance} description="Projected position" variant="dynamic" />
         </div>
     );
 };
@@ -150,10 +110,8 @@ export const SourceIndicator = ({ source, className = '' }: SourceIndicatorProps
     const { color, label, textColor, bgColor } = config[source];
 
     return (
-        <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${textColor} ${bgColor} ${className}`}
-        >
-            <span className={`w-1.5 h-1.5 rounded-full ${color}`} />
+        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${textColor} ${bgColor} ${className}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
             {label}
         </span>
     );
@@ -165,29 +123,25 @@ type DataSourceLegendProps = {
     showMixed?: boolean;
 };
 
-export const DataSourceLegend = ({
-    showActual = true,
-    showForecast = true,
-    showMixed = true,
-}: DataSourceLegendProps) => {
+export const DataSourceLegend = ({ showActual = true, showForecast = true, showMixed = true }: DataSourceLegendProps) => {
     return (
         <div className="flex flex-wrap items-center gap-4 text-xs">
             <span className="text-muted-foreground font-medium">Data Source:</span>
             {showActual && (
                 <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="h-2 w-2 rounded-full bg-blue-500" />
                     <span className="text-muted-foreground">Actual (invoiced/committed)</span>
                 </div>
             )}
             {showForecast && (
                 <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="h-2 w-2 rounded-full bg-amber-500" />
                     <span className="text-muted-foreground">Forecast (remaining expected)</span>
                 </div>
             )}
             {showMixed && (
                 <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-amber-500" />
+                    <span className="h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-amber-500" />
                     <span className="text-muted-foreground">Mixed (actual + remaining forecast)</span>
                 </div>
             )}

@@ -1,16 +1,11 @@
-import { ColDef } from 'ag-grid-community';
-import { CostCode } from '@/pages/purchasing/types';
-import { ActionsCellRenderer } from './cellRenderers/ActionsCellRenderer';
-import { currencyFormatter, CostType } from './utils';
 import { CostCodeSelector } from '@/pages/purchasing/costCodeSelector';
+import { CostCode } from '@/pages/purchasing/types';
+import { ColDef } from 'ag-grid-community';
 import { CostTypeSearchEditor } from './cellEditors/CostTypeSearchEditor';
+import { ActionsCellRenderer } from './cellRenderers/ActionsCellRenderer';
+import { CostType, currencyFormatter } from './utils';
 
-export const createColumnDefs = (
-    costCodes: CostCode[],
-    costTypes: CostType[],
-    onDeleteRow: (data: any) => void,
-    canDelete: boolean,
-): ColDef[] => {
+export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], onDeleteRow: (data: any) => void, canDelete: boolean): ColDef[] => {
     return [
         {
             field: 'line_number',

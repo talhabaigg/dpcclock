@@ -25,7 +25,25 @@ import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
-import { AlertCircleIcon, Building2, Calendar, FileText, Loader2, Lock, MapPin, PenLine, Phone, Rocket, Send, Sparkles, Trash2, Plus, Truck, User, X } from 'lucide-react';
+import {
+    AlertCircleIcon,
+    Building2,
+    Calendar,
+    FileText,
+    Loader2,
+    Lock,
+    MapPin,
+    PenLine,
+    Phone,
+    Plus,
+    Rocket,
+    Send,
+    Sparkles,
+    Trash2,
+    Truck,
+    User,
+    X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
@@ -148,19 +166,23 @@ export default function Create() {
     }>({ open: false, itemCode: '', priceList: '', isLocked: false });
 
     const [deletedItemsAlert, setDeletedItemsAlert] = useState<string[]>([]);
-    const [priceChangesAlert, setPriceChangesAlert] = useState<{
-        code: string;
-        description: string;
-        previous_price: number;
-        current_price: number;
-        variance: number;
-    }[]>([]);
-    const [costCodeChangesAlert, setCostCodeChangesAlert] = useState<{
-        code: string;
-        description: string;
-        previous_cost_code: string;
-        current_cost_code: string;
-    }[]>([]);
+    const [priceChangesAlert, setPriceChangesAlert] = useState<
+        {
+            code: string;
+            description: string;
+            previous_price: number;
+            current_price: number;
+            variance: number;
+        }[]
+    >([]);
+    const [costCodeChangesAlert, setCostCodeChangesAlert] = useState<
+        {
+            code: string;
+            description: string;
+            previous_cost_code: string;
+            current_cost_code: string;
+        }[]
+    >([]);
 
     const [gridSize, setGridSize] = useState(() => {
         return localStorage.getItem('gridSize') || '300px';
@@ -305,7 +327,7 @@ export default function Create() {
                         <span className={error ? 'text-destructive' : ''}>
                             {params.value || <span className="text-gray-500">Double click to type...</span>}
                         </span>
-                        {error && <span className="text-[10px] text-destructive">{error}</span>}
+                        {error && <span className="text-destructive text-[10px]">{error}</span>}
                     </div>
                 );
             },
@@ -324,7 +346,7 @@ export default function Create() {
                         <span className={error ? 'text-destructive' : ''}>
                             {params.value || <span className="text-gray-500">Search item...</span>}
                         </span>
-                        {error && <span className="text-[10px] text-destructive">{error}</span>}
+                        {error && <span className="text-destructive text-[10px]">{error}</span>}
                     </div>
                 );
             },
@@ -398,7 +420,7 @@ export default function Create() {
                     return (
                         <div className="flex flex-col text-right">
                             <span className="text-destructive">{params.value}</span>
-                            <span className="text-[10px] text-destructive">{error}</span>
+                            <span className="text-destructive text-[10px]">{error}</span>
                         </div>
                     );
                 }
@@ -434,7 +456,7 @@ export default function Create() {
                     return (
                         <div className="flex flex-col text-right">
                             <span className="text-destructive">{formatted}</span>
-                            <span className="text-[10px] text-destructive">{error}</span>
+                            <span className="text-destructive text-[10px]">{error}</span>
                         </div>
                     );
                 }
@@ -442,7 +464,7 @@ export default function Create() {
                 // Show lock icon only when is_locked is true, but style differently if from project list
                 if (isLocked) {
                     return (
-                        <div className="flex items-center justify-end gap-1.5 cursor-pointer" title="Project locked price - click for details">
+                        <div className="flex cursor-pointer items-center justify-end gap-1.5" title="Project locked price - click for details">
                             <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                             <span className="text-amber-700 dark:text-amber-300">{formatted}</span>
                         </div>
@@ -452,7 +474,7 @@ export default function Create() {
                 // From project list but not locked - still not editable, subtle styling
                 if (isFromProjectList) {
                     return (
-                        <div className="flex items-center justify-end gap-1.5 cursor-pointer" title="Project price - click for details">
+                        <div className="flex cursor-pointer items-center justify-end gap-1.5" title="Project price - click for details">
                             <span className="text-slate-600 dark:text-slate-300">{formatted}</span>
                         </div>
                     );
@@ -522,7 +544,7 @@ export default function Create() {
                     return (
                         <div className="flex flex-col">
                             <span className="text-destructive">{displayValue || 'Select...'}</span>
-                            <span className="text-[10px] text-destructive">{error}</span>
+                            <span className="text-destructive text-[10px]">{error}</span>
                         </div>
                     );
                 }
@@ -592,7 +614,6 @@ export default function Create() {
 
     const [file, setFile] = useState<File | null>(null);
 
-
     useEffect(() => {
         if (!flash) return;
 
@@ -652,36 +673,30 @@ export default function Create() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
-            {permissions.includes('ai.chat') && (
-                <ChatDock enableVoice={permissions.includes('ai.voice')} />
-            )}
+            {permissions.includes('ai.chat') && <ChatDock enableVoice={permissions.includes('ai.voice')} />}
 
             {/* HEADER - Compact but polished */}
-            <div className="relative overflow-hidden border-b border-border/60 bg-gradient-to-r from-muted/40 via-background to-muted/30">
+            <div className="border-border/60 from-muted/40 via-background to-muted/30 relative overflow-hidden border-b bg-gradient-to-r">
                 <div className="flex items-center justify-between px-4 py-4 md:px-6">
                     {/* Left - Icon + Title */}
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/25">
-                            <FileText className="h-5 w-5 text-primary-foreground" />
+                        <div className="from-primary to-primary/80 shadow-primary/25 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br shadow-md">
+                            <FileText className="text-primary-foreground h-5 w-5" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight">
-                                {requisition ? 'Edit Requisition' : 'New Requisition'}
-                            </h1>
-                            {requisition && (
-                                <p className="text-xs text-muted-foreground">Requisition #{requisition.id}</p>
-                            )}
+                            <h1 className="text-xl font-bold tracking-tight">{requisition ? 'Edit Requisition' : 'New Requisition'}</h1>
+                            {requisition && <p className="text-muted-foreground text-xs">Requisition #{requisition.id}</p>}
                         </div>
                     </div>
 
                     {/* Right - Stats pills */}
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-sm">
+                        <div className="bg-muted/60 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm">
                             <span className="font-medium tabular-nums">{rowData.length}</span>
                             <span className="text-muted-foreground">items</span>
                         </div>
                         <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1.5 text-sm ring-1 ring-emerald-500/20">
-                            <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            <span className="font-bold text-emerald-600 tabular-nums dark:text-emerald-400">
                                 ${totalAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                         </div>
@@ -690,10 +705,15 @@ export default function Create() {
 
                 {/* Restored Draft Alert - inside header */}
                 {orderRestored && (
-                    <div className="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40 md:px-6">
+                    <div className="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm md:px-6 dark:border-amber-900 dark:bg-amber-950/40">
                         <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         <span className="font-medium text-amber-800 dark:text-amber-200">Draft restored from memory</span>
-                        <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-amber-700 hover:bg-amber-200/50 hover:text-amber-900 dark:text-amber-300" onClick={() => setOrderRestored(false)}>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-6 px-2 text-amber-700 hover:bg-amber-200/50 hover:text-amber-900 dark:text-amber-300"
+                            onClick={() => setOrderRestored(false)}
+                        >
                             <X className="h-3 w-3" />
                         </Button>
                     </div>
@@ -701,14 +721,19 @@ export default function Create() {
 
                 {/* Deleted Items Alert */}
                 {deletedItemsAlert.length > 0 && (
-                    <Alert variant="destructive" className="mx-2 mt-4 border-red-300 bg-red-50 sm:mx-4 md:mx-6 dark:border-red-900 dark:bg-red-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
+                    <Alert
+                        variant="destructive"
+                        className="mx-2 mt-4 border-red-300 bg-red-50 sm:mx-4 md:mx-6 dark:border-red-900 dark:bg-red-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden"
+                    >
                         <AlertCircleIcon className="h-4 w-4 shrink-0" />
                         <AlertTitle>Items No Longer Available</AlertTitle>
                         <AlertDescription className="min-w-0 overflow-hidden">
                             <p className="mb-2">The following items were removed because they no longer exist in the system:</p>
                             <ul className="list-inside list-disc space-y-1">
                                 {deletedItemsAlert.map((item, index) => (
-                                    <li key={index} className="text-sm">{item}</li>
+                                    <li key={index} className="text-sm">
+                                        {item}
+                                    </li>
                                 ))}
                             </ul>
                             <Button
@@ -733,20 +758,30 @@ export default function Create() {
                             {/* Mobile: Card layout */}
                             <div className="space-y-2 sm:hidden">
                                 {priceChangesAlert.map((item, index) => (
-                                    <div key={index} className="rounded-md border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-amber-950/30">
+                                    <div
+                                        key={index}
+                                        className="rounded-md border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-amber-950/30"
+                                    >
                                         <div className="mb-1 text-xs font-medium text-amber-900 dark:text-amber-100">{item.code}</div>
                                         <div className="mb-1.5 truncate text-[10px] text-amber-600 dark:text-amber-400">{item.description}</div>
                                         <div className="flex items-center justify-between text-[11px]">
                                             <div className="flex items-center gap-1">
                                                 <span className="text-amber-500">Was:</span>
-                                                <span className="font-mono text-amber-700 dark:text-amber-300">${Number(item.previous_price).toFixed(2)}</span>
+                                                <span className="font-mono text-amber-700 dark:text-amber-300">
+                                                    ${Number(item.previous_price).toFixed(2)}
+                                                </span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <span className="text-amber-500">Now:</span>
-                                                <span className="font-mono text-amber-700 dark:text-amber-300">${Number(item.current_price).toFixed(2)}</span>
+                                                <span className="font-mono text-amber-700 dark:text-amber-300">
+                                                    ${Number(item.current_price).toFixed(2)}
+                                                </span>
                                             </div>
-                                            <div className={`font-mono font-semibold ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                                                ({Number(item.variance) > 0 ? '+' : ''}{Number(item.variance).toFixed(2)})
+                                            <div
+                                                className={`font-mono font-semibold ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                                            >
+                                                ({Number(item.variance) > 0 ? '+' : ''}
+                                                {Number(item.variance).toFixed(2)})
                                             </div>
                                         </div>
                                     </div>
@@ -768,15 +803,19 @@ export default function Create() {
                                             <tr key={index} className="bg-white dark:bg-amber-950/30">
                                                 <td className="px-3 py-2">
                                                     <div className="font-medium text-amber-900 dark:text-amber-100">{item.code}</div>
-                                                    <div className="max-w-[200px] truncate text-xs text-amber-600 dark:text-amber-400">{item.description}</div>
+                                                    <div className="max-w-[200px] truncate text-xs text-amber-600 dark:text-amber-400">
+                                                        {item.description}
+                                                    </div>
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-amber-700 dark:text-amber-300">
+                                                <td className="px-3 py-2 text-right font-mono whitespace-nowrap text-amber-700 dark:text-amber-300">
                                                     ${Number(item.previous_price).toFixed(2)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-amber-700 dark:text-amber-300">
+                                                <td className="px-3 py-2 text-right font-mono whitespace-nowrap text-amber-700 dark:text-amber-300">
                                                     ${Number(item.current_price).toFixed(2)}
                                                 </td>
-                                                <td className={`whitespace-nowrap px-3 py-2 text-right font-mono font-semibold ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                <td
+                                                    className={`px-3 py-2 text-right font-mono font-semibold whitespace-nowrap ${Number(item.variance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                                                >
                                                     {Number(item.variance) > 0 ? '+' : ''}${Number(item.variance).toFixed(2)}
                                                 </td>
                                             </tr>
@@ -805,13 +844,16 @@ export default function Create() {
                             <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">Items with updated cost codes:</p>
                             <div className="space-y-2">
                                 {costCodeChangesAlert.map((item, index) => (
-                                    <div key={index} className="rounded-md border border-blue-200 bg-white p-2 dark:border-blue-800 dark:bg-blue-950/30">
+                                    <div
+                                        key={index}
+                                        className="rounded-md border border-blue-200 bg-white p-2 dark:border-blue-800 dark:bg-blue-950/30"
+                                    >
                                         <div className="mb-1 text-xs font-medium text-blue-900 dark:text-blue-100">{item.code}</div>
                                         <div className="mb-1.5 truncate text-[10px] text-blue-600 dark:text-blue-400">{item.description}</div>
                                         <div className="flex items-center gap-2 text-[11px]">
                                             <span className="text-blue-500">Was:</span>
                                             <span className="font-mono text-blue-700 dark:text-blue-300">
-                                                {item.previous_cost_code || <span className="italic text-blue-400">None</span>}
+                                                {item.previous_cost_code || <span className="text-blue-400 italic">None</span>}
                                             </span>
                                             <span className="text-blue-400">→</span>
                                             <span className="text-blue-500">Now:</span>
@@ -842,7 +884,7 @@ export default function Create() {
                             <DialogTitle>Processing Items</DialogTitle>
                         </DialogHeader>
                         <DialogDescription className="flex flex-col items-center gap-4 py-4">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <Loader2 className="text-primary h-8 w-8 animate-spin" />
                             <span className="text-sm">Adding line items...</span>
                             <BarLoader width={180} color={'hsl(var(--primary))'} />
                         </DialogDescription>
@@ -854,15 +896,13 @@ export default function Create() {
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
-                                <AlertCircleIcon className="h-5 w-5 text-destructive" />
+                                <AlertCircleIcon className="text-destructive h-5 w-5" />
                                 Price Expired
                             </AlertDialogTitle>
                             <AlertDialogDescription>
                                 Item <strong>{expiredPriceDialog.itemCode}</strong> price expired on{' '}
                                 <strong>
-                                    {expiredPriceDialog.expiryDate
-                                        ? new Date(expiredPriceDialog.expiryDate).toLocaleDateString('en-AU')
-                                        : 'N/A'}
+                                    {expiredPriceDialog.expiryDate ? new Date(expiredPriceDialog.expiryDate).toLocaleDateString('en-AU') : 'N/A'}
                                 </strong>
                                 . Update the price before adding to requisition.
                             </AlertDialogDescription>
@@ -905,11 +945,12 @@ export default function Create() {
                             <AlertDialogDescription>
                                 The price for item <strong>{lockedPriceDialog.itemCode}</strong> is set from the project price list{' '}
                                 <strong>{lockedPriceDialog.priceList}</strong> and cannot be modified on this requisition.
-                                <br /><br />
+                                <br />
+                                <br />
                                 {lockedPriceDialog.isLocked
                                     ? 'This price is locked to ensure pricing consistency across all orders for this project.'
-                                    : 'This price comes from the project item list to maintain consistent pricing.'}
-                                {' '}To change this price, please update it in the project's item pricing settings.
+                                    : 'This price comes from the project item list to maintain consistent pricing.'}{' '}
+                                To change this price, please update it in the project's item pricing settings.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -922,14 +963,14 @@ export default function Create() {
 
                 {/* Error Summary Banner - Shows all validation errors */}
                 {Object.keys(errors).length > 0 && (
-                    <div className="mt-4 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
+                    <div className="border-destructive/50 bg-destructive/5 mt-4 rounded-xl border p-4">
                         <div className="mb-3 flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
-                                <AlertCircleIcon className="h-4 w-4 text-destructive" />
+                            <div className="bg-destructive/10 flex h-8 w-8 items-center justify-center rounded-lg">
+                                <AlertCircleIcon className="text-destructive h-4 w-4" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-semibold text-destructive">Validation Errors</h3>
-                                <p className="text-xs text-destructive/80">Please fix the following errors before submitting</p>
+                                <h3 className="text-destructive text-sm font-semibold">Validation Errors</h3>
+                                <p className="text-destructive/80 text-xs">Please fix the following errors before submitting</p>
                             </div>
                         </div>
                         <ul className="space-y-1.5 pl-10">
@@ -939,17 +980,17 @@ export default function Create() {
                                     const itemMatch = errorKey.match(/^items\.(\d+)\.(\w+)$/);
                                     if (itemMatch) {
                                         const lineNum = parseInt(itemMatch[1]) + 1;
-                                        const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                        const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                                         return `Line ${lineNum} - ${field}`;
                                     }
-                                    return errorKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                    return errorKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                                 };
 
                                 return (
                                     <li key={key} className="flex items-start gap-2 text-sm">
-                                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                                        <span className="bg-destructive mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full" />
                                         <span>
-                                            <span className="font-medium text-destructive">{formatErrorKey(key)}:</span>{' '}
+                                            <span className="text-destructive font-medium">{formatErrorKey(key)}:</span>{' '}
                                             <span className="text-destructive/90">{message}</span>
                                         </span>
                                     </li>
@@ -964,9 +1005,13 @@ export default function Create() {
                     {/* Primary Fields Row */}
                     <div className="grid gap-4 md:grid-cols-2">
                         {/* Project Field */}
-                        <div className={`group rounded-xl border bg-card p-4 shadow-sm transition-all hover:shadow-md ${errors.project_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}>
+                        <div
+                            className={`group bg-card rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${errors.project_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}
+                        >
                             <div className="mb-3 flex items-center gap-2">
-                                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.project_id ? 'bg-destructive/10' : 'bg-blue-500/10'}`}>
+                                <div
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.project_id ? 'bg-destructive/10' : 'bg-blue-500/10'}`}
+                                >
                                     <MapPin className={`h-4 w-4 ${errors.project_id ? 'text-destructive' : 'text-blue-600 dark:text-blue-400'}`} />
                                 </div>
                                 <Label className="text-sm font-semibold">Project / Location</Label>
@@ -981,7 +1026,7 @@ export default function Create() {
                                 }))}
                             />
                             {errors.project_id && (
-                                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1.5 text-xs font-medium">
                                     <AlertCircleIcon className="h-3.5 w-3.5" />
                                     {errors.project_id}
                                 </p>
@@ -989,13 +1034,21 @@ export default function Create() {
                         </div>
 
                         {/* Supplier Field */}
-                        <div className={`group rounded-xl border bg-card p-4 shadow-sm transition-all hover:shadow-md ${errors.supplier_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}>
+                        <div
+                            className={`group bg-card rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${errors.supplier_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}
+                        >
                             <div className="mb-3 flex items-center gap-2">
-                                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.supplier_id ? 'bg-destructive/10' : 'bg-violet-500/10'}`}>
-                                    <Building2 className={`h-4 w-4 ${errors.supplier_id ? 'text-destructive' : 'text-violet-600 dark:text-violet-400'}`} />
+                                <div
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.supplier_id ? 'bg-destructive/10' : 'bg-violet-500/10'}`}
+                                >
+                                    <Building2
+                                        className={`h-4 w-4 ${errors.supplier_id ? 'text-destructive' : 'text-violet-600 dark:text-violet-400'}`}
+                                    />
                                 </div>
                                 <Label className="text-sm font-semibold">Supplier</Label>
-                                <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">Required</span>
+                                <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+                                    Required
+                                </span>
                             </div>
                             <SearchSelect
                                 optionName="supplier"
@@ -1007,7 +1060,7 @@ export default function Create() {
                                 }))}
                             />
                             {errors.supplier_id && (
-                                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1.5 text-xs font-medium">
                                     <AlertCircleIcon className="h-3.5 w-3.5" />
                                     {errors.supplier_id}
                                 </p>
@@ -1018,8 +1071,12 @@ export default function Create() {
                     {/* Secondary Fields Row */}
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                         {/* Date Required */}
-                        <div className={`relative z-10 rounded-lg border bg-card/50 p-3 transition-all ${errors.date_required ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
-                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.date_required ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <div
+                            className={`bg-card/50 relative z-10 rounded-lg border p-3 transition-all ${errors.date_required ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}
+                        >
+                            <Label
+                                className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.date_required ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
                                 <Calendar className="h-3.5 w-3.5" />
                                 Date Required
                             </Label>
@@ -1028,7 +1085,7 @@ export default function Create() {
                                 onChange={(date) => setData('date_required', date ? format(date, 'yyyy-MM-dd HH:mm:ss') : '')}
                             />
                             {errors.date_required && (
-                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1 text-[11px] font-medium">
                                     <AlertCircleIcon className="h-3 w-3" />
                                     {errors.date_required}
                                 </p>
@@ -1036,8 +1093,12 @@ export default function Create() {
                         </div>
 
                         {/* Delivery Contact */}
-                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.delivery_contact ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
-                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.delivery_contact ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <div
+                            className={`bg-card/50 rounded-lg border p-3 transition-all ${errors.delivery_contact ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}
+                        >
+                            <Label
+                                className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.delivery_contact ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
                                 <Phone className="h-3.5 w-3.5" />
                                 Delivery Contact
                             </Label>
@@ -1045,10 +1106,10 @@ export default function Create() {
                                 placeholder="Contact name..."
                                 value={data.delivery_contact ?? ''}
                                 onChange={(e) => setData('delivery_contact', e.target.value)}
-                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.delivery_contact ? 'ring-1 ring-destructive/50' : ''}`}
+                                className={`bg-background/50 border-0 shadow-none focus-visible:ring-1 ${errors.delivery_contact ? 'ring-destructive/50 ring-1' : ''}`}
                             />
                             {errors.delivery_contact && (
-                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1 text-[11px] font-medium">
                                     <AlertCircleIcon className="h-3 w-3" />
                                     {errors.delivery_contact}
                                 </p>
@@ -1056,8 +1117,12 @@ export default function Create() {
                         </div>
 
                         {/* Requested By */}
-                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.requested_by ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
-                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.requested_by ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <div
+                            className={`bg-card/50 rounded-lg border p-3 transition-all ${errors.requested_by ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}
+                        >
+                            <Label
+                                className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.requested_by ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
                                 <User className="h-3.5 w-3.5" />
                                 Requested By
                             </Label>
@@ -1065,10 +1130,10 @@ export default function Create() {
                                 placeholder="Your name..."
                                 value={data.requested_by}
                                 onChange={(e) => setData('requested_by', e.target.value)}
-                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.requested_by ? 'ring-1 ring-destructive/50' : ''}`}
+                                className={`bg-background/50 border-0 shadow-none focus-visible:ring-1 ${errors.requested_by ? 'ring-destructive/50 ring-1' : ''}`}
                             />
                             {errors.requested_by && (
-                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1 text-[11px] font-medium">
                                     <AlertCircleIcon className="h-3 w-3" />
                                     {errors.requested_by}
                                 </p>
@@ -1076,8 +1141,12 @@ export default function Create() {
                         </div>
 
                         {/* Deliver To */}
-                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.deliver_to ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
-                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.deliver_to ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <div
+                            className={`bg-card/50 rounded-lg border p-3 transition-all ${errors.deliver_to ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}
+                        >
+                            <Label
+                                className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.deliver_to ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
                                 <Truck className="h-3.5 w-3.5" />
                                 Deliver To
                             </Label>
@@ -1085,10 +1154,10 @@ export default function Create() {
                                 placeholder="Delivery location..."
                                 value={data.deliver_to ?? ''}
                                 onChange={(e) => setData('deliver_to', e.target.value)}
-                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.deliver_to ? 'ring-1 ring-destructive/50' : ''}`}
+                                className={`bg-background/50 border-0 shadow-none focus-visible:ring-1 ${errors.deliver_to ? 'ring-destructive/50 ring-1' : ''}`}
                             />
                             {errors.deliver_to && (
-                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1 text-[11px] font-medium">
                                     <AlertCircleIcon className="h-3 w-3" />
                                     {errors.deliver_to}
                                 </p>
@@ -1096,8 +1165,12 @@ export default function Create() {
                         </div>
 
                         {/* Order Reference */}
-                        <div className={`rounded-lg border bg-card/50 p-3 transition-all ${errors.order_reference ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}>
-                            <Label className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.order_reference ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <div
+                            className={`bg-card/50 rounded-lg border p-3 transition-all ${errors.order_reference ? 'border-destructive/60 hover:border-destructive' : 'border-border/50 hover:border-border'}`}
+                        >
+                            <Label
+                                className={`mb-2 flex items-center gap-1.5 text-xs font-medium ${errors.order_reference ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
                                 <FileText className="h-3.5 w-3.5" />
                                 Order Reference
                             </Label>
@@ -1105,10 +1178,10 @@ export default function Create() {
                                 placeholder="Memo..."
                                 value={data.order_reference ?? ''}
                                 onChange={(e) => setData('order_reference', e.target.value)}
-                                className={`border-0 bg-background/50 shadow-none focus-visible:ring-1 ${errors.order_reference ? 'ring-1 ring-destructive/50' : ''}`}
+                                className={`bg-background/50 border-0 shadow-none focus-visible:ring-1 ${errors.order_reference ? 'ring-destructive/50 ring-1' : ''}`}
                             />
                             {errors.order_reference && (
-                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                                <p className="text-destructive mt-2 flex items-center gap-1 text-[11px] font-medium">
                                     <AlertCircleIcon className="h-3 w-3" />
                                     {errors.order_reference}
                                 </p>
@@ -1122,10 +1195,10 @@ export default function Create() {
                         if (itemErrors.length === 0) return null;
 
                         return (
-                            <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3">
+                            <div className="border-destructive/50 bg-destructive/5 rounded-lg border px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                    <AlertCircleIcon className="h-4 w-4 shrink-0 text-destructive" />
-                                    <p className="text-sm font-semibold text-destructive">Line Items Errors</p>
+                                    <AlertCircleIcon className="text-destructive h-4 w-4 shrink-0" />
+                                    <p className="text-destructive text-sm font-semibold">Line Items Errors</p>
                                 </div>
                                 <ul className="mt-2 space-y-1 pl-6">
                                     {itemErrors.map(([key, message]) => {
@@ -1133,14 +1206,14 @@ export default function Create() {
                                         let label = key;
                                         if (itemMatch) {
                                             const lineNum = parseInt(itemMatch[1]) + 1;
-                                            const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                            const field = itemMatch[2].replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                                             label = `Line ${lineNum} - ${field}`;
                                         } else if (key === 'items') {
                                             label = 'Items';
                                         }
                                         return (
                                             <li key={key} className="flex items-start gap-2 text-sm">
-                                                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive/70" />
+                                                <span className="bg-destructive/70 mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
                                                 <span className="text-destructive/90">
                                                     <span className="font-medium">{label}:</span> {message}
                                                 </span>
@@ -1155,90 +1228,90 @@ export default function Create() {
 
                 {/* LINE ITEMS GRID */}
                 <div className="ag-theme-shadcn mt-4" style={{ height: gridSize }}>
-                            <AgGridReact
-                                ref={gridRef}
-                                rowData={rowData}
-                                theme={appliedTheme}
-                                rowSelection={rowSelection}
-                                rowDragManaged={true}
-                                getRowClass={(params) => {
-                                    if (params.data?.is_locked === true) {
-                                        return 'ag-row-locked';
-                                    }
-                                    return '';
-                                }}
-                                onRowDragEnd={(event) => {
-                                    const movingData = event.node.data;
-                                    const overIndex = event.overIndex;
+                    <AgGridReact
+                        ref={gridRef}
+                        rowData={rowData}
+                        theme={appliedTheme}
+                        rowSelection={rowSelection}
+                        rowDragManaged={true}
+                        getRowClass={(params) => {
+                            if (params.data?.is_locked === true) {
+                                return 'ag-row-locked';
+                            }
+                            return '';
+                        }}
+                        onRowDragEnd={(event) => {
+                            const movingData = event.node.data;
+                            const overIndex = event.overIndex;
 
-                                    if (overIndex === undefined || overIndex < 0) return;
+                            if (overIndex === undefined || overIndex < 0) return;
 
-                                    const displayedRows = [];
-                                    event.api.forEachNodeAfterFilterAndSort((node) => {
-                                        displayedRows.push(node.data);
-                                    });
+                            const displayedRows = [];
+                            event.api.forEachNodeAfterFilterAndSort((node) => {
+                                displayedRows.push(node.data);
+                            });
 
-                                    // Remove movingData from wherever it is in rowData
-                                    const filteredRowData = rowData.filter((d) => d !== movingData);
+                            // Remove movingData from wherever it is in rowData
+                            const filteredRowData = rowData.filter((d) => d !== movingData);
 
-                                    // Insert movingData at the overIndex
-                                    filteredRowData.splice(overIndex, 0, movingData);
+                            // Insert movingData at the overIndex
+                            filteredRowData.splice(overIndex, 0, movingData);
 
-                                    setRowData(filteredRowData);
-                                }}
-                                columnDefs={columnDefs}
-                                maintainColumnOrder={true}
-                                suppressAutoSize={true}
-                                defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 100 }}
-                                rowModelType="clientSide"
-                                onGridReady={onGridReady} // Initialize gridApi
-                                onCellValueChanged={(e) => {
-                                    const updated = [...rowData];
-                                    updated[e.rowIndex] = e.data;
-                                    setRowData(updated);
-                                }}
-                                onCellKeyDown={(event) => {
-                                    if ((event.event as KeyboardEvent).key === 'Tab') {
-                                        const lastRowIndex = rowData.length - 1;
-                                        const lastColIndex = columnDefs.length - 1; // Now target the actual last column
+                            setRowData(filteredRowData);
+                        }}
+                        columnDefs={columnDefs}
+                        maintainColumnOrder={true}
+                        suppressAutoSize={true}
+                        defaultColDef={{ flex: 1, resizable: true, singleClickEdit: true, minWidth: 100 }}
+                        rowModelType="clientSide"
+                        onGridReady={onGridReady} // Initialize gridApi
+                        onCellValueChanged={(e) => {
+                            const updated = [...rowData];
+                            updated[e.rowIndex] = e.data;
+                            setRowData(updated);
+                        }}
+                        onCellKeyDown={(event) => {
+                            if ((event.event as KeyboardEvent).key === 'Tab') {
+                                const lastRowIndex = rowData.length - 1;
+                                const lastColIndex = columnDefs.length - 1; // Now target the actual last column
 
-                                        if (
-                                            'column' in event &&
-                                            event.rowIndex === lastRowIndex &&
-                                            event.column &&
-                                            event.column.getColId() === columnDefs[lastColIndex].field
-                                        ) {
-                                            // Prevent default tab behavior so it doesn't skip ahead
-                                            event.event.preventDefault();
+                                if (
+                                    'column' in event &&
+                                    event.rowIndex === lastRowIndex &&
+                                    event.column &&
+                                    event.column.getColId() === columnDefs[lastColIndex].field
+                                ) {
+                                    // Prevent default tab behavior so it doesn't skip ahead
+                                    event.event.preventDefault();
 
-                                            setTimeout(() => {
-                                                const newRow = {
-                                                    code: '',
-                                                    description: '',
-                                                    unit_cost: 0,
-                                                    qty: 1,
-                                                    total_cost: 0,
-                                                    serial_number: rowData.length + 1,
-                                                    cost_code: '',
-                                                    price_list: '',
-                                                    is_locked: false,
-                                                };
+                                    setTimeout(() => {
+                                        const newRow = {
+                                            code: '',
+                                            description: '',
+                                            unit_cost: 0,
+                                            qty: 1,
+                                            total_cost: 0,
+                                            serial_number: rowData.length + 1,
+                                            cost_code: '',
+                                            price_list: '',
+                                            is_locked: false,
+                                        };
 
-                                                const updated = [...rowData, newRow];
-                                                setRowData(updated);
+                                        const updated = [...rowData, newRow];
+                                        setRowData(updated);
 
-                                                // Wait a tick before starting cell edit
-                                                setTimeout(() => {
-                                                    event.api.startEditingCell({
-                                                        rowIndex: updated.length - 1,
-                                                        colKey: 'code',
-                                                    });
-                                                }, 50);
-                                            }, 50);
-                                        }
-                                    }
-                                }}
-                            />
+                                        // Wait a tick before starting cell edit
+                                        setTimeout(() => {
+                                            event.api.startEditingCell({
+                                                rowIndex: updated.length - 1,
+                                                colKey: 'code',
+                                            });
+                                        }, 50);
+                                    }, 50);
+                                }
+                            }
+                        }}
+                    />
                 </div>
                 {/* AI Image Extractor */}
                 {permissions.includes('requisitions.view-all') && (
@@ -1254,14 +1327,14 @@ export default function Create() {
                 )}
 
                 {/* ACTION BAR */}
-                <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/50 bg-gradient-to-r from-muted/40 via-muted/20 to-muted/40 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="border-border/50 from-muted/40 via-muted/20 to-muted/40 mt-4 flex flex-col gap-3 rounded-xl border bg-gradient-to-r p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     {/* Left - Row actions */}
                     <div className="flex items-center gap-2">
                         <Button onClick={addNewRow} variant="outline" className="shadow-sm">
                             <Plus className="mr-1.5 h-4 w-4" />
                             Add Row
                         </Button>
-                        <Button onClick={deleteSelectedRow} variant="outline" className="text-destructive shadow-sm hover:bg-destructive/10">
+                        <Button onClick={deleteSelectedRow} variant="outline" className="text-destructive hover:bg-destructive/10 shadow-sm">
                             <Trash2 className="mr-1.5 h-4 w-4" />
                             Delete
                         </Button>
@@ -1269,9 +1342,9 @@ export default function Create() {
 
                     {/* Right - Tools and Submit */}
                     <div className="flex items-center gap-3">
-                        <div className="hidden items-center gap-1 rounded-lg border border-border/50 bg-background/80 p-1 shadow-sm backdrop-blur-sm sm:flex">
+                        <div className="border-border/50 bg-background/80 hidden items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur-sm sm:flex">
                             <GridStateToolbar gridRef={gridRef} />
-                            <div className="mx-1 h-5 w-px bg-border/50" />
+                            <div className="bg-border/50 mx-1 h-5 w-px" />
                             <PasteTableButton
                                 rowData={rowData}
                                 setRowData={setRowData}
@@ -1288,7 +1361,7 @@ export default function Create() {
                             onClick={handleSubmit}
                             disabled={processing}
                             size="lg"
-                            className="bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30"
+                            className="from-primary to-primary/90 shadow-primary/20 hover:shadow-primary/30 bg-gradient-to-r shadow-lg transition-all hover:shadow-xl"
                         >
                             {processing ? (
                                 <>

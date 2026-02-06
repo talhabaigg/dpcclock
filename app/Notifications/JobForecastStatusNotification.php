@@ -14,17 +14,20 @@ class JobForecastStatusNotification extends Notification
     use Queueable;
 
     protected JobForecast $forecast;
+
     protected string $action;
+
     protected ?User $actor;
+
     protected ?string $message;
 
     /**
      * Create a new notification instance.
      *
-     * @param JobForecast $forecast The forecast that changed
-     * @param string $action The action taken (submitted, finalized, rejected)
-     * @param User|null $actor The user who performed the action
-     * @param string|null $message Optional message (e.g., rejection reason)
+     * @param  JobForecast  $forecast  The forecast that changed
+     * @param  string  $action  The action taken (submitted, finalized, rejected)
+     * @param  User|null  $actor  The user who performed the action
+     * @param  string|null  $message  Optional message (e.g., rejection reason)
      */
     public function __construct(
         JobForecast $forecast,
@@ -73,7 +76,7 @@ class JobForecastStatusNotification extends Notification
             ->body($data['body'])
             ->icon('/icon-192x192.png')
             ->badge('/icon-192x192.png')
-            ->tag('forecast-' . $this->forecast->id)
+            ->tag('forecast-'.$this->forecast->id)
             ->data(['url' => $url])
             ->options(['TTL' => 86400]); // 24 hours
     }

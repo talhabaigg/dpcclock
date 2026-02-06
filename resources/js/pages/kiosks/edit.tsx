@@ -232,7 +232,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                             <Switch checked={kiosk.is_active} onCheckedChange={handleKioskActiveToggle} />
                         </div>
                         <div className="border-t pt-4">
-                            <Label className="text-sm font-semibold text-muted-foreground">Allowance Settings</Label>
+                            <Label className="text-muted-foreground text-sm font-semibold">Allowance Settings</Label>
                         </div>
                         <div className="flex items-center justify-between">
                             <div>

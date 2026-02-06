@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Jobs\SyncTimesheetWithEH; // Import your job here
+use App\Jobs\SyncTimesheetWithEH;
+use Illuminate\Console\Command; // Import your job here
 
 class SyncTimesheets extends Command
 {

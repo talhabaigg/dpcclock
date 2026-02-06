@@ -51,14 +51,14 @@ const SortableColumn = ({
         <div
             ref={setNodeRef}
             style={style}
-            className="mx-0 flex min-w-0 max-w-full flex-col rounded-lg bg-slate-100/50 md:mx-1 md:h-full md:w-full dark:bg-card/80"
+            className="dark:bg-card/80 mx-0 flex max-w-full min-w-0 flex-col rounded-lg bg-slate-100/50 md:mx-1 md:h-full md:w-full"
         >
             {/* Column Header */}
-            <div className="flex shrink-0 items-center justify-between rounded-t-lg bg-slate-100 px-3 py-2.5 md:py-2 dark:bg-muted/30">
+            <div className="dark:bg-muted/30 flex shrink-0 items-center justify-between rounded-t-lg bg-slate-100 px-3 py-2.5 md:py-2">
                 <div className="flex items-center gap-2">
                     <span className="text-slate-500 dark:text-slate-400">{icon}</span>
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-muted dark:text-slate-300">
+                    <span className="dark:bg-muted rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                         {count}
                     </span>
                 </div>
@@ -86,15 +86,13 @@ const SortableColumn = ({
             </div>
 
             {/* Cards container - scrollable on desktop, max-height on mobile */}
-            <div className="max-h-[400px] min-h-0 min-w-0 max-w-full flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2 md:max-h-none">
+            <div className="max-h-[400px] min-h-0 max-w-full min-w-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2 md:max-h-none">
                 {cards.length === 0 ? (
-                    <div className="rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-border">
+                    <div className="dark:border-border rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
                         No requisitions
                     </div>
                 ) : (
-                    cards.map((requisition) => (
-                        <RequisitionCard key={requisition.id} requisition={requisition} />
-                    ))
+                    cards.map((requisition) => <RequisitionCard key={requisition.id} requisition={requisition} />)
                 )}
             </div>
         </div>
@@ -186,7 +184,7 @@ const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
                     </div>
                 </SortableContext>
             </DndContext>
-            <div className="mt-3 flex shrink-0 justify-end border-t border-slate-200 pt-3 dark:border-border">
+            <div className="dark:border-border mt-3 flex shrink-0 justify-end border-t border-slate-200 pt-3">
                 <Button
                     onClick={resetSettings}
                     variant="ghost"

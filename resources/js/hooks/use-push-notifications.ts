@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useCallback, useEffect, useState } from 'react';
 
 interface PushNotificationState {
     isSupported: boolean;
@@ -16,9 +16,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
         throw new Error('VAPID public key is not configured');
     }
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
 
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
@@ -39,11 +37,7 @@ export function usePushNotifications() {
     });
 
     const checkSupport = useCallback(() => {
-        const isSupported =
-            'serviceWorker' in navigator &&
-            'PushManager' in window &&
-            'Notification' in window &&
-            !!VAPID_PUBLIC_KEY;
+        const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!VAPID_PUBLIC_KEY;
         return isSupported;
     }, []);
 

@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Run the migrations.
      */
@@ -13,9 +14,9 @@ return new class extends Migration {
         Schema::create('variations', function (Blueprint $table) {
             $table->id();
             $table->string('co_number');
-            $table->string('type'); //internal purpose
+            $table->string('type'); // internal purpose
             $table->string('description')->nullable();
-            $table->string('status')->default('pending'); //internal purpose
+            $table->string('status')->default('pending'); // internal purpose
             $table->date('co_date');
             $table->string('created_by')->nullable(); // Track who created the variation
             $table->string('updated_by')->nullable(); // Track who updated the variation

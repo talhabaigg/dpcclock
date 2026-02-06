@@ -49,19 +49,19 @@ class HandleInertiaRequests extends Middleware
                 'permissions' => $request->user()?->roles->first()?->permissions->pluck('name'),
             ],
             'flash' => [
-                'success' => fn() => $request->session()->get('success'),
-                'message' => fn() => $request->session()->get('message'),
-                'error' => fn() => $request->session()->get('error'),
-                'deletedItems' => fn() => $request->session()->get('deletedItems'),
-                'priceChanges' => fn() => $request->session()->get('priceChanges'),
-                'costCodeChanges' => fn() => $request->session()->get('costCodeChanges'),
+                'success' => fn () => $request->session()->get('success'),
+                'message' => fn () => $request->session()->get('message'),
+                'error' => fn () => $request->session()->get('error'),
+                'deletedItems' => fn () => $request->session()->get('deletedItems'),
+                'priceChanges' => fn () => $request->session()->get('priceChanges'),
+                'costCodeChanges' => fn () => $request->session()->get('costCodeChanges'),
             ],
-            'ziggy' => fn(): array => [
+            'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
             ],
-            'tokenUsage' => fn() => $request->user() ? $request->user()->tokenUsage() : 0,
-            'tokenStats' => fn() => $request->user() ? $request->user()->tokenStats() : [
+            'tokenUsage' => fn () => $request->user() ? $request->user()->tokenUsage() : 0,
+            'tokenStats' => fn () => $request->user() ? $request->user()->tokenStats() : [
                 'total_tokens' => 0,
                 'input_tokens' => 0,
                 'output_tokens' => 0,
@@ -73,18 +73,18 @@ class HandleInertiaRequests extends Middleware
                 'voice_cost' => 0,
                 'total_cost' => 0,
             ],
-            'notifications' => fn() => $request->user() ? [
+            'notifications' => fn () => $request->user() ? [
                 'unreadCount' => $request->user()->unreadNotifications()->count(),
                 // keep it small; fetch the full list on a notifications page/API
                 'latest' => $request->user()->unreadNotifications()->latest()->get()
-                    ->map(fn($n) => [
+                    ->map(fn ($n) => [
                         'id' => $n->id,
                         'data' => $n->data,
                         'read_at' => $n->read_at,
                         'created_at' => $n->created_at,
                     ]),
             ] : ['unreadCount' => 0, 'latest' => []],
-            'passkeyPrompt' => fn() => $request->user() ? [
+            'passkeyPrompt' => fn () => $request->user() ? [
                 'hasPasskeys' => $request->user()->passkeys()->exists(),
                 'dismissed' => (bool) $request->user()->passkey_prompt_dismissed,
             ] : null,

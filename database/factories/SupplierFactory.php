@@ -3,8 +3,6 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
-use App\Models\Supplier;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Supplier>
@@ -17,11 +15,12 @@ class SupplierFactory extends Factory
      * @return array<string, mixed>
      */
     protected $model = \App\Models\Supplier::class;
+
     public function definition(): array
     {
         return [
             'name' => $this->faker->company,
-            'code' => strtoupper('SUP-' . $this->faker->unique()->bothify('###??')),
+            'code' => strtoupper('SUP-'.$this->faker->unique()->bothify('###??')),
         ];
     }
 }
