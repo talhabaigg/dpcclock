@@ -13,12 +13,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Update labour_forecast_entries: subtract 2 days to convert Sunday -> Friday
-        DB::statement('UPDATE labour_forecast_entries SET week_ending = DATE_SUB(week_ending, INTERVAL 2 DAY)');
+        $driver = DB::getDriverName();
 
-        // Also update turnover_forecast_entries if they exist
+        if ($driver === 'sqlite') {
+            DB::statement("UPDATE labour_forecast_entries SET week_ending = date(week_ending, '-2 days')");
+        } else {
+            DB::statement('UPDATE labour_forecast_entries SET week_ending = DATE_SUB(week_ending, INTERVAL 2 DAY)');
+        }
+
         if (DB::getSchemaBuilder()->hasTable('turnover_forecast_entries')) {
-            DB::statement('UPDATE turnover_forecast_entries SET week_ending = DATE_SUB(week_ending, INTERVAL 2 DAY)');
+            if ($driver === 'sqlite') {
+                DB::statement("UPDATE turnover_forecast_entries SET week_ending = date(week_ending, '-2 days')");
+            } else {
+                DB::statement('UPDATE turnover_forecast_entries SET week_ending = DATE_SUB(week_ending, INTERVAL 2 DAY)');
+            }
         }
     }
 
@@ -29,11 +37,20 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Add 2 days to convert Friday -> Sunday
-        DB::statement('UPDATE labour_forecast_entries SET week_ending = DATE_ADD(week_ending, INTERVAL 2 DAY)');
+        $driver = DB::getDriverName();
+
+        if ($driver === 'sqlite') {
+            DB::statement("UPDATE labour_forecast_entries SET week_ending = date(week_ending, '+2 days')");
+        } else {
+            DB::statement('UPDATE labour_forecast_entries SET week_ending = DATE_ADD(week_ending, INTERVAL 2 DAY)');
+        }
 
         if (DB::getSchemaBuilder()->hasTable('turnover_forecast_entries')) {
-            DB::statement('UPDATE turnover_forecast_entries SET week_ending = DATE_ADD(week_ending, INTERVAL 2 DAY)');
+            if ($driver === 'sqlite') {
+                DB::statement("UPDATE turnover_forecast_entries SET week_ending = date(week_ending, '+2 days')");
+            } else {
+                DB::statement('UPDATE turnover_forecast_entries SET week_ending = DATE_ADD(week_ending, INTERVAL 2 DAY)');
+            }
         }
     }
 };
