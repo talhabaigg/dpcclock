@@ -37,8 +37,10 @@ jobs:
             # Enable maintenance mode
             php artisan down --secret="${{ secrets.MAINTENANCE_SECRET }}"
 
-            # Pull latest code
+            # Stash any local changes and pull latest code
+            git stash --include-untracked || true
             git pull origin main
+            git stash drop || true
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --optimize-autoloader
