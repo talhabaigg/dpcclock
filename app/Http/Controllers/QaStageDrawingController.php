@@ -301,17 +301,11 @@ class QaStageDrawingController extends Controller
      */
     public function serveThumbnail(QaStageDrawing $drawing)
     {
-        $thumbnailPath = $drawing->thumbnail_path;
-
-        if (! $thumbnailPath) {
-            abort(404, 'No thumbnail available.');
-        }
-
-        // Try local public disk first
-        if (Storage::disk('public')->exists($thumbnailPath)) {
-            $stream = Storage::disk('public')->readStream($thumbnailPath);
-            $size = Storage::disk('public')->size($thumbnailPath);
-            $mimeType = Storage::disk('public')->mimeType($thumbnailPath) ?: 'image/png';
+        // Try local thumbnail first
+        if ($drawing->thumbnail_path && Storage::disk('public')->exists($drawing->thumbnail_path)) {
+            $stream = Storage::disk('public')->readStream($drawing->thumbnail_path);
+            $size = Storage::disk('public')->size($drawing->thumbnail_path);
+            $mimeType = Storage::disk('public')->mimeType($drawing->thumbnail_path) ?: 'image/png';
 
             return response()->stream(
                 function () use ($stream) {
@@ -330,27 +324,12 @@ class QaStageDrawingController extends Controller
             );
         }
 
-        // Try S3
-        if (Storage::disk('s3')->exists($thumbnailPath)) {
-            $stream = Storage::disk('s3')->readStream($thumbnailPath);
-            $size = Storage::disk('s3')->size($thumbnailPath);
-            $mimeType = Storage::disk('s3')->mimeType($thumbnailPath) ?: 'image/png';
+        // Fall back to S3 thumbnail (from drawing set processing)
+        $s3Key = $drawing->thumbnail_s3_key;
+        if ($s3Key && Storage::disk('s3')->exists($s3Key)) {
+            $url = Storage::disk('s3')->temporaryUrl($s3Key, now()->addMinutes(5));
 
-            return response()->stream(
-                function () use ($stream) {
-                    fpassthru($stream);
-                    if (is_resource($stream)) {
-                        fclose($stream);
-                    }
-                },
-                200,
-                [
-                    'Content-Type' => $mimeType,
-                    'Content-Length' => $size,
-                    'Content-Disposition' => 'inline',
-                    'Cache-Control' => 'public, max-age=86400',
-                ]
-            );
+            return redirect($url);
         }
 
         abort(404, 'Thumbnail not found.');

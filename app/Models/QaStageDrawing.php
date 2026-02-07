@@ -36,6 +36,7 @@ class QaStageDrawing extends Model
         'previous_revision_id',
         // Textract extraction fields
         'page_preview_s3_key',
+        'thumbnail_s3_key',
         'page_width_px',
         'page_height_px',
         'page_orientation',
@@ -301,7 +302,7 @@ class QaStageDrawing extends Model
 
     public function getThumbnailUrlAttribute()
     {
-        if (! $this->thumbnail_path) {
+        if (! $this->thumbnail_path && ! $this->thumbnail_s3_key) {
             return null;
         }
 

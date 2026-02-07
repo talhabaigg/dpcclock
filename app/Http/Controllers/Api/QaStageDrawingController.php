@@ -208,16 +208,26 @@ class QaStageDrawingController extends Controller
      */
     public function thumbnail(QaStageDrawing $qaStageDrawing)
     {
-        if (! $qaStageDrawing->thumbnail_path || ! Storage::disk('public')->exists($qaStageDrawing->thumbnail_path)) {
-            // Return placeholder or 404
-            return response()->json(['message' => 'Thumbnail not available.'], 404);
+        // Try local thumbnail first
+        if ($qaStageDrawing->thumbnail_path && Storage::disk('public')->exists($qaStageDrawing->thumbnail_path)) {
+            return Storage::disk('public')->response(
+                $qaStageDrawing->thumbnail_path,
+                'thumbnail.png',
+                ['Content-Type' => 'image/png']
+            );
         }
 
-        return Storage::disk('public')->response(
-            $qaStageDrawing->thumbnail_path,
-            'thumbnail.png',
-            ['Content-Type' => 'image/png']
-        );
+        // Fall back to S3 thumbnail (from drawing set processing)
+        if ($qaStageDrawing->thumbnail_s3_key && Storage::disk('s3')->exists($qaStageDrawing->thumbnail_s3_key)) {
+            $url = Storage::disk('s3')->temporaryUrl(
+                $qaStageDrawing->thumbnail_s3_key,
+                now()->addMinutes(5)
+            );
+
+            return redirect($url);
+        }
+
+        return response()->json(['message' => 'Thumbnail not available.'], 404);
     }
 
     /**
