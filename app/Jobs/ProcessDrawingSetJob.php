@@ -351,8 +351,9 @@ class ProcessDrawingSetJob implements ShouldQueue
         $outputPath = $outputPrefix.'-'.$pageNumber.'.png';
 
         // ImageMagick uses 0-based page index in brackets
+        // -background white -alpha remove ensures transparent PDF areas render as white (not black)
         $command = sprintf(
-            '%s -density 300 %s[%d] -quality 90 %s',
+            '%s -density 300 %s[%d] -background white -alpha remove -quality 90 %s',
             $magickCommand,
             escapeshellarg($pdfPath),
             $pageNumber - 1, // 0-based index
@@ -386,6 +387,11 @@ class ProcessDrawingSetJob implements ShouldQueue
             $imagick = new \Imagick;
             $imagick->setResolution(300, 300);
             $imagick->readImage($pdfPath.'['.($pageNumber - 1).']'); // 0-based index
+
+            // Flatten transparency to white background (prevents black background on PDFs)
+            $imagick->setImageBackgroundColor('white');
+            $imagick->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+
             $imagick->setImageFormat('png');
             $imagick->setImageCompressionQuality(90);
 

@@ -338,7 +338,7 @@ export default function DrawingsIndex() {
                             className="group"
                         >
                             <Card className="overflow-hidden transition-shadow hover:shadow-lg">
-                                <div className="bg-muted relative aspect-[4/3]">
+                                <div className="relative aspect-[4/3] bg-white">
                                     {drawing.revision?.thumbnail_url ? (
                                         <img
                                             src={drawing.revision.thumbnail_url}

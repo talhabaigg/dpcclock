@@ -282,6 +282,11 @@ class DrawingProcessingService
                 $imagick = new \Imagick;
                 $imagick->setResolution($dpi, $dpi);
                 $imagick->readImage($pdfPath.'['.($page - 1).']');
+
+                // Flatten transparency to white background (prevents black background)
+                $imagick->setImageBackgroundColor('white');
+                $imagick->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+
                 $imagick->setImageFormat('png');
                 $imagick->thumbnailImage($maxWidth, 0);
                 $imagick->writeImage($outputPath);
@@ -318,7 +323,7 @@ class DrawingProcessingService
         if ($convert) {
             $cmd = escapeshellarg($convert).' -density '.$dpi.' '
                 .escapeshellarg($pdfPath.'['.($page - 1).']')
-                .' -resize '.$maxWidth.'x -quality 90 '
+                .' -background white -alpha remove -resize '.$maxWidth.'x -quality 90 '
                 .escapeshellarg($outputPath);
             Log::debug('ImageMagick command', ['cmd' => $cmd]);
             exec($cmd.' 2>&1', $output, $returnCode);
