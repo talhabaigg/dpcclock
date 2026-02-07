@@ -1073,22 +1073,20 @@ export default function QaStageDrawingShow() {
                         selectedObservationIds={selectedObservationIds}
                         viewMode={viewMode}
                         onObservationClick={(obs) => {
-                            if (viewMode === 'select') {
-                                setSelectedObservationIds((prev) => {
-                                    const newSet = new Set(prev);
-                                    if (newSet.has(obs.id)) newSet.delete(obs.id);
-                                    else newSet.add(obs.id);
-                                    return newSet;
-                                });
-                                return;
-                            }
+                            // Open edit dialog in any mode (view/edit existing observations)
+                            setPendingPoint(null);
                             setEditingObservation(obs as unknown as Observation);
                             setObservationType(obs.type);
                             setDescription(obs.description);
+                            setPhotoFile(null);
                             setDialogOpen(true);
                         }}
                         onMapClick={(x, y) => {
                             if (viewMode !== 'select') return;
+                            setEditingObservation(null);
+                            setObservationType('defect');
+                            setDescription('');
+                            setPhotoFile(null);
                             setPendingPoint({ pageNumber: targetPageNumber, x, y });
                             setDialogOpen(true);
                         }}

@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Hand, Loader2, Maximize, MinusCircle, MousePointer, PlusCircle, RotateCcw } from 'lucide-react';
+import { Loader2, Maximize, MinusCircle, PlusCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { Button } from './ui/button';
@@ -107,6 +107,7 @@ function MapEventHandler({
     imageWidth,
     onObservationClick,
     onMapClick,
+    previewRef,
 }: {
     observations: Observation[];
     selectedObservationIds: Set<number>;
@@ -115,9 +116,46 @@ function MapEventHandler({
     imageWidth: number;
     onObservationClick?: (observation: Observation) => void;
     onMapClick?: (x: number, y: number) => void;
+    previewRef: React.RefObject<HTMLDivElement | null>;
 }) {
     const map = useMap();
     const markersRef = useRef<L.Marker[]>([]);
+
+    // Move preview pin via direct DOM manipulation — no React re-renders
+    useEffect(() => {
+        const el = previewRef.current;
+        if (!el) return;
+
+        if (viewMode !== 'select') {
+            el.style.display = 'none';
+            return;
+        }
+
+        const onMouseMove = (e: L.LeafletMouseEvent) => {
+            const nx = e.latlng.lng / imageWidth;
+            const ny = (imageHeight - e.latlng.lat) / imageHeight;
+            if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
+                el.style.display = 'none';
+                return;
+            }
+            const pt = map.latLngToContainerPoint(e.latlng);
+            el.style.display = 'block';
+            el.style.transform = `translate(${pt.x - 15}px, ${pt.y - 42}px)`;
+        };
+
+        const onMouseOut = () => {
+            el.style.display = 'none';
+        };
+
+        map.on('mousemove', onMouseMove);
+        map.on('mouseout', onMouseOut);
+
+        return () => {
+            map.off('mousemove', onMouseMove);
+            map.off('mouseout', onMouseOut);
+            el.style.display = 'none';
+        };
+    }, [map, viewMode, imageWidth, imageHeight, previewRef]);
 
     // Add observation markers
     useEffect(() => {
@@ -138,7 +176,7 @@ function MapEventHandler({
                 obs.ai_impact
             );
 
-            const marker = L.marker(latLng, { icon }).addTo(map);
+            const marker = L.marker(latLng, { icon, bubblingMouseEvents: false }).addTo(map);
 
             marker.on('click', () => {
                 onObservationClick?.(obs);
@@ -180,41 +218,18 @@ function MapEventHandler({
     return null;
 }
 
-// Controls component
+// Controls component (zoom only — view mode is controlled by the parent toolbar)
 function MapControls({
-    viewMode,
-    onViewModeChange,
     onFitToScreen,
     onZoomIn,
     onZoomOut,
 }: {
-    viewMode: 'pan' | 'select';
-    onViewModeChange: (mode: 'pan' | 'select') => void;
     onFitToScreen: () => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
 }) {
     return (
         <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
-            <div className="bg-white rounded-lg shadow-lg p-1 flex flex-col gap-1">
-                <Button
-                    variant={viewMode === 'pan' ? 'default' : 'ghost'}
-                    size="icon"
-                    onClick={() => onViewModeChange('pan')}
-                    title="Pan mode"
-                >
-                    <Hand className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant={viewMode === 'select' ? 'default' : 'ghost'}
-                    size="icon"
-                    onClick={() => onViewModeChange('select')}
-                    title="Select/Add observation mode"
-                >
-                    <MousePointer className="h-4 w-4" />
-                </Button>
-            </div>
-
             <div className="bg-white rounded-lg shadow-lg p-1 flex flex-col gap-1">
                 <Button variant="ghost" size="icon" onClick={onZoomIn} title="Zoom in">
                     <PlusCircle className="h-4 w-4" />
@@ -235,12 +250,8 @@ function MapControls({
 
 // Internal component that has access to the map instance
 function MapControlsInternal({
-    viewMode,
-    onViewModeChange,
     bounds,
 }: {
-    viewMode: 'pan' | 'select';
-    onViewModeChange: (mode: 'pan' | 'select') => void;
     bounds: L.LatLngBoundsExpression;
 }) {
     const map = useMap();
@@ -259,8 +270,6 @@ function MapControlsInternal({
 
     return (
         <MapControls
-            viewMode={viewMode}
-            onViewModeChange={onViewModeChange}
             onFitToScreen={handleFitToScreen}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
@@ -280,13 +289,8 @@ export function LeafletDrawingViewer({
     onMapClick,
     className = '',
 }: LeafletDrawingViewerProps) {
-    const [internalViewMode, setInternalViewMode] = useState<'pan' | 'select'>(viewMode);
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
-
-    // Update internal state when prop changes
-    useEffect(() => {
-        setInternalViewMode(viewMode);
-    }, [viewMode]);
+    const previewPinRef = useRef<HTMLDivElement>(null);
 
     // Preload image to get dimensions when using image mode (no tiles)
     useEffect(() => {
@@ -377,27 +381,50 @@ export function LeafletDrawingViewer({
                 <MapEventHandler
                     observations={observations}
                     selectedObservationIds={selectedObservationIds}
-                    viewMode={internalViewMode}
+                    viewMode={viewMode}
                     imageHeight={imageHeight}
                     imageWidth={imageWidth}
                     onObservationClick={onObservationClick}
                     onMapClick={onMapClick}
+                    previewRef={previewPinRef}
                 />
 
                 <MapControlsInternal
-                    viewMode={internalViewMode}
-                    onViewModeChange={setInternalViewMode}
                     bounds={bounds}
                 />
             </MapContainer>
 
+            {/* Preview pin overlay — positioned via ref, no React re-renders on mousemove */}
+            <div
+                ref={previewPinRef}
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    pointerEvents: 'none',
+                    zIndex: 5000,
+                    display: 'none',
+                    willChange: 'transform',
+                }}
+            >
+                <svg width="30" height="42" viewBox="0 0 30 42" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
+                    <path
+                        d="M15 0C6.716 0 0 6.716 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.716 23.284 0 15 0z"
+                        fill="rgba(239, 68, 68, 0.5)"
+                        stroke="rgba(185, 28, 28, 0.7)"
+                        strokeWidth="1.5"
+                    />
+                    <circle cx="15" cy="14" r="6" fill="rgba(255, 255, 255, 0.7)" />
+                </svg>
+            </div>
+
             {/* Cursor style based on view mode */}
             <style>{`
                 .leaflet-container {
-                    cursor: ${internalViewMode === 'pan' ? 'grab' : 'crosshair'};
+                    cursor: ${viewMode === 'pan' ? 'grab' : 'crosshair'};
                 }
                 .leaflet-container.leaflet-drag-target {
-                    cursor: ${internalViewMode === 'pan' ? 'grabbing' : 'crosshair'};
+                    cursor: ${viewMode === 'pan' ? 'grabbing' : 'crosshair'};
                 }
                 .leaflet-observation-marker {
                     background: transparent !important;
