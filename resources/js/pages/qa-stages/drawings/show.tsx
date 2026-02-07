@@ -1,4 +1,5 @@
 import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
+import { PanoramaViewer } from '@/components/panorama-viewer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -54,6 +55,7 @@ type Observation = {
     type: 'defect' | 'observation';
     description: string;
     photo_url?: string | null;
+    is_360_photo?: boolean;
     created_at?: string;
     created_by_user?: { name: string };
     source?: 'ai_comparison' | null;
@@ -224,6 +226,7 @@ export default function QaStageDrawingShow() {
     const [observationType, setObservationType] = useState<'defect' | 'observation'>('defect');
     const [description, setDescription] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [is360Photo, setIs360Photo] = useState(false);
     const [saving, setSaving] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -293,6 +296,19 @@ export default function QaStageDrawingShow() {
         setObservationType('defect');
         setDescription('');
         setPhotoFile(null);
+        setIs360Photo(false);
+    };
+
+    const detect360FromFile = (file: File) => {
+        const img = new Image();
+        img.onload = () => {
+            const aspectRatio = img.naturalWidth / img.naturalHeight;
+            if (Math.abs(aspectRatio - 2.0) < 0.05) {
+                setIs360Photo(true);
+            }
+            URL.revokeObjectURL(img.src);
+        };
+        img.src = URL.createObjectURL(file);
     };
 
     const getCsrfToken = () => {
@@ -323,6 +339,7 @@ export default function QaStageDrawingShow() {
             if (photoFile) {
                 formData.append('photo', photoFile);
             }
+            formData.append('is_360_photo', is360Photo ? '1' : '0');
 
             const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations`, {
                 method: 'POST',
@@ -369,6 +386,7 @@ export default function QaStageDrawingShow() {
             if (photoFile) {
                 formData.append('photo', photoFile);
             }
+            formData.append('is_360_photo', is360Photo ? '1' : '0');
 
             const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}`, {
                 method: 'POST',
@@ -1079,6 +1097,7 @@ export default function QaStageDrawingShow() {
                             setObservationType(obs.type);
                             setDescription(obs.description);
                             setPhotoFile(null);
+                            setIs360Photo((obs as unknown as Observation).is_360_photo ?? false);
                             setDialogOpen(true);
                         }}
                         onMapClick={(x, y) => {
@@ -1087,6 +1106,7 @@ export default function QaStageDrawingShow() {
                             setObservationType('defect');
                             setDescription('');
                             setPhotoFile(null);
+                            setIs360Photo(false);
                             setPendingPoint({ pageNumber: targetPageNumber, x, y });
                             setDialogOpen(true);
                         }}
@@ -1105,7 +1125,7 @@ export default function QaStageDrawingShow() {
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className={is360Photo || editingObservation?.is_360_photo ? 'sm:max-w-lg' : 'sm:max-w-md'}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             {editingObservation?.source === 'ai_comparison' && <Sparkles className="h-4 w-4 text-violet-500" />}
@@ -1225,8 +1245,14 @@ export default function QaStageDrawingShow() {
                                 onChange={(event) => {
                                     const file = event.target.files?.[0] || null;
                                     setPhotoFile(file);
+                                    if (file) {
+                                        detect360FromFile(file);
+                                    } else {
+                                        setIs360Photo(false);
+                                    }
                                 }}
                             />
+                            <p className="text-muted-foreground text-[10px]">Max 50MB. Supports standard photos and 360 panoramic images.</p>
                             {photoFile && (
                                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                                     <Camera className="h-3.5 w-3.5" />
@@ -1235,7 +1261,23 @@ export default function QaStageDrawingShow() {
                             )}
                             {!photoFile && editingObservation?.photo_url && (
                                 <div className="overflow-hidden rounded border">
-                                    <img src={editingObservation.photo_url} alt="Current" className="h-24 w-full object-cover" />
+                                    {editingObservation.is_360_photo || is360Photo ? (
+                                        <PanoramaViewer imageUrl={editingObservation.photo_url} className="h-48 w-full" compact />
+                                    ) : (
+                                        <img src={editingObservation.photo_url} alt="Current" className="h-24 w-full object-cover" />
+                                    )}
+                                </div>
+                            )}
+                            {(photoFile || editingObservation?.photo_url) && (
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="is-360-photo"
+                                        checked={is360Photo}
+                                        onCheckedChange={(checked) => setIs360Photo(checked === true)}
+                                    />
+                                    <Label htmlFor="is-360-photo" className="cursor-pointer text-xs">
+                                        This is a 360 panoramic photo
+                                    </Label>
                                 </div>
                             )}
                         </div>

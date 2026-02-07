@@ -15,6 +15,7 @@ export type Observation = {
     type: 'defect' | 'observation';
     description: string;
     photo_url?: string | null;
+    is_360_photo?: boolean;
     source?: 'ai_comparison' | null;
     ai_impact?: 'low' | 'medium' | 'high' | null;
     is_confirmed?: boolean;

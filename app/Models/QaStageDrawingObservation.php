@@ -24,6 +24,7 @@ class QaStageDrawingObservation extends Model
         'photo_name',
         'photo_type',
         'photo_size',
+        'is_360_photo',
         'created_by',
         'updated_by',
         // AI comparison fields
@@ -43,6 +44,7 @@ class QaStageDrawingObservation extends Model
         'potential_change_order' => 'boolean',
         'is_confirmed' => 'boolean',
         'confirmed_at' => 'datetime',
+        'is_360_photo' => 'boolean',
     ];
 
     protected $appends = ['photo_url'];

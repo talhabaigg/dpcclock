@@ -18,7 +18,8 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable|image|max:5120',
+            'photo' => 'nullable|image|max:51200', // 50MB max (360 photos)
+            'is_360_photo' => 'nullable|boolean',
         ]);
 
         $photoPath = null;
@@ -50,6 +51,7 @@ class QaStageDrawingObservationController extends Controller
                 'photo_name' => $photoName,
                 'photo_type' => $photoType,
                 'photo_size' => $photoSize,
+                'is_360_photo' => $request->boolean('is_360_photo'),
             ]);
 
             return response()->json($observation->fresh());
@@ -79,7 +81,8 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable|image|max:5120',
+            'photo' => 'nullable|image|max:51200', // 50MB max (360 photos)
+            'is_360_photo' => 'nullable|boolean',
         ]);
 
         $photoPath = $observation->photo_path;
@@ -114,6 +117,9 @@ class QaStageDrawingObservationController extends Controller
                 'photo_name' => $photoName,
                 'photo_type' => $photoType,
                 'photo_size' => $photoSize,
+                'is_360_photo' => $request->has('is_360_photo')
+                    ? $request->boolean('is_360_photo')
+                    : $observation->is_360_photo,
             ]);
 
             return response()->json($observation->fresh());
