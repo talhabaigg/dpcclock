@@ -35,7 +35,7 @@ class QaStageDrawingObservationController extends Controller
             $photoPath = $photo->storeAs(
                 'qa-drawing-observations/'.$drawing->id,
                 time().'_'.$photoName,
-                'public'
+                's3'
             );
         }
 
@@ -62,7 +62,7 @@ class QaStageDrawingObservationController extends Controller
             ]);
 
             if ($photoPath) {
-                Storage::disk('public')->delete($photoPath);
+                Storage::disk('s3')->delete($photoPath);
             }
 
             return response()->json(['message' => 'Failed to save observation.'], 500);
@@ -98,11 +98,11 @@ class QaStageDrawingObservationController extends Controller
             $photoPath = $photo->storeAs(
                 'qa-drawing-observations/'.$drawing->id,
                 time().'_'.$photoName,
-                'public'
+                's3'
             );
 
             if ($observation->photo_path) {
-                Storage::disk('public')->delete($observation->photo_path);
+                Storage::disk('s3')->delete($observation->photo_path);
             }
         }
 
@@ -182,7 +182,7 @@ class QaStageDrawingObservationController extends Controller
         try {
             // Delete associated photo if exists
             if ($observation->photo_path) {
-                Storage::disk('public')->delete($observation->photo_path);
+                Storage::disk('s3')->delete($observation->photo_path);
             }
 
             $observation->delete();
@@ -200,7 +200,7 @@ class QaStageDrawingObservationController extends Controller
     }
 
     /**
-     * Stream observation photo from S3 (same-origin proxy for 360 viewer).
+     * Stream observation photo (same-origin proxy for 360 viewer).
      */
     public function photo(QaStageDrawingObservation $observation)
     {
@@ -209,10 +209,6 @@ class QaStageDrawingObservationController extends Controller
         }
 
         $disk = Storage::disk('s3');
-
-        if (! $disk->exists($observation->photo_path)) {
-            abort(404, 'Photo not found');
-        }
 
         return response()->stream(function () use ($disk, $observation) {
             $stream = $disk->readStream($observation->photo_path);
