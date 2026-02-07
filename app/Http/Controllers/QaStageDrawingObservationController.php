@@ -200,6 +200,32 @@ class QaStageDrawingObservationController extends Controller
     }
 
     /**
+     * Stream observation photo from S3 (same-origin proxy for 360 viewer).
+     */
+    public function photo(QaStageDrawingObservation $observation)
+    {
+        if (! $observation->photo_path) {
+            abort(404, 'No photo available');
+        }
+
+        $disk = Storage::disk('s3');
+
+        if (! $disk->exists($observation->photo_path)) {
+            abort(404, 'Photo not found');
+        }
+
+        return response()->stream(function () use ($disk, $observation) {
+            $stream = $disk->readStream($observation->photo_path);
+            fpassthru($stream);
+            fclose($stream);
+        }, 200, [
+            'Content-Type' => $observation->photo_type ?? 'image/jpeg',
+            'Content-Disposition' => 'inline',
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
+    }
+
+    /**
      * Describe an AI observation using GPT-4o (on-demand).
      */
     public function describe(QaStageDrawing $drawing, QaStageDrawingObservation $observation)

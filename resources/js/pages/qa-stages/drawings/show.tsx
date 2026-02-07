@@ -1262,7 +1262,7 @@ export default function QaStageDrawingShow() {
                             {!photoFile && editingObservation?.photo_url && (
                                 <div className="overflow-hidden rounded border">
                                     {editingObservation.is_360_photo || is360Photo ? (
-                                        <PanoramaViewer imageUrl={editingObservation.photo_url} className="h-48 w-full" compact />
+                                        <PanoramaViewer imageUrl={`/qa-stage-drawing-observations/${editingObservation.id}/photo`} className="h-48 w-full" compact />
                                     ) : (
                                         <img src={editingObservation.photo_url} alt="Current" className="h-24 w-full object-cover" />
                                     )}
