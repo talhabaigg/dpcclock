@@ -325,11 +325,28 @@ class QaStageDrawingController extends Controller
         }
 
         // Fall back to S3 thumbnail (from drawing set processing)
+        // Stream through the server instead of redirecting to avoid CORS issues
         $s3Key = $drawing->thumbnail_s3_key;
         if ($s3Key && Storage::disk('s3')->exists($s3Key)) {
-            $url = Storage::disk('s3')->temporaryUrl($s3Key, now()->addMinutes(5));
+            $stream = Storage::disk('s3')->readStream($s3Key);
+            $size = Storage::disk('s3')->size($s3Key);
+            $mimeType = str_ends_with($s3Key, '.png') ? 'image/png' : 'image/jpeg';
 
-            return redirect($url);
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]
+            );
         }
 
         abort(404, 'Thumbnail not found.');

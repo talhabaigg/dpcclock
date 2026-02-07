@@ -19,7 +19,7 @@ class DrawingIndexController extends Controller
         $drawingSheets = DrawingSheet::where('project_id', $project->id)
             ->whereNotNull('current_revision_id')
             ->with([
-                'currentRevision:id,drawing_sheet_id,drawing_number,drawing_title,revision_number,revision,status,page_preview_s3_key,drawing_set_id,created_at',
+                'currentRevision:id,drawing_sheet_id,drawing_number,drawing_title,revision_number,revision,status,page_preview_s3_key,thumbnail_s3_key,thumbnail_path,drawing_set_id,created_at',
                 'currentRevision.drawingSet:id,original_filename',
             ])
             ->orderBy('sheet_number')
@@ -44,6 +44,9 @@ class DrawingIndexController extends Controller
                         'status' => $revision->status,
                         'created_at' => $revision->created_at,
                         'drawing_set_name' => $revision->drawingSet?->original_filename,
+                        'thumbnail_url' => ($revision->thumbnail_path || $revision->thumbnail_s3_key)
+                            ? route('qa-stage-drawings.thumbnail', ['drawing' => $revision->id])
+                            : null,
                     ] : null,
                 ];
             });

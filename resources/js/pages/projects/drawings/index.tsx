@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowLeft, ArrowUpDown, Eye, FileImage, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, Upload, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type Project = {
@@ -25,6 +25,7 @@ type Revision = {
     status: string;
     created_at: string;
     drawing_set_name: string | null;
+    thumbnail_url: string | null;
 };
 
 type Drawing = {
@@ -68,6 +69,7 @@ export default function DrawingsIndex() {
     const [searchQuery, setSearchQuery] = useState('');
     const [disciplineFilter, setDisciplineFilter] = useState<string>('all');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sheet_number', order: 'asc' });
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
     // Get unique disciplines for filter
     const disciplines = useMemo(() => {
@@ -217,54 +219,74 @@ export default function DrawingsIndex() {
                     </Button>
                 )}
 
-                <div className="text-muted-foreground ml-auto text-sm">
-                    Showing {filteredDrawings.length} of {drawings.length} drawings
+                <div className="ml-auto flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">
+                        Showing {filteredDrawings.length} of {drawings.length} drawings
+                    </span>
+                    <div className="flex rounded-md border">
+                        <Button
+                            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-8 rounded-r-none"
+                            onClick={() => setViewMode('list')}
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-8 rounded-l-none"
+                            onClick={() => setViewMode('grid')}
+                        >
+                            <Grid3X3 className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* Drawings Table */}
-            <Card className="mx-2 p-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>
-                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('sheet_number')}>
-                                    Drawing Number
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableHead>
-                            <TableHead>
-                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('title')}>
-                                    Title
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableHead>
-                            <TableHead>Current Revision</TableHead>
-                            <TableHead>
-                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('revision_count')}>
-                                    Revisions
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableHead>
-                            <TableHead>Discipline</TableHead>
-                            <TableHead>
-                                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
-                                    Created
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredDrawings.length === 0 ? (
+            {filteredDrawings.length === 0 ? (
+                <Card className="mx-2 p-0">
+                    <div className="text-muted-foreground py-8 text-center">
+                        {hasActiveFilters ? 'No drawings match your search criteria.' : 'No drawings found for this project.'}
+                    </div>
+                </Card>
+            ) : viewMode === 'list' ? (
+                /* List View (Table) */
+                <Card className="mx-2 p-0">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-                                    {hasActiveFilters ? 'No drawings match your search criteria.' : 'No drawings found for this project.'}
-                                </TableCell>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('sheet_number')}>
+                                        Drawing Number
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('title')}>
+                                        Title
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>Current Revision</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('revision_count')}>
+                                        Revisions
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>Discipline</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
+                                        Created
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>Actions</TableHead>
                             </TableRow>
-                        ) : (
-                            filteredDrawings.map((drawing) => (
+                        </TableHeader>
+                        <TableBody>
+                            {filteredDrawings.map((drawing) => (
                                 <TableRow key={drawing.id}>
                                     <TableCell className="font-medium">{drawing.sheet_number || drawing.revision?.drawing_number || '-'}</TableCell>
                                     <TableCell>{drawing.title || drawing.revision?.drawing_title || '-'}</TableCell>
@@ -302,11 +324,51 @@ export default function DrawingsIndex() {
                                         )}
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </Card>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Card>
+            ) : (
+                /* Grid View (Thumbnails) */
+                <div className="mx-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    {filteredDrawings.map((drawing) => (
+                        <Link
+                            key={drawing.id}
+                            href={drawing.revision?.id ? `/qa-stage-drawings/${drawing.revision.id}` : '#'}
+                            className="group"
+                        >
+                            <Card className="overflow-hidden transition-shadow hover:shadow-lg">
+                                <div className="bg-muted relative aspect-[4/3]">
+                                    {drawing.revision?.thumbnail_url ? (
+                                        <img
+                                            src={drawing.revision.thumbnail_url}
+                                            alt={drawing.display_name}
+                                            className="h-full w-full object-contain"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center">
+                                            <FileImage className="text-muted-foreground h-12 w-12" />
+                                        </div>
+                                    )}
+                                    {drawing.revision?.revision_number && (
+                                        <Badge variant="secondary" className="absolute right-1 top-1 text-xs">
+                                            Rev {drawing.revision.revision_number}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div className="p-2">
+                                    <p className="truncate text-sm font-medium">
+                                        {drawing.sheet_number || drawing.revision?.drawing_number || '-'}
+                                    </p>
+                                    <p className="text-muted-foreground truncate text-xs">
+                                        {drawing.title || drawing.revision?.drawing_title || 'Untitled'}
+                                    </p>
+                                </div>
+                            </Card>
+                        </Link>
+                    ))}
+                </div>
+            )}
         </AppLayout>
     );
 }
