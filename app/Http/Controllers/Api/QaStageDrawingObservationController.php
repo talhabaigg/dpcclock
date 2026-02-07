@@ -164,6 +164,27 @@ class QaStageDrawingObservationController extends Controller
         }
     }
 
+    public function photo(QaStageDrawingObservation $qaStageDrawingObservation)
+    {
+        if (! $qaStageDrawingObservation->photo_path) {
+            return response()->json(['message' => 'No photo found.'], 404);
+        }
+
+        if (! Storage::disk('s3')->exists($qaStageDrawingObservation->photo_path)) {
+            return response()->json(['message' => 'Photo file not found.'], 404);
+        }
+
+        $stream = Storage::disk('s3')->readStream($qaStageDrawingObservation->photo_path);
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+        }, 200, [
+            'Content-Type' => $qaStageDrawingObservation->photo_type ?? 'image/jpeg',
+            'Content-Disposition' => 'inline; filename="'.($qaStageDrawingObservation->photo_name ?? 'photo.jpg').'"',
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
+    }
+
     public function destroy(QaStageDrawingObservation $qaStageDrawingObservation)
     {
         if ($qaStageDrawingObservation->photo_path) {

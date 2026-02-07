@@ -86,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('api.qa-stage-drawings.confirm-metadata');
 
     Route::apiResource('qa-stage-drawing-observations', QaStageDrawingObservationController::class);
+    Route::get('qa-stage-drawing-observations/{qaStageDrawingObservation}/photo', [QaStageDrawingObservationController::class, 'photo'])
+        ->name('api.qa-stage-drawing-observations.photo');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])
