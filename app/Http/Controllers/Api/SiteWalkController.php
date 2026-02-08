@@ -129,6 +129,7 @@ class SiteWalkController extends Controller
                 'sequence_order' => $photo->sequence_order,
                 'caption' => $photo->caption,
                 'photo_url' => '/api/site-walk-photos/'.$photo->id.'/file',
+                'hotspot_overrides' => $photo->hotspot_overrides,
                 'sheet_display_name' => $photo->drawingSheet?->display_name,
                 'current_revision_id' => $photo->drawingSheet?->current_revision_id,
                 'created_at' => $photo->created_at,
@@ -217,6 +218,10 @@ class SiteWalkController extends Controller
             'y' => 'sometimes|numeric|min:0|max:1',
             'heading' => 'nullable|numeric',
             'sequence_order' => 'sometimes|integer|min:1',
+            'hotspot_overrides' => 'nullable|array',
+            'hotspot_overrides.*' => 'array',
+            'hotspot_overrides.*.yaw' => 'required|numeric',
+            'hotspot_overrides.*.pitch' => 'required|numeric',
         ]);
 
         $photo->update($validated);

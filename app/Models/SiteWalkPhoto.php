@@ -24,6 +24,7 @@ class SiteWalkPhoto extends Model
         'photo_name',
         'photo_type',
         'photo_size',
+        'hotspot_overrides',
         'created_by',
         'updated_by',
     ];
@@ -35,6 +36,7 @@ class SiteWalkPhoto extends Model
         'page_number' => 'integer',
         'sequence_order' => 'integer',
         'photo_size' => 'integer',
+        'hotspot_overrides' => 'array',
     ];
 
     protected $appends = ['photo_url'];
