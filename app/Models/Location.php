@@ -96,4 +96,9 @@ class Location extends Model
         return $this->hasMany(LocationPayRateTemplate::class)
             ->orderBy('sort_order');
     }
+
+    public function siteWalks()
+    {
+        return $this->hasMany(SiteWalk::class, 'project_id');
+    }
 }

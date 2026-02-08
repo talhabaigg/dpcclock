@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\QaStageController;
 use App\Http\Controllers\Api\QaStageDrawingController;
 use App\Http\Controllers\Api\QaStageDrawingObservationController;
+use App\Http\Controllers\Api\SiteWalkController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
 use App\Models\User;
@@ -96,4 +97,26 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('api.projects.drawings.index');
     Route::get('projects/{project}/drawings/{drawing}', [ProjectDrawingController::class, 'show'])
         ->name('api.projects.drawings.show');
+
+    // Site Walks
+    Route::get('projects/{project}/site-walks', [SiteWalkController::class, 'index'])
+        ->name('api.projects.site-walks.index');
+    Route::post('projects/{project}/site-walks', [SiteWalkController::class, 'store'])
+        ->name('api.projects.site-walks.store');
+    Route::get('site-walks/{siteWalk}', [SiteWalkController::class, 'show'])
+        ->name('api.site-walks.show');
+    Route::put('site-walks/{siteWalk}', [SiteWalkController::class, 'update'])
+        ->name('api.site-walks.update');
+    Route::delete('site-walks/{siteWalk}', [SiteWalkController::class, 'destroy'])
+        ->name('api.site-walks.destroy');
+    Route::get('site-walks/{siteWalk}/tour', [SiteWalkController::class, 'tour'])
+        ->name('api.site-walks.tour');
+    Route::post('site-walks/{siteWalk}/photos', [SiteWalkController::class, 'storePhoto'])
+        ->name('api.site-walks.photos.store');
+    Route::put('site-walk-photos/{photo}', [SiteWalkController::class, 'updatePhoto'])
+        ->name('api.site-walk-photos.update');
+    Route::delete('site-walk-photos/{photo}', [SiteWalkController::class, 'destroyPhoto'])
+        ->name('api.site-walk-photos.destroy');
+    Route::get('site-walk-photos/{photo}/file', [SiteWalkController::class, 'photoFile'])
+        ->name('api.site-walk-photos.file');
 });
