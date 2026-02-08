@@ -34,10 +34,9 @@ jobs:
 
             cd ${{ secrets.APP_PATH }}
 
-            # Enable maintenance mode
-            php artisan down --secret="${{ secrets.MAINTENANCE_SECRET }}"
+            # ---- PHASE 1: Slow steps (site stays live) ----
 
-            # Stash any local changes and pull latest code
+            # Pull latest code
             git stash --include-untracked || true
             git pull origin main
             git stash drop || true
@@ -48,6 +47,11 @@ jobs:
             # Install and build frontend assets
             npm ci --legacy-peer-deps
             npm run build
+
+            # ---- PHASE 2: Fast steps only (brief downtime) ----
+
+            # Enable maintenance mode
+            php artisan down --secret="${{ secrets.MAINTENANCE_SECRET }}"
 
             # Run migrations
             php artisan migrate --force
