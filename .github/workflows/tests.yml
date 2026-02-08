@@ -50,3 +50,5 @@ jobs:
 
       - name: Tests
         run: ./vendor/bin/pest
+        env:
+          PAYROLL_API_KEY: ${{ secrets.PAYROLL_API_KEY }}

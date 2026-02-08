@@ -23,7 +23,7 @@ class EmployeeController extends Controller
 
     public function sync()
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
         ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/employee/details');
@@ -80,7 +80,7 @@ class EmployeeController extends Controller
     public function syncEmployeeWorktypes()
     {
         ini_set('max_execution_time', 300);
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
 
         $employees = Employee::all();
         $missingWorkTypes = []; // Array to track missing work types
@@ -151,7 +151,7 @@ class EmployeeController extends Controller
     public function syncSingleEmployeeWorktype($employeeId)
     {
         // dd($employeeId);
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $missingWorkTypes = []; // Array to track missing work types
         $allowedCodes = ['01-01', '03-01', '05-01', '07-01', '11-01'];
         $employee = Employee::findOrFail($employeeId);

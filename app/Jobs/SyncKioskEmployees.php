@@ -103,7 +103,7 @@ class SyncKioskEmployees implements ShouldQueue
 
     protected function getLocationsforEmployeeId(int $employeeId): ?array
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
 
         try {
             $response = Http::withHeaders([

@@ -617,7 +617,7 @@ class ClockController extends Controller
 
     private function sync($chunkData)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         // Send POST request to the API with correct headers and JSON data
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
@@ -899,7 +899,7 @@ class ClockController extends Controller
         $to = $weekEnd->format('Y-m-d\TH:i:s');
         $filter = "EmployeeId eq {$employeeId} and StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
 
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
 
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
@@ -1003,7 +1003,7 @@ class ClockController extends Controller
         // $from = $weekStart->format('Y-m-d\TH:i:s');
         // $to = $weekEnd->format('Y-m-d\TH:i:s');
         // $filter = "StartTime ge datetime'{$from}' and StartTime le datetime'{$to}'";
-        // $apiKey = env('PAYROLL_API_KEY');
+        // $apiKey = config('services.employment_hero.api_key');
 
         // $response = Http::withHeaders([
         //     'Authorization' => 'Basic ' . base64_encode($apiKey . ':'),

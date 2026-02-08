@@ -72,7 +72,7 @@ class WorktypeController extends Controller
 
     public function syncWorktypes()
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
         ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/worktype');
