@@ -84,6 +84,10 @@ interface CostBreakdown {
                 percentage_rate?: number;
                 hours?: number;
                 base?: number;
+                base_components?: {
+                    gross_wages: number;
+                    super: number;
+                };
                 amount: number;
             }>;
             fixed_total: number;
@@ -121,6 +125,11 @@ interface CostBreakdown {
                 percentage_rate?: number;
                 hours?: number;
                 base?: number;
+                base_components?: {
+                    annual_leave_accrual: number;
+                    leave_loading: number;
+                    super: number;
+                };
                 amount: number;
             }>;
             fixed_total: number;
@@ -147,6 +156,12 @@ interface CostBreakdown {
                 percentage_rate?: number;
                 hours?: number;
                 base?: number;
+                base_components?: {
+                    gross_wages: number;
+                    annual_leave_accrual: number;
+                    leave_loading: number;
+                    super: number;
+                };
                 amount: number;
             }>;
             fixed_total: number;
@@ -162,6 +177,14 @@ interface CostBreakdown {
             is_percentage: boolean;
             hourly_rate: number | null;
             percentage_rate: number | null;
+            base: number | null;
+            base_components: {
+                ordinary_base_wages: number;
+                ordinary_allowances: number;
+                overtime_base_wages: number;
+                overtime_allowances: number;
+                super: number;
+            } | null;
             hours_applied: number;
             amount: number;
         }>;
@@ -472,7 +495,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                 <TooltipTrigger asChild>
                                                     <span>{prefix}-01</span>
                                                 </TooltipTrigger>
-                                                <TooltipContent>{label} Wages</TooltipContent>
+                                                <TooltipContent className="z-[10002]">{label} Wages</TooltipContent>
                                             </Tooltip>
                                         </TabsTrigger>
                                     );
@@ -501,7 +524,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                         {label} Wages
                                                                     </span>
                                                                 </TooltipTrigger>
-                                                                <TooltipContent>{group.wagesCode}</TooltipContent>
+                                                                <TooltipContent className="z-[10002]">{group.wagesCode}</TooltipContent>
                                                             </Tooltip>
                                                             <span className="text-lg font-bold">{formatCurrency(group.wagesAmount)}</span>
                                                         </div>
@@ -521,7 +544,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                                         Oncosts
                                                                                     </span>
                                                                                 </TooltipTrigger>
-                                                                                <TooltipContent>{group.oncostsSeries} series</TooltipContent>
+                                                                                <TooltipContent className="z-[10002]">{group.oncostsSeries} series</TooltipContent>
                                                                             </Tooltip>
                                                                             <span className="text-muted-foreground text-xs">
                                                                                 (
@@ -552,7 +575,7 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                                                 {formattedCode}
                                                                                             </span>
                                                                                         </TooltipTrigger>
-                                                                                        <TooltipContent>{oncostInfo.label}</TooltipContent>
+                                                                                        <TooltipContent className="z-[10002]">{oncostInfo.label}</TooltipContent>
                                                                                     </Tooltip>
                                                                                     <span>{formatCurrency(oncost.amount)}</span>
                                                                                 </div>
@@ -1004,7 +1027,38 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                             {oncost.hourly_rate !== undefined && oncost.hours !== undefined
                                                                                 ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
                                                                                 : oncost.percentage_rate !== undefined && oncost.base !== undefined
-                                                                                  ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                                                  ? <span className="ml-1 text-xs">
+                                                                                        ({oncost.percentage_rate}% of{' '}
+                                                                                        {oncost.base_components ? (
+                                                                                            <Tooltip>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <span className="cursor-help border-b border-dotted border-current">
+                                                                                                        {formatCurrency(oncost.base)}
+                                                                                                    </span>
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent className="z-[10002] w-56 p-3">
+                                                                                                    <p className="mb-2 text-xs font-semibold">Taxable Base Breakdown</p>
+                                                                                                    <div className="space-y-1 text-xs">
+                                                                                                        <div className="flex justify-between gap-4">
+                                                                                                            <span className="text-muted-foreground">Gross Wages</span>
+                                                                                                            <span>{formatCurrency(oncost.base_components.gross_wages)}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between gap-4">
+                                                                                                            <span className="text-muted-foreground">Super</span>
+                                                                                                            <span>{formatCurrency(oncost.base_components.super)}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+                                                                                                            <span>Total</span>
+                                                                                                            <span>{formatCurrency(oncost.base)}</span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        ) : (
+                                                                                            formatCurrency(oncost.base)
+                                                                                        )}
+                                                                                        )
+                                                                                    </span>
                                                                                   : ''}
                                                                         </span>
                                                                         <span className="font-medium">{formatCurrency(oncost.amount)}</span>
@@ -1146,7 +1200,42 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                             {oncost.hourly_rate !== undefined && oncost.hours !== undefined
                                                                                 ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
                                                                                 : oncost.percentage_rate !== undefined && oncost.base !== undefined
-                                                                                  ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                                                  ? <span className="ml-1 text-xs">
+                                                                                        ({oncost.percentage_rate}% of{' '}
+                                                                                        {oncost.base_components ? (
+                                                                                            <Tooltip>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <span className="cursor-help border-b border-dotted border-current">
+                                                                                                        {formatCurrency(oncost.base)}
+                                                                                                    </span>
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent className="z-[10002] w-56 p-3">
+                                                                                                    <p className="mb-2 text-xs font-semibold">Taxable Base Breakdown</p>
+                                                                                                    <div className="space-y-1 text-xs">
+                                                                                                        <div className="flex justify-between gap-4">
+                                                                                                            <span className="text-muted-foreground">Annual Leave Accrual</span>
+                                                                                                            <span>{formatCurrency(oncost.base_components.annual_leave_accrual)}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between gap-4">
+                                                                                                            <span className="text-muted-foreground">Leave Loading</span>
+                                                                                                            <span>{formatCurrency(oncost.base_components.leave_loading)}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between gap-4">
+                                                                                                            <span className="text-muted-foreground">Super</span>
+                                                                                                            <span>{formatCurrency(oncost.base_components.super)}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+                                                                                                            <span>Total</span>
+                                                                                                            <span>{formatCurrency(oncost.base)}</span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        ) : (
+                                                                                            formatCurrency(oncost.base)
+                                                                                        )}
+                                                                                        )
+                                                                                    </span>
                                                                                   : ''}
                                                                         </span>
                                                                         <span className="font-medium">{formatCurrency(oncost.amount)}</span>
@@ -1244,7 +1333,46 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                                     ? ` (${formatCurrency(oncost.hourly_rate)}/hr × ${oncost.hours.toFixed(1)} hrs)`
                                                                                     : oncost.percentage_rate !== undefined &&
                                                                                         oncost.base !== undefined
-                                                                                      ? ` (${oncost.percentage_rate}% of ${formatCurrency(oncost.base)})`
+                                                                                      ? <span className="ml-1 text-xs">
+                                                                                            ({oncost.percentage_rate}% of{' '}
+                                                                                            {oncost.base_components ? (
+                                                                                                <Tooltip>
+                                                                                                    <TooltipTrigger asChild>
+                                                                                                        <span className="cursor-help border-b border-dotted border-current">
+                                                                                                            {formatCurrency(oncost.base)}
+                                                                                                        </span>
+                                                                                                    </TooltipTrigger>
+                                                                                                    <TooltipContent className="z-[10002] w-56 p-3">
+                                                                                                        <p className="mb-2 text-xs font-semibold">Taxable Base Breakdown</p>
+                                                                                                        <div className="space-y-1 text-xs">
+                                                                                                            <div className="flex justify-between gap-4">
+                                                                                                                <span className="text-muted-foreground">Gross Wages</span>
+                                                                                                                <span>{formatCurrency(oncost.base_components.gross_wages)}</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex justify-between gap-4">
+                                                                                                                <span className="text-muted-foreground">Annual Leave Accrual</span>
+                                                                                                                <span>{formatCurrency(oncost.base_components.annual_leave_accrual)}</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex justify-between gap-4">
+                                                                                                                <span className="text-muted-foreground">Leave Loading</span>
+                                                                                                                <span>{formatCurrency(oncost.base_components.leave_loading)}</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex justify-between gap-4">
+                                                                                                                <span className="text-muted-foreground">Super</span>
+                                                                                                                <span>{formatCurrency(oncost.base_components.super)}</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+                                                                                                                <span>Total</span>
+                                                                                                                <span>{formatCurrency(oncost.base)}</span>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </TooltipContent>
+                                                                                                </Tooltip>
+                                                                                            ) : (
+                                                                                                formatCurrency(oncost.base)
+                                                                                            )}
+                                                                                            )
+                                                                                        </span>
                                                                                       : ''}
                                                                             </span>
                                                                             <span className="font-medium">{formatCurrency(oncost.amount)}</span>
@@ -1286,9 +1414,60 @@ export const CostBreakdownDialog = ({ open, onOpenChange, locationId, locationNa
                                                                     </span>
                                                                     <span className="ml-2">{oncost.name}</span>
                                                                     <span className="ml-1 text-xs">
-                                                                        {oncost.is_percentage
-                                                                            ? `(${oncost.percentage_rate}%)`
-                                                                            : `(${formatCurrency(oncost.hourly_rate || 0)}/hr × ${oncost.hours_applied.toFixed(1)} hrs)`}
+                                                                        {oncost.is_percentage ? (
+                                                                            <>
+                                                                                ({oncost.percentage_rate}% of{' '}
+                                                                                {oncost.base_components ? (
+                                                                                    <Tooltip>
+                                                                                        <TooltipTrigger asChild>
+                                                                                            <span className="cursor-help border-b border-dotted border-current">
+                                                                                                {formatCurrency(oncost.base || 0)}
+                                                                                            </span>
+                                                                                        </TooltipTrigger>
+                                                                                        <TooltipContent className="z-[10002] w-56 p-3">
+                                                                                            <p className="mb-2 text-xs font-semibold">Taxable Base Breakdown</p>
+                                                                                            <div className="space-y-1 text-xs">
+                                                                                                <div className="flex justify-between gap-4">
+                                                                                                    <span className="text-muted-foreground">Ordinary Base Wages</span>
+                                                                                                    <span>{formatCurrency(oncost.base_components.ordinary_base_wages)}</span>
+                                                                                                </div>
+                                                                                                {oncost.base_components.ordinary_allowances > 0 && (
+                                                                                                    <div className="flex justify-between gap-4">
+                                                                                                        <span className="text-muted-foreground">Ordinary Allowances</span>
+                                                                                                        <span>{formatCurrency(oncost.base_components.ordinary_allowances)}</span>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                                {oncost.base_components.overtime_base_wages > 0 && (
+                                                                                                    <div className="flex justify-between gap-4">
+                                                                                                        <span className="text-muted-foreground">Overtime Base Wages</span>
+                                                                                                        <span>{formatCurrency(oncost.base_components.overtime_base_wages)}</span>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                                {oncost.base_components.overtime_allowances > 0 && (
+                                                                                                    <div className="flex justify-between gap-4">
+                                                                                                        <span className="text-muted-foreground">Overtime Allowances</span>
+                                                                                                        <span>{formatCurrency(oncost.base_components.overtime_allowances)}</span>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                                <div className="flex justify-between gap-4">
+                                                                                                    <span className="text-muted-foreground">Super</span>
+                                                                                                    <span>{formatCurrency(oncost.base_components.super)}</span>
+                                                                                                </div>
+                                                                                                <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+                                                                                                    <span>Total</span>
+                                                                                                    <span>{formatCurrency(oncost.base || 0)}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </TooltipContent>
+                                                                                    </Tooltip>
+                                                                                ) : (
+                                                                                    formatCurrency(oncost.base || 0)
+                                                                                )}
+                                                                                )
+                                                                            </>
+                                                                        ) : (
+                                                                            `(${formatCurrency(oncost.hourly_rate || 0)}/hr × ${oncost.hours_applied.toFixed(1)} hrs)`
+                                                                        )}
                                                                     </span>
                                                                 </span>
                                                                 <span className="font-medium">{formatCurrency(oncost.amount)}</span>

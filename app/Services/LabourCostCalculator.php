@@ -671,6 +671,14 @@ class LabourCostCalculator
                 'is_percentage' => $oncost['is_percentage'],
                 'hourly_rate' => $oncost['is_percentage'] ? null : round((float) $oncost['hourly_rate'], 4),
                 'percentage_rate' => $oncost['is_percentage'] ? round((float) $oncost['percentage_rate'] * 100, 2) : null,
+                'base' => $oncost['is_percentage'] ? round($taxableBase, 2) : null,
+                'base_components' => $oncost['is_percentage'] ? [
+                    'ordinary_base_wages' => round($ordinaryBaseWages, 2),
+                    'ordinary_allowances' => round($ordinaryTotalAllowances, 2),
+                    'overtime_base_wages' => round($overtimeBaseWages, 2),
+                    'overtime_allowances' => round($overtimeTotalAllowances, 2),
+                    'super' => round($superAmount, 2),
+                ] : null,
                 'hours_applied' => $hours,
                 'amount' => round($amount, 2),
             ];
@@ -737,6 +745,10 @@ class LabourCostCalculator
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
                         'base' => round($leaveTaxableBase, 2),
+                        'base_components' => [
+                            'gross_wages' => round($leaveGrossWages, 2),
+                            'super' => round($leaveSuperAmount, 2),
+                        ],
                         'amount' => round($leaveAmount, 2),
                     ];
                 }
@@ -836,6 +848,11 @@ class LabourCostCalculator
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
                         'base' => round($rdoTaxableBase, 2),
+                        'base_components' => [
+                            'annual_leave_accrual' => round($rdoAnnualLeaveAmount, 2),
+                            'leave_loading' => round($rdoLeaveLoadingAmount, 2),
+                            'super' => round($rdoSuperAmount, 2),
+                        ],
                         'amount' => round($amount, 2),
                     ];
                 }
@@ -903,6 +920,12 @@ class LabourCostCalculator
                         'name' => $oncost['name'],
                         'percentage_rate' => round((float) $oncost['percentage_rate'] * 100, 2),
                         'base' => round($phTaxableBase, 2),
+                        'base_components' => [
+                            'gross_wages' => round($phGrossWages, 2),
+                            'annual_leave_accrual' => round($phAnnualLeaveAmount, 2),
+                            'leave_loading' => round($phLeaveLoadingAmount, 2),
+                            'super' => round($phSuperAmount, 2),
+                        ],
                         'amount' => round($amount, 2),
                     ];
                 }
