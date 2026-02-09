@@ -14,6 +14,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      PAYROLL_API_KEY: ${{ secrets.PAYROLL_API_KEY }}
 
     steps:
       - name: Checkout
@@ -51,10 +53,6 @@ jobs:
       - name: Debug Secret Availability
         run: |
           if [ -z "$PAYROLL_API_KEY" ]; then echo "PAYROLL_API_KEY is EMPTY"; else echo "PAYROLL_API_KEY is SET (length: ${#PAYROLL_API_KEY})"; fi
-        env:
-          PAYROLL_API_KEY: ${{ secrets.PAYROLL_API_KEY }}
 
       - name: Tests
         run: ./vendor/bin/pest
-        env:
-          PAYROLL_API_KEY: ${{ secrets.PAYROLL_API_KEY }}
