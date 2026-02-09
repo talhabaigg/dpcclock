@@ -20,6 +20,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
 use App\Http\Controllers\MaterialItemController;
+use App\Http\Controllers\MissingSignOutReportController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
@@ -638,6 +639,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/reports/po-comparison/insights/refresh', [POComparisonReportController::class, 'refreshInsights'])->name('reports.poComparison.insights.refresh');
         Route::get('/reports/po-comparison/sync-status', [POComparisonReportController::class, 'getSyncStatus'])->name('reports.poComparison.syncStatus');
         Route::post('/reports/po-comparison/queue-sync', [POComparisonReportController::class, 'queueSync'])->name('reports.poComparison.queueSync');
+    });
+
+    // Missing Sign-Out Report
+    Route::middleware('permission:reports.missing-sign-out')->group(function () {
+        Route::get('/reports/missing-sign-out', [MissingSignOutReportController::class, 'index'])->name('reports.missingSignOut');
+        Route::get('/reports/missing-sign-out/data', [MissingSignOutReportController::class, 'getData'])->name('reports.missingSignOut.data');
     });
 
     // ============================================

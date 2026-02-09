@@ -11,7 +11,11 @@ test('can connect to Employment Hero API', function () {
     $businessId = config('services.employment_hero.business_id');
 
     if (! $apiKey) {
-        $this->markTestSkipped('PAYROLL_API_KEY is not set — skipping API connection test.');
+        if (env('CI')) {
+            $this->fail('PAYROLL_API_KEY is not set — this must be configured in CI secrets.');
+        }
+
+        $this->markTestSkipped('PAYROLL_API_KEY is not set — skipping locally.');
     }
 
     try {

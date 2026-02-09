@@ -31,6 +31,7 @@ import {
     Settings,
     Shield,
     Target,
+    UserX,
     UsersRound,
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -208,6 +209,12 @@ const reports = [
                 url: '/reports/po-comparison',
                 icon: GitCompare,
                 permission: 'requisitions.view',
+            },
+            {
+                name: 'Missing Sign-Out',
+                url: '/reports/missing-sign-out',
+                icon: UserX,
+                permission: 'reports.missing-sign-out',
             },
         ],
     },
