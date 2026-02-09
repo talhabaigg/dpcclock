@@ -56,6 +56,9 @@ jobs:
             # Run migrations
             php artisan migrate --force
 
+            # Seed roles and permissions
+            php artisan db:seed --class=RolesAndPermissionsSeeder --force
+
             # Clear and warm caches
             php artisan optimize
 

@@ -138,7 +138,7 @@ export default function MissingSignOutReport() {
     const toggleGroup = (key: string) =>
         setOpenGroups((prev) => {
             const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
+            if (next.has(key)) next.delete(key); else next.add(key);
             return next;
         });
 
@@ -339,7 +339,7 @@ export default function MissingSignOutReport() {
                 )}
 
                 {!loading &&
-                    groups.map((group, idx) => (
+                    groups.map((group) => (
                         <Collapsible key={group.key} open={openGroups.has(group.key)} onOpenChange={() => toggleGroup(group.key)}>
                             <Card className="gap-0 overflow-hidden py-0">
                                 <CollapsibleTrigger asChild>
