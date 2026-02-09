@@ -322,7 +322,7 @@ class VariationController extends Controller
         $authService = new PremierAuthenticationService;
         $token = $authService->getAccessToken();
         $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
-        $base_url = env('PREMIER_SWAGGER_API_URL');
+        $base_url = config('premier.swagger_api.base_url');
         // dd($variation->co_date);
         $lineItems = $variation->lineItems->map(function ($item) {
             return [

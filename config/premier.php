@@ -18,6 +18,12 @@ return [
         'timeout' => env('PREMIER_API_TIMEOUT', 300), // 5 minutes default
     ],
 
+    'swagger_api' => [
+        'base_url' => env('PREMIER_SWAGGER_API_URL'),
+        'username' => env('PREMIER_SWAGGER_API_USERNAME'),
+        'password' => env('PREMIER_SWAGGER_API_PASSWORD'),
+    ],
+
     'endpoints' => [
         'job_cost_details' => '/JobCostDetails',
         'job_report_by_cost_item' => '/JobReportByCostItemAndCostTypes',
