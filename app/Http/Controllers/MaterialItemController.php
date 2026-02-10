@@ -245,6 +245,66 @@ class MaterialItemController extends Controller
         return response()->json(['success' => true, 'message' => 'Category updated successfully.']);
     }
 
+    /**
+     * Dry-run validation: same checks as upload() but returns JSON errors without persisting.
+     */
+    public function validateImport(Request $request)
+    {
+        $request->validate([
+            'rows' => 'required|array',
+            'rows.*.code' => 'nullable|string',
+            'rows.*.description' => 'nullable|string',
+            'rows.*.unit_cost' => 'nullable|string',
+            'rows.*.supplier_code' => 'nullable|string',
+            'rows.*.cost_code' => 'nullable|string',
+            'rows.*.expiry_date' => 'nullable|string',
+            'rows.*.category_code' => 'nullable|string',
+        ]);
+
+        $suppliers = Supplier::select('id', 'code')->get()->keyBy(fn ($s) => trim($s->code));
+        $costCodes = CostCode::select('id', 'code')->get()->keyBy(fn ($c) => trim($c->code));
+
+        $results = [];
+
+        foreach ($request->input('rows') as $index => $row) {
+            $code = trim($row['code'] ?? '');
+            $description = trim($row['description'] ?? '');
+            $unit_cost = trim($row['unit_cost'] ?? '');
+            $supplier_code = trim($row['supplier_code'] ?? '');
+            $costcode = trim($row['cost_code'] ?? '');
+
+            $errors = [];
+
+            if (empty($code)) {
+                $errors['code'] = 'Missing item code';
+            }
+            if (empty($description)) {
+                $errors['description'] = 'Missing description';
+            }
+            if (! is_numeric($unit_cost) || (float) $unit_cost < 0) {
+                $errors['unit_cost'] = 'Invalid unit cost "'.$unit_cost.'"';
+            }
+            if (empty($supplier_code)) {
+                $errors['supplier_code'] = 'Missing supplier code';
+            } elseif (! $suppliers->has($supplier_code)) {
+                $errors['supplier_code'] = 'Supplier "'.$supplier_code.'" not found';
+            }
+            if (empty($costcode)) {
+                $errors['cost_code'] = 'Missing cost code';
+            } elseif (! $costCodes->has($costcode)) {
+                $errors['cost_code'] = 'Cost code "'.$costcode.'" not found';
+            }
+
+            $results[] = [
+                'row' => $index,
+                'status' => empty($errors) ? 'valid' : 'error',
+                'errors' => $errors,
+            ];
+        }
+
+        return response()->json(['results' => $results]);
+    }
+
     public function upload(Request $request)
     {
         set_time_limit(300);

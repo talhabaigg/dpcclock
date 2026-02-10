@@ -300,6 +300,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
         ->middleware('permission:materials.delete');
     Route::middleware('permission:materials.import')->group(function () {
+        Route::post('/material-items/validate-import', [MaterialItemController::class, 'validateImport']);
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
         Route::get('/material-items/upload-issues/{filename}', [MaterialItemController::class, 'downloadIssuesFile']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);

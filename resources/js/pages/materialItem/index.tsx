@@ -1,4 +1,4 @@
-import CsvImporterDialog from '@/components/csv-importer';
+import { ImporterWizardTrigger } from '@/components/importer-wizard';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -48,6 +48,23 @@ type Filters = {
     dir: string;
     per_page: number;
 };
+
+const IMPORT_COLUMNS = [
+    { key: 'code', label: 'Item Code', required: true, aliases: ['item_code', 'sku', 'product_code', 'material_code'] },
+    { key: 'description', label: 'Description', required: true, aliases: ['desc', 'item_description', 'name', 'item_name'] },
+    {
+        key: 'unit_cost',
+        label: 'Unit Cost',
+        required: true,
+        type: 'number' as const,
+        aliases: ['price', 'cost', 'unit_price', 'rate'],
+        validate: (v: string) => (Number(v) < 0 ? 'Must be >= 0' : null),
+    },
+    { key: 'supplier_code', label: 'Supplier Code', required: true, aliases: ['supplier', 'vendor_code', 'vendor'] },
+    { key: 'cost_code', label: 'Cost Code', required: true, aliases: ['costcode', 'cost_centre', 'cc'] },
+    { key: 'expiry_date', label: 'Expiry Date', type: 'date' as const, aliases: ['price_expiry', 'expiry', 'expiration', 'price_expiry_date'] },
+    { key: 'category_code', label: 'Category Code', aliases: ['category', 'cat_code', 'supplier_category'] },
+] as const;
 
 const CSV_HEADERS = ['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date', 'category_code'];
 
@@ -131,8 +148,6 @@ export default function ItemList() {
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
     const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
     const isNavigating = useRef(false);
 
     // Navigate with Inertia query params
@@ -184,29 +199,14 @@ export default function ItemList() {
         [filters, navigate],
     );
 
-    // Upload
-    const handleUpload = () => {
-        if (!selectedFile) return;
+    // Import handler
+    const handleImport = async (rows: Record<string, string>[]) => {
+        const csvContent = `${CSV_HEADERS.join(',')}\n${rows.map((row) => CSV_HEADERS.map((h) => row[h] ?? '').join(',')).join('\n')}`;
+        const file = new File([csvContent], 'imported_data.csv', { type: 'text/csv' });
         const formData = new FormData();
-        formData.append('file', selectedFile);
-        router.post('/material-items/upload', formData, {
-            forceFormData: true,
-            onSuccess: () => setSelectedFile(null),
-        });
+        formData.append('file', file);
+        router.post('/material-items/upload', formData, { forceFormData: true });
     };
-
-    const handleCsvSubmit = (mappedData: any) => {
-        const csvContent = `${CSV_HEADERS.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
-        setSelectedFile(new File([csvContent], 'exported_data.csv', { type: 'text/csv' }));
-        setShouldUploadAfterSet(true);
-    };
-
-    useEffect(() => {
-        if (selectedFile && shouldUploadAfterSet) {
-            handleUpload();
-            setShouldUploadAfterSet(false);
-        }
-    }, [selectedFile, shouldUploadAfterSet]);
 
     // Flash messages
     useEffect(() => {
@@ -407,7 +407,13 @@ export default function ItemList() {
                                     ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <CsvImporterDialog requiredColumns={CSV_HEADERS} onSubmit={handleCsvSubmit} />
+                        <ImporterWizardTrigger
+                            title="Import Material Items"
+                            description="Upload a CSV or Excel file to import material items."
+                            columns={IMPORT_COLUMNS as any}
+                            onSubmit={handleImport}
+                            serverValidateUrl="/material-items/validate-import"
+                        />
                         <a href="/material-items/download">
                             <Button variant="outline" size="sm">
                                 <Download className="mr-1 h-4 w-4" />
