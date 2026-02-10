@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Location;
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use App\Models\TitleBlockTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,13 +40,13 @@ class TitleBlockTemplateController extends Controller
             'crop_rect.h' => ['required', 'numeric', 'min:0.01', 'max:1'],
             'orientation' => ['nullable', 'in:portrait,landscape'],
             'size_bucket' => ['nullable', 'string', 'max:50'],
-            'source_sheet_id' => ['nullable', 'integer', 'exists:qa_stage_drawings,id'],
+            'source_sheet_id' => ['nullable', 'integer', 'exists:drawings,id'],
             'anchor_labels' => ['nullable', 'array'],
         ]);
 
         // If source sheet provided, derive orientation and size bucket from it
         if (! empty($validated['source_sheet_id'])) {
-            $sourceSheet = QaStageDrawing::find($validated['source_sheet_id']);
+            $sourceSheet = Drawing::find($validated['source_sheet_id']);
             if ($sourceSheet) {
                 $validated['orientation'] = $validated['orientation'] ?? $sourceSheet->page_orientation;
                 $validated['size_bucket'] = $validated['size_bucket'] ?? $sourceSheet->size_bucket;
@@ -115,10 +115,10 @@ class TitleBlockTemplateController extends Controller
     public function test(Request $request, TitleBlockTemplate $template): JsonResponse
     {
         $validated = $request->validate([
-            'sheet_id' => ['required', 'integer', 'exists:qa_stage_drawings,id'],
+            'sheet_id' => ['required', 'integer', 'exists:drawings,id'],
         ]);
 
-        $sheet = QaStageDrawing::findOrFail($validated['sheet_id']);
+        $sheet = Drawing::findOrFail($validated['sheet_id']);
 
         if (! $sheet->page_preview_s3_key) {
             return response()->json([
@@ -174,7 +174,7 @@ class TitleBlockTemplateController extends Controller
      * Detect all text blocks within a sheet's cropped title block region.
      * Used for the field mapping UI where users can select which text belongs to which field.
      */
-    public function detectTextBlocks(Request $request, QaStageDrawing $sheet): JsonResponse
+    public function detectTextBlocks(Request $request, Drawing $sheet): JsonResponse
     {
         // Increase memory limit for large images (300 DPI drawings can be 200MB+ uncompressed)
         ini_set('memory_limit', '1G');
@@ -287,7 +287,7 @@ class TitleBlockTemplateController extends Controller
     /**
      * Create a template from a sheet's successful extraction.
      */
-    public function createFromSheet(Request $request, QaStageDrawing $sheet): JsonResponse
+    public function createFromSheet(Request $request, Drawing $sheet): JsonResponse
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -298,15 +298,15 @@ class TitleBlockTemplateController extends Controller
             'crop_rect.h' => ['required', 'numeric', 'min:0.01', 'max:1'],
         ]);
 
-        if (! $sheet->drawingSet) {
+        if (! $sheet->project_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Sheet is not part of a drawing set.',
+                'message' => 'Drawing has no project assigned.',
             ], 422);
         }
 
         $template = TitleBlockTemplate::create([
-            'project_id' => $sheet->drawingSet->project_id,
+            'project_id' => $sheet->project_id,
             'name' => $validated['name'],
             'crop_rect' => $validated['crop_rect'],
             'orientation' => $sheet->page_orientation,
@@ -316,7 +316,7 @@ class TitleBlockTemplateController extends Controller
         ]);
 
         // If extraction was successful, link template
-        if ($sheet->extraction_status === QaStageDrawing::EXTRACTION_SUCCESS) {
+        if ($sheet->extraction_status === Drawing::EXTRACTION_SUCCESS) {
             $sheet->update(['used_template_id' => $template->id]);
         }
 

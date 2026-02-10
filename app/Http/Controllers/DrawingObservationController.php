@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\QaStageDrawing;
-use App\Models\QaStageDrawingObservation;
+use App\Models\Drawing;
+use App\Models\DrawingObservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class QaStageDrawingObservationController extends Controller
+class DrawingObservationController extends Controller
 {
-    public function store(Request $request, QaStageDrawing $drawing)
+    public function store(Request $request, Drawing $drawing)
     {
         $validated = $request->validate([
             'type' => 'required|string|in:defect,observation',
@@ -18,7 +18,7 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable|image|max:51200', // 50MB max (360 photos)
+            'photo' => 'nullable|image|max:51200',
             'is_360_photo' => 'nullable|boolean',
         ]);
 
@@ -33,15 +33,15 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/'.$drawing->id,
-                time().'_'.$photoName,
+                'drawing-observations/' . $drawing->id,
+                time() . '_' . $photoName,
                 's3'
             );
         }
 
         try {
-            $observation = QaStageDrawingObservation::create([
-                'qa_stage_drawing_id' => $drawing->id,
+            $observation = DrawingObservation::create([
+                'drawing_id' => $drawing->id,
                 'page_number' => $validated['page_number'],
                 'x' => $validated['x'],
                 'y' => $validated['y'],
@@ -69,9 +69,9 @@ class QaStageDrawingObservationController extends Controller
         }
     }
 
-    public function update(Request $request, QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    public function update(Request $request, Drawing $drawing, DrawingObservation $observation)
     {
-        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+        if ($observation->drawing_id !== $drawing->id) {
             abort(404);
         }
 
@@ -81,7 +81,7 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable|image|max:51200', // 50MB max (360 photos)
+            'photo' => 'nullable|image|max:51200',
             'is_360_photo' => 'nullable|boolean',
         ]);
 
@@ -96,8 +96,8 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/'.$drawing->id,
-                time().'_'.$photoName,
+                'drawing-observations/' . $drawing->id,
+                time() . '_' . $photoName,
                 's3'
             );
 
@@ -125,7 +125,6 @@ class QaStageDrawingObservationController extends Controller
             return response()->json($observation->fresh());
         } catch (\Exception $e) {
             Log::error('Observation update failed', [
-                'drawing_id' => $drawing->id,
                 'observation_id' => $observation->id,
                 'error' => $e->getMessage(),
             ]);
@@ -134,12 +133,9 @@ class QaStageDrawingObservationController extends Controller
         }
     }
 
-    /**
-     * Confirm an AI-generated observation.
-     */
-    public function confirm(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    public function confirm(Drawing $drawing, DrawingObservation $observation)
     {
-        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+        if ($observation->drawing_id !== $drawing->id) {
             abort(404);
         }
 
@@ -160,27 +156,17 @@ class QaStageDrawingObservationController extends Controller
 
             return response()->json($observation->fresh());
         } catch (\Exception $e) {
-            Log::error('Observation confirmation failed', [
-                'drawing_id' => $drawing->id,
-                'observation_id' => $observation->id,
-                'error' => $e->getMessage(),
-            ]);
-
             return response()->json(['message' => 'Failed to confirm observation.'], 500);
         }
     }
 
-    /**
-     * Delete an observation.
-     */
-    public function destroy(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    public function destroy(Drawing $drawing, DrawingObservation $observation)
     {
-        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+        if ($observation->drawing_id !== $drawing->id) {
             abort(404);
         }
 
         try {
-            // Delete associated photo if exists
             if ($observation->photo_path) {
                 Storage::disk('s3')->delete($observation->photo_path);
             }
@@ -189,12 +175,6 @@ class QaStageDrawingObservationController extends Controller
 
             return response()->json(['message' => 'Observation deleted successfully.']);
         } catch (\Exception $e) {
-            Log::error('Observation deletion failed', [
-                'drawing_id' => $drawing->id,
-                'observation_id' => $observation->id,
-                'error' => $e->getMessage(),
-            ]);
-
             return response()->json(['message' => 'Failed to delete observation.'], 500);
         }
     }
@@ -202,7 +182,7 @@ class QaStageDrawingObservationController extends Controller
     /**
      * Stream observation photo (same-origin proxy for 360 viewer).
      */
-    public function photo(QaStageDrawingObservation $observation)
+    public function photo(DrawingObservation $observation)
     {
         if (! $observation->photo_path) {
             abort(404, 'No photo available');
@@ -222,15 +202,14 @@ class QaStageDrawingObservationController extends Controller
     }
 
     /**
-     * Describe an AI observation using GPT-4o (on-demand).
+     * Describe an AI observation using GPT-4o.
      */
-    public function describe(QaStageDrawing $drawing, QaStageDrawingObservation $observation)
+    public function describe(Drawing $drawing, DrawingObservation $observation)
     {
-        if ($observation->qa_stage_drawing_id !== $drawing->id) {
+        if ($observation->drawing_id !== $drawing->id) {
             abort(404);
         }
 
-        // Only AI observations can be described (they have source sheets)
         if ($observation->source !== 'ai_comparison') {
             return response()->json([
                 'success' => false,
@@ -238,20 +217,18 @@ class QaStageDrawingObservationController extends Controller
             ], 422);
         }
 
-        // Get the source QaStageDrawings (not DrawingSheets)
-        $qaDrawingA = \App\Models\QaStageDrawing::find($observation->source_sheet_a_id);
-        $qaDrawingB = \App\Models\QaStageDrawing::find($observation->source_sheet_b_id);
+        $drawingA = Drawing::find($observation->source_sheet_a_id);
+        $drawingB = Drawing::find($observation->source_sheet_b_id);
 
-        if (! $qaDrawingA || ! $qaDrawingB) {
+        if (! $drawingA || ! $drawingB) {
             return response()->json([
                 'success' => false,
                 'message' => 'Source drawings not found.',
             ], 404);
         }
 
-        // Get file paths - use page_preview_s3_key or thumbnail_path (same as comparison)
-        $filePathA = $qaDrawingA->page_preview_s3_key ?: $qaDrawingA->thumbnail_path;
-        $filePathB = $qaDrawingB->page_preview_s3_key ?: $qaDrawingB->thumbnail_path;
+        $filePathA = $drawingA->page_preview_s3_key ?: $drawingA->thumbnail_path;
+        $filePathB = $drawingB->page_preview_s3_key ?: $drawingB->thumbnail_path;
 
         if (! $filePathA || ! $filePathB) {
             return response()->json([
@@ -260,8 +237,6 @@ class QaStageDrawingObservationController extends Controller
             ], 404);
         }
 
-        // Build bounding box from observation coordinates
-        // Use stored CV dimensions if available, otherwise default to 15%
         $boundingBox = [
             'x' => $observation->x,
             'y' => $observation->y,
@@ -285,7 +260,6 @@ class QaStageDrawingObservationController extends Controller
                 ], 500);
             }
 
-            // Update the observation with AI description
             $observation->update([
                 'description' => $result['description'],
                 'ai_change_type' => $result['type'],
@@ -299,7 +273,6 @@ class QaStageDrawingObservationController extends Controller
                 'observation' => $observation->fresh(),
                 'ai_result' => $result,
             ]);
-
         } catch (\Exception $e) {
             Log::error('AI describe failed', [
                 'observation_id' => $observation->id,
@@ -308,7 +281,7 @@ class QaStageDrawingObservationController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to describe observation: '.$e->getMessage(),
+                'message' => 'Failed to describe observation: ' . $e->getMessage(),
             ], 500);
         }
     }

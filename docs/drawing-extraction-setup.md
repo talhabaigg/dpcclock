@@ -173,9 +173,8 @@ php artisan migrate
 ```
 
 This creates:
-- `drawing_sets` - Multi-page PDF uploads
 - `title_block_templates` - Reusable crop templates
-- Adds extraction columns to `qa_stage_drawings`
+- Adds extraction columns to `drawings`
 
 ## Usage
 
@@ -208,7 +207,7 @@ When extraction fails, users can:
 Upload PDF
     │
     ▼
-ProcessDrawingSetJob
+ProcessDrawingJob
     │
     ├── Download PDF from S3
     ├── For each page:

@@ -7,12 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
-class QaStageDrawingObservation extends Model
+class DrawingObservation extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $table = 'drawing_observations';
+
     protected $fillable = [
-        'qa_stage_drawing_id',
+        'drawing_id',
         'page_number',
         'x',
         'y',
@@ -52,7 +54,9 @@ class QaStageDrawingObservation extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            $model->created_by = auth()->id();
+            if ($model->created_by === null) {
+                $model->created_by = auth()->id();
+            }
         });
 
         static::updating(function ($model) {
@@ -62,7 +66,7 @@ class QaStageDrawingObservation extends Model
 
     public function drawing()
     {
-        return $this->belongsTo(QaStageDrawing::class, 'qa_stage_drawing_id');
+        return $this->belongsTo(Drawing::class, 'drawing_id');
     }
 
     public function createdBy()
@@ -82,33 +86,24 @@ class QaStageDrawingObservation extends Model
 
     public function sourceSheetA()
     {
-        return $this->belongsTo(QaStageDrawing::class, 'source_sheet_a_id');
+        return $this->belongsTo(Drawing::class, 'source_sheet_a_id');
     }
 
     public function sourceSheetB()
     {
-        return $this->belongsTo(QaStageDrawing::class, 'source_sheet_b_id');
+        return $this->belongsTo(Drawing::class, 'source_sheet_b_id');
     }
 
-    /**
-     * Scope to filter AI-generated observations.
-     */
     public function scopeAiGenerated($query)
     {
         return $query->where('source', 'ai_comparison');
     }
 
-    /**
-     * Scope to filter confirmed observations.
-     */
     public function scopeConfirmed($query)
     {
         return $query->where('is_confirmed', true);
     }
 
-    /**
-     * Scope to filter unconfirmed AI observations.
-     */
     public function scopeUnconfirmed($query)
     {
         return $query->where('is_confirmed', false);

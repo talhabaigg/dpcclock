@@ -87,7 +87,7 @@ class TitleBlockTemplate extends Model
      */
     public function usedBySheets()
     {
-        return $this->hasMany(QaStageDrawing::class, 'used_template_id');
+        return $this->hasMany(Drawing::class, 'used_template_id');
     }
 
     /**

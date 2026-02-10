@@ -1,9 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\DrawingController;
+use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
-use App\Http\Controllers\Api\QaStageController;
-use App\Http\Controllers\Api\QaStageDrawingController;
-use App\Http\Controllers\Api\QaStageDrawingObservationController;
 use App\Http\Controllers\Api\SiteWalkController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
@@ -38,9 +37,6 @@ Route::post('/login', function (Request $request) {
 });
 
 Route::middleware('auth:sanctum')->group(function () {
-    // File download route - needs to be inside auth middleware for token processing
-    Route::get('qa-stage-drawings/{qaStageDrawing}/file', [QaStageDrawingController::class, 'file'])
-        ->name('api.qa-stage-drawings.file');
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -63,32 +59,35 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json(['message' => 'Logged out successfully']);
     });
 
-    Route::apiResource('qa-stages', QaStageController::class)->names('api.qa-stages');
-    Route::apiResource('qa-stage-drawings', QaStageDrawingController::class)->names('api.qa-stage-drawings');
+    // Drawings
+    Route::apiResource('drawings', DrawingController::class)->names('api.drawings');
 
-    // Drawing revision and comparison endpoints
-    Route::get('qa-stage-drawings/{qaStageDrawing}/thumbnail', [QaStageDrawingController::class, 'thumbnail'])
-        ->name('api.qa-stage-drawings.thumbnail');
-    Route::get('qa-stage-drawings/{qaStageDrawing}/diff', [QaStageDrawingController::class, 'diff'])
-        ->name('api.qa-stage-drawings.diff');
-    Route::get('qa-stage-drawings/{qaStageDrawing}/revisions', [QaStageDrawingController::class, 'revisions'])
-        ->name('api.qa-stage-drawings.revisions');
-    Route::post('qa-stage-drawings/{qaStageDrawing}/compare', [QaStageDrawingController::class, 'compare'])
-        ->name('api.qa-stage-drawings.compare');
-    Route::post('qa-stage-drawings/{qaStageDrawing}/reprocess', [QaStageDrawingController::class, 'reprocess'])
-        ->name('api.qa-stage-drawings.reprocess');
+    Route::get('drawings/{drawing}/file', [DrawingController::class, 'file'])
+        ->name('api.drawings.file');
+    Route::get('drawings/{drawing}/thumbnail', [DrawingController::class, 'thumbnail'])
+        ->name('api.drawings.thumbnail');
+    Route::get('drawings/{drawing}/diff', [DrawingController::class, 'diff'])
+        ->name('api.drawings.diff');
+    Route::get('drawings/{drawing}/revisions', [DrawingController::class, 'revisions'])
+        ->name('api.drawings.revisions');
+    Route::post('drawings/{drawing}/compare', [DrawingController::class, 'compare'])
+        ->name('api.drawings.compare');
+    Route::post('drawings/{drawing}/reprocess', [DrawingController::class, 'reprocess'])
+        ->name('api.drawings.reprocess');
 
-    // AI Metadata extraction and confirmation
-    Route::get('qa-stage-drawings/{qaStageDrawing}/metadata', [QaStageDrawingController::class, 'metadata'])
-        ->name('api.qa-stage-drawings.metadata');
-    Route::post('qa-stage-drawings/{qaStageDrawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])
-        ->name('api.qa-stage-drawings.extract-metadata');
-    Route::post('qa-stage-drawings/{qaStageDrawing}/confirm-metadata', [QaStageDrawingController::class, 'confirmMetadata'])
-        ->name('api.qa-stage-drawings.confirm-metadata');
+    // Drawing metadata extraction and confirmation
+    Route::get('drawings/{drawing}/metadata', [DrawingController::class, 'metadata'])
+        ->name('api.drawings.metadata');
+    Route::post('drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])
+        ->name('api.drawings.extract-metadata');
+    Route::post('drawings/{drawing}/confirm-metadata', [DrawingController::class, 'confirmMetadata'])
+        ->name('api.drawings.confirm-metadata');
 
-    Route::apiResource('qa-stage-drawing-observations', QaStageDrawingObservationController::class);
-    Route::get('qa-stage-drawing-observations/{qaStageDrawingObservation}/photo', [QaStageDrawingObservationController::class, 'photo'])
-        ->name('api.qa-stage-drawing-observations.photo');
+    // Drawing Observations
+    Route::apiResource('drawing-observations', DrawingObservationController::class)
+        ->names('api.drawing-observations');
+    Route::get('drawing-observations/{drawingObservation}/photo', [DrawingObservationController::class, 'photo'])
+        ->name('api.drawing-observations.photo');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])

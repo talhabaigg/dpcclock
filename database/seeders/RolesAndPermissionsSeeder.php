@@ -192,16 +192,12 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
-        // QA STAGES
+        // DRAWINGS
         // ============================================
-        'QA Stages' => [
-            'qa-stages.view' => 'View QA stages',
-            'qa-stages.create' => 'Create QA stages',
-            'qa-stages.delete' => 'Delete QA stages',
-            'qa-drawings.view' => 'View QA drawings',
-            'qa-drawings.create' => 'Upload QA drawings',
-            'qa-drawings.delete' => 'Delete QA drawings',
-            'qa-observations.manage' => 'Manage QA observations',
+        'Drawings' => [
+            'drawings.view' => 'View drawings',
+            'drawings.create' => 'Upload and edit drawings',
+            'drawings.delete' => 'Delete drawings',
         ],
 
         // ============================================
@@ -326,14 +322,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'variations.sync',
             'variations.send',
             'variations.export',
-            // QA
-            'qa-stages.view',
-            'qa-stages.create',
-            'qa-stages.delete',
-            'qa-drawings.view',
-            'qa-drawings.create',
-            'qa-drawings.delete',
-            'qa-observations.manage',
+            // Drawings
+            'drawings.view',
+            'drawings.create',
+            'drawings.delete',
             // Reports
             'reports.view',
             'reports.requisition-lines',
@@ -394,12 +386,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'variations.view',
             'variations.create',
             'variations.edit',
-            // QA
-            'qa-stages.view',
-            'qa-stages.create',
-            'qa-drawings.view',
-            'qa-drawings.create',
-            'qa-observations.manage',
+            // Drawings
+            'drawings.view',
+            'drawings.create',
             // Reports
             'reports.view',
         ],

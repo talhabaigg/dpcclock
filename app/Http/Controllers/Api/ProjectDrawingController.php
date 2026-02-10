@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\DrawingSheet;
+use App\Models\Drawing;
 use App\Models\Location;
-use App\Models\QaStageDrawing;
 use Illuminate\Http\Request;
 
 class ProjectDrawingController extends Controller
@@ -20,12 +19,14 @@ class ProjectDrawingController extends Controller
 
     /**
      * List projects (locations) that belong to SWCP or GRE companies.
-     * Each project includes counts of drawing sheets and QA stages.
+     * Each project includes count of active drawings.
      */
     public function projects(Request $request)
     {
         $query = Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS)
-            ->withCount(['drawingSheets', 'qaStages'])
+            ->withCount(['drawings' => function ($q) {
+                $q->where('status', Drawing::STATUS_ACTIVE);
+            }])
             ->orderBy('name');
 
         $projects = $query->get()->map(function ($location) {
@@ -36,8 +37,7 @@ class ProjectDrawingController extends Controller
                 'eh_parent_id' => $location->eh_parent_id,
                 'external_id' => $location->external_id,
                 'state' => $location->state,
-                'drawing_sheets_count' => $location->drawing_sheets_count,
-                'qa_stages_count' => $location->qa_stages_count,
+                'drawings_count' => $location->drawings_count,
             ];
         });
 
@@ -45,19 +45,14 @@ class ProjectDrawingController extends Controller
     }
 
     /**
-     * List all drawings (current revisions) for a project.
-     * Returns DrawingSheet records with their current QaStageDrawing revision loaded.
+     * List all active drawings for a project.
+     * Drawing includes all fields directly (sheet_number, title, discipline, storage_path, etc.)
      */
     public function index(Request $request, Location $project)
     {
-        $query = DrawingSheet::where('project_id', $project->id)
-            ->whereNotNull('current_revision_id')
-            ->with([
-                'currentRevision' => function ($q) {
-                    $q->with(['observations.createdBy', 'createdBy', 'updatedBy']);
-                },
-                'currentRevision.drawingSet:id,original_filename',
-            ])
+        $query = Drawing::where('project_id', $project->id)
+            ->where('status', Drawing::STATUS_ACTIVE)
+            ->with(['observations.createdBy', 'createdBy', 'updatedBy'])
             ->orderBy('sheet_number');
 
         // Optional discipline filter
@@ -65,44 +60,20 @@ class ProjectDrawingController extends Controller
             $query->where('discipline', $request->discipline);
         }
 
-        $sheets = $query->get();
-
-        // Return the current revision (QaStageDrawing) for each sheet,
-        // enriched with sheet metadata, so mobile can treat them like drawings
-        $drawings = $sheets->map(function ($sheet) {
-            $revision = $sheet->currentRevision;
-            if (! $revision) {
-                return null;
-            }
-
-            // Merge sheet metadata onto the drawing for convenience
-            $revision->setAttribute('sheet_number', $sheet->sheet_number);
-            $revision->setAttribute('sheet_title', $sheet->title);
-            $revision->setAttribute('sheet_discipline', $sheet->discipline);
-            $revision->setAttribute('sheet_display_name', $sheet->display_name);
-            $revision->setAttribute('revision_count', $sheet->revision_count);
-
-            return $revision;
-        })->filter()->values();
+        $drawings = $query->get();
 
         return response()->json($drawings);
     }
 
     /**
      * Get a single drawing with full details.
-     * Delegates to QaStageDrawing show logic.
      */
-    public function show(Location $project, QaStageDrawing $drawing)
+    public function show(Location $project, Drawing $drawing)
     {
         $drawing->load([
-            'drawingSheet',
-            'drawingSheet.revisions' => function ($query) {
-                $query->select('id', 'drawing_sheet_id', 'revision_number', 'revision_date', 'status', 'created_at')
-                    ->orderBy('created_at', 'desc');
-            },
             'observations.createdBy',
             'observations.updatedBy',
-            'previousRevision:id,name,revision_number',
+            'previousRevision:id,title,revision_number',
             'createdBy',
             'updatedBy',
         ]);

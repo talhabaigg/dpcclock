@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\QaStageDrawingObservation;
+use App\Models\DrawingObservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class QaStageDrawingObservationController extends Controller
+class DrawingObservationController extends Controller
 {
     public function index(Request $request)
     {
-        $query = QaStageDrawingObservation::with(['drawing.qaStage', 'createdBy', 'updatedBy']);
+        $query = DrawingObservation::with(['drawing', 'createdBy', 'updatedBy']);
 
-        if ($request->has('qa_stage_drawing_id')) {
-            $query->where('qa_stage_drawing_id', $request->qa_stage_drawing_id);
+        if ($request->has('drawing_id')) {
+            $query->where('drawing_id', $request->drawing_id);
         }
 
         $observations = $query->orderBy('created_at', 'desc')->get();
@@ -26,13 +26,13 @@ class QaStageDrawingObservationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'qa_stage_drawing_id' => 'required|exists:qa_stage_drawings,id',
+            'drawing_id' => 'required|exists:drawings,id',
             'type' => 'required|string|in:defect,observation',
             'description' => 'required|string|max:2000',
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
-            'photo' => 'nullable|file|mimetypes:image/*|max:51200', // 50MB max (360 photos)
+            'photo' => 'nullable|file|mimetypes:image/*|max:51200',
             'is_360_photo' => 'nullable|boolean',
         ]);
 
@@ -47,15 +47,15 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/'.$validated['qa_stage_drawing_id'],
+                'drawing-observations/'.$validated['drawing_id'],
                 time().'_'.$photoName,
                 's3'
             );
         }
 
         try {
-            $observation = QaStageDrawingObservation::create([
-                'qa_stage_drawing_id' => $validated['qa_stage_drawing_id'],
+            $observation = DrawingObservation::create([
+                'drawing_id' => $validated['drawing_id'],
                 'page_number' => $validated['page_number'],
                 'x' => $validated['x'],
                 'y' => $validated['y'],
@@ -73,7 +73,7 @@ class QaStageDrawingObservationController extends Controller
             return response()->json($observation, 201);
         } catch (\Exception $e) {
             Log::error('Observation creation failed', [
-                'qa_stage_drawing_id' => $validated['qa_stage_drawing_id'],
+                'drawing_id' => $validated['drawing_id'],
                 'error' => $e->getMessage(),
             ]);
 
@@ -85,14 +85,14 @@ class QaStageDrawingObservationController extends Controller
         }
     }
 
-    public function show(QaStageDrawingObservation $qaStageDrawingObservation)
+    public function show(DrawingObservation $drawingObservation)
     {
-        $qaStageDrawingObservation->load(['drawing.qaStage.location', 'createdBy', 'updatedBy']);
+        $drawingObservation->load(['drawing.project', 'createdBy', 'updatedBy']);
 
-        return response()->json($qaStageDrawingObservation);
+        return response()->json($drawingObservation);
     }
 
-    public function update(Request $request, QaStageDrawingObservation $qaStageDrawingObservation)
+    public function update(Request $request, DrawingObservation $drawingObservation)
     {
         $validated = $request->validate([
             'type' => 'sometimes|required|string|in:defect,observation',
@@ -100,20 +100,19 @@ class QaStageDrawingObservationController extends Controller
             'page_number' => 'sometimes|required|integer|min:1',
             'x' => 'sometimes|required|numeric|min:0|max:1',
             'y' => 'sometimes|required|numeric|min:0|max:1',
-            'photo' => 'nullable|file|mimetypes:image/*|max:51200', // 50MB max (360 photos)
+            'photo' => 'nullable|file|mimetypes:image/*|max:51200',
             'remove_photo' => 'sometimes|boolean',
             'is_360_photo' => 'nullable|boolean',
         ]);
 
-        $photoPath = $qaStageDrawingObservation->photo_path;
-        $photoName = $qaStageDrawingObservation->photo_name;
-        $photoType = $qaStageDrawingObservation->photo_type;
-        $photoSize = $qaStageDrawingObservation->photo_size;
+        $photoPath = $drawingObservation->photo_path;
+        $photoName = $drawingObservation->photo_name;
+        $photoType = $drawingObservation->photo_type;
+        $photoSize = $drawingObservation->photo_size;
 
-        // Handle photo removal
         if ($request->boolean('remove_photo')) {
-            if ($qaStageDrawingObservation->photo_path) {
-                Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
+            if ($drawingObservation->photo_path) {
+                Storage::disk('s3')->delete($drawingObservation->photo_path);
             }
             $photoPath = null;
             $photoName = null;
@@ -125,38 +124,38 @@ class QaStageDrawingObservationController extends Controller
             $photoType = $photo->getClientMimeType();
             $photoSize = $photo->getSize();
             $photoPath = $photo->storeAs(
-                'qa-drawing-observations/'.$qaStageDrawingObservation->qa_stage_drawing_id,
+                'drawing-observations/'.$drawingObservation->drawing_id,
                 time().'_'.$photoName,
                 's3'
             );
 
-            if ($qaStageDrawingObservation->photo_path) {
-                Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
+            if ($drawingObservation->photo_path) {
+                Storage::disk('s3')->delete($drawingObservation->photo_path);
             }
         }
 
         try {
-            $qaStageDrawingObservation->update([
-                'type' => $validated['type'] ?? $qaStageDrawingObservation->type,
-                'description' => $validated['description'] ?? $qaStageDrawingObservation->description,
-                'page_number' => $validated['page_number'] ?? $qaStageDrawingObservation->page_number,
-                'x' => $validated['x'] ?? $qaStageDrawingObservation->x,
-                'y' => $validated['y'] ?? $qaStageDrawingObservation->y,
+            $drawingObservation->update([
+                'type' => $validated['type'] ?? $drawingObservation->type,
+                'description' => $validated['description'] ?? $drawingObservation->description,
+                'page_number' => $validated['page_number'] ?? $drawingObservation->page_number,
+                'x' => $validated['x'] ?? $drawingObservation->x,
+                'y' => $validated['y'] ?? $drawingObservation->y,
                 'photo_path' => $photoPath,
                 'photo_name' => $photoName,
                 'photo_type' => $photoType,
                 'photo_size' => $photoSize,
                 'is_360_photo' => $request->has('is_360_photo')
                     ? $request->boolean('is_360_photo')
-                    : $qaStageDrawingObservation->is_360_photo,
+                    : $drawingObservation->is_360_photo,
             ]);
 
-            $qaStageDrawingObservation->load(['drawing', 'createdBy', 'updatedBy']);
+            $drawingObservation->load(['drawing', 'createdBy', 'updatedBy']);
 
-            return response()->json($qaStageDrawingObservation);
+            return response()->json($drawingObservation);
         } catch (\Exception $e) {
             Log::error('Observation update failed', [
-                'observation_id' => $qaStageDrawingObservation->id,
+                'observation_id' => $drawingObservation->id,
                 'error' => $e->getMessage(),
             ]);
 
@@ -164,34 +163,34 @@ class QaStageDrawingObservationController extends Controller
         }
     }
 
-    public function photo(QaStageDrawingObservation $qaStageDrawingObservation)
+    public function photo(DrawingObservation $drawingObservation)
     {
-        if (! $qaStageDrawingObservation->photo_path) {
+        if (! $drawingObservation->photo_path) {
             return response()->json(['message' => 'No photo found.'], 404);
         }
 
-        if (! Storage::disk('s3')->exists($qaStageDrawingObservation->photo_path)) {
+        if (! Storage::disk('s3')->exists($drawingObservation->photo_path)) {
             return response()->json(['message' => 'Photo file not found.'], 404);
         }
 
-        $stream = Storage::disk('s3')->readStream($qaStageDrawingObservation->photo_path);
+        $stream = Storage::disk('s3')->readStream($drawingObservation->photo_path);
 
         return response()->stream(function () use ($stream) {
             fpassthru($stream);
         }, 200, [
-            'Content-Type' => $qaStageDrawingObservation->photo_type ?? 'image/jpeg',
-            'Content-Disposition' => 'inline; filename="'.($qaStageDrawingObservation->photo_name ?? 'photo.jpg').'"',
+            'Content-Type' => $drawingObservation->photo_type ?? 'image/jpeg',
+            'Content-Disposition' => 'inline; filename="'.($drawingObservation->photo_name ?? 'photo.jpg').'"',
             'Cache-Control' => 'public, max-age=3600',
         ]);
     }
 
-    public function destroy(QaStageDrawingObservation $qaStageDrawingObservation)
+    public function destroy(DrawingObservation $drawingObservation)
     {
-        if ($qaStageDrawingObservation->photo_path) {
-            Storage::disk('s3')->delete($qaStageDrawingObservation->photo_path);
+        if ($drawingObservation->photo_path) {
+            Storage::disk('s3')->delete($drawingObservation->photo_path);
         }
 
-        $qaStageDrawingObservation->delete();
+        $drawingObservation->delete();
 
         return response()->json(['message' => 'Observation deleted successfully']);
     }

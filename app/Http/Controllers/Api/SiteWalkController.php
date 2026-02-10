@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\DrawingSheet;
+use App\Models\Drawing;
 use App\Models\Location;
 use App\Models\SiteWalk;
 use App\Models\SiteWalkPhoto;
@@ -53,7 +53,7 @@ class SiteWalkController extends Controller
      */
     public function show(SiteWalk $siteWalk)
     {
-        $siteWalk->load(['photos.drawingSheet', 'createdBy']);
+        $siteWalk->load(['photos.drawing', 'createdBy']);
 
         return response()->json($siteWalk);
     }
@@ -91,27 +91,23 @@ class SiteWalkController extends Controller
     public function tour(SiteWalk $siteWalk)
     {
         $photos = $siteWalk->photos()
-            ->with('drawingSheet')
+            ->with('drawing')
             ->get();
 
-        // Group photos by drawing sheet to build sheet info
-        $sheetIds = $photos->pluck('drawing_sheet_id')->unique();
-        $sheets = DrawingSheet::whereIn('id', $sheetIds)
-            ->with('currentRevision')
+        // Group photos by drawing to build sheet info
+        $drawingIds = $photos->pluck('drawing_sheet_id')->unique()->filter();
+        $drawings = Drawing::whereIn('id', $drawingIds)
             ->get()
-            ->map(function ($sheet) use ($photos) {
-                $sheetPhotos = $photos->where('drawing_sheet_id', $sheet->id);
+            ->map(function ($drawing) use ($photos) {
+                $drawingPhotos = $photos->where('drawing_sheet_id', $drawing->id);
 
                 return [
-                    'id' => $sheet->id,
-                    'sheet_number' => $sheet->sheet_number,
-                    'title' => $sheet->title,
-                    'display_name' => $sheet->display_name,
-                    'current_revision_id' => $sheet->current_revision_id,
-                    'background_url' => $sheet->current_revision_id
-                        ? '/api/qa-stage-drawings/'.$sheet->current_revision_id.'/file'
-                        : null,
-                    'photo_ids' => $sheetPhotos->pluck('id')->values(),
+                    'id' => $drawing->id,
+                    'sheet_number' => $drawing->sheet_number,
+                    'title' => $drawing->title,
+                    'display_name' => $drawing->display_name,
+                    'background_url' => '/api/drawings/'.$drawing->id.'/file',
+                    'photo_ids' => $drawingPhotos->pluck('id')->values(),
                 ];
             });
 
@@ -130,8 +126,7 @@ class SiteWalkController extends Controller
                 'caption' => $photo->caption,
                 'photo_url' => '/api/site-walk-photos/'.$photo->id.'/file',
                 'hotspot_overrides' => $photo->hotspot_overrides,
-                'sheet_display_name' => $photo->drawingSheet?->display_name,
-                'current_revision_id' => $photo->drawingSheet?->current_revision_id,
+                'sheet_display_name' => $photo->drawing?->display_name,
                 'created_at' => $photo->created_at,
             ];
         });
@@ -139,7 +134,7 @@ class SiteWalkController extends Controller
         return response()->json([
             'walk' => $siteWalk->only(['id', 'name', 'description', 'walk_date', 'status', 'photo_count']),
             'photos' => $photoData,
-            'sheets' => $sheets,
+            'sheets' => $drawings,
         ]);
     }
 
@@ -149,7 +144,7 @@ class SiteWalkController extends Controller
     public function storePhoto(Request $request, SiteWalk $siteWalk)
     {
         $validated = $request->validate([
-            'drawing_sheet_id' => 'required|exists:drawing_sheets,id',
+            'drawing_sheet_id' => 'required|exists:drawings,id',
             'page_number' => 'required|integer|min:1',
             'x' => 'required|numeric|min:0|max:1',
             'y' => 'required|numeric|min:0|max:1',
@@ -190,7 +185,7 @@ class SiteWalkController extends Controller
                 'photo_count' => $siteWalk->photos()->count(),
             ]);
 
-            $siteWalkPhoto->load('drawingSheet');
+            $siteWalkPhoto->load('drawing');
 
             return response()->json($siteWalkPhoto, 201);
         } catch (\Exception $e) {

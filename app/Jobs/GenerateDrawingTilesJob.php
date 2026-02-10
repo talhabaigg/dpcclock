@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use App\Services\DrawingTileService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -39,7 +39,7 @@ class GenerateDrawingTilesJob implements ShouldQueue
      */
     public function handle(DrawingTileService $tileService): void
     {
-        $drawing = QaStageDrawing::find($this->drawingId);
+        $drawing = Drawing::find($this->drawingId);
 
         if (!$drawing) {
             Log::warning('GenerateDrawingTilesJob: Drawing not found', ['id' => $this->drawingId]);
@@ -96,7 +96,7 @@ class GenerateDrawingTilesJob implements ShouldQueue
         ]);
 
         // Update drawing tile status to indicate failure
-        $drawing = QaStageDrawing::find($this->drawingId);
+        $drawing = Drawing::find($this->drawingId);
         if ($drawing) {
             $drawing->update(['tiles_status' => 'failed']);
         }

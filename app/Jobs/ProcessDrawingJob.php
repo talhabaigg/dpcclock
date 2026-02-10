@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use App\Services\DrawingMetadataService;
 use App\Services\DrawingProcessingService;
 use Illuminate\Bus\Queueable;
@@ -43,7 +43,7 @@ class ProcessDrawingJob implements ShouldQueue
      */
     public function handle(DrawingProcessingService $processingService, DrawingMetadataService $metadataService): void
     {
-        $drawing = QaStageDrawing::find($this->drawingId);
+        $drawing = Drawing::find($this->drawingId);
 
         if (! $drawing) {
             Log::warning('ProcessDrawingJob: Drawing not found', ['id' => $this->drawingId]);
@@ -101,9 +101,9 @@ class ProcessDrawingJob implements ShouldQueue
         ]);
 
         // Update drawing status to indicate failure
-        $drawing = QaStageDrawing::find($this->drawingId);
+        $drawing = Drawing::find($this->drawingId);
         if ($drawing) {
-            $drawing->update(['status' => QaStageDrawing::STATUS_DRAFT]);
+            $drawing->update(['status' => Drawing::STATUS_DRAFT]);
         }
     }
 }

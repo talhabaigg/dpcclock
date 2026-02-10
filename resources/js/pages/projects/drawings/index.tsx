@@ -9,23 +9,12 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type Project = {
     id: number;
     name: string;
-};
-
-type Revision = {
-    id: number;
-    drawing_number: string | null;
-    drawing_title: string | null;
-    revision_number: string | null;
-    status: string;
-    created_at: string;
-    drawing_set_name: string | null;
-    thumbnail_url: string | null;
 };
 
 type Drawing = {
@@ -34,14 +23,16 @@ type Drawing = {
     title: string | null;
     display_name: string;
     discipline: string | null;
-    revision_count: number;
-    current_revision_id: number;
+    revision_number: string | null;
+    drawing_number: string | null;
+    drawing_title: string | null;
+    status: string;
     created_at: string;
-    revision: Revision | null;
+    thumbnail_url: string | null;
 };
 
 type SortConfig = {
-    field: 'sheet_number' | 'title' | 'created_at' | 'revision_count';
+    field: 'sheet_number' | 'title' | 'created_at';
     order: 'asc' | 'desc';
 };
 
@@ -86,14 +77,14 @@ export default function DrawingsIndex() {
     const filteredDrawings = useMemo(() => {
         let filtered = [...drawings];
 
-        // Apply search filter (searches both title and drawing number)
+        // Apply search filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter((drawing) => {
                 const sheetNumber = drawing.sheet_number?.toLowerCase() || '';
                 const title = drawing.title?.toLowerCase() || '';
-                const drawingNumber = drawing.revision?.drawing_number?.toLowerCase() || '';
-                const drawingTitle = drawing.revision?.drawing_title?.toLowerCase() || '';
+                const drawingNumber = drawing.drawing_number?.toLowerCase() || '';
+                const drawingTitle = drawing.drawing_title?.toLowerCase() || '';
                 return sheetNumber.includes(query) || title.includes(query) || drawingNumber.includes(query) || drawingTitle.includes(query);
             });
         }
@@ -114,16 +105,12 @@ export default function DrawingsIndex() {
                     bValue = b.sheet_number || '';
                     break;
                 case 'title':
-                    aValue = a.title || a.revision?.drawing_title || '';
-                    bValue = b.title || b.revision?.drawing_title || '';
+                    aValue = a.title || a.drawing_title || '';
+                    bValue = b.title || b.drawing_title || '';
                     break;
                 case 'created_at':
                     aValue = new Date(a.created_at);
                     bValue = new Date(b.created_at);
-                    break;
-                case 'revision_count':
-                    aValue = a.revision_count;
-                    bValue = b.revision_count;
                     break;
                 default:
                     return 0;
@@ -162,12 +149,6 @@ export default function DrawingsIndex() {
                         Back to Project
                     </Button>
                 </Link>
-                <Link href={`/projects/${project.id}/drawing-sets`}>
-                    <Button>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Drawings
-                    </Button>
-                </Link>
             </div>
 
             <div className="mx-2 mb-4">
@@ -177,7 +158,7 @@ export default function DrawingsIndex() {
                         <div>
                             <h2 className="text-xl font-bold">Project Drawings</h2>
                             <p className="text-muted-foreground text-sm">
-                                {project.name} - {drawings.length} drawing{drawings.length !== 1 ? 's' : ''} (latest revisions only)
+                                {project.name} - {drawings.length} drawing{drawings.length !== 1 ? 's' : ''} (active revisions)
                             </p>
                         </div>
                     </div>
@@ -268,13 +249,7 @@ export default function DrawingsIndex() {
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
-                                <TableHead>Current Revision</TableHead>
-                                <TableHead>
-                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('revision_count')}>
-                                        Revisions
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
-                                </TableHead>
+                                <TableHead>Revision</TableHead>
                                 <TableHead>Discipline</TableHead>
                                 <TableHead>
                                     <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
@@ -288,17 +263,14 @@ export default function DrawingsIndex() {
                         <TableBody>
                             {filteredDrawings.map((drawing) => (
                                 <TableRow key={drawing.id}>
-                                    <TableCell className="font-medium">{drawing.sheet_number || drawing.revision?.drawing_number || '-'}</TableCell>
-                                    <TableCell>{drawing.title || drawing.revision?.drawing_title || '-'}</TableCell>
+                                    <TableCell className="font-medium">{drawing.sheet_number || drawing.drawing_number || '-'}</TableCell>
+                                    <TableCell>{drawing.title || drawing.drawing_title || '-'}</TableCell>
                                     <TableCell>
-                                        {drawing.revision?.revision_number ? (
-                                            <Badge variant="outline">Rev {drawing.revision.revision_number}</Badge>
+                                        {drawing.revision_number ? (
+                                            <Badge variant="outline">Rev {drawing.revision_number}</Badge>
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
                                         )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary">{drawing.revision_count}</Badge>
                                     </TableCell>
                                     <TableCell>
                                         {drawing.discipline ? (
@@ -309,19 +281,12 @@ export default function DrawingsIndex() {
                                     </TableCell>
                                     <TableCell>{format(new Date(drawing.created_at), 'dd MMM yyyy')}</TableCell>
                                     <TableCell>
-                                        {drawing.revision?.id ? (
-                                            <Link href={`/qa-stage-drawings/${drawing.revision.id}`}>
-                                                <Button size="sm" variant="outline">
-                                                    <Eye className="mr-1 h-4 w-4" />
-                                                    View
-                                                </Button>
-                                            </Link>
-                                        ) : (
-                                            <Button size="sm" variant="outline" disabled>
+                                        <Link href={`/drawings/${drawing.id}`}>
+                                            <Button size="sm" variant="outline">
                                                 <Eye className="mr-1 h-4 w-4" />
                                                 View
                                             </Button>
-                                        )}
+                                        </Link>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -334,14 +299,14 @@ export default function DrawingsIndex() {
                     {filteredDrawings.map((drawing) => (
                         <Link
                             key={drawing.id}
-                            href={drawing.revision?.id ? `/qa-stage-drawings/${drawing.revision.id}` : '#'}
+                            href={`/drawings/${drawing.id}`}
                             className="group"
                         >
                             <Card className="overflow-hidden transition-shadow hover:shadow-lg">
                                 <div className="relative aspect-[4/3] bg-white">
-                                    {drawing.revision?.thumbnail_url ? (
+                                    {drawing.thumbnail_url ? (
                                         <img
-                                            src={drawing.revision.thumbnail_url}
+                                            src={drawing.thumbnail_url}
                                             alt={drawing.display_name}
                                             className="h-full w-full object-contain"
                                         />
@@ -350,18 +315,18 @@ export default function DrawingsIndex() {
                                             <FileImage className="text-muted-foreground h-12 w-12" />
                                         </div>
                                     )}
-                                    {drawing.revision?.revision_number && (
+                                    {drawing.revision_number && (
                                         <Badge variant="secondary" className="absolute right-1 top-1 text-xs">
-                                            Rev {drawing.revision.revision_number}
+                                            Rev {drawing.revision_number}
                                         </Badge>
                                     )}
                                 </div>
                                 <div className="p-2">
                                     <p className="truncate text-sm font-medium">
-                                        {drawing.sheet_number || drawing.revision?.drawing_number || '-'}
+                                        {drawing.sheet_number || drawing.drawing_number || '-'}
                                     </p>
                                     <p className="text-muted-foreground truncate text-xs">
-                                        {drawing.title || drawing.revision?.drawing_title || 'Untitled'}
+                                        {drawing.title || drawing.drawing_title || 'Untitled'}
                                     </p>
                                 </div>
                             </Card>

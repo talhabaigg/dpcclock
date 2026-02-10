@@ -30,12 +30,12 @@ class DrawingAlignment extends Model
 
     public function baseDrawing(): BelongsTo
     {
-        return $this->belongsTo(QaStageDrawing::class, 'base_drawing_id');
+        return $this->belongsTo(Drawing::class, 'base_drawing_id');
     }
 
     public function candidateDrawing(): BelongsTo
     {
-        return $this->belongsTo(QaStageDrawing::class, 'candidate_drawing_id');
+        return $this->belongsTo(Drawing::class, 'candidate_drawing_id');
     }
 
     public function createdBy(): BelongsTo

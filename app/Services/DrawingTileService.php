@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -26,7 +26,7 @@ class DrawingTileService
      * Generate tiles for a drawing.
      * Creates a tile pyramid for efficient viewing at multiple zoom levels.
      */
-    public function generateTiles(QaStageDrawing $drawing): array
+    public function generateTiles(Drawing $drawing): array
     {
         $result = [
             'success' => false,
@@ -241,7 +241,7 @@ class DrawingTileService
      * Get the source image path for a drawing.
      * Converts PDF to image if necessary.
      */
-    protected function getSourceImagePath(QaStageDrawing $drawing): ?string
+    protected function getSourceImagePath(Drawing $drawing): ?string
     {
         $originalPath = $this->getOriginalFilePath($drawing);
 
@@ -273,7 +273,7 @@ class DrawingTileService
     /**
      * Get the original file path for a drawing.
      */
-    protected function getOriginalFilePath(QaStageDrawing $drawing): ?string
+    protected function getOriginalFilePath(Drawing $drawing): ?string
     {
         // Check if file is stored locally
         if ($drawing->file_path) {
@@ -289,7 +289,7 @@ class DrawingTileService
     /**
      * Download file from S3 to a temp location.
      */
-    protected function downloadFromS3(QaStageDrawing $drawing): ?string
+    protected function downloadFromS3(Drawing $drawing): ?string
     {
         $s3Key = $drawing->file_path ?? $drawing->page_preview_s3_key;
         if (!$s3Key) {
@@ -412,7 +412,7 @@ class DrawingTileService
     /**
      * Delete all tiles for a drawing.
      */
-    public function deleteTiles(QaStageDrawing $drawing): bool
+    public function deleteTiles(Drawing $drawing): bool
     {
         if (!$drawing->tiles_base_url) {
             return true;
@@ -442,7 +442,7 @@ class DrawingTileService
     /**
      * Get the URL for a specific tile.
      */
-    public function getTileUrl(QaStageDrawing $drawing, int $z, int $x, int $y): ?string
+    public function getTileUrl(Drawing $drawing, int $z, int $x, int $y): ?string
     {
         if (!$drawing->tiles_base_url) {
             return null;
@@ -455,7 +455,7 @@ class DrawingTileService
     /**
      * Check if tiles exist for a drawing.
      */
-    public function hasTiles(QaStageDrawing $drawing): bool
+    public function hasTiles(Drawing $drawing): bool
     {
         return $drawing->tiles_status === 'completed'
             && $drawing->tiles_base_url

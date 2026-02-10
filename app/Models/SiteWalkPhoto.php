@@ -61,9 +61,9 @@ class SiteWalkPhoto extends Model
         return $this->belongsTo(SiteWalk::class);
     }
 
-    public function drawingSheet()
+    public function drawing()
     {
-        return $this->belongsTo(DrawingSheet::class);
+        return $this->belongsTo(Drawing::class, 'drawing_sheet_id');
     }
 
     public function createdBy()

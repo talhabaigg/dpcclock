@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,7 +14,7 @@ class BackfillThumbnailS3Keys extends Command
 
     public function handle(): int
     {
-        $drawings = QaStageDrawing::whereNotNull('page_preview_s3_key')
+        $drawings = Drawing::whereNotNull('page_preview_s3_key')
             ->whereNull('thumbnail_s3_key')
             ->get();
 

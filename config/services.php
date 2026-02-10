@@ -58,4 +58,9 @@ return [
         'enabled' => env('CV_COMPARISON_ENABLED', true),
     ],
 
+    'payroll' => [
+        'api_key' => env('PAYROLL_API_KEY'),
+        'business_id' => env('PAYROLL_BUSINESS_ID', '431152'),
+    ],
+
 ];

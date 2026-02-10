@@ -2,8 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\DrawingSheet;
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -17,7 +16,7 @@ class DrawingMetadataService
     /**
      * Extract metadata from a drawing using AI vision
      */
-    public function extractMetadata(QaStageDrawing $drawing): array
+    public function extractMetadata(Drawing $drawing): array
     {
         try {
             // Get the thumbnail or first page image
@@ -59,9 +58,21 @@ class DrawingMetadataService
                 ],
             ];
 
-            // Update drawing name if AI extracted a title and confidence is high enough
-            if (! empty($metadata['title']) && ($metadata['confidence'] ?? 0) >= 70) {
-                $drawingUpdates['name'] = $metadata['title'];
+            $confidence = $metadata['confidence'] ?? 0;
+
+            // Update drawing title if AI extracted one and confidence is high enough
+            if (! empty($metadata['title']) && $confidence >= 70) {
+                $drawingUpdates['title'] = $metadata['title'];
+            }
+
+            // Update sheet_number directly on drawing
+            if (! empty($metadata['sheet_number'])) {
+                $drawingUpdates['sheet_number'] = $metadata['sheet_number'];
+            }
+
+            // Update discipline if found
+            if (! empty($metadata['discipline'])) {
+                $drawingUpdates['discipline'] = $metadata['discipline'];
             }
 
             // Update revision info
@@ -74,21 +85,11 @@ class DrawingMetadataService
 
             $drawing->update($drawingUpdates);
 
-            // Reload the drawing to get fresh relationships
-            $drawing->refresh();
-
-            // Update drawing sheet if we got good data
-            if ($drawing->drawing_sheet_id && ! empty($metadata['sheet_number'])) {
-                $sheet = DrawingSheet::find($drawing->drawing_sheet_id);
-                if ($sheet) {
-                    $this->updateDrawingSheet($sheet, $metadata, $drawing);
-                    Log::info('DrawingMetadataService: Updated sheet', [
-                        'sheet_id' => $drawing->drawing_sheet_id, // Use fresh value in case it was merged
-                        'title' => $metadata['title'] ?? null,
-                        'sheet_number' => $metadata['sheet_number'] ?? null,
-                    ]);
-                }
-            }
+            Log::info('DrawingMetadataService: Updated drawing metadata', [
+                'drawing_id' => $drawing->id,
+                'sheet_number' => $metadata['sheet_number'] ?? null,
+                'title' => $metadata['title'] ?? null,
+            ]);
 
             return [
                 'success' => true,
@@ -112,7 +113,7 @@ class DrawingMetadataService
     /**
      * Get image for AI analysis - crops to title block region for better accuracy
      */
-    private function getDrawingImage(QaStageDrawing $drawing): ?string
+    private function getDrawingImage(Drawing $drawing): ?string
     {
         $fullImagePath = null;
 
@@ -400,111 +401,22 @@ PROMPT;
     }
 
     /**
-     * Update drawing sheet with extracted metadata
-     * Handles merging with existing sheets if same sheet_number is found
-     */
-    private function updateDrawingSheet(DrawingSheet $sheet, array $metadata, QaStageDrawing $drawing): void
-    {
-        $confidence = $metadata['confidence'] ?? 0;
-        $extractedSheetNumber = $metadata['sheet_number'] ?? null;
-
-        // Check if a different sheet with this sheet_number already exists for this QA stage
-        if (! empty($extractedSheetNumber) && $extractedSheetNumber !== $sheet->sheet_number) {
-            $existingSheet = DrawingSheet::where('qa_stage_id', $sheet->qa_stage_id)
-                ->where('sheet_number', $extractedSheetNumber)
-                ->where('id', '!=', $sheet->id)
-                ->first();
-
-            if ($existingSheet) {
-                // Merge this drawing into the existing sheet
-                Log::info('DrawingMetadataService: Merging drawing into existing sheet', [
-                    'drawing_id' => $drawing->id,
-                    'old_sheet_id' => $sheet->id,
-                    'new_sheet_id' => $existingSheet->id,
-                    'sheet_number' => $extractedSheetNumber,
-                ]);
-
-                // Move drawing to existing sheet
-                $drawing->update(['drawing_sheet_id' => $existingSheet->id]);
-
-                // Add as revision to the existing sheet
-                $existingSheet->addRevision($drawing, $drawing->revision_number);
-
-                // Delete the orphaned sheet if it has no other drawings
-                if ($sheet->revisions()->count() === 0) {
-                    $sheet->delete();
-                    Log::info('DrawingMetadataService: Deleted orphaned sheet', ['sheet_id' => $sheet->id]);
-                }
-
-                // Update the existing sheet with extracted metadata
-                $existingSheet->update(array_filter([
-                    'title' => ($confidence >= 70 && ! empty($metadata['title'])) ? $metadata['title'] : null,
-                    'discipline' => $metadata['discipline'] ?? null,
-                    'extraction_confidence' => $confidence > 0 ? $confidence : null,
-                ]));
-
-                return;
-            }
-        }
-
-        // No existing sheet to merge with - update the current sheet
-        $updates = [];
-
-        // Update sheet_number if AI found one (always update - this is authoritative)
-        if (! empty($extractedSheetNumber)) {
-            $updates['sheet_number'] = $extractedSheetNumber;
-        }
-
-        // Update title if AI found one and confidence is high enough
-        // This overwrites user-provided filename with actual drawing title
-        if (! empty($metadata['title']) && $confidence >= 70) {
-            $updates['title'] = $metadata['title'];
-        }
-
-        // Update discipline if AI found one
-        if (! empty($metadata['discipline'])) {
-            $updates['discipline'] = $metadata['discipline'];
-        }
-
-        if ($confidence > 0) {
-            $updates['extraction_confidence'] = $confidence;
-        }
-
-        if (! empty($updates)) {
-            $sheet->update($updates);
-        }
-    }
-
-    /**
      * Confirm AI-extracted metadata (user verification)
      */
-    public function confirmMetadata(QaStageDrawing $drawing, array $confirmedData): bool
+    public function confirmMetadata(Drawing $drawing, array $confirmedData): bool
     {
         try {
-            // Update the drawing
-            $drawingUpdates = array_filter([
+            $updates = array_filter([
+                'sheet_number' => $confirmedData['sheet_number'] ?? null,
+                'title' => $confirmedData['title'] ?? null,
+                'discipline' => $confirmedData['discipline'] ?? null,
                 'revision_number' => $confirmedData['revision'] ?? null,
                 'revision_date' => $confirmedData['revision_date'] ?? null,
+                'metadata_confirmed' => true,
+                'status' => Drawing::STATUS_ACTIVE,
             ]);
 
-            if (! empty($drawingUpdates)) {
-                $drawing->update($drawingUpdates);
-            }
-
-            // Update the sheet
-            if ($drawing->drawingSheet) {
-                $sheetUpdates = array_filter([
-                    'sheet_number' => $confirmedData['sheet_number'] ?? null,
-                    'title' => $confirmedData['title'] ?? null,
-                    'discipline' => $confirmedData['discipline'] ?? null,
-                    'metadata_confirmed' => true,
-                ]);
-
-                $drawing->drawingSheet->update($sheetUpdates);
-            }
-
-            // Update status to active
-            $drawing->update(['status' => QaStageDrawing::STATUS_ACTIVE]);
+            $drawing->update($updates);
 
             return true;
 

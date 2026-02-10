@@ -8,8 +8,8 @@ use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
-use App\Http\Controllers\DrawingIndexController;
-use App\Http\Controllers\DrawingSetController;
+use App\Http\Controllers\DrawingController;
+use App\Http\Controllers\DrawingObservationController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
@@ -26,9 +26,6 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
-use App\Http\Controllers\QaStageController;
-use App\Http\Controllers\QaStageDrawingController;
-use App\Http\Controllers\QaStageDrawingObservationController;
 use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
@@ -533,88 +530,53 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:variations.export');
 
     // ============================================
-    // QA STAGES
+    // DRAWINGS
     // ============================================
-    Route::get('/qa-stages', [QaStageController::class, 'index'])->name('qa-stages.index')
-        ->middleware('permission:qa-stages.view');
-    Route::get('/qa-stages/{qaStage}', [QaStageController::class, 'show'])->name('qa-stages.show')
-        ->middleware('permission:qa-stages.view');
-    Route::post('/qa-stages', [QaStageController::class, 'store'])->name('qa-stages.store')
-        ->middleware('permission:qa-stages.create');
-    Route::delete('/qa-stages/{qaStage}', [QaStageController::class, 'destroy'])->name('qa-stages.destroy')
-        ->middleware('permission:qa-stages.delete');
-
-    // QA Drawings
-    Route::get('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'show'])->name('qa-stage-drawings.show')
-        ->middleware('permission:qa-drawings.view');
-    Route::get('/qa-stage-drawings/{drawing}/download', [QaStageDrawingController::class, 'download'])->name('qa-stage-drawings.download')
-        ->middleware('permission:qa-drawings.view');
-    Route::get('/qa-stage-drawings/{drawing}/file', [QaStageDrawingController::class, 'serveFile'])->name('qa-stage-drawings.file')
-        ->middleware('permission:qa-drawings.view');
-    Route::get('/qa-stage-drawings/{drawing}/thumbnail', [QaStageDrawingController::class, 'serveThumbnail'])->name('qa-stage-drawings.thumbnail')
-        ->middleware('permission:qa-drawings.view');
-    Route::middleware('permission:qa-drawings.create')->group(function () {
-        Route::post('/qa-stages/{qaStage}/drawings', [QaStageDrawingController::class, 'store'])->name('qa-stage-drawings.store');
-        Route::post('/qa-stage-drawings/{drawing}/extract-metadata', [QaStageDrawingController::class, 'extractMetadata'])->name('qa-stage-drawings.extract-metadata');
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
+        Route::get('/drawings/{drawing}', [DrawingController::class, 'show'])->name('drawings.show');
+        Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
+        Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');
+        Route::get('/drawings/{drawing}/thumbnail', [DrawingController::class, 'serveThumbnail'])->name('drawings.thumbnail');
+        Route::get('/drawings/{drawing}/preview', [DrawingController::class, 'servePreview'])->name('drawings.preview');
+        Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
     });
-    Route::delete('/qa-stage-drawings/{drawing}', [QaStageDrawingController::class, 'destroy'])->name('qa-stage-drawings.destroy')
-        ->middleware('permission:qa-drawings.delete');
-    Route::middleware('permission:qa-observations.manage')->group(function () {
-        Route::post('/qa-stage-drawings/{drawing}/observations', [QaStageDrawingObservationController::class, 'store'])->name('qa-stage-drawings.observations.store');
-        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'update'])->name('qa-stage-drawings.observations.update');
-        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}/confirm', [QaStageDrawingObservationController::class, 'confirm'])->name('qa-stage-drawings.observations.confirm');
-        Route::delete('/qa-stage-drawings/{drawing}/observations/{observation}', [QaStageDrawingObservationController::class, 'destroy'])->name('qa-stage-drawings.observations.destroy');
-        Route::post('/qa-stage-drawings/{drawing}/observations/{observation}/describe', [QaStageDrawingObservationController::class, 'describe'])->name('qa-stage-drawings.observations.describe');
-        Route::get('/qa-stage-drawing-observations/{observation}/photo', [QaStageDrawingObservationController::class, 'photo'])->name('qa-stage-drawings.observations.photo');
-    });
-
-    // Drawing alignment persistence
-    Route::post('/qa-stage-drawings/{drawing}/alignment', [QaStageDrawingController::class, 'saveAlignment'])->name('qa-stage-drawings.alignment.save')
-        ->middleware('permission:qa-drawings.view');
-    Route::get('/qa-stage-drawings/{drawing}/alignment/{candidateDrawing}', [QaStageDrawingController::class, 'getAlignment'])->name('qa-stage-drawings.alignment.get')
-        ->middleware('permission:qa-drawings.view');
-    Route::delete('/qa-stage-drawings/{drawing}/alignment/{candidateDrawing}', [QaStageDrawingController::class, 'deleteAlignment'])->name('qa-stage-drawings.alignment.delete')
-        ->middleware('permission:qa-drawings.view');
-
-    // ============================================
-    // DRAWING INDEX (All drawings for a project)
-    // ============================================
-    Route::get('/projects/{project}/drawings', [DrawingIndexController::class, 'index'])
-        ->name('drawings.index')
-        ->middleware('permission:qa-drawings.view');
-
-    // ============================================
-    // DRAWING SETS (PDF Upload & Textract Extraction)
-    // ============================================
-    Route::middleware('permission:qa-drawings.view')->group(function () {
-        Route::get('/projects/{project}/drawing-sets', [DrawingSetController::class, 'index'])->name('drawing-sets.index');
-        Route::get('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'show'])->name('drawing-sets.show');
-        Route::get('/drawing-sets/{drawingSet}/pdf', [DrawingSetController::class, 'servePdf'])->name('drawing-sets.pdf');
-        Route::get('/drawing-sheets/{sheet}/preview', [DrawingSetController::class, 'sheetPreview'])->name('drawing-sheets.preview');
-        Route::get('/drawing-sheets/{sheet}/thumbnail', [DrawingSetController::class, 'sheetThumbnail'])->name('drawing-sheets.thumbnail');
-    });
-    Route::middleware('permission:qa-drawings.create')->group(function () {
-        Route::post('/projects/{project}/drawing-sets', [DrawingSetController::class, 'store'])->name('drawing-sets.store');
-        Route::patch('/drawing-sheets/{sheet}', [DrawingSetController::class, 'updateSheet'])->name('drawing-sheets.update');
-        Route::post('/drawing-sheets/{sheet}/retry', [DrawingSetController::class, 'retryExtraction'])->name('drawing-sheets.retry');
-        Route::post('/drawing-sets/{drawingSet}/retry-all', [DrawingSetController::class, 'retryAllExtraction'])->name('drawing-sets.retry-all');
-        Route::post('/drawing-sets/{drawingSet}/relink-sheets', [DrawingSetController::class, 'relinkSheets'])->name('drawing-sets.relink-sheets');
-        Route::post('/drawing-sheets/{sheet}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawing-sheets.create-template');
+    Route::middleware('permission:drawings.create')->group(function () {
+        Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
+        Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
+        Route::post('/drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])->name('drawings.extract-metadata');
         // AI Drawing Comparison
-        Route::post('/drawing-sheets/compare', [DrawingSetController::class, 'compareRevisions'])->name('drawing-sheets.compare');
-        Route::post('/drawing-sheets/compare/save-observations', [DrawingSetController::class, 'saveComparisonAsObservations'])->name('drawing-sheets.compare.save-observations');
-        Route::get('/drawing-sheets-group/{drawingSheet}/revisions', [DrawingSetController::class, 'getDrawingSheetRevisions'])->name('drawing-sheets-group.revisions');
+        Route::post('/drawings/compare', [DrawingController::class, 'compareRevisions'])->name('drawings.compare');
+        Route::post('/drawings/compare/save-observations', [DrawingController::class, 'saveComparisonAsObservations'])->name('drawings.compare.save-observations');
     });
-    Route::delete('/drawing-sets/{drawingSet}', [DrawingSetController::class, 'destroy'])->name('drawing-sets.destroy')
-        ->middleware('permission:qa-drawings.delete');
+    Route::delete('/drawings/{drawing}', [DrawingController::class, 'destroy'])->name('drawings.destroy')
+        ->middleware('permission:drawings.delete');
+
+    // Drawing Observations
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::post('/drawings/{drawing}/observations', [DrawingObservationController::class, 'store'])->name('drawings.observations.store');
+        Route::post('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'update'])->name('drawings.observations.update');
+        Route::post('/drawings/{drawing}/observations/{observation}/confirm', [DrawingObservationController::class, 'confirm'])->name('drawings.observations.confirm');
+        Route::delete('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'destroy'])->name('drawings.observations.destroy');
+        Route::post('/drawings/{drawing}/observations/{observation}/describe', [DrawingObservationController::class, 'describe'])->name('drawings.observations.describe');
+        Route::get('/drawing-observations/{observation}/photo', [DrawingObservationController::class, 'photo'])->name('drawings.observations.photo');
+    });
+
+    // Drawing Alignment
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::post('/drawings/{drawing}/alignment', [DrawingController::class, 'saveAlignment'])->name('drawings.alignment.save');
+        Route::get('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'getAlignment'])->name('drawings.alignment.get');
+        Route::delete('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'deleteAlignment'])->name('drawings.alignment.delete');
+    });
 
     // Title Block Templates
-    Route::middleware('permission:qa-drawings.view')->group(function () {
+    Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/templates', [TitleBlockTemplateController::class, 'index'])->name('title-block-templates.index');
         Route::post('/templates/{template}/test', [TitleBlockTemplateController::class, 'test'])->name('title-block-templates.test');
-        Route::post('/drawing-sheets/{sheet}/detect-text', [TitleBlockTemplateController::class, 'detectTextBlocks'])->name('drawing-sheets.detect-text');
+        Route::post('/drawings/{drawing}/detect-text', [TitleBlockTemplateController::class, 'detectTextBlocks'])->name('drawings.detect-text');
+        Route::post('/drawings/{drawing}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawings.create-template');
     });
-    Route::middleware('permission:qa-drawings.create')->group(function () {
+    Route::middleware('permission:drawings.create')->group(function () {
         Route::post('/projects/{project}/templates', [TitleBlockTemplateController::class, 'store'])->name('title-block-templates.store');
         Route::put('/templates/{template}', [TitleBlockTemplateController::class, 'update'])->name('title-block-templates.update');
         Route::put('/templates/{template}/field-mappings', [TitleBlockTemplateController::class, 'saveFieldMappings'])->name('title-block-templates.field-mappings');

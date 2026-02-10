@@ -33,20 +33,14 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-type Location = {
+type Project = {
     id: number;
     name: string;
-};
-
-type QaStage = {
-    id: number;
-    name: string;
-    location?: Location;
 };
 
 type Observation = {
     id: number;
-    qa_stage_drawing_id: number;
+    drawing_id: number;
     page_number: number;
     x: number;
     y: number;
@@ -72,58 +66,22 @@ type Observation = {
 
 type Revision = {
     id: number;
-    drawing_sheet_id: number;
-    drawing_set_id?: number | null;
-    name: string;
+    sheet_number?: string | null;
     revision_number?: string | null;
     revision_date?: string | null;
     status: string;
     created_at: string;
     thumbnail_path?: string | null;
-    file_path?: string | null;
-    diff_image_path?: string | null;
-    file_url?: string;
-    pdf_url?: string | null;
-    is_drawing_set_sheet?: boolean;
-    thumbnail_url?: string;
-    diff_image_url?: string;
-    page_number?: number;
+    thumbnail_s3_key?: string | null;
     page_preview_s3_key?: string | null;
-    page_preview_url?: string;
     drawing_number?: string | null;
     drawing_title?: string | null;
     revision?: string | null;
-};
-
-type DrawingSheet = {
-    id: number;
-    title?: string;
-    sheet_number?: string;
-    revisions?: Revision[];
-    current_revision_id?: number;
-};
-
-type DrawingFile = {
-    id: number;
-    storage_path: string;
-    original_name: string;
-    mime_type?: string;
-    page_count: number;
-    file_url: string;
-};
-
-type SiblingPage = {
-    id: number;
-    page_number: number;
-    page_label?: string | null;
-    name: string;
-};
-
-type DrawingSet = {
-    id: number;
-    project_id: number;
-    original_filename: string;
-    project?: Location;
+    diff_image_path?: string | null;
+    file_url?: string;
+    page_preview_url?: string;
+    thumbnail_url?: string;
+    diff_image_url?: string;
 };
 
 type TilesInfo = {
@@ -136,40 +94,30 @@ type TilesInfo = {
 
 type Drawing = {
     id: number;
-    name: string;
+    project_id: number;
+    project?: Project;
+    sheet_number?: string | null;
+    title?: string | null;
+    discipline?: string | null;
     display_name?: string;
-    file_name?: string | null;
-    file_type?: string | null;
     file_url?: string | null;
     pdf_url?: string | null;
-    is_drawing_set_sheet?: boolean;
-    qa_stage_id: number | null;
-    qa_stage?: QaStage;
-    drawing_set_id?: number | null;
-    drawing_set?: DrawingSet;
+    page_preview_url?: string | null;
     observations?: Observation[];
-    drawing_sheet?: DrawingSheet;
-    drawing_file?: DrawingFile;
-    page_number: number;
-    page_label?: string | null;
-    total_pages: number;
     previous_revision?: {
         id: number;
-        name: string;
+        sheet_number?: string | null;
         revision_number?: string | null;
-        file_url?: string;
-        pdf_url?: string | null;
-        is_drawing_set_sheet?: boolean;
-        page_preview_s3_key?: string | null;
     };
     revision_number?: string | null;
     diff_image_url?: string | null;
     drawing_number?: string | null;
     drawing_title?: string | null;
     revision?: string | null;
-    page_preview_s3_key?: string | null;
-    page_preview_url?: string | null;
     tiles_info?: TilesInfo | null;
+    storage_path?: string | null;
+    original_name?: string | null;
+    mime_type?: string | null;
 };
 
 type PendingPoint = {
@@ -178,47 +126,32 @@ type PendingPoint = {
     y: number;
 };
 
-export default function QaStageDrawingShow() {
-    const { drawing, siblingPages, project } = usePage<{
+export default function DrawingShow() {
+    const { drawing, revisions, project } = usePage<{
         drawing: Drawing;
-        siblingPages: SiblingPage[];
-        project?: Location;
+        revisions: Revision[];
+        project?: Project;
     }>().props;
 
-    const targetPageNumber = drawing.page_number || 1;
-    const totalPages = drawing.total_pages || 1;
-    const isPaged = totalPages > 1;
-
-    const isFromDrawingSet = Boolean(drawing.drawing_set_id);
-    const displayName = drawing.display_name || drawing.name || `Page ${drawing.page_number}`;
+    const displayName = drawing.display_name || drawing.title || drawing.sheet_number || 'Drawing';
 
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
 
-    const breadcrumbs: BreadcrumbItem[] = isFromDrawingSet
-        ? [
-              { title: 'Projects', href: '/locations' },
-              {
-                  title: project?.name || drawing.drawing_set?.project?.name || 'Project',
-                  href: project?.id ? `/locations/${project.id}` : '/locations',
-              },
-              {
-                  title: 'Drawing Sets',
-                  href: project?.id ? `/projects/${project.id}/drawing-sets` : '/locations',
-              },
-              {
-                  title: drawing.drawing_set?.original_filename || 'Drawing Set',
-                  href: drawing.drawing_set_id ? `/drawing-sets/${drawing.drawing_set_id}` : '#',
-              },
-              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-          ]
-        : [
-              { title: 'QA Stages', href: '/qa-stages' },
-              {
-                  title: drawing.qa_stage?.name || 'QA Stage',
-                  href: drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages',
-              },
-              { title: displayName, href: `/qa-stage-drawings/${drawing.id}` },
-          ];
+    const projectName = project?.name || drawing.project?.name || 'Project';
+    const projectId = project?.id || drawing.project_id;
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Projects', href: '/locations' },
+        {
+            title: projectName,
+            href: `/locations/${projectId}`,
+        },
+        {
+            title: 'Drawings',
+            href: `/projects/${projectId}/drawings`,
+        },
+        { title: displayName, href: `/drawings/${drawing.id}` },
+    ];
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
@@ -238,7 +171,6 @@ export default function QaStageDrawingShow() {
     const [serverObservations, setServerObservations] = useState<Observation[]>(drawing.observations || []);
 
     // Revision management
-    const revisions = drawing.drawing_sheet?.revisions || [];
     const [selectedRevisionId, setSelectedRevisionId] = useState<number>(drawing.id);
     const [showCompareOverlay, setShowCompareOverlay] = useState(false);
 
@@ -258,8 +190,8 @@ export default function QaStageDrawingShow() {
 
     // AI Comparison state
     const [showAICompareDialog, setShowAICompareDialog] = useState(false);
-    const [aiCompareSheetA, setAICompareSheetA] = useState<string>('');
-    const [aiCompareSheetB, setAICompareSheetB] = useState<string>('');
+    const [aiCompareDrawingA, setAICompareDrawingA] = useState<string>('');
+    const [aiCompareDrawingB, setAICompareDrawingB] = useState<string>('');
     const [aiComparing, setAIComparing] = useState(false);
     const [aiComparisonResult, setAIComparisonResult] = useState<{
         summary: string | null;
@@ -341,7 +273,7 @@ export default function QaStageDrawingShow() {
             }
             formData.append('is_360_photo', is360Photo ? '1' : '0');
 
-            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations`, {
+            const response = await fetch(`/drawings/${drawing.id}/observations`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': getCsrfToken(),
@@ -388,7 +320,7 @@ export default function QaStageDrawingShow() {
             }
             formData.append('is_360_photo', is360Photo ? '1' : '0');
 
-            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}`, {
+            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': getCsrfToken(),
@@ -420,7 +352,7 @@ export default function QaStageDrawingShow() {
         setConfirming(true);
 
         try {
-            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}/confirm`, {
+            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}/confirm`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -456,7 +388,7 @@ export default function QaStageDrawingShow() {
         setDeleting(true);
 
         try {
-            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}`, {
+            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -488,7 +420,7 @@ export default function QaStageDrawingShow() {
         setDescribing(true);
 
         try {
-            const response = await fetch(`/qa-stage-drawings/${drawing.id}/observations/${editingObservation.id}/describe`, {
+            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}/describe`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -531,7 +463,7 @@ export default function QaStageDrawingShow() {
 
         try {
             const deletePromises = aiObservations.map((obs) =>
-                fetch(`/qa-stage-drawings/${drawing.id}/observations/${obs.id}`, {
+                fetch(`/drawings/${drawing.id}/observations/${obs.id}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -593,7 +525,7 @@ export default function QaStageDrawingShow() {
             }
 
             const deletePromises = selectedObs.map((obs) =>
-                fetch(`/qa-stage-drawings/${drawing.id}/observations/${obs.id}`, {
+                fetch(`/drawings/${drawing.id}/observations/${obs.id}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -644,7 +576,7 @@ export default function QaStageDrawingShow() {
 
     // AI Comparison handler
     const handleAICompare = async (additionalPrompt?: string) => {
-        if (!aiCompareSheetA || !aiCompareSheetB) {
+        if (!aiCompareDrawingA || !aiCompareDrawingB) {
             toast.error('Please select two revisions to compare.');
             return;
         }
@@ -654,7 +586,7 @@ export default function QaStageDrawingShow() {
         setSelectedChanges(new Set());
 
         try {
-            const response = await fetch('/drawing-sheets/compare', {
+            const response = await fetch('/drawings/compare', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -664,8 +596,8 @@ export default function QaStageDrawingShow() {
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
-                    sheet_a_id: parseInt(aiCompareSheetA),
-                    sheet_b_id: parseInt(aiCompareSheetB),
+                    drawing_a_id: parseInt(aiCompareDrawingA),
+                    drawing_b_id: parseInt(aiCompareDrawingB),
                     context: 'walls and ceilings construction drawings',
                     additional_prompt: additionalPrompt || undefined,
                 }),
@@ -732,7 +664,7 @@ export default function QaStageDrawingShow() {
         try {
             const changesToSave = aiComparisonResult.changes.filter((_, index) => selectedChanges.has(index));
 
-            const response = await fetch('/drawing-sheets/compare/save-observations', {
+            const response = await fetch('/drawings/compare/save-observations', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -742,9 +674,9 @@ export default function QaStageDrawingShow() {
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
-                    target_sheet_id: drawing.id,
-                    sheet_a_id: parseInt(aiCompareSheetA),
-                    sheet_b_id: parseInt(aiCompareSheetB),
+                    target_drawing_id: drawing.id,
+                    drawing_a_id: parseInt(aiCompareDrawingA),
+                    drawing_b_id: parseInt(aiCompareDrawingB),
                     changes: changesToSave,
                 }),
             });
@@ -785,21 +717,21 @@ export default function QaStageDrawingShow() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`${drawing.name}`} />
+            <Head title={displayName} />
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {/* Header Bar */}
                 <div className="bg-background flex shrink-0 items-center justify-between border-b px-4 py-2">
                     <div className="flex items-center gap-3">
-                        <Link href={drawing.qa_stage?.id ? `/qa-stages/${drawing.qa_stage.id}` : '/qa-stages'}>
+                        <Link href={`/projects/${projectId}/drawings`}>
                             <Button variant="ghost" size="sm">
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
                         </Link>
                         <div className="flex flex-col">
-                            <h1 className="text-sm leading-tight font-semibold">{drawing.name}</h1>
+                            <h1 className="text-sm leading-tight font-semibold">{displayName}</h1>
                             <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                                <span>{drawing.qa_stage?.location?.name}</span>
+                                <span>{projectName}</span>
                                 {drawing.revision_number && (
                                     <>
                                         <span className="text-muted-foreground/50">|</span>
@@ -818,7 +750,7 @@ export default function QaStageDrawingShow() {
                                 onValueChange={(value) => {
                                     const revId = Number(value);
                                     if (revId !== drawing.id) {
-                                        router.visit(`/qa-stage-drawings/${revId}`);
+                                        router.visit(`/drawings/${revId}`);
                                     }
                                     setSelectedRevisionId(revId);
                                 }}
@@ -832,7 +764,7 @@ export default function QaStageDrawingShow() {
                                         <SelectItem key={rev.id} value={String(rev.id)}>
                                             <div className="flex items-center gap-2">
                                                 <span>
-                                                    Rev {rev.revision_number || '?'}
+                                                    Rev {rev.revision_number || rev.revision || '?'}
                                                     {rev.id === drawing.id && ' (Current)'}
                                                 </span>
                                                 {rev.status === 'active' && (
@@ -847,33 +779,11 @@ export default function QaStageDrawingShow() {
                             </Select>
                         )}
 
-                        {/* Page Selector */}
-                        {isPaged && siblingPages.length > 1 && (
-                            <Select
-                                value={String(drawing.id)}
-                                onValueChange={(value) => {
-                                    router.visit(`/qa-stage-drawings/${value}`);
-                                }}
-                            >
-                                <SelectTrigger className="h-8 w-[120px] text-xs">
-                                    <SelectValue placeholder="Page" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {siblingPages.map((page) => (
-                                        <SelectItem key={page.id} value={String(page.id)}>
-                                            Page {page.page_number}
-                                            {page.id === drawing.id && ' (Current)'}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-
                         <div className="bg-border h-4 w-px" />
 
                         {/* Download button */}
                         <Button variant="ghost" size="sm" asChild>
-                            <a href={`/qa-stage-drawings/${drawing.id}/download`} download>
+                            <a href={`/drawings/${drawing.id}/download`} download>
                                 <Download className="h-4 w-4" />
                             </a>
                         </Button>
@@ -947,7 +857,7 @@ export default function QaStageDrawingShow() {
                                                     .filter((rev) => rev.id !== drawing.id && rev.file_url)
                                                     .map((rev) => (
                                                         <SelectItem key={rev.id} value={String(rev.id)}>
-                                                            Rev {rev.revision_number || '?'}
+                                                            Rev {rev.revision_number || rev.revision || '?'}
                                                         </SelectItem>
                                                     ))}
                                             </SelectContent>
@@ -1008,8 +918,8 @@ export default function QaStageDrawingShow() {
                                     const currentId = String(drawing.id);
                                     const otherRevisions = revisions.filter((r) => r.id !== drawing.id);
                                     const previousId = otherRevisions.length > 0 ? String(otherRevisions[0].id) : '';
-                                    setAICompareSheetA(previousId);
-                                    setAICompareSheetB(currentId);
+                                    setAICompareDrawingA(previousId);
+                                    setAICompareDrawingB(currentId);
                                     setAIComparisonResult(null);
                                     setShowAICompareDialog(true);
                                 }}
@@ -1091,7 +1001,6 @@ export default function QaStageDrawingShow() {
                         selectedObservationIds={selectedObservationIds}
                         viewMode={viewMode}
                         onObservationClick={(obs) => {
-                            // Open edit dialog in any mode (view/edit existing observations)
                             setPendingPoint(null);
                             setEditingObservation(obs as unknown as Observation);
                             setObservationType(obs.type);
@@ -1107,7 +1016,7 @@ export default function QaStageDrawingShow() {
                             setDescription('');
                             setPhotoFile(null);
                             setIs360Photo(false);
-                            setPendingPoint({ pageNumber: targetPageNumber, x, y });
+                            setPendingPoint({ pageNumber: 1, x, y });
                             setDialogOpen(true);
                         }}
                         className="absolute inset-0"
@@ -1262,7 +1171,7 @@ export default function QaStageDrawingShow() {
                             {!photoFile && editingObservation?.photo_url && (
                                 <div className="overflow-hidden rounded border">
                                     {editingObservation.is_360_photo || is360Photo ? (
-                                        <PanoramaViewer imageUrl={`/qa-stage-drawing-observations/${editingObservation.id}/photo`} className="h-48 w-full" compact />
+                                        <PanoramaViewer imageUrl={`/drawing-observations/${editingObservation.id}/photo`} className="h-48 w-full" compact />
                                     ) : (
                                         <img src={editingObservation.photo_url} alt="Current" className="h-24 w-full object-cover" />
                                     )}
@@ -1327,14 +1236,14 @@ export default function QaStageDrawingShow() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label className="text-xs">Older Revision (A)</Label>
-                                <Select value={aiCompareSheetA} onValueChange={setAICompareSheetA}>
+                                <Select value={aiCompareDrawingA} onValueChange={setAICompareDrawingA}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select revision" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {revisions.map((rev) => (
-                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareSheetB}>
-                                                Rev {rev.revision_number || '?'} - {rev.name || `Sheet ${rev.id}`}
+                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareDrawingB}>
+                                                Rev {rev.revision_number || rev.revision || '?'} - {rev.drawing_title || rev.drawing_number || `Drawing ${rev.id}`}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1342,14 +1251,14 @@ export default function QaStageDrawingShow() {
                             </div>
                             <div className="grid gap-2">
                                 <Label className="text-xs">Newer Revision (B)</Label>
-                                <Select value={aiCompareSheetB} onValueChange={setAICompareSheetB}>
+                                <Select value={aiCompareDrawingB} onValueChange={setAICompareDrawingB}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select revision" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {revisions.map((rev) => (
-                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareSheetA}>
-                                                Rev {rev.revision_number || '?'} - {rev.name || `Sheet ${rev.id}`}
+                                            <SelectItem key={rev.id} value={String(rev.id)} disabled={String(rev.id) === aiCompareDrawingA}>
+                                                Rev {rev.revision_number || rev.revision || '?'} - {rev.drawing_title || rev.drawing_number || `Drawing ${rev.id}`}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1357,7 +1266,7 @@ export default function QaStageDrawingShow() {
                             </div>
                         </div>
 
-                        <Button onClick={() => handleAICompare()} disabled={aiComparing || !aiCompareSheetA || !aiCompareSheetB} className="w-full">
+                        <Button onClick={() => handleAICompare()} disabled={aiComparing || !aiCompareDrawingA || !aiCompareDrawingB} className="w-full">
                             {aiComparing ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

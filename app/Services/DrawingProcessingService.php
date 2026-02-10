@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -21,7 +21,7 @@ class DrawingProcessingService
      * - Extract page dimensions
      * - Generate diff if previous revision exists
      */
-    public function processDrawing(QaStageDrawing $drawing): array
+    public function processDrawing(Drawing $drawing): array
     {
         $results = [
             'thumbnail' => false,
@@ -32,7 +32,7 @@ class DrawingProcessingService
 
         try {
             // Update status to processing
-            $drawing->update(['status' => QaStageDrawing::STATUS_PROCESSING]);
+            $drawing->update(['status' => Drawing::STATUS_PROCESSING]);
 
             // Get the full file path
             $filePath = Storage::disk($this->storageDisk)->path($drawing->file_path);
@@ -66,8 +66,8 @@ class DrawingProcessingService
 
             // Update status based on results
             $newStatus = empty($results['errors'])
-                ? QaStageDrawing::STATUS_PENDING_REVIEW
-                : QaStageDrawing::STATUS_DRAFT; // Stay in draft if processing failed
+                ? Drawing::STATUS_PENDING_REVIEW
+                : Drawing::STATUS_DRAFT; // Stay in draft if processing failed
 
             $drawing->update(['status' => $newStatus]);
 
@@ -77,7 +77,7 @@ class DrawingProcessingService
                 'error' => $e->getMessage(),
             ]);
             $results['errors'][] = $e->getMessage();
-            $drawing->update(['status' => QaStageDrawing::STATUS_DRAFT]);
+            $drawing->update(['status' => Drawing::STATUS_DRAFT]);
         }
 
         return $results;
@@ -86,7 +86,7 @@ class DrawingProcessingService
     /**
      * Generate a thumbnail for the drawing (first page)
      */
-    public function generateThumbnail(QaStageDrawing $drawing, ?string $filePath = null): array
+    public function generateThumbnail(Drawing $drawing, ?string $filePath = null): array
     {
         $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
 
@@ -179,7 +179,7 @@ class DrawingProcessingService
     /**
      * Extract page dimensions from PDF and update the drawing model.
      */
-    public function extractPageDimensions(QaStageDrawing $drawing, ?string $filePath = null): array
+    public function extractPageDimensions(Drawing $drawing, ?string $filePath = null): array
     {
         $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
 
@@ -203,14 +203,14 @@ class DrawingProcessingService
     /**
      * Generate a diff image between this drawing and its previous revision
      */
-    public function generateDiff(QaStageDrawing $drawing): array
+    public function generateDiff(Drawing $drawing): array
     {
         if (! $drawing->previous_revision_id) {
             return ['success' => false, 'error' => 'No previous revision to compare'];
         }
 
         try {
-            $previousRevision = QaStageDrawing::find($drawing->previous_revision_id);
+            $previousRevision = Drawing::find($drawing->previous_revision_id);
             if (! $previousRevision) {
                 return ['success' => false, 'error' => 'Previous revision not found'];
             }

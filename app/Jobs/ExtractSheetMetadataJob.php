@@ -2,9 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Events\DrawingSetProcessingUpdated;
-use App\Models\DrawingSheet;
-use App\Models\QaStageDrawing;
+use App\Models\Drawing;
 use App\Models\TitleBlockTemplate;
 use App\Services\DrawingMetadataValidationService;
 use App\Services\ImageCropService;
@@ -54,7 +52,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'has_preferred_template' => $this->preferredTemplateId !== null,
         ]);
 
-        $sheet = QaStageDrawing::with('drawingSet')->find($this->sheetId);
+        $sheet = Drawing::find($this->sheetId);
 
         if (! $sheet) {
             Log::error('Sheet not found for extraction', ['id' => $this->sheetId]);
@@ -65,16 +63,16 @@ class ExtractSheetMetadataJob implements ShouldQueue
         if (! $sheet->page_preview_s3_key) {
             Log::error('Sheet has no preview image', ['id' => $this->sheetId]);
             $sheet->update([
-                'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
+                'extraction_status' => Drawing::EXTRACTION_FAILED,
                 'extraction_errors' => ['error' => 'No preview image available'],
             ]);
 
             return;
         }
 
-        $sheet->update(['extraction_status' => QaStageDrawing::EXTRACTION_PROCESSING]);
+        $sheet->update(['extraction_status' => Drawing::EXTRACTION_PROCESSING]);
 
-        $projectId = $sheet->drawingSet?->project_id;
+        $projectId = $sheet->project_id;
         $bestResult = null;
         $allAttempts = [];
 
@@ -209,7 +207,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
             ]);
 
             $sheet->update([
-                'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
+                'extraction_status' => Drawing::EXTRACTION_FAILED,
                 'extraction_errors' => [
                     'error' => $e->getMessage(),
                     'attempts' => $allAttempts,
@@ -222,7 +220,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * Extract using a specific template's crop region.
      */
     private function extractWithTemplate(
-        QaStageDrawing $sheet,
+        Drawing $sheet,
         TitleBlockTemplate $template,
         TextractService $textract,
         ImageCropService $cropService,
@@ -311,7 +309,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * Small regions are automatically padded to ensure Textract can process them.
      */
     private function extractWithFieldMappings(
-        QaStageDrawing $sheet,
+        Drawing $sheet,
         TitleBlockTemplate $template,
         TextractService $textract,
         ImageCropService $cropService,
@@ -570,7 +568,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * Extract using heuristic bottom-right crop.
      */
     private function extractWithHeuristic(
-        QaStageDrawing $sheet,
+        Drawing $sheet,
         TextractService $textract,
         ImageCropService $cropService,
         DrawingMetadataValidationService $validator
@@ -616,7 +614,7 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * Extract from full page image (last resort).
      */
     private function extractFullPage(
-        QaStageDrawing $sheet,
+        Drawing $sheet,
         TextractService $textract,
         DrawingMetadataValidationService $validator
     ): array {
@@ -673,14 +671,14 @@ class ExtractSheetMetadataJob implements ShouldQueue
      * Save extraction results to the sheet.
      */
     private function saveExtractionResult(
-        QaStageDrawing $sheet,
+        Drawing $sheet,
         ?array $result,
         array $allAttempts,
         bool $skippedHeuristicCropping = false
     ): void {
         if ($result === null || ! isset($result['fields'])) {
             $sheet->update([
-                'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
+                'extraction_status' => Drawing::EXTRACTION_FAILED,
                 'extraction_errors' => [
                     'error' => 'No extraction result available',
                     'attempts' => $allAttempts,
@@ -709,10 +707,10 @@ class ExtractSheetMetadataJob implements ShouldQueue
         ];
 
         if ($result['passes']) {
-            $updateData['extraction_status'] = QaStageDrawing::EXTRACTION_SUCCESS;
+            $updateData['extraction_status'] = Drawing::EXTRACTION_SUCCESS;
             $updateData['extraction_errors'] = null;
         } else {
-            $updateData['extraction_status'] = QaStageDrawing::EXTRACTION_NEEDS_REVIEW;
+            $updateData['extraction_status'] = Drawing::EXTRACTION_NEEDS_REVIEW;
             $errors = [
                 'validation_errors' => $validation['overall_errors'] ?? [],
                 'field_errors' => [
@@ -737,63 +735,21 @@ class ExtractSheetMetadataJob implements ShouldQueue
 
         $sheet->update($updateData);
 
-        // Link to DrawingSheet for revision comparison when we have a valid drawing number
+        // Link to revision chain when we have a valid drawing number
         $this->linkToDrawingSheet($sheet, $updateData['drawing_number'], $updateData['drawing_title']);
 
-        // Update drawing set status if applicable
-        if ($sheet->drawingSet) {
-            $sheet->drawingSet->updateStatusFromSheets();
-            $drawingSet = $sheet->drawingSet->fresh();
-
-            // Broadcast real-time update
-            $this->broadcastProgress($sheet, $drawingSet, $updateData);
-        }
     }
 
     /**
      * Broadcast extraction progress for real-time UI updates.
      */
-    private function broadcastProgress(QaStageDrawing $sheet, $drawingSet, array $updateData): void
+    private function broadcastProgress(Drawing $sheet, array $updateData): void
     {
         try {
-            // Calculate stats for the drawing set
-            $stats = [
-                'total' => $drawingSet->page_count,
-                'queued' => $drawingSet->sheets()->where('extraction_status', 'queued')->count(),
-                'processing' => $drawingSet->sheets()->where('extraction_status', 'processing')->count(),
-                'success' => $drawingSet->sheets()->where('extraction_status', 'success')->count(),
-                'needs_review' => $drawingSet->sheets()->where('extraction_status', 'needs_review')->count(),
-                'failed' => $drawingSet->sheets()->where('extraction_status', 'failed')->count(),
-            ];
-
-            // Get thumbnail URL from first sheet if available
-            $thumbnailUrl = null;
-            $firstSheet = $drawingSet->sheets()->where('page_number', 1)->first();
-            if ($firstSheet && $firstSheet->thumbnail_s3_key) {
-                $thumbnailUrl = "/drawing-sheets/{$firstSheet->id}/thumbnail";
-            }
-
-            Log::info('Broadcasting extraction progress', [
-                'drawing_set_id' => $drawingSet->id,
-                'sheet_id' => $sheet->id,
-                'status' => $drawingSet->status,
-                'stats' => $stats,
-                'thumbnail_url' => $thumbnailUrl,
+            Log::info('Extraction complete for drawing', [
+                'drawing_id' => $sheet->id,
+                'extraction_status' => $updateData['extraction_status'] ?? null,
             ]);
-
-            event(new DrawingSetProcessingUpdated(
-                projectId: $drawingSet->project_id,
-                drawingSetId: $drawingSet->id,
-                status: $drawingSet->status,
-                sheetId: $sheet->id,
-                pageNumber: $sheet->page_number,
-                extractionStatus: $updateData['extraction_status'] ?? null,
-                drawingNumber: $updateData['drawing_number'] ?? null,
-                drawingTitle: $updateData['drawing_title'] ?? null,
-                revision: $updateData['revision'] ?? null,
-                stats: $stats,
-                thumbnailUrl: $thumbnailUrl
-            ));
         } catch (\Exception $e) {
             // Don't fail the job if broadcasting fails
             Log::warning('Failed to broadcast extraction progress', [
@@ -804,54 +760,51 @@ class ExtractSheetMetadataJob implements ShouldQueue
     }
 
     /**
-     * Link the sheet to a DrawingSheet for revision grouping and comparison.
-     * This enables sheets with the same drawing number to be compared across revisions.
+     * Link the drawing to revision history by setting sheet_number and managing active/superseded status.
+     * This enables drawings with the same drawing number to be compared across revisions.
      */
-    private function linkToDrawingSheet(QaStageDrawing $sheet, ?string $drawingNumber, ?string $title): void
+    private function linkToDrawingSheet(Drawing $sheet, ?string $drawingNumber, ?string $title): void
     {
         // Skip if no drawing number extracted
         if (empty($drawingNumber)) {
             return;
         }
 
-        // Skip if already linked
-        if ($sheet->drawing_sheet_id) {
+        // Skip if already has a sheet_number assigned
+        if ($sheet->sheet_number) {
             return;
         }
 
-        // Get project ID from drawing set
-        $projectId = $sheet->drawingSet?->project_id;
+        $projectId = $sheet->project_id;
         if (! $projectId) {
             return;
         }
 
         try {
-            // Find or create a DrawingSheet for this drawing number
-            // Pass the sheet's creator as fallback since we're in a job context without auth
-            $drawingSheet = DrawingSheet::findOrCreateByDrawingNumber(
+            $normalizedNumber = strtoupper(trim($drawingNumber));
+
+            // Update the drawing's sheet identity
+            $sheet->sheet_number = $normalizedNumber;
+            if ($title && ! $sheet->title) {
+                $sheet->title = $title;
+            }
+
+            // Add as revision — supersedes existing active drawing with same sheet_number
+            Drawing::addRevision(
                 $projectId,
-                $drawingNumber,
-                $title,
-                null, // discipline
-                $sheet->created_by // Pass original uploader as creator
+                $normalizedNumber,
+                $sheet,
+                $sheet->revision // Use the extracted revision as the revision_number
             );
 
-            // Add this sheet as a revision
-            // Use the extracted revision as the revision_number
-            $revisionNumber = $sheet->revision;
-
-            // Link the sheet to the DrawingSheet
-            $drawingSheet->addRevision($sheet, $revisionNumber);
-
-            Log::info('Linked sheet to DrawingSheet', [
-                'sheet_id' => $sheet->id,
-                'drawing_sheet_id' => $drawingSheet->id,
-                'drawing_number' => $drawingNumber,
-                'revision' => $revisionNumber,
+            Log::info('Linked drawing to revision chain', [
+                'drawing_id' => $sheet->id,
+                'sheet_number' => $normalizedNumber,
+                'revision' => $sheet->revision,
             ]);
         } catch (\Exception $e) {
-            Log::warning('Failed to link sheet to DrawingSheet', [
-                'sheet_id' => $sheet->id,
+            Log::warning('Failed to link drawing to revision chain', [
+                'drawing_id' => $sheet->id,
                 'drawing_number' => $drawingNumber,
                 'error' => $e->getMessage(),
             ]);
@@ -889,28 +842,15 @@ class ExtractSheetMetadataJob implements ShouldQueue
             'error' => $exception->getMessage(),
         ]);
 
-        $sheet = QaStageDrawing::with('drawingSet')->find($this->sheetId);
+        $sheet = Drawing::find($this->sheetId);
         if ($sheet) {
             $sheet->update([
-                'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
+                'extraction_status' => Drawing::EXTRACTION_FAILED,
                 'extraction_errors' => [
                     'error' => $exception->getMessage(),
                     'failed_at' => now()->toIso8601String(),
                 ],
             ]);
-
-            if ($sheet->drawingSet) {
-                $sheet->drawingSet->updateStatusFromSheets();
-                $drawingSet = $sheet->drawingSet->fresh();
-
-                // Broadcast failure status
-                $this->broadcastProgress($sheet, $drawingSet, [
-                    'extraction_status' => QaStageDrawing::EXTRACTION_FAILED,
-                    'drawing_number' => $sheet->drawing_number,
-                    'drawing_title' => $sheet->drawing_title,
-                    'revision' => $sheet->revision,
-                ]);
-            }
         }
     }
 }
