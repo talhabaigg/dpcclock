@@ -1,5 +1,5 @@
 import InputSearch from '@/components/inputSearch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
@@ -10,6 +10,7 @@ import { BarChart3, Building2, DollarSign, MapPin, TrendingUp, Users } from 'luc
 import { useMemo, useState } from 'react';
 import { buildLabourForecastColumnDefs } from './column-builders';
 import { CostBreakdownDialog } from './CostBreakdownDialog';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -29,13 +30,12 @@ interface Location {
 
 interface LabourForecastIndexProps {
     locations: Location[];
-    currentMonth: string;
     currentWeekEnding: string;
 }
 
-const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: LabourForecastIndexProps) => {
+const LabourForecastIndex = ({ locations, currentWeekEnding }: LabourForecastIndexProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Labour Forecast', href: '/labour-forecast' }];
-
+    const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -97,36 +97,6 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
             <Head title="Labour Forecast" />
 
             <div className="flex flex-col gap-6 p-4 md:p-6">
-                {/* Page Header */}
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <BarChart3 className="text-primary h-6 w-6" />
-                            Labour Forecast
-                        </h1>
-                        <p className="text-muted-foreground text-sm">Manage workforce planning for {currentMonth}</p>
-                    </div>
-
-                    {/* Search & Filters */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="relative w-full sm:w-64">
-                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="job name or number" />
-                        </div>
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full sm:w-40">
-                                <SelectValue placeholder="All Statuses" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                <SelectItem value="not_started">Not Started</SelectItem>
-                                <SelectItem value="draft">Draft</SelectItem>
-                                <SelectItem value="submitted">Submitted</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
                 {/* Summary Cards - Focused on operational metrics */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {/* Total Jobs */}
@@ -200,81 +170,70 @@ const LabourForecastIndex = ({ locations, currentMonth, currentWeekEnding }: Lab
                     </Card>
                 </div>
 
-                {/* Grid Card */}
-                <Card className="overflow-hidden border-0 shadow-md">
-                    <CardHeader className="border-border/50 bg-card border-b px-6 py-4">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle className="flex items-center gap-2 text-lg">
-                                    <MapPin className="text-muted-foreground h-5 w-5" />
-                                    Job Forecasts
-                                </CardTitle>
-                                <CardDescription>
-                                    {filteredLocations.length} job{filteredLocations.length !== 1 ? 's' : ''}
-                                    {statusFilter !== 'all' && ` with status "${statusFilter.replace('_', ' ')}"`}
-                                </CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
+                {/* Search & Filters */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="relative w-full sm:w-64">
+                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="job name or number" />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-full sm:w-40">
+                            <SelectValue placeholder="All Statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="not_started">Not Started</SelectItem>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="submitted">Submitted</SelectItem>
+                            <SelectItem value="approved">Approved</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                    <CardContent className="p-0">
-                        {filteredLocations.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16">
-                                <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                                    <BarChart3 className="text-muted-foreground h-8 w-8" />
-                                </div>
-                                <h3 className="mb-1 text-lg font-semibold">No forecasts found</h3>
-                                <p className="text-muted-foreground max-w-sm text-center text-sm">
-                                    {searchQuery || statusFilter !== 'all'
-                                        ? 'Try adjusting your search or filter criteria.'
-                                        : 'There are no job locations with labour forecast data for this period.'}
-                                </p>
-                                {(searchQuery || statusFilter !== 'all') && (
-                                    <button
-                                        onClick={() => {
-                                            setSearchQuery('');
-                                            setStatusFilter('all');
-                                        }}
-                                        className="text-primary mt-4 text-sm font-medium hover:underline"
-                                    >
-                                        Clear filters
-                                    </button>
-                                )}
+                {/* Grid */}
+                <div>
+
+
+                    {filteredLocations.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16">
+                            <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                                <BarChart3 className="text-muted-foreground h-8 w-8" />
                             </div>
-                        ) : (
-                            <div
-                                className="ag-theme-alpine dark:ag-theme-alpine-dark [&_.ag-header]:border-border/50 h-[calc(100vh-420px)] min-h-[400px] [&_.ag-header]:border-b"
-                                style={
-                                    {
-                                        '--ag-border-color': 'transparent',
-                                        '--ag-header-background-color': 'hsl(var(--card))',
-                                        '--ag-background-color': 'hsl(var(--card))',
-                                        '--ag-odd-row-background-color': 'hsl(var(--muted) / 0.3)',
-                                        '--ag-row-border-color': 'hsl(var(--border) / 0.5)',
-                                        '--ag-row-hover-color': 'hsl(var(--muted) / 0.5)',
-                                        '--ag-selected-row-background-color': 'hsl(var(--primary) / 0.1)',
-                                        '--ag-border-radius': '0px',
-                                        '--ag-header-column-separator-display': 'none',
-                                        '--ag-cell-horizontal-padding': '16px',
-                                    } as React.CSSProperties
-                                }
-                            >
-                                <AgGridReact
-                                    columnDefs={buildLabourForecastColumnDefs(handleCostClick)}
-                                    rowData={filteredLocations}
-                                    defaultColDef={{
-                                        resizable: true,
-                                        suppressMovable: true,
+                            <h3 className="mb-1 text-lg font-semibold">No forecasts found</h3>
+                            <p className="text-muted-foreground max-w-sm text-center text-sm">
+                                {searchQuery || statusFilter !== 'all'
+                                    ? 'Try adjusting your search or filter criteria.'
+                                    : 'There are no job locations with labour forecast data for this period.'}
+                            </p>
+                            {(searchQuery || statusFilter !== 'all') && (
+                                <button
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setStatusFilter('all');
                                     }}
-                                    getRowId={(params) => params.data.id}
-                                    suppressColumnVirtualisation={true}
-                                    headerHeight={44}
-                                    rowHeight={48}
-                                />
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                    className="text-primary mt-4 text-sm font-medium hover:underline"
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="ag-theme-shadcn h-[calc(100vh-420px)] min-h-[400px]">
+                            <AgGridReact
+                                columnDefs={buildLabourForecastColumnDefs(handleCostClick)}
+                                rowData={filteredLocations}
+                                theme={isDarkMode ? shadcnDarkTheme : shadcnLightTheme}
+                                defaultColDef={{
+                                    resizable: true,
+                                    suppressMovable: true,
+                                }}
+                                getRowId={(params) => params.data.id}
+                                suppressColumnVirtualisation={true}
+                                headerHeight={44}
+                                rowHeight={48}
+                            />
+                        </div>
+                    )}
+                </div>
 
                 {/* Cost Breakdown Dialog */}
                 {selectedLocation && (

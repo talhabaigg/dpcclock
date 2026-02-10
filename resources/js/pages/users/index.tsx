@@ -1,3 +1,4 @@
+import InputSearch from '@/components/inputSearch';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -9,9 +10,6 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,16 +17,11 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { Loader2, Pencil, Plus, Search, Users } from 'lucide-react';
+import { Loader2, Pencil, Plus, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Users',
-        href: '/users',
-    },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Users', href: '/users' }];
 
 type Permission = {
     id: number;
@@ -134,131 +127,146 @@ export default function UsersIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Users" />
 
-            {/* Page Header */}
-            <div className="flex flex-col gap-4 p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Users</h1>
-                    <p className="text-muted-foreground text-sm">Manage user accounts and role assignments</p>
-                </div>
-                <Button asChild size="default" className="w-full sm:w-auto">
+            <div className="flex flex-col gap-4 p-3 sm:p-4">
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-xs">
+                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name" />
+                    </div>
                     <Link href="/users/create">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add User
+                        <Button size="sm" className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Add User
+                        </Button>
                     </Link>
-                </Button>
-            </div>
-
-            {/* Search */}
-            <div className="px-4 pb-4 sm:px-6">
-                <div className="relative w-full sm:max-w-sm">
-                    <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                    <Input
-                        type="text"
-                        placeholder="Search by name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-10 pl-9 sm:h-9"
-                        aria-label="Search users by name"
-                    />
                 </div>
-            </div>
 
-            {/* Table */}
-            <div className="px-4 pb-4 sm:px-6 sm:pb-6">
-                <Card className="overflow-hidden p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
+                {/* Mobile card layout */}
+                <div className="flex flex-col gap-2 sm:hidden">
+                    {!filteredUsers.length ? (
+                        <div className="text-muted-foreground py-12 text-center text-sm">
+                            {searchQuery ? `No users match "${searchQuery}"` : 'No users found.'}
+                        </div>
+                    ) : (
+                        filteredUsers.map((user) => (
+                            <div key={user.id} className="rounded-lg border p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <UserInfo user={{ ...user, email_verified_at: '', created_at: '', updated_at: '', phone: '' }} showEmail />
+                                    </div>
+                                    <Link href={`/users/edit/${user.id}`}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </Link>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <Select
+                                        value={user.roles[0]?.id.toString()}
+                                        onValueChange={(value) => handleRoleChange(user, value)}
+                                        disabled={processing && data.userId === user.id}
+                                    >
+                                        <SelectTrigger className="h-8 w-[140px]">
+                                            {processing && data.userId === user.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <SelectValue placeholder="Select Role" />
+                                            )}
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {roles.map((role) => (
+                                                <SelectItem key={role.id} value={role.id.toString()}>
+                                                    {role.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <span className="text-muted-foreground text-[11px]">
+                                        Joined {new Date(user.created_at).toLocaleDateString()}
+                                    </span>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-hidden rounded-lg border sm:block">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/50">
+                                <TableHead className="px-3">Name</TableHead>
+                                <TableHead className="px-3">Email</TableHead>
+                                <TableHead className="px-3">Role</TableHead>
+                                <TableHead className="px-3">Joined</TableHead>
+                                <TableHead className="w-[70px] px-3 text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableHead className="min-w-[180px]">Name</TableHead>
-                                    <TableHead className="hidden min-w-[200px] sm:table-cell">Email</TableHead>
-                                    <TableHead className="min-w-[140px]">Role</TableHead>
-                                    <TableHead className="hidden min-w-[100px] md:table-cell">Joined</TableHead>
-                                    <TableHead className="w-[70px] text-right">Actions</TableHead>
+                                    <TableCell colSpan={5} className="h-32 text-center">
+                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
+                                            <Users className="h-8 w-8 opacity-40" />
+                                            <p>No users found</p>
+                                            {searchQuery && (
+                                                <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
+                                                    Clear search
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredUsers.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="h-32">
-                                            <Empty className="border-0">
-                                                <EmptyHeader>
-                                                    <EmptyMedia variant="icon">
-                                                        <Users className="h-6 w-6" />
-                                                    </EmptyMedia>
-                                                    <EmptyTitle>No users found</EmptyTitle>
-                                                    <EmptyDescription>
-                                                        {searchQuery ? (
-                                                            <>
-                                                                No users match your search.{' '}
-                                                                <button
-                                                                    onClick={() => setSearchQuery('')}
-                                                                    className="text-primary underline underline-offset-4"
-                                                                >
-                                                                    Clear search
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            'Get started by adding a new user.'
-                                                        )}
-                                                    </EmptyDescription>
-                                                </EmptyHeader>
-                                            </Empty>
+                            ) : (
+                                filteredUsers.map((user) => (
+                                    <TableRow key={user.id}>
+                                        <TableCell className="px-3">
+                                            <div className="flex items-center gap-2">
+                                                <UserInfo user={{ ...user, email_verified_at: '', created_at: '', updated_at: '', phone: '' }} />
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="px-3">{user.email}</TableCell>
+                                        <TableCell className="px-3">
+                                            <Select
+                                                value={user.roles[0]?.id.toString()}
+                                                onValueChange={(value) => handleRoleChange(user, value)}
+                                                disabled={processing && data.userId === user.id}
+                                            >
+                                                <SelectTrigger className="h-8 w-[140px]">
+                                                    {processing && data.userId === user.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <SelectValue placeholder="Select Role" />
+                                                    )}
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {roles.map((role) => (
+                                                        <SelectItem key={role.id} value={role.id.toString()}>
+                                                            {role.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </TableCell>
+                                        <TableCell className="px-3">{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                                        <TableCell className="px-3 text-right">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                                                        <Link href={`/users/edit/${user.id}`}>
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Edit user</TooltipContent>
+                                            </Tooltip>
                                         </TableCell>
                                     </TableRow>
-                                ) : (
-                                    filteredUsers.map((user) => (
-                                        <TableRow key={user.id}>
-                                            <TableCell>
-                                                <div className="flex flex-col">
-                                                    <UserInfo user={{ ...user, email_verified_at: '', created_at: '', updated_at: '', phone: '' }} />
-                                                    {/* Show email on mobile below name */}
-                                                    <span className="text-muted-foreground mt-1 text-xs sm:hidden">{user.email}</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="hidden sm:table-cell">{user.email}</TableCell>
-                                            <TableCell>
-                                                <Select
-                                                    value={user.roles[0]?.id.toString()}
-                                                    onValueChange={(value) => handleRoleChange(user, value)}
-                                                    disabled={processing && data.userId === user.id}
-                                                >
-                                                    <SelectTrigger className="h-9 w-full max-w-[160px] min-w-[120px]">
-                                                        {processing && data.userId === user.id ? (
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                        ) : (
-                                                            <SelectValue placeholder="Select Role" />
-                                                        )}
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {roles.map((role) => (
-                                                            <SelectItem key={role.id} value={role.id.toString()}>
-                                                                {role.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell">{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                                                            <Link href={`/users/edit/${user.id}`}>
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Link>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Edit user</TooltipContent>
-                                                </Tooltip>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </Card>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
 
             {/* Role Change Confirmation Dialog */}
