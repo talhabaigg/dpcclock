@@ -35,7 +35,8 @@ class DrawingProcessingService
             $drawing->update(['status' => Drawing::STATUS_PROCESSING]);
 
             // Get the full file path
-            $filePath = Storage::disk($this->storageDisk)->path($drawing->file_path);
+            $storagePath = $drawing->storage_path ?? $drawing->file_path;
+            $filePath = Storage::disk($this->storageDisk)->path($storagePath);
 
             if (! file_exists($filePath)) {
                 throw new \Exception("Drawing file not found: {$filePath}");
@@ -88,7 +89,7 @@ class DrawingProcessingService
      */
     public function generateThumbnail(Drawing $drawing, ?string $filePath = null): array
     {
-        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
+        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
 
         try {
             $isPdf = Str::lower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
@@ -181,7 +182,7 @@ class DrawingProcessingService
      */
     public function extractPageDimensions(Drawing $drawing, ?string $filePath = null): array
     {
-        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->file_path);
+        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
 
         try {
             $dimensions = $this->extractPageDimensionsFromPath($filePath);
@@ -226,8 +227,8 @@ class DrawingProcessingService
             $fullDiffPath = Storage::disk($this->storageDisk)->path($diffPath);
 
             // Get paths to both files
-            $currentPath = Storage::disk($this->storageDisk)->path($drawing->file_path);
-            $previousPath = Storage::disk($this->storageDisk)->path($previousRevision->file_path);
+            $currentPath = Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
+            $previousPath = Storage::disk($this->storageDisk)->path($previousRevision->storage_path ?? $previousRevision->file_path);
 
             // Convert PDFs to images first if needed
             $currentImage = $this->getFirstPageImage($currentPath);

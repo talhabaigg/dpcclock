@@ -84,6 +84,14 @@ class ProcessDrawingJob implements ShouldQueue
             }
         }
 
+        // Step 3: Generate tiles for high-res viewing (runs on separate queue)
+        if ($results['thumbnail']) {
+            GenerateDrawingTilesJob::dispatch($drawing->id);
+            Log::info('ProcessDrawingJob: Tile generation job dispatched', [
+                'drawing_id' => $drawing->id,
+            ]);
+        }
+
         Log::info('ProcessDrawingJob: All processing complete', [
             'drawing_id' => $drawing->id,
             'results' => $results,

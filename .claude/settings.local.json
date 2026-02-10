@@ -78,7 +78,9 @@
       "Bash(npx prettier:*)",
       "Bash(vendor\\\\bin\\\\pint:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npx vite build)"
+      "Bash(npx vite build)",
+      "Bash(Select-String -Pattern \"drawing\")",
+      "Bash(Select-String -Pattern \"drawing\" -CaseSensitive:$false)"
     ]
   }
 }

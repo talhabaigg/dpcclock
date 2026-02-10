@@ -542,6 +542,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
     });
     Route::middleware('permission:drawings.create')->group(function () {
+        Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
         Route::post('/drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])->name('drawings.extract-metadata');

@@ -9,11 +9,10 @@ use Illuminate\Support\Str;
 
 class DrawingTileService
 {
-    protected string $storageDisk = 's3';
+    protected string $storageDisk = 'public';
     protected string $tilesDir = 'drawing-tiles';
     protected int $defaultTileSize = 256;
     protected int $maxZoomLevel = 5;
-    protected int $minImageDimension = 256;
 
     protected DrawingProcessingService $processingService;
 
@@ -24,7 +23,7 @@ class DrawingTileService
 
     /**
      * Generate tiles for a drawing.
-     * Creates a tile pyramid for efficient viewing at multiple zoom levels.
+     * Uses ImageMagick CLI to avoid loading huge images into PHP/GD memory.
      */
     public function generateTiles(Drawing $drawing): array
     {
@@ -38,48 +37,58 @@ class DrawingTileService
         ];
 
         try {
-            // Update status to processing
             $drawing->update(['tiles_status' => 'processing']);
 
-            // Get the source image path
+            // Get the source image path (converts PDF to PNG via ImageMagick CLI)
             $imagePath = $this->getSourceImagePath($drawing);
             if (!$imagePath) {
                 throw new \Exception('Could not get source image for tile generation');
             }
 
-            // Get image dimensions
-            $imageInfo = @getimagesize($imagePath);
-            if (!$imageInfo) {
+            // Get dimensions using identify (no memory load)
+            [$width, $height] = $this->getImageDimensions($imagePath);
+            if (!$width || !$height) {
                 throw new \Exception('Could not read image dimensions');
             }
 
-            $width = $imageInfo[0];
-            $height = $imageInfo[1];
             $tileSize = $drawing->tile_size ?? $this->defaultTileSize;
-
-            // Calculate max zoom level based on image size
-            $maxDimension = max($width, $height);
-            $maxZoom = $this->calculateMaxZoom($maxDimension, $tileSize);
-
-            // Base path for tiles in S3
+            $maxZoom = $this->calculateMaxZoom(max($width, $height), $tileSize);
             $tilesBasePath = "{$this->tilesDir}/{$drawing->id}";
 
-            // Generate tiles for each zoom level
+            Log::info('Tile generation starting', [
+                'drawing_id' => $drawing->id,
+                'dimensions' => "{$width}x{$height}",
+                'max_zoom' => $maxZoom,
+            ]);
+
+            // Generate tiles for each zoom level using ImageMagick CLI
             $totalTiles = 0;
+            $magick = $this->findExecutable(['magick']);
+
             for ($z = 0; $z <= $maxZoom; $z++) {
-                $tilesAtLevel = $this->generateTilesForZoomLevel(
-                    $imagePath,
-                    $tilesBasePath,
-                    $z,
-                    $maxZoom,
-                    $width,
-                    $height,
-                    $tileSize
-                );
+                if ($magick) {
+                    $tilesAtLevel = $this->generateTilesWithMagick(
+                        $magick, $imagePath, $tilesBasePath,
+                        $z, $maxZoom, $width, $height, $tileSize
+                    );
+                } else {
+                    // Guard: check if image is too large for GD
+                    $estimatedMemory = $width * $height * 4; // RGBA
+                    $memoryLimit = $this->getMemoryLimitBytes();
+                    if ($estimatedMemory > $memoryLimit * 0.5) {
+                        throw new \Exception(
+                            "Image too large for GD fallback ({$width}x{$height}, ~"
+                            . round($estimatedMemory / 1048576) . "MB needed). Install ImageMagick CLI."
+                        );
+                    }
+                    $tilesAtLevel = $this->generateTilesWithGD(
+                        $imagePath, $tilesBasePath,
+                        $z, $maxZoom, $width, $height, $tileSize
+                    );
+                }
                 $totalTiles += $tilesAtLevel;
             }
 
-            // Update drawing with tile information
             $drawing->update([
                 'tiles_base_url' => $tilesBasePath,
                 'tiles_max_zoom' => $maxZoom,
@@ -104,6 +113,7 @@ class DrawingTileService
                 'drawing_id' => $drawing->id,
                 'tiles_count' => $totalTiles,
                 'max_zoom' => $maxZoom,
+                'dimensions' => "{$width}x{$height}",
             ]);
 
         } catch (\Exception $e) {
@@ -120,12 +130,36 @@ class DrawingTileService
     }
 
     /**
-     * Calculate the maximum zoom level based on image dimensions.
+     * Get image dimensions without loading into memory.
      */
+    protected function getImageDimensions(string $imagePath): array
+    {
+        // Try ImageMagick identify first (no memory load)
+        $magick = $this->findExecutable(['magick']);
+        if ($magick) {
+            $cmd = escapeshellarg($magick) . ' identify -format "%w %h" '
+                . escapeshellarg($imagePath . '[0]');
+            exec($cmd . ' 2>&1', $output, $returnCode);
+
+            if ($returnCode === 0 && !empty($output[0])) {
+                $parts = explode(' ', trim($output[0]));
+                if (count($parts) >= 2) {
+                    return [(int) $parts[0], (int) $parts[1]];
+                }
+            }
+        }
+
+        // Fallback to getimagesize (loads header only, not full image)
+        $info = @getimagesize($imagePath);
+        if ($info) {
+            return [$info[0], $info[1]];
+        }
+
+        return [0, 0];
+    }
+
     protected function calculateMaxZoom(int $maxDimension, int $tileSize): int
     {
-        // At zoom level 0, the entire image fits in a few tiles
-        // Each zoom level doubles the resolution
         $zoom = 0;
         $currentSize = $maxDimension;
 
@@ -138,9 +172,11 @@ class DrawingTileService
     }
 
     /**
-     * Generate tiles for a specific zoom level.
+     * Generate tiles for a zoom level using ImageMagick CLI.
+     * Avoids loading the full image into PHP memory.
      */
-    protected function generateTilesForZoomLevel(
+    protected function generateTilesWithMagick(
+        string $magick,
         string $imagePath,
         string $tilesBasePath,
         int $zoomLevel,
@@ -149,33 +185,107 @@ class DrawingTileService
         int $originalHeight,
         int $tileSize
     ): int {
-        // Calculate the scale for this zoom level
-        // At maxZoom, scale = 1 (full resolution)
-        // Each lower zoom level halves the resolution
         $scale = pow(2, $zoomLevel - $maxZoom);
-        $scaledWidth = (int) ($originalWidth * $scale);
-        $scaledHeight = (int) ($originalHeight * $scale);
+        $scaledWidth = max(1, (int) ($originalWidth * $scale));
+        $scaledHeight = max(1, (int) ($originalHeight * $scale));
 
-        // Ensure minimum dimensions
-        $scaledWidth = max($scaledWidth, 1);
-        $scaledHeight = max($scaledHeight, 1);
-
-        // Calculate number of tiles
         $cols = (int) ceil($scaledWidth / $tileSize);
         $rows = (int) ceil($scaledHeight / $tileSize);
 
-        // Load source image
+        // Create a temp directory for this zoom level's tiles
+        $tempDir = sys_get_temp_dir() . '/tiles_' . uniqid();
+        @mkdir($tempDir, 0755, true);
+
+        // Use ImageMagick to resize + crop into tiles in one pass
+        // -extent pads edge tiles with white background
+        // Use proc_open with array syntax to bypass CMD shell on Windows (avoids %d variable expansion)
+        $outputPattern = $tempDir . '/tile_%d.jpg';
+        $extentSize = ($cols * $tileSize) . 'x' . ($rows * $tileSize);
+        $args = [
+            $magick, 'convert', $imagePath,
+            '-resize', "{$scaledWidth}x{$scaledHeight}!",
+            '-background', 'white', '-extent', $extentSize,
+            '-crop', "{$tileSize}x{$tileSize}", '+repage',
+            '-quality', '90',
+            $outputPattern,
+        ];
+
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = proc_open($args, $descriptors, $pipes);
+
+        if (!is_resource($process)) {
+            Log::warning('ImageMagick proc_open failed', ['zoom' => $zoomLevel]);
+            $this->cleanupDir($tempDir);
+            return 0;
+        }
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $returnCode = proc_close($process);
+
+        if ($returnCode !== 0) {
+            Log::warning('ImageMagick tile crop failed', [
+                'zoom' => $zoomLevel,
+                'returnCode' => $returnCode,
+                'stderr' => $stderr,
+            ]);
+            $this->cleanupDir($tempDir);
+            return 0;
+        }
+
+        // Upload tiles to S3 (ImageMagick numbers sequentially: tile_0.jpg, tile_1.jpg, ...)
+        // The sequential order is: row by row, left to right
+        $tilesCreated = 0;
+        $index = 0;
+        for ($y = 0; $y < $rows; $y++) {
+            for ($x = 0; $x < $cols; $x++) {
+                $tileFile = $tempDir . "/tile_{$index}.jpg";
+                if (file_exists($tileFile)) {
+                    $s3Path = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.jpg";
+                    Storage::disk($this->storageDisk)->put($s3Path, file_get_contents($tileFile), 'public');
+                    @unlink($tileFile);
+                    $tilesCreated++;
+                }
+                $index++;
+            }
+        }
+
+        $this->cleanupDir($tempDir);
+
+        return $tilesCreated;
+    }
+
+    /**
+     * Fallback: generate tiles using GD (for smaller images only).
+     */
+    protected function generateTilesWithGD(
+        string $imagePath,
+        string $tilesBasePath,
+        int $zoomLevel,
+        int $maxZoom,
+        int $originalWidth,
+        int $originalHeight,
+        int $tileSize
+    ): int {
+        $scale = pow(2, $zoomLevel - $maxZoom);
+        $scaledWidth = max(1, (int) ($originalWidth * $scale));
+        $scaledHeight = max(1, (int) ($originalHeight * $scale));
+
+        $cols = (int) ceil($scaledWidth / $tileSize);
+        $rows = (int) ceil($scaledHeight / $tileSize);
+
         $sourceImage = $this->loadImage($imagePath);
         if (!$sourceImage) {
             throw new \Exception("Could not load source image: {$imagePath}");
         }
 
-        // Create scaled version if needed
         if ($scale < 1) {
             $scaledImage = imagecreatetruecolor($scaledWidth, $scaledHeight);
             imagecopyresampled(
-                $scaledImage,
-                $sourceImage,
+                $scaledImage, $sourceImage,
                 0, 0, 0, 0,
                 $scaledWidth, $scaledHeight,
                 $originalWidth, $originalHeight
@@ -186,33 +296,23 @@ class DrawingTileService
 
         $tilesCreated = 0;
 
-        // Generate each tile
         for ($x = 0; $x < $cols; $x++) {
             for ($y = 0; $y < $rows; $y++) {
                 $tileX = $x * $tileSize;
                 $tileY = $y * $tileSize;
-
-                // Calculate actual tile dimensions (may be smaller at edges)
                 $actualTileWidth = min($tileSize, $scaledWidth - $tileX);
                 $actualTileHeight = min($tileSize, $scaledHeight - $tileY);
 
-                // Create tile image
                 $tile = imagecreatetruecolor($tileSize, $tileSize);
                 $white = imagecolorallocate($tile, 255, 255, 255);
                 imagefill($tile, 0, 0, $white);
+                imagecopy($tile, $sourceImage, 0, 0, $tileX, $tileY, $actualTileWidth, $actualTileHeight);
 
-                // Copy the portion from source
-                imagecopy(
-                    $tile,
-                    $sourceImage,
-                    0, 0,
-                    $tileX, $tileY,
-                    $actualTileWidth, $actualTileHeight
-                );
-
-                // Save tile to S3
                 $tilePath = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.jpg";
-                $this->saveTileToS3($tile, $tilePath);
+                ob_start();
+                imagejpeg($tile, null, 90);
+                $imageData = ob_get_clean();
+                Storage::disk($this->storageDisk)->put($tilePath, $imageData, 'public');
 
                 imagedestroy($tile);
                 $tilesCreated++;
@@ -220,21 +320,7 @@ class DrawingTileService
         }
 
         imagedestroy($sourceImage);
-
         return $tilesCreated;
-    }
-
-    /**
-     * Save a tile image to S3.
-     */
-    protected function saveTileToS3($image, string $path): bool
-    {
-        // Capture JPEG output to buffer
-        ob_start();
-        imagejpeg($image, null, 85);
-        $imageData = ob_get_clean();
-
-        return Storage::disk($this->storageDisk)->put($path, $imageData, 'public');
     }
 
     /**
@@ -246,7 +332,6 @@ class DrawingTileService
         $originalPath = $this->getOriginalFilePath($drawing);
 
         if (!$originalPath || !file_exists($originalPath)) {
-            // Try to download from S3 if needed
             $originalPath = $this->downloadFromS3($drawing);
         }
 
@@ -254,13 +339,10 @@ class DrawingTileService
             return null;
         }
 
-        // Check if it's a PDF
         $extension = Str::lower(pathinfo($originalPath, PATHINFO_EXTENSION));
         if ($extension === 'pdf') {
-            // Convert PDF to high-resolution image for tiling
             $tempImagePath = sys_get_temp_dir() . '/drawing_tile_' . $drawing->id . '_' . uniqid() . '.png';
 
-            // Use higher DPI for tile generation (300 DPI for high quality)
             if ($this->convertPdfToImage($originalPath, $tempImagePath, $drawing->page_number ?? 1, 300)) {
                 return $tempImagePath;
             }
@@ -270,14 +352,11 @@ class DrawingTileService
         return $originalPath;
     }
 
-    /**
-     * Get the original file path for a drawing.
-     */
     protected function getOriginalFilePath(Drawing $drawing): ?string
     {
-        // Check if file is stored locally
-        if ($drawing->file_path) {
-            $localPath = Storage::disk('public')->path($drawing->file_path);
+        $storagePath = $drawing->storage_path ?? $drawing->file_path;
+        if ($storagePath) {
+            $localPath = Storage::disk('public')->path($storagePath);
             if (file_exists($localPath)) {
                 return $localPath;
             }
@@ -286,12 +365,9 @@ class DrawingTileService
         return null;
     }
 
-    /**
-     * Download file from S3 to a temp location.
-     */
     protected function downloadFromS3(Drawing $drawing): ?string
     {
-        $s3Key = $drawing->file_path ?? $drawing->page_preview_s3_key;
+        $s3Key = $drawing->storage_path ?? $drawing->file_path ?? $drawing->page_preview_s3_key;
         if (!$s3Key) {
             return null;
         }
@@ -320,12 +396,14 @@ class DrawingTileService
      */
     protected function convertPdfToImage(string $pdfPath, string $outputPath, int $page = 1, int $dpi = 300): bool
     {
-        // Try Imagick first
+        // Try Imagick PHP extension first
         if (extension_loaded('imagick')) {
             try {
                 $imagick = new \Imagick();
                 $imagick->setResolution($dpi, $dpi);
                 $imagick->readImage($pdfPath . '[' . ($page - 1) . ']');
+                $imagick->setImageBackgroundColor('white');
+                $imagick->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
                 $imagick->setImageFormat('png');
                 $imagick->writeImage($outputPath);
                 $imagick->clear();
@@ -334,6 +412,23 @@ class DrawingTileService
             } catch (\Exception $e) {
                 Log::warning('Imagick PDF conversion failed for tiles', ['error' => $e->getMessage()]);
             }
+        }
+
+        // Try ImageMagick CLI
+        $magick = $this->findExecutable(['magick']);
+        if ($magick) {
+            $cmd = escapeshellarg($magick) . ' -density ' . $dpi . ' '
+                . escapeshellarg($pdfPath . '[' . ($page - 1) . ']')
+                . ' -background white -alpha remove -quality 95 '
+                . escapeshellarg($outputPath);
+
+            exec($cmd . ' 2>&1', $output, $returnCode);
+
+            if ($returnCode === 0 && file_exists($outputPath)) {
+                Log::info('Tile PDF conversion via ImageMagick CLI', ['path' => $pdfPath]);
+                return true;
+            }
+            Log::warning('ImageMagick CLI PDF conversion failed', ['returnCode' => $returnCode, 'output' => $output]);
         }
 
         // Try Ghostscript
@@ -351,12 +446,10 @@ class DrawingTileService
             }
         }
 
+        Log::warning('No PDF converter available for tile generation');
         return false;
     }
 
-    /**
-     * Load an image using GD.
-     */
     protected function loadImage(string $path)
     {
         $info = @getimagesize($path);
@@ -376,13 +469,14 @@ class DrawingTileService
         }
     }
 
-    /**
-     * Find an executable in common locations.
-     */
     protected function findExecutable(array $names): ?string
     {
         $paths = PHP_OS_FAMILY === 'Windows'
             ? [
+                'C:\\Program Files\\ImageMagick-7.1.2-Q16-HDRI\\',
+                'C:\\Program Files\\ImageMagick-7.1.1-Q16-HDRI\\',
+                'C:\\Program Files\\ImageMagick-7.1.0-Q16-HDRI\\',
+                'C:\\Program Files\\ImageMagick\\',
                 'C:\\Program Files\\gs\\gs10.06.0\\bin\\',
                 'C:\\Program Files\\gs\\gs10.02.1\\bin\\',
                 'C:\\Program Files\\gs\\gs10.00.0\\bin\\',
@@ -398,8 +492,8 @@ class DrawingTileService
                 }
             }
 
-            // Try to find in PATH
             $which = PHP_OS_FAMILY === 'Windows' ? 'where' : 'which';
+            $output = [];
             exec("$which $name 2>&1", $output, $returnCode);
             if ($returnCode === 0 && !empty($output[0]) && file_exists(trim($output[0]))) {
                 return trim($output[0]);
@@ -409,9 +503,6 @@ class DrawingTileService
         return null;
     }
 
-    /**
-     * Delete all tiles for a drawing.
-     */
     public function deleteTiles(Drawing $drawing): bool
     {
         if (!$drawing->tiles_base_url) {
@@ -439,9 +530,6 @@ class DrawingTileService
         }
     }
 
-    /**
-     * Get the URL for a specific tile.
-     */
     public function getTileUrl(Drawing $drawing, int $z, int $x, int $y): ?string
     {
         if (!$drawing->tiles_base_url) {
@@ -452,13 +540,40 @@ class DrawingTileService
         return Storage::disk($this->storageDisk)->url($tilePath);
     }
 
-    /**
-     * Check if tiles exist for a drawing.
-     */
     public function hasTiles(Drawing $drawing): bool
     {
         return $drawing->tiles_status === 'completed'
             && $drawing->tiles_base_url
             && $drawing->tiles_max_zoom !== null;
+    }
+
+    protected function getMemoryLimitBytes(): int
+    {
+        $limit = ini_get('memory_limit');
+        if ($limit === '-1') {
+            return PHP_INT_MAX;
+        }
+        $unit = strtolower(substr($limit, -1));
+        $value = (int) $limit;
+        return match ($unit) {
+            'g' => $value * 1073741824,
+            'm' => $value * 1048576,
+            'k' => $value * 1024,
+            default => $value,
+        };
+    }
+
+    protected function cleanupDir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $files = glob($dir . '/*');
+        if ($files) {
+            foreach ($files as $file) {
+                @unlink($file);
+            }
+        }
+        @rmdir($dir);
     }
 }

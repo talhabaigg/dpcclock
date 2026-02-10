@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type Project = {
@@ -61,6 +61,15 @@ export default function DrawingsIndex() {
     const [disciplineFilter, setDisciplineFilter] = useState<string>('all');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sheet_number', order: 'asc' });
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    const handleDelete = (drawing: Drawing) => {
+        if (!confirm(`Delete "${drawing.display_name}"? This cannot be undone.`)) return;
+        setDeletingId(drawing.id);
+        router.delete(`/drawings/${drawing.id}`, {
+            onFinish: () => setDeletingId(null),
+        });
+    };
 
     // Get unique disciplines for filter
     const disciplines = useMemo(() => {
@@ -147,6 +156,12 @@ export default function DrawingsIndex() {
                     <Button variant="outline">
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Project
+                    </Button>
+                </Link>
+                <Link href={`/projects/${project.id}/drawings/upload`}>
+                    <Button>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload Drawings
                     </Button>
                 </Link>
             </div>
@@ -281,12 +296,23 @@ export default function DrawingsIndex() {
                                     </TableCell>
                                     <TableCell>{format(new Date(drawing.created_at), 'dd MMM yyyy')}</TableCell>
                                     <TableCell>
-                                        <Link href={`/drawings/${drawing.id}`}>
-                                            <Button size="sm" variant="outline">
-                                                <Eye className="mr-1 h-4 w-4" />
-                                                View
+                                        <div className="flex items-center gap-1">
+                                            <Link href={`/drawings/${drawing.id}`}>
+                                                <Button size="sm" variant="outline">
+                                                    <Eye className="mr-1 h-4 w-4" />
+                                                    View
+                                                </Button>
+                                            </Link>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                                onClick={() => handleDelete(drawing)}
+                                                disabled={deletingId === drawing.id}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
                                             </Button>
-                                        </Link>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -297,40 +323,50 @@ export default function DrawingsIndex() {
                 /* Grid View (Thumbnails) */
                 <div className="mx-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                     {filteredDrawings.map((drawing) => (
-                        <Link
-                            key={drawing.id}
-                            href={`/drawings/${drawing.id}`}
-                            className="group"
-                        >
-                            <Card className="overflow-hidden transition-shadow hover:shadow-lg">
-                                <div className="relative aspect-[4/3] bg-white">
-                                    {drawing.thumbnail_url ? (
-                                        <img
-                                            src={drawing.thumbnail_url}
-                                            alt={drawing.display_name}
-                                            className="h-full w-full object-contain"
-                                        />
-                                    ) : (
-                                        <div className="flex h-full w-full items-center justify-center">
-                                            <FileImage className="text-muted-foreground h-12 w-12" />
-                                        </div>
-                                    )}
-                                    {drawing.revision_number && (
-                                        <Badge variant="secondary" className="absolute right-1 top-1 text-xs">
-                                            Rev {drawing.revision_number}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="p-2">
-                                    <p className="truncate text-sm font-medium">
-                                        {drawing.sheet_number || drawing.drawing_number || '-'}
-                                    </p>
-                                    <p className="text-muted-foreground truncate text-xs">
-                                        {drawing.title || drawing.drawing_title || 'Untitled'}
-                                    </p>
-                                </div>
-                            </Card>
-                        </Link>
+                        <div key={drawing.id} className="group relative">
+                            <Link href={`/drawings/${drawing.id}`}>
+                                <Card className="overflow-hidden transition-shadow hover:shadow-lg">
+                                    <div className="relative aspect-[4/3] bg-white">
+                                        {drawing.thumbnail_url ? (
+                                            <img
+                                                src={drawing.thumbnail_url}
+                                                alt={drawing.display_name}
+                                                className="h-full w-full object-contain"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center">
+                                                <FileImage className="text-muted-foreground h-12 w-12" />
+                                            </div>
+                                        )}
+                                        {drawing.revision_number && (
+                                            <Badge variant="secondary" className="absolute right-1 top-1 text-xs">
+                                                Rev {drawing.revision_number}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="p-2">
+                                        <p className="truncate text-sm font-medium">
+                                            {drawing.sheet_number || drawing.drawing_number || '-'}
+                                        </p>
+                                        <p className="text-muted-foreground truncate text-xs">
+                                            {drawing.title || drawing.drawing_title || 'Untitled'}
+                                        </p>
+                                    </div>
+                                </Card>
+                            </Link>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute left-1 top-1 h-7 w-7 rounded-full bg-white/80 p-0 text-red-600 opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 dark:bg-black/50 dark:text-red-400 dark:hover:bg-red-950"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleDelete(drawing);
+                                }}
+                                disabled={deletingId === drawing.id}
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
                     ))}
                 </div>
             )}

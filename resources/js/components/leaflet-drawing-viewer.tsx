@@ -134,7 +134,7 @@ function MapEventHandler({
 
         const onMouseMove = (e: L.LeafletMouseEvent) => {
             const nx = e.latlng.lng / imageWidth;
-            const ny = (imageHeight - e.latlng.lat) / imageHeight;
+            const ny = -e.latlng.lat / imageHeight;
             if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
                 el.style.display = 'none';
                 return;
@@ -166,8 +166,8 @@ function MapEventHandler({
 
         observations.forEach((obs) => {
             // Convert normalized coordinates (0-1) to Leaflet coordinates
-            // In CRS.Simple, y increases downward, so we flip it
-            const latLng: L.LatLngExpression = [imageHeight - obs.y * imageHeight, obs.x * imageWidth];
+            // Bounds are [[-height, 0], [0, width]], so lat=0 is top, lat=-height is bottom
+            const latLng: L.LatLngExpression = [-obs.y * imageHeight, obs.x * imageWidth];
 
             const icon = createObservationIcon(
                 obs.type,
@@ -206,7 +206,7 @@ function MapEventHandler({
 
             // Convert Leaflet coordinates back to normalized (0-1)
             const x = e.latlng.lng / imageWidth;
-            const y = (imageHeight - e.latlng.lat) / imageHeight;
+            const y = -e.latlng.lat / imageHeight;
 
             // Clamp to valid range
             const clampedX = Math.max(0, Math.min(1, x));
@@ -313,13 +313,27 @@ export function LeafletDrawingViewer({
     const imageWidth = tiles ? tiles.width : imageDimensions?.width ?? 0;
     const imageHeight = tiles ? tiles.height : imageDimensions?.height ?? 0;
 
-    // Calculate bounds based on image dimensions
+    // For tile mode: Leaflet CRS.Simple treats zoom 0 as 1:1 pixel mapping,
+    // doubling pixels per zoom level. Our tile pyramid was built the same way
+    // (zoom 0 = smallest, zoom maxZoom = full resolution). So bounds must be
+    // expressed in zoom-0 pixel coordinates for tiles to align at every level.
+    const scale = tiles ? Math.pow(2, tiles.maxZoom) : 1;
+    // Padded dimensions (tiles pad edges to full tileSize)
+    const paddedW = tiles ? Math.ceil(tiles.width / tiles.tileSize) * tiles.tileSize : imageWidth;
+    const paddedH = tiles ? Math.ceil(tiles.height / tiles.tileSize) * tiles.tileSize : imageHeight;
+    // Coordinate space = padded dimensions at zoom 0
+    const coordWidth = paddedW / scale;
+    const coordHeight = paddedH / scale;
+    // Actual image area within that coordinate space (for observation mapping)
+    const imgCoordW = imageWidth / scale;
+    const imgCoordH = imageHeight / scale;
+
     const bounds: L.LatLngBoundsExpression = useMemo(() => {
         return [
-            [0, 0],
-            [imageHeight, imageWidth],
+            [-coordHeight, 0],
+            [0, coordWidth],
         ];
-    }, [imageHeight, imageWidth]);
+    }, [coordHeight, coordWidth]);
 
     // Calculate appropriate min/max zoom levels
     const { minZoom, maxZoom } = useMemo(() => {
@@ -383,8 +397,8 @@ export function LeafletDrawingViewer({
                     observations={observations}
                     selectedObservationIds={selectedObservationIds}
                     viewMode={viewMode}
-                    imageHeight={imageHeight}
-                    imageWidth={imageWidth}
+                    imageHeight={imgCoordH}
+                    imageWidth={imgCoordW}
                     onObservationClick={onObservationClick}
                     onMapClick={onMapClick}
                     previewRef={previewPinRef}

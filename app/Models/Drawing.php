@@ -273,7 +273,7 @@ class Drawing extends Model
             return null;
         }
 
-        $baseUrl = Storage::disk('s3')->url($this->tiles_base_url);
+        $baseUrl = '/storage/' . $this->tiles_base_url;
 
         return [
             'baseUrl' => $baseUrl,

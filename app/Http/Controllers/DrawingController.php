@@ -63,6 +63,30 @@ class DrawingController extends Controller
     }
 
     /**
+     * Show the drawing upload page.
+     */
+    public function upload(Location $project): Response
+    {
+        $recentDrawings = Drawing::where('project_id', $project->id)
+            ->whereIn('status', [Drawing::STATUS_DRAFT, Drawing::STATUS_PROCESSING, Drawing::STATUS_PENDING_REVIEW, Drawing::STATUS_ACTIVE])
+            ->select([
+                'id', 'project_id', 'sheet_number', 'title', 'original_name',
+                'status', 'extraction_status', 'mime_type', 'file_size',
+                'drawing_number', 'drawing_title', 'revision',
+                'thumbnail_s3_key', 'page_preview_s3_key',
+                'created_at',
+            ])
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get();
+
+        return Inertia::render('projects/drawings/upload', [
+            'project' => ['id' => $project->id, 'name' => $project->name],
+            'recentDrawings' => $recentDrawings,
+        ]);
+    }
+
+    /**
      * Upload one or more single-page drawing files.
      */
     public function store(Request $request, Location $project)
@@ -81,11 +105,11 @@ class DrawingController extends Controller
             DB::transaction(function () use ($request, $project, $validated, &$createdDrawings) {
                 foreach ($request->file('files') as $file) {
                     $fileName = $file->getClientOriginalName();
-                    $directory = 'drawings/' . $project->id;
+                    $directory = 'drawings/'.$project->id;
 
                     $filePath = $file->storeAs(
                         $directory,
-                        time() . '_' . $fileName,
+                        time().'_'.$fileName,
                         'public'
                     );
 
@@ -107,6 +131,7 @@ class DrawingController extends Controller
                         'title' => $validated['title'] ?? pathinfo($fileName, PATHINFO_FILENAME),
                         'revision_number' => $validated['revision_number'] ?? null,
                         'status' => Drawing::STATUS_DRAFT,
+                        'extraction_status' => Drawing::EXTRACTION_QUEUED,
                     ]);
 
                     // If sheet_number provided, handle revision chain
@@ -133,11 +158,26 @@ class DrawingController extends Controller
                 ? 'Drawing uploaded successfully. Processing in background...'
                 : "{$count} drawings uploaded successfully. Processing in background...";
 
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'drawings' => $createdDrawings,
+                ]);
+            }
+
             return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             Log::error('Drawing upload error', ['error' => $e->getMessage()]);
 
-            return redirect()->back()->with('error', 'Failed to upload: ' . $e->getMessage());
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to upload: '.$e->getMessage(),
+                ], 500);
+            }
+
+            return redirect()->back()->with('error', 'Failed to upload: '.$e->getMessage());
         }
     }
 
