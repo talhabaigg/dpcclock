@@ -111,7 +111,6 @@ export function ImporterWizardDialog({ open, onOpenChange, title, description, c
                             columns={columns}
                             parsedFile={importer.parsedFile}
                             mappings={importer.mappings}
-                            confidence={importer.confidence}
                             onSetMapping={importer.setMapping}
                             onClearMapping={importer.clearMapping}
                             onResetAutoMap={importer.runAutoMap}

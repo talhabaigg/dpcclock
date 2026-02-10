@@ -3,13 +3,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { cn } from '@/lib/utils';
 import { ArrowRight, ChevronDown, RotateCcw, X } from 'lucide-react';
 import { useState } from 'react';
-import type { AutoMapConfidence, ColumnMapping, ImporterColumnDef, ParsedFileData } from '../types';
+import type { ColumnMapping, ImporterColumnDef, ParsedFileData } from '../types';
 
 interface MappingStepProps {
     columns: ImporterColumnDef[];
     parsedFile: ParsedFileData;
     mappings: ColumnMapping;
-    confidence: Record<string, AutoMapConfidence>;
     onSetMapping: (targetKey: string, sourceHeader: string) => void;
     onClearMapping: (targetKey: string) => void;
     onResetAutoMap: () => void;
@@ -17,7 +16,7 @@ interface MappingStepProps {
 
 const PREVIEW_COUNT = 10;
 
-export function MappingStep({ columns, parsedFile, mappings, confidence, onSetMapping, onClearMapping, onResetAutoMap }: MappingStepProps) {
+export function MappingStep({ columns, parsedFile, mappings, onSetMapping, onClearMapping, onResetAutoMap }: MappingStepProps) {
     const [activeField, setActiveField] = useState<string | null>(columns[0]?.key ?? null);
 
     const mappedCount = columns.filter((c) => !!mappings[c.key]).length;
