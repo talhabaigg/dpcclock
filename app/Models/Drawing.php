@@ -273,7 +273,10 @@ class Drawing extends Model
             return null;
         }
 
-        $baseUrl = '/storage/' . $this->tiles_base_url;
+        $tilesDisk = config('filesystems.tiles_disk', 'public');
+        $baseUrl = $tilesDisk === 'public'
+            ? '/storage/' . $this->tiles_base_url
+            : Storage::disk($tilesDisk)->url($this->tiles_base_url);
 
         return [
             'baseUrl' => $baseUrl,

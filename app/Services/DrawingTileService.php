@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class DrawingTileService
 {
-    protected string $storageDisk = 'public';
+    protected string $storageDisk;
     protected string $tilesDir = 'drawing-tiles';
     protected int $defaultTileSize = 256;
     protected int $maxZoomLevel = 5;
@@ -19,6 +19,7 @@ class DrawingTileService
     public function __construct(DrawingProcessingService $processingService)
     {
         $this->processingService = $processingService;
+        $this->storageDisk = config('filesystems.tiles_disk', 'public');
     }
 
     /**
