@@ -26,6 +26,7 @@ export type RowValidationStatus = 'valid' | 'warning' | 'error';
 export interface RowValidationResult {
     status: RowValidationStatus;
     errors: Record<string, string>; // { fieldKey: errorMessage }
+    warnings?: Record<string, string>; // { fieldKey: warningMessage } — e.g. duplicate detection
 }
 
 // ---- Parsed file ----

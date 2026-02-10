@@ -12,6 +12,7 @@ interface PreviewStepProps {
     columns: ImporterColumnDef[];
     mappedRows: MappedRow[];
     validCount: number;
+    warningCount: number;
     errorCount: number;
     isValidating: boolean;
     hasServerValidation: boolean;
@@ -26,7 +27,7 @@ function StatusIconRenderer(params: { value: RowValidationResult }) {
     return <XCircle className="h-4 w-4 text-red-500" />;
 }
 
-export function PreviewStep({ columns, mappedRows, validCount, errorCount, isValidating, hasServerValidation, onCellUpdate, onRevalidate }: PreviewStepProps) {
+export function PreviewStep({ columns, mappedRows, validCount, warningCount, errorCount, isValidating, hasServerValidation, onCellUpdate, onRevalidate }: PreviewStepProps) {
     const gridRef = useRef<AgGridReact>(null);
     const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
@@ -56,11 +57,6 @@ export function PreviewStep({ columns, mappedRows, validCount, errorCount, isVal
                 singleClickEdit: true,
                 minWidth: 120,
                 flex: 1,
-                cellClassRules: {
-                    'importer-cell-error': (params: any) => {
-                        return !!params.data?.__validation?.errors?.[col.key];
-                    },
-                },
                 cellRenderer: (params: any) => {
                     const error = params.data?.__validation?.errors?.[col.key];
                     if (!error) return params.value ?? '';
@@ -72,22 +68,39 @@ export function PreviewStep({ columns, mappedRows, validCount, errorCount, isVal
                     );
                 },
             })),
-            // Error summary column
+            // Status summary column
             {
-                headerName: 'Errors',
+                headerName: 'Status',
                 field: '__validation',
                 pinned: 'right',
                 minWidth: 200,
                 flex: 1,
                 editable: false,
                 filter: false,
+                wrapText: true,
+                autoHeight: true,
                 cellRenderer: (params: any) => {
-                    const errors = params.data?.__validation?.errors;
-                    if (!errors || Object.keys(errors).length === 0) return null;
+                    const validation = params.data?.__validation;
+                    const errors = validation?.errors;
+                    const warnings = validation?.warnings;
+                    const hasErrors = errors && Object.keys(errors).length > 0;
+                    const hasWarnings = warnings && Object.keys(warnings).length > 0;
+
+                    if (!hasErrors && !hasWarnings) return null;
+
                     return (
-                        <span className="text-xs text-red-500">
-                            {Object.values(errors).join('; ')}
-                        </span>
+                        <div className="flex flex-col gap-0.5 py-1">
+                            {hasErrors && (
+                                <span className="text-xs leading-snug text-red-500">
+                                    {Object.values(errors).join('; ')}
+                                </span>
+                            )}
+                            {hasWarnings && (
+                                <span className="text-xs leading-snug text-amber-500">
+                                    {Object.values(warnings).join('; ')}
+                                </span>
+                            )}
+                        </div>
                     );
                 },
             },
@@ -104,6 +117,12 @@ export function PreviewStep({ columns, mappedRows, validCount, errorCount, isVal
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         {validCount} valid
                     </span>
+                    {warningCount > 0 && (
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            {warningCount} unchanged
+                        </span>
+                    )}
                     {errorCount > 0 && (
                         <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
                             <XCircle className="h-3.5 w-3.5" />
@@ -129,7 +148,7 @@ export function PreviewStep({ columns, mappedRows, validCount, errorCount, isVal
             </div>
 
             {/* AG Grid */}
-            <div className="flex-1 overflow-hidden">
+            <div className="ag-theme-shadcn flex-1 overflow-hidden">
                 <AgGridReact
                     ref={gridRef}
                     theme={isDarkMode ? shadcnDarkTheme : shadcnLightTheme}
@@ -140,6 +159,10 @@ export function PreviewStep({ columns, mappedRows, validCount, errorCount, isVal
                         sortable: true,
                     }}
                     getRowId={(params) => String(params.data.__rowId)}
+                    rowClassRules={{
+                        'importer-row-error': (params) => params.data?.__validation?.status === 'error',
+                        'importer-row-warning': (params) => params.data?.__validation?.status === 'warning',
+                    }}
                     pagination={true}
                     paginationPageSize={100}
                     paginationPageSizeSelector={[50, 100, 500]}

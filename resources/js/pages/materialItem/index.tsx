@@ -201,11 +201,21 @@ export default function ItemList() {
 
     // Import handler
     const handleImport = async (rows: Record<string, string>[]) => {
-        const csvContent = `${CSV_HEADERS.join(',')}\n${rows.map((row) => CSV_HEADERS.map((h) => row[h] ?? '').join(',')).join('\n')}`;
+        const escapeCsv = (v: string) =>
+            v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')
+                ? `"${v.replace(/"/g, '""')}"`
+                : v;
+        const csvContent = `${CSV_HEADERS.join(',')}\n${rows.map((row) => CSV_HEADERS.map((h) => escapeCsv(row[h] ?? '')).join(',')).join('\n')}`;
         const file = new File([csvContent], 'imported_data.csv', { type: 'text/csv' });
         const formData = new FormData();
         formData.append('file', file);
-        router.post('/material-items/upload', formData, { forceFormData: true });
+        await new Promise<void>((resolve, reject) => {
+            router.post('/material-items/upload', formData, {
+                forceFormData: true,
+                onSuccess: () => resolve(),
+                onError: () => reject(new Error('Upload failed')),
+            });
+        });
     };
 
     // Flash messages
@@ -365,28 +375,29 @@ export default function ItemList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
 
-            <div className="flex flex-col gap-4 p-4">
+            <div className="mx-auto flex w-full min-w-[320px] flex-col gap-4 p-3 sm:p-4">
                 {/* Toolbar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     {/* Search */}
-                    <div className="relative w-full sm:max-w-xs">
+                    <div className="relative w-full min-w-0 sm:max-w-xs">
                         <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                         <Input placeholder="Search code or description..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         {selectedCount > 0 && (
                             <Button variant="destructive" size="sm" onClick={deleteSelected}>
-                                <Trash2 className="mr-1 h-4 w-4" />
-                                Delete ({selectedCount})
+                                <Trash2 className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Delete ({selectedCount})</span>
+                                <span className="sm:hidden">({selectedCount})</span>
                             </Button>
                         )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm">
-                                    <Columns3 className="mr-1 h-4 w-4" />
-                                    Columns
+                                    <Columns3 className="h-4 w-4 sm:mr-1" />
+                                    <span className="hidden sm:inline">Columns</span>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
@@ -416,21 +427,51 @@ export default function ItemList() {
                         />
                         <a href="/material-items/download">
                             <Button variant="outline" size="sm">
-                                <Download className="mr-1 h-4 w-4" />
-                                Export
+                                <Download className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Export</span>
                             </Button>
                         </a>
                         <Link href="/material-items/create">
                             <Button size="sm">
-                                <CirclePlus className="mr-1 h-4 w-4" />
-                                Add Item
+                                <CirclePlus className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Add Item</span>
                             </Button>
                         </Link>
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-lg border">
+                {/* Mobile card layout */}
+                <div className="flex flex-col gap-2 sm:hidden">
+                    {!items.data.length ? (
+                        <div className="text-muted-foreground py-12 text-center text-sm">
+                            {items.total === 0 && filters.search ? `No items match "${filters.search}"` : 'No items found.'}
+                        </div>
+                    ) : (
+                        items.data.map((item) => (
+                            <Link key={item.id} href={`/material-items/${item.id}/edit`} className="block">
+                                <div className="rounded-lg border p-3 active:bg-muted/50 ">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">{item.code}</p>
+                                            <p className="text-muted-foreground truncate text-xs">{item.description}</p>
+                                        </div>
+                                        <span className="shrink-0 text-sm font-semibold">${Number(item.unit_cost).toFixed(2)}</span>
+                                    </div>
+                                    <div className="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                                        {item.supplier && <span>Supplier: {item.supplier.code}</span>}
+                                        {item.cost_code && <span>Cost: {item.cost_code.code}</span>}
+                                        {item.price_expiry_date && (
+                                            <span>Exp: {new Date(item.price_expiry_date).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop table layout */}
+                <div className="hidden overflow-hidden rounded-lg border sm:block">
                     <Table>
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
@@ -523,21 +564,21 @@ export default function ItemList() {
 
                 {/* Pagination */}
                 <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-                    <p className="text-muted-foreground text-sm">{items.total > 0 ? `${fromRow}\u2013${toRow} of ${items.total.toLocaleString()} items` : 'No items'}</p>
+                    <p className="text-muted-foreground text-xs sm:text-sm">{items.total > 0 ? `${fromRow}\u2013${toRow} of ${items.total.toLocaleString()} items` : 'No items'}</p>
                     <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-8 w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: 1 })}>
+                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: 1 })}>
                             <ChevronFirst className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: items.current_page - 1 })}>
+                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: items.current_page - 1 })}>
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <span className="text-muted-foreground px-3 text-sm tabular-nums">
+                        <span className="text-muted-foreground px-2 text-xs tabular-nums sm:px-3 sm:text-sm">
                             {items.current_page} / {items.last_page}
                         </span>
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7 sm:h-8 sm:w-8"
                             disabled={items.current_page >= items.last_page}
                             onClick={() => navigate({ page: items.current_page + 1 })}
                         >
@@ -546,7 +587,7 @@ export default function ItemList() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7 sm:h-8 sm:w-8"
                             disabled={items.current_page >= items.last_page}
                             onClick={() => navigate({ page: items.last_page })}
                         >

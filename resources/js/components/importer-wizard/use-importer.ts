@@ -25,6 +25,7 @@ export interface UseImporterReturn {
 
     // Derived
     validCount: number;
+    warningCount: number;
     errorCount: number;
     canAdvance: boolean;
 
@@ -63,6 +64,7 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
 
     // Derived counts
     const validCount = useMemo(() => mappedRows.filter((r) => r.__validation.status === 'valid').length, [mappedRows]);
+    const warningCount = useMemo(() => mappedRows.filter((r) => r.__validation.status === 'warning').length, [mappedRows]);
     const errorCount = useMemo(() => mappedRows.filter((r) => r.__validation.status === 'error').length, [mappedRows]);
 
     // Can advance logic per step
@@ -163,21 +165,22 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
 
             if (!response.ok) throw new Error('Server validation failed');
 
-            const data: { results: { row: number; status: string; errors: Record<string, string> }[] } = await response.json();
+            const data: { results: { row: number; status: string; errors: Record<string, string>; warnings?: Record<string, string> }[] } = await response.json();
 
-            // Merge server errors into existing rows
+            // Merge server errors/warnings into existing rows
             setMappedRows((prev) =>
                 prev.map((row) => {
                     const serverResult = data.results.find((r) => r.row === row.__rowId);
                     if (!serverResult) return row;
 
-                    // Merge: server errors override client errors for the same field, add new ones
                     const mergedErrors = { ...row.__validation.errors, ...serverResult.errors };
-                    const status = Object.keys(mergedErrors).length > 0 ? 'error' : 'valid';
+                    const mergedWarnings = { ...(row.__validation.warnings ?? {}), ...(serverResult.warnings ?? {}) };
+                    const status = Object.keys(mergedErrors).length > 0 ? 'error'
+                        : Object.keys(mergedWarnings).length > 0 ? 'warning' : 'valid';
 
                     return {
                         ...row,
-                        __validation: { status: status as 'valid' | 'error', errors: mergedErrors },
+                        __validation: { status: status as 'valid' | 'warning' | 'error', errors: mergedErrors, warnings: mergedWarnings },
                     };
                 }),
             );
@@ -229,7 +232,7 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
                     });
 
                     if (response.ok) {
-                        const data: { results: { row: number; status: string; errors: Record<string, string> }[] } = await response.json();
+                        const data: { results: { row: number; status: string; errors: Record<string, string>; warnings?: Record<string, string> }[] } = await response.json();
 
                         setMappedRows((prev) =>
                             prev.map((row) => {
@@ -237,11 +240,13 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
                                 if (!serverResult) return row;
 
                                 const mergedErrors = { ...row.__validation.errors, ...serverResult.errors };
-                                const status = Object.keys(mergedErrors).length > 0 ? 'error' : 'valid';
+                                const mergedWarnings = { ...(row.__validation.warnings ?? {}), ...(serverResult.warnings ?? {}) };
+                                const status = Object.keys(mergedErrors).length > 0 ? 'error'
+                                    : Object.keys(mergedWarnings).length > 0 ? 'warning' : 'valid';
 
                                 return {
                                     ...row,
-                                    __validation: { status: status as 'valid' | 'error', errors: mergedErrors },
+                                    __validation: { status: status as 'valid' | 'warning' | 'error', errors: mergedErrors, warnings: mergedWarnings },
                                 };
                             }),
                         );
@@ -268,7 +273,7 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
         setSubmitError(null);
         try {
             const validRows = mappedRows
-                .filter((r) => r.__validation.status === 'valid')
+                .filter((r) => r.__validation.status === 'valid' || r.__validation.status === 'warning')
                 .map((r) => toPlainRow(r, columns));
 
             await onSubmit(validRows);
@@ -303,6 +308,7 @@ export function useImporter({ columns, validateRow: customValidator, onSubmit, s
         submitError,
         submitComplete,
         validCount,
+        warningCount,
         errorCount,
         canAdvance,
         handleFile,

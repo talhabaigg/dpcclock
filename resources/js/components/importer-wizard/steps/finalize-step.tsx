@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, XCircle } from '
 interface FinalizeStepProps {
     totalRows: number;
     validCount: number;
+    warningCount: number;
     errorCount: number;
     isSubmitting: boolean;
     submitComplete: boolean;
@@ -12,7 +13,9 @@ interface FinalizeStepProps {
     onClose: () => void;
 }
 
-export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, submitComplete, submitError, onSubmit, onClose }: FinalizeStepProps) {
+export function FinalizeStep({ totalRows, validCount, warningCount, errorCount, isSubmitting, submitComplete, submitError, onSubmit, onClose }: FinalizeStepProps) {
+    const importableCount = validCount + warningCount;
+
     if (submitComplete) {
         return (
             <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
@@ -22,7 +25,7 @@ export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, 
                 <div className="text-center">
                     <h3 className="text-lg font-semibold">Import Complete</h3>
                     <p className="text-muted-foreground mt-1 text-sm">
-                        {validCount} items have been submitted for import.
+                        {importableCount} items have been submitted for import.
                     </p>
                 </div>
                 <Button onClick={onClose}>Close</Button>
@@ -49,7 +52,7 @@ export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, 
         <div className="flex flex-1 flex-col items-center justify-center gap-8 p-8">
             <h3 className="text-lg font-semibold">Review & Import</h3>
 
-            <div className="grid w-full max-w-md grid-cols-3 gap-4">
+            <div className={`grid w-full max-w-lg gap-4 ${warningCount > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 {/* Total */}
                 <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
                     <FileSpreadsheet className="text-muted-foreground h-6 w-6" />
@@ -63,6 +66,15 @@ export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, 
                     <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{validCount}</span>
                     <span className="text-xs text-emerald-600 dark:text-emerald-400">Will Import</span>
                 </div>
+
+                {/* Unchanged (warnings) */}
+                {warningCount > 0 && (
+                    <div className="flex flex-col items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                        <span className="text-2xl font-bold text-amber-700 dark:text-amber-300">{warningCount}</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400">Unchanged</span>
+                    </div>
+                )}
 
                 {/* Errors */}
                 <div className={`flex flex-col items-center gap-2 rounded-lg border p-4 ${
@@ -90,7 +102,13 @@ export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, 
                 </p>
             )}
 
-            {validCount === 0 ? (
+            {warningCount > 0 && (
+                <p className="text-muted-foreground max-w-sm text-center text-sm">
+                    {warningCount} rows already exist with identical values and won't be changed.
+                </p>
+            )}
+
+            {importableCount === 0 ? (
                 <p className="text-destructive text-sm font-medium">
                     No valid rows to import. Go back and fix the errors.
                 </p>
@@ -102,7 +120,7 @@ export function FinalizeStep({ totalRows, validCount, errorCount, isSubmitting, 
                             Importing...
                         </>
                     ) : (
-                        <>Import {validCount} Items</>
+                        <>Import {importableCount} Items</>
                     )}
                 </Button>
             )}

@@ -484,6 +484,23 @@
     border-left: 3px solid #ef4444 !important;
 }
 
+/* Importer wizard row highlighting */
+.importer-row-error {
+    background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.dark .importer-row-error {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+}
+
+.importer-row-warning {
+    background-color: rgba(245, 158, 11, 0.06) !important;
+}
+
+.dark .importer-row-warning {
+    background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
 .dark .ag-cell-error {
     background-color: rgba(239, 68, 68, 0.15) !important;
     border-left-color: #f87171 !important;

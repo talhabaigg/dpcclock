@@ -121,6 +121,7 @@ export function ImporterWizardDialog({ open, onOpenChange, title, description, c
                             columns={columns}
                             mappedRows={importer.mappedRows}
                             validCount={importer.validCount}
+                            warningCount={importer.warningCount}
                             errorCount={importer.errorCount}
                             isValidating={importer.isValidating}
                             hasServerValidation={!!serverValidateUrl}
@@ -132,6 +133,7 @@ export function ImporterWizardDialog({ open, onOpenChange, title, description, c
                         <FinalizeStep
                             totalRows={importer.mappedRows.length}
                             validCount={importer.validCount}
+                            warningCount={importer.warningCount}
                             errorCount={importer.errorCount}
                             isSubmitting={importer.isSubmitting}
                             submitComplete={importer.submitComplete}

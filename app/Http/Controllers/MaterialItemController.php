@@ -263,6 +263,12 @@ class MaterialItemController extends Controller
 
         $suppliers = Supplier::select('id', 'code')->get()->keyBy(fn ($s) => trim($s->code));
         $costCodes = CostCode::select('id', 'code')->get()->keyBy(fn ($c) => trim($c->code));
+        $supplierCategories = SupplierCategory::select('id', 'code', 'supplier_id')->get()->keyBy(fn ($c) => trim($c->code));
+
+        // Load existing items for duplicate detection (keyed by "code|supplier_id")
+        $existingItems = MaterialItem::with('costCode:id,code')
+            ->get()
+            ->keyBy(fn ($item) => $item->code.'|'.$item->supplier_id);
 
         $results = [];
 
@@ -272,6 +278,8 @@ class MaterialItemController extends Controller
             $unit_cost = trim($row['unit_cost'] ?? '');
             $supplier_code = trim($row['supplier_code'] ?? '');
             $costcode = trim($row['cost_code'] ?? '');
+            $expiry_date = trim($row['expiry_date'] ?? '');
+            $category_code = trim($row['category_code'] ?? '');
 
             $errors = [];
 
@@ -295,10 +303,65 @@ class MaterialItemController extends Controller
                 $errors['cost_code'] = 'Cost code "'.$costcode.'" not found';
             }
 
+            // If row has errors, skip duplicate check
+            if (! empty($errors)) {
+                $results[] = [
+                    'row' => $index,
+                    'status' => 'error',
+                    'errors' => $errors,
+                    'warnings' => (object) [],
+                ];
+
+                continue;
+            }
+
+            // Check for existing item with identical values
+            $warnings = [];
+            $supplier = $suppliers->get($supplier_code);
+            $costCode = $costCodes->get($costcode);
+            $existing = $existingItems->get($code.'|'.$supplier->id);
+
+            if ($existing) {
+                $parsedExpiry = null;
+                if (! empty($expiry_date)) {
+                    try {
+                        $parsedExpiry = \Carbon\Carbon::parse($expiry_date)->format('Y-m-d');
+                    } catch (\Exception $e) {
+                        $parsedExpiry = null;
+                    }
+                }
+
+                $existingExpiry = $existing->price_expiry_date
+                    ? $existing->price_expiry_date->format('Y-m-d')
+                    : null;
+
+                // Find category ID for the import row
+                $importCategoryId = null;
+                if (! empty($category_code)) {
+                    $category = $supplierCategories->get($category_code);
+                    if ($category && $category->supplier_id === $supplier->id) {
+                        $importCategoryId = $category->id;
+                    }
+                }
+
+                $sameDescription = $existing->description === $description;
+                $sameCost = (float) $existing->unit_cost === (float) $unit_cost;
+                $sameCostCode = $existing->cost_code_id === $costCode->id;
+                $sameExpiry = $existingExpiry === $parsedExpiry;
+                $sameCategory = $existing->supplier_category_id == $importCategoryId;
+
+                if ($sameDescription && $sameCost && $sameCostCode && $sameExpiry && $sameCategory) {
+                    $warnings['_row'] = 'Identical item already exists — no changes will be made';
+                }
+            }
+
+            $status = ! empty($warnings) ? 'warning' : 'valid';
+
             $results[] = [
                 'row' => $index,
-                'status' => empty($errors) ? 'valid' : 'error',
-                'errors' => $errors,
+                'status' => $status,
+                'errors' => (object) [],
+                'warnings' => ! empty($warnings) ? $warnings : (object) [],
             ];
         }
 
