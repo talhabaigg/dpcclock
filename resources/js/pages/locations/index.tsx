@@ -12,6 +12,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -68,7 +70,35 @@ const companyTabs = [
     { value: '1198645', label: 'Greenline' },
 ];
 
+function getLocationActions(location: Location) {
+    return [
+        {
+            group: 'Actions',
+            items: [{ href: `locations/${location.id}`, icon: Eye, label: 'View Details' }],
+        },
+        {
+            group: 'Material Items',
+            items: [
+                { href: `location/${location.id}/material-items`, icon: Eye, label: 'View Items' },
+                { href: `location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
+            ],
+        },
+        {
+            group: 'Variations',
+            items: [
+                { href: `locations/${location.id}/variations`, icon: CirclePlus, label: 'Create New' },
+                { href: `locations/${location.id}/variations`, icon: Eye, label: 'View All' },
+            ],
+        },
+        {
+            group: 'Requisition',
+            items: [{ href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Edit Header' }],
+        },
+    ];
+}
+
 function LocationActions({ location }: { location: Location }) {
+    const actions = getLocationActions(location);
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -78,55 +108,60 @@ function LocationActions({ location }: { location: Location }) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <Link href={`locations/${location.id}`}>
-                    <DropdownMenuItem className="gap-2">
-                        <Eye className="h-4 w-4" />
-                        View Details
-                    </DropdownMenuItem>
-                </Link>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-muted-foreground text-xs">Material Items</DropdownMenuLabel>
-                <Link href={`location/${location.id}/material-items`}>
-                    <DropdownMenuItem className="gap-2">
-                        <Eye className="h-4 w-4" />
-                        View Items
-                    </DropdownMenuItem>
-                </Link>
-                <Link href={`location/${location.id}/material-item-price-list-uploads`}>
-                    <DropdownMenuItem className="gap-2">
-                        <ClockAlert className="h-4 w-4" />
-                        Audit Uploads
-                    </DropdownMenuItem>
-                </Link>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-muted-foreground text-xs">Variations</DropdownMenuLabel>
-                <Link href={`locations/${location.id}/variations`}>
-                    <DropdownMenuItem className="gap-2">
-                        <CirclePlus className="h-4 w-4" />
-                        Create New
-                    </DropdownMenuItem>
-                </Link>
-                <Link href={`locations/${location.id}/variations`}>
-                    <DropdownMenuItem className="gap-2">
-                        <Eye className="h-4 w-4" />
-                        View All
-                    </DropdownMenuItem>
-                </Link>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-muted-foreground text-xs">Requisition</DropdownMenuLabel>
-                <Link href={route('location.req-header.edit', { locationId: location.id })}>
-                    <DropdownMenuItem className="gap-2">
-                        <Pencil className="h-4 w-4" />
-                        Edit Header
-                    </DropdownMenuItem>
-                </Link>
+                {actions.map((group, gi) => (
+                    <div key={group.group}>
+                        {gi > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className={gi === 0 ? '' : 'text-muted-foreground text-xs'}>{group.group}</DropdownMenuLabel>
+                        {gi === 0 && <DropdownMenuSeparator />}
+                        {group.items.map((item) => (
+                            <Link key={item.label} href={item.href}>
+                                <DropdownMenuItem className="gap-2">
+                                    <item.icon className="h-4 w-4" />
+                                    {item.label}
+                                </DropdownMenuItem>
+                            </Link>
+                        ))}
+                    </div>
+                ))}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+}
+
+function LocationActionsMobile({ location }: { location: Location }) {
+    const actions = getLocationActions(location);
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-xl">
+                <SheetHeader>
+                    <SheetTitle>{location.name}</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1 px-4 pb-6">
+                    {actions.map((group, gi) => (
+                        <div key={group.group}>
+                            {gi > 0 && <Separator className="my-2" />}
+                            <p className="text-muted-foreground mb-1 px-3 text-xs font-medium">{group.group}</p>
+                            {group.items.map((item) => (
+                                <Link
+                                    key={item.label}
+                                    href={item.href}
+                                    className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                                >
+                                    <item.icon className="text-muted-foreground h-4 w-4" />
+                                    {item.label}
+                                </Link>
+                            ))}
+                        </div>
+                    ))}
+                </nav>
+            </SheetContent>
+        </Sheet>
     );
 }
 
@@ -199,38 +234,65 @@ export default function LocationsList() {
                 )}
 
                 {/* Toolbar */}
-                <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0 shrink-0">
-                        <TabsList>
-                            {companyTabs.map((tab) => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
-                                    {tab.label}
-                                    <Badge variant={activeTab === tab.value ? 'default' : 'secondary'} className="px-1.5 text-[10px]">
-                                        {tabCounts[tab.value] ?? 0}
-                                    </Badge>
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
-                    </Tabs>
+                <div className="flex min-w-0 flex-col gap-3">
+                    {/* Row 1: Tabs + actions (wide) / Tabs only (narrow) */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0 shrink-0">
+                            <TabsList>
+                                {companyTabs.map((tab) => (
+                                    <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
+                                        {tab.label}
+                                        <Badge variant={activeTab === tab.value ? 'default' : 'secondary'} className="px-1.5 text-[10px]">
+                                            {tabCounts[tab.value] ?? 0}
+                                        </Badge>
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
 
-                    <div className="ml-auto flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-[200px] max-w-[256px] flex-1">
-                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
-                        </div>
-                        <Link href="/locations/sync" method="get">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                                <RefreshCcw className="h-4 w-4" />
-                                Sync Locations
-                            </Button>
-                        </Link>
-                        {isAdmin && (
-                            <Link href="/locations/load-job-data" method="get">
+                        {/* Search + actions inline on wide containers */}
+                        <div className="ml-auto hidden items-center gap-2 @3xl:flex">
+                            <div className="relative w-64">
+                                <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
+                            </div>
+                            <Link href="/locations/sync" method="get">
                                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                                    <Download className="h-4 w-4" />
-                                    Load Job Data
+                                    <RefreshCcw className="h-4 w-4" />
+                                    Sync Locations
                                 </Button>
                             </Link>
-                        )}
+                            {isAdmin && (
+                                <Link href="/locations/load-job-data" method="get">
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                                        <Download className="h-4 w-4" />
+                                        Load Job Data
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Row 2: Search full-width + actions on narrow containers */}
+                    <div className="flex flex-col gap-2 @3xl:hidden">
+                        <div className="relative w-full">
+                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Link href="/locations/sync" method="get" className="flex-1">
+                                <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
+                                    <RefreshCcw className="h-4 w-4" />
+                                    Sync
+                                </Button>
+                            </Link>
+                            {isAdmin && (
+                                <Link href="/locations/load-job-data" method="get" className="flex-1">
+                                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
+                                        <Download className="h-4 w-4" />
+                                        Load Jobs
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -283,18 +345,9 @@ export default function LocationsList() {
                                         </div>
                                         <div className="flex shrink-0 items-center gap-1">
                                             {location.state && <Badge variant="secondary">{location.state}</Badge>}
-                                            <LocationActions location={location} />
+                                            <LocationActionsMobile location={location} />
                                         </div>
                                     </div>
-                                    {location.worktypes?.length > 0 && (
-                                        <div className="mt-3 flex flex-wrap items-center gap-1">
-                                            {location.worktypes.map((worktype) => (
-                                                <Badge key={worktype.eh_worktype_id} variant="outline" className="text-xs font-normal">
-                                                    {worktype.name}
-                                                </Badge>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
                             ))}
                         </div>

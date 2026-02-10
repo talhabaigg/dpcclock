@@ -23,15 +23,38 @@ class MaterialItemController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        // Fetch all material items with their cost codes and categories
-        $materialItems = MaterialItem::with('costCode', 'supplier', 'supplierCategory')->get();
+        $search = $request->input('search', '');
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = min(100, max(1, (int) $request->input('per_page', 50)));
+
+        $allowedSorts = ['id', 'code', 'description', 'unit_cost', 'price_expiry_date'];
+        $sortBy = in_array($request->input('sort'), $allowedSorts) ? $request->input('sort') : 'id';
+        $sortDir = $request->input('dir') === 'asc' ? 'asc' : 'desc';
+
+        $query = MaterialItem::select('id', 'code', 'description', 'unit_cost', 'price_expiry_date', 'supplier_category_id', 'cost_code_id', 'supplier_id')
+            ->with(['costCode:id,code', 'supplier:id,code']);
+
+        if (! empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $items = $query->orderBy($sortBy, $sortDir)->paginate($perPage, ['*'], 'page', $page);
         $categories = SupplierCategory::with('supplier')->get();
 
         return Inertia::render('materialItem/index', [
-            'items' => $materialItems,
+            'items' => $items,
             'categories' => $categories,
+            'filters' => [
+                'search' => $search,
+                'sort' => $sortBy,
+                'dir' => $sortDir,
+                'per_page' => $perPage,
+            ],
         ]);
     }
 
@@ -224,83 +247,180 @@ class MaterialItemController extends Controller
 
     public function upload(Request $request)
     {
-        set_time_limit(300); // Extend request time to 5 minutes
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
         $request->validate([
             'file' => 'required|file|mimes:csv,txt',
         ]);
-        $suppliers = Supplier::all()->keyBy(fn ($s) => trim($s->code));
-        $costCodes = CostCode::all()->keyBy(fn ($c) => trim($c->code));
-        $supplierCategories = SupplierCategory::all()->keyBy(fn ($c) => trim($c->code));
+
+        // Only load the columns we need to reduce memory usage
+        $suppliers = Supplier::select('id', 'code')->get()->keyBy(fn ($s) => trim($s->code));
+        $costCodes = CostCode::select('id', 'code')->get()->keyBy(fn ($c) => trim($c->code));
+        $supplierCategories = SupplierCategory::select('id', 'code', 'supplier_id')->get()->keyBy(fn ($c) => trim($c->code));
+
         $file = fopen($request->file('file')->getRealPath(), 'r');
         $header = fgetcsv($file); // Skip header row
-        $missingCostCodeRows = [];
+
+        // Write issues directly to file to avoid memory buildup
+        $issuesFilename = 'upload_issues_'.now()->format('Ymd_His').'.csv';
+        $issuesFilePath = storage_path('app/'.$issuesFilename);
+        $issuesHandle = fopen($issuesFilePath, 'w');
+        fputcsv($issuesHandle, ['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date', 'category_code', 'issue_reason']);
+        $issuesCount = 0;
+        $importedCount = 0;
+        $rowNumber = 1; // header is row 1
+
         while (($row = fgetcsv($file)) !== false) {
+            $rowNumber++;
             $row = array_map('trim', $row);
-            $code = $row[0] ?? '';
-            $description = $row[1] ?? '';
-            $unit_cost = $row[2] ?? 0;
-            $supplier_code = $row[3] ?? '';
-            $costcode = $row[4] ?? '';
-            $expiry_date = $row[5] ?? null;
-            $category_code = $row[6] ?? null;
 
-            $supplier = $suppliers->get($supplier_code);
-            $costCode = $costCodes->get($costcode);
+            // Skip completely empty rows
+            if (count($row) === 0 || (count($row) === 1 && $row[0] === '')) {
+                continue;
+            }
 
-            if (! $supplier || ! $costCode) {
-                $row[4] = '="'.$row[4].'"'; // prevent Excel from formatting costcode
-                $missingCostCodeRows[] = $row;
+            // Check minimum required columns (code, description, unit_cost, supplier_code, cost_code)
+            if (count($row) < 5) {
+                $paddedRow = array_pad($row, 7, '');
+                fputcsv($issuesHandle, array_merge($paddedRow, ['Row '.$rowNumber.': Not enough columns. Expected at least 5, got '.count($row)]));
+                $issuesCount++;
 
                 continue;
             }
 
-            // Parse expiry date if provided
-            $parsedExpiryDate = null;
-            if (! empty($expiry_date)) {
-                try {
-                    $parsedExpiryDate = \Carbon\Carbon::parse($expiry_date)->format('Y-m-d');
-                } catch (\Exception $e) {
-                    // Invalid date format, leave as null
-                    $parsedExpiryDate = null;
-                }
+            $code = $row[0];
+            $description = $row[1];
+            $unit_cost = $row[2];
+            $supplier_code = $row[3];
+            $costcode = $row[4];
+            $expiry_date = $row[5] ?? '';
+            $category_code = $row[6] ?? '';
+
+            // Validate required fields
+            $errors = [];
+            if (empty($code)) {
+                $errors[] = 'Missing item code';
+            }
+            if (empty($description)) {
+                $errors[] = 'Missing description';
+            }
+            if (! is_numeric($unit_cost) || (float) $unit_cost < 0) {
+                $errors[] = 'Invalid unit cost "'.$unit_cost.'"';
+            }
+            if (empty($supplier_code)) {
+                $errors[] = 'Missing supplier code';
+            }
+            if (empty($costcode)) {
+                $errors[] = 'Missing cost code';
             }
 
-            // Find category by code (must also match supplier)
-            $supplierCategoryId = null;
-            if (! empty($category_code)) {
-                $category = $supplierCategories->get($category_code);
-                if ($category && $category->supplier_id === $supplier->id) {
-                    $supplierCategoryId = $category->id;
-                }
+            // Check supplier exists
+            $supplier = ! empty($supplier_code) ? $suppliers->get($supplier_code) : null;
+            if (! empty($supplier_code) && ! $supplier) {
+                $errors[] = 'Supplier "'.$supplier_code.'" not found';
             }
 
-            MaterialItem::updateOrCreate(
-                ['code' => $code, 'supplier_id' => $supplier->id],
-                [
-                    'description' => trim($description),
-                    'unit_cost' => (float) $unit_cost,
-                    'cost_code_id' => $costCode->id,
-                    'price_expiry_date' => $parsedExpiryDate,
-                    'supplier_category_id' => $supplierCategoryId,
-                ]
-            );
+            // Check cost code exists
+            $costCode = ! empty($costcode) ? $costCodes->get($costcode) : null;
+            if (! empty($costcode) && ! $costCode) {
+                $errors[] = 'Cost code "'.$costcode.'" not found';
+            }
+
+            if (! empty($errors)) {
+                fputcsv($issuesHandle, [
+                    $code,
+                    $description,
+                    $unit_cost,
+                    $supplier_code,
+                    '="'.$costcode.'"',
+                    $expiry_date,
+                    $category_code,
+                    'Row '.$rowNumber.': '.implode('; ', $errors),
+                ]);
+                $issuesCount++;
+
+                continue;
+            }
+
+            try {
+                // Parse expiry date if provided
+                $parsedExpiryDate = null;
+                if (! empty($expiry_date)) {
+                    try {
+                        $parsedExpiryDate = \Carbon\Carbon::parse($expiry_date)->format('Y-m-d');
+                    } catch (\Exception $e) {
+                        $parsedExpiryDate = null;
+                    }
+                }
+
+                // Find category by code (must also match supplier)
+                $supplierCategoryId = null;
+                if (! empty($category_code)) {
+                    $category = $supplierCategories->get($category_code);
+                    if ($category && $category->supplier_id === $supplier->id) {
+                        $supplierCategoryId = $category->id;
+                    }
+                }
+
+                MaterialItem::updateOrCreate(
+                    ['code' => $code, 'supplier_id' => $supplier->id],
+                    [
+                        'description' => $description,
+                        'unit_cost' => (float) $unit_cost,
+                        'cost_code_id' => $costCode->id,
+                        'price_expiry_date' => $parsedExpiryDate,
+                        'supplier_category_id' => $supplierCategoryId,
+                    ]
+                );
+
+                $importedCount++;
+            } catch (\Exception $e) {
+                fputcsv($issuesHandle, [
+                    $code,
+                    $description,
+                    $unit_cost,
+                    $supplier_code,
+                    '="'.$costcode.'"',
+                    $expiry_date,
+                    $category_code,
+                    'Row '.$rowNumber.': Database error - '.$e->getMessage(),
+                ]);
+                $issuesCount++;
+            }
         }
         fclose($file);
+        fclose($issuesHandle);
 
-        if (! empty($missingCostCodeRows)) {
-            $filename = 'missing_costcodes_'.now()->format('Ymd_His').'.csv';
-            $filePath = storage_path("app/{$filename}");
+        if ($issuesCount > 0) {
+            $message = $importedCount > 0
+                ? "Imported {$importedCount} items successfully. {$issuesCount} rows had issues."
+                : "{$issuesCount} rows had issues. No items were imported.";
 
-            $handle = fopen($filePath, 'w');
-            foreach ($missingCostCodeRows as $missingRow) {
-                fputcsv($handle, $missingRow);
-            }
-            fclose($handle);
-
-            return redirect()->back()->with('success', json_encode($missingCostCodeRows));
+            return redirect()->back()->with([
+                'success' => $message,
+                'issues_file' => $issuesFilename,
+                'issues_count' => $issuesCount,
+                'imported_count' => $importedCount,
+            ]);
         }
 
-        return redirect()->back()->with('success', 'Material items imported successfully.');
+        // No issues — clean up the empty issues file
+        @unlink($issuesFilePath);
+
+        return redirect()->back()->with('success', "All {$importedCount} material items imported successfully.");
+    }
+
+    public function downloadIssuesFile($filename)
+    {
+        // Sanitize filename to prevent directory traversal
+        $filename = basename($filename);
+        $filePath = storage_path('app/'.$filename);
+
+        if (! file_exists($filePath)) {
+            return redirect()->back()->with('error', 'Issues file not found or already downloaded.');
+        }
+
+        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
     }
 
     public function download()
