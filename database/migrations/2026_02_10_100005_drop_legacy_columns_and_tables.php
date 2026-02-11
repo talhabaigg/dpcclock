@@ -61,6 +61,16 @@ return new class extends Migration
             });
         }
 
+        // Drop FK from site_walk_photos referencing drawing_sheets BEFORE remapping IDs
+        if (Schema::hasTable('site_walk_photos')) {
+            $swpFks = $getForeignKeys('site_walk_photos');
+            if ($swpFks->contains('site_walk_photos_drawing_sheet_id_foreign')) {
+                Schema::table('site_walk_photos', function (Blueprint $table) {
+                    $table->dropForeign('site_walk_photos_drawing_sheet_id_foreign');
+                });
+            }
+        }
+
         // Remap site_walk_photos.drawing_sheet_id from DrawingSheet IDs to Drawing IDs
         // before dropping the drawing_sheets table
         if (Schema::hasTable('drawing_sheets') && Schema::hasTable('site_walk_photos') && Schema::hasColumn('site_walk_photos', 'drawing_sheet_id')) {
@@ -73,16 +83,6 @@ return new class extends Migration
                 )
                 WHERE drawing_sheet_id IS NOT NULL
             ');
-        }
-
-        // Drop FK from site_walk_photos referencing drawing_sheets
-        if (Schema::hasTable('site_walk_photos')) {
-            $swpFks = $getForeignKeys('site_walk_photos');
-            if ($swpFks->contains('site_walk_photos_drawing_sheet_id_foreign')) {
-                Schema::table('site_walk_photos', function (Blueprint $table) {
-                    $table->dropForeign('site_walk_photos_drawing_sheet_id_foreign');
-                });
-            }
         }
 
         // Drop legacy tables
