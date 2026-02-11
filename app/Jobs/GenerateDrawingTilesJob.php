@@ -102,11 +102,4 @@ class GenerateDrawingTilesJob implements ShouldQueue
         }
     }
 
-    /**
-     * Determine the queue the job should be sent to.
-     */
-    public function queue(): string
-    {
-        return 'drawings';
-    }
 }
