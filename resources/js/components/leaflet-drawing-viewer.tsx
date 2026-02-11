@@ -378,14 +378,12 @@ export function LeafletDrawingViewer({
             <MapContainer
                 crs={L.CRS.Simple}
                 bounds={imageBounds}
-                maxBounds={imageBounds}
-                maxBoundsViscosity={1.0}
                 minZoom={minZoom}
                 maxZoom={maxZoom}
                 zoomSnap={0.25}
                 zoomDelta={0.5}
                 className="w-full h-full"
-                style={{ background: '#f5f5f5' }}
+                style={{ background: '#ffffff' }}
             >
                 {tiles ? (
                     <TileLayer
@@ -463,8 +461,7 @@ export function LeafletDrawingViewer({
                     border: none !important;
                 }
                 .leaflet-tile {
-                    image-rendering: -webkit-optimize-contrast;
-                    image-rendering: crisp-edges;
+                    image-rendering: auto;
                 }
             `}</style>
         </div>
