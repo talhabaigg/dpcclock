@@ -1,11 +1,12 @@
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import Echo from 'laravel-echo';
-import { Activity, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, FileX2, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { useEffect, useState } from 'react';
 
@@ -49,6 +50,31 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     const [recentlyCompleted, setRecentlyCompleted] = useState<QueueJob[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [selectedFailedJob, setSelectedFailedJob] = useState<QueueJob | null>(null);
+    const [clearing, setClearing] = useState<string | null>(null);
+
+    const handleClear = async (action: 'clear-queue' | 'clear-failed' | 'clear-logs') => {
+        setClearing(action);
+        try {
+            const response = await fetch(`/queue-status/${action}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                    'Accept': 'application/json',
+                },
+            });
+            const data = await response.json();
+            if (action === 'clear-queue') {
+                setJobs((prev) => ({ ...prev, pending: [], stats: { ...prev.stats, pending_count: 0 } }));
+            } else if (action === 'clear-failed') {
+                setJobs((prev) => ({ ...prev, failed: [], stats: { ...prev.stats, failed_count: 0 } }));
+            }
+            alert(data.message);
+        } catch {
+            alert('Failed to perform action.');
+        } finally {
+            setClearing(null);
+        }
+    };
 
     useEffect(() => {
         // Initialize Pusher and Laravel Echo
@@ -201,9 +227,40 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             <div className="m-4 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Queue Status Monitor</h1>
-                    <div className="flex items-center gap-2">
-                        <Activity className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-red-500'}`} />
-                        <span className="text-muted-foreground text-sm">{isConnected ? 'Connected to real-time updates' : 'Connecting...'}</span>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleClear('clear-queue')}
+                                disabled={clearing !== null}
+                            >
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                {clearing === 'clear-queue' ? 'Clearing...' : 'Clear Queue'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleClear('clear-failed')}
+                                disabled={clearing !== null}
+                            >
+                                <XCircle className="mr-1 h-4 w-4" />
+                                {clearing === 'clear-failed' ? 'Clearing...' : 'Clear Failed'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleClear('clear-logs')}
+                                disabled={clearing !== null}
+                            >
+                                <FileX2 className="mr-1 h-4 w-4" />
+                                {clearing === 'clear-logs' ? 'Clearing...' : 'Clear Logs'}
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Activity className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-red-500'}`} />
+                            <span className="text-muted-foreground text-sm">{isConnected ? 'Connected to real-time updates' : 'Connecting...'}</span>
+                        </div>
                     </div>
                 </div>
 

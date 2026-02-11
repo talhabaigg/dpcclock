@@ -620,6 +620,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:queue-status.view');
     Route::get('/queue-status/stats', [QueueStatusController::class, 'stats'])->name('queueStatus.stats')
         ->middleware('permission:queue-status.view');
+    Route::post('/queue-status/clear-queue', [QueueStatusController::class, 'clearQueue'])->name('queueStatus.clearQueue')
+        ->middleware('role:admin');
+    Route::post('/queue-status/clear-failed', [QueueStatusController::class, 'clearFailed'])->name('queueStatus.clearFailed')
+        ->middleware('role:admin');
+    Route::post('/queue-status/clear-logs', [QueueStatusController::class, 'clearLogs'])->name('queueStatus.clearLogs')
+        ->middleware('role:admin');
 
     // Role & Permission Management (Admin only)
     Route::middleware('permission:admin.roles')->group(function () {

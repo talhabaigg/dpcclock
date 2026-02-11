@@ -28,6 +28,41 @@ class QueueStatusController extends Controller
     }
 
     /**
+     * Clear all pending jobs from the queue.
+     */
+    public function clearQueue(): JsonResponse
+    {
+        $count = DB::table('jobs')->count();
+        DB::table('jobs')->truncate();
+
+        return response()->json(['message' => "Cleared {$count} pending jobs."]);
+    }
+
+    /**
+     * Clear all failed jobs.
+     */
+    public function clearFailed(): JsonResponse
+    {
+        $count = DB::table('failed_jobs')->count();
+        DB::table('failed_jobs')->truncate();
+
+        return response()->json(['message' => "Cleared {$count} failed jobs."]);
+    }
+
+    /**
+     * Clear Laravel log file.
+     */
+    public function clearLogs(): JsonResponse
+    {
+        $logFile = storage_path('logs/laravel.log');
+        if (file_exists($logFile)) {
+            file_put_contents($logFile, '');
+        }
+
+        return response()->json(['message' => 'Logs cleared.']);
+    }
+
+    /**
      * Get queue statistics from database.
      */
     protected function getQueueStats(): array
