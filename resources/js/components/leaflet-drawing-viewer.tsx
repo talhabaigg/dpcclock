@@ -344,7 +344,7 @@ export function LeafletDrawingViewer({
     // Tile URL function
     const tileUrl = useMemo(() => {
         if (!tiles) return '';
-        return `${tiles.baseUrl}/{z}/{x}_{y}.jpg`;
+        return `${tiles.baseUrl}/{z}/{x}_{y}`;
     }, [tiles]);
 
     // Show loading state when waiting for image dimensions

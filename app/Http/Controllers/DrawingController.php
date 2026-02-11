@@ -474,6 +474,45 @@ class DrawingController extends Controller
     }
 
     /**
+     * Serve a single map tile for the drawing viewer.
+     */
+    public function serveTile(Drawing $drawing, int $z, string $coords)
+    {
+        if (! $drawing->tiles_base_url) {
+            abort(404);
+        }
+
+        $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.jpg";
+        $disk = config('filesystems.drawings_disk', 'public');
+
+        try {
+            $stream = Storage::disk($disk)->readStream($tilePath);
+            if ($stream) {
+                $size = Storage::disk($disk)->size($tilePath);
+
+                return response()->stream(
+                    function () use ($stream) {
+                        fpassthru($stream);
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    },
+                    200,
+                    [
+                        'Content-Type' => 'image/jpeg',
+                        'Content-Length' => $size,
+                        'Cache-Control' => 'public, max-age=604800',
+                    ]
+                );
+            }
+        } catch (\Exception $e) {
+            // Tile not found on configured disk
+        }
+
+        abort(404);
+    }
+
+    /**
      * Serve a drawing preview image from S3.
      */
     public function servePreview(Drawing $drawing)

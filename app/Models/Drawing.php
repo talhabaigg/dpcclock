@@ -273,10 +273,8 @@ class Drawing extends Model
             return null;
         }
 
-        $drawingsDisk = config('filesystems.drawings_disk', 'public');
-        $baseUrl = $drawingsDisk !== 's3'
-            ? '/storage/' . $this->tiles_base_url
-            : Storage::disk('s3')->url($this->tiles_base_url);
+        // Always use the proxy route — works for both local and S3
+        $baseUrl = "/drawings/{$this->id}/tiles";
 
         return [
             'baseUrl' => $baseUrl,
