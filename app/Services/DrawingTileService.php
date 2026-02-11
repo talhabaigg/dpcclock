@@ -64,7 +64,7 @@ class DrawingTileService
 
             // Generate tiles for each zoom level using ImageMagick CLI
             $totalTiles = 0;
-            $magick = $this->findExecutable(['magick']);
+            $magick = $this->findExecutable(['magick', 'convert']);
 
             for ($z = 0; $z <= $maxZoom; $z++) {
                 if ($magick) {
@@ -136,9 +136,11 @@ class DrawingTileService
     protected function getImageDimensions(string $imagePath): array
     {
         // Try ImageMagick identify first (no memory load)
-        $magick = $this->findExecutable(['magick']);
+        $magick = $this->findExecutable(['magick', 'identify']);
         if ($magick) {
-            $cmd = escapeshellarg($magick) . ' identify -format "%w %h" '
+            // If we found 'magick', use 'magick identify'; if we found 'identify' directly, use it as-is
+            $identifyCmd = str_contains($magick, 'magick') ? escapeshellarg($magick) . ' identify' : escapeshellarg($magick);
+            $cmd = $identifyCmd . ' -format "%w %h" '
                 . escapeshellarg($imagePath . '[0]');
             exec($cmd . ' 2>&1', $output, $returnCode);
 
@@ -202,14 +204,19 @@ class DrawingTileService
         // Use proc_open with array syntax to bypass CMD shell on Windows (avoids %d variable expansion)
         $outputPattern = $tempDir . '/tile_%d.jpg';
         $extentSize = ($cols * $tileSize) . 'x' . ($rows * $tileSize);
-        $args = [
-            $magick, 'convert', $imagePath,
+
+        // Build args: IM7 uses "magick convert", IM6 uses just "convert"
+        $isMagick7 = str_contains(basename($magick), 'magick');
+        $args = $isMagick7
+            ? [$magick, 'convert'] : [$magick];
+        $args = array_merge($args, [
+            $imagePath,
             '-resize', "{$scaledWidth}x{$scaledHeight}!",
             '-background', 'white', '-extent', $extentSize,
             '-crop', "{$tileSize}x{$tileSize}", '+repage',
             '-quality', '90',
             $outputPattern,
-        ];
+        ]);
 
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $process = proc_open($args, $descriptors, $pipes);
@@ -397,10 +404,40 @@ class DrawingTileService
 
     /**
      * Convert PDF to image using available tools.
+     * Matches the same fallback chain as DrawingProcessingService.
      */
     protected function convertPdfToImage(string $pdfPath, string $outputPath, int $page = 1, int $dpi = 300): bool
     {
-        // Try Imagick PHP extension first
+        // Try pdftoppm first (poppler-utils) — most reliable on Linux servers
+        $pdftoppm = $this->findExecutable(['pdftoppm']);
+        if ($pdftoppm) {
+            $tempBase = sys_get_temp_dir() . '/pdf_tile_' . uniqid();
+            $cmd = escapeshellarg($pdftoppm) . ' -png -r ' . $dpi
+                . ' -f ' . $page . ' -l ' . $page . ' '
+                . escapeshellarg($pdfPath) . ' ' . escapeshellarg($tempBase);
+            exec($cmd . ' 2>&1', $output, $returnCode);
+
+            // pdftoppm names output as base-N.png
+            $tempFile = $tempBase . '-' . $page . '.png';
+            if (!file_exists($tempFile)) {
+                // Some versions use base-0N.png format
+                $tempFile = $tempBase . '-' . sprintf('%02d', $page) . '.png';
+            }
+            if (!file_exists($tempFile)) {
+                // Single page might just be base.png
+                $tempFile = $tempBase . '.png';
+            }
+
+            if ($returnCode === 0 && file_exists($tempFile)) {
+                rename($tempFile, $outputPath);
+                Log::info('Tile PDF conversion via pdftoppm', ['path' => $pdfPath]);
+                return true;
+            }
+            @unlink($tempFile);
+            Log::warning('pdftoppm conversion failed for tiles', ['returnCode' => $returnCode, 'output' => $output]);
+        }
+
+        // Try Imagick PHP extension
         if (extension_loaded('imagick')) {
             try {
                 $imagick = new \Imagick();
@@ -418,8 +455,8 @@ class DrawingTileService
             }
         }
 
-        // Try ImageMagick CLI
-        $magick = $this->findExecutable(['magick']);
+        // Try ImageMagick CLI (magick for v7, convert for v6)
+        $magick = $this->findExecutable(['magick', 'convert']);
         if ($magick) {
             $cmd = escapeshellarg($magick) . ' -density ' . $dpi . ' '
                 . escapeshellarg($pdfPath . '[' . ($page - 1) . ']')
@@ -475,32 +512,53 @@ class DrawingTileService
 
     protected function findExecutable(array $names): ?string
     {
-        $paths = PHP_OS_FAMILY === 'Windows'
-            ? [
-                'C:\\Program Files\\ImageMagick-7.1.2-Q16-HDRI\\',
-                'C:\\Program Files\\ImageMagick-7.1.1-Q16-HDRI\\',
-                'C:\\Program Files\\ImageMagick-7.1.0-Q16-HDRI\\',
-                'C:\\Program Files\\ImageMagick\\',
-                'C:\\Program Files\\gs\\gs10.06.0\\bin\\',
-                'C:\\Program Files\\gs\\gs10.02.1\\bin\\',
-                'C:\\Program Files\\gs\\gs10.00.0\\bin\\',
-            ]
-            : ['/usr/bin/', '/usr/local/bin/', '/opt/homebrew/bin/'];
+        $windowsPaths = [
+            'C:\\Program Files\\ImageMagick-7.1.2-Q16-HDRI\\',
+            'C:\\Program Files\\ImageMagick-7.1.1-Q16-HDRI\\',
+            'C:\\Program Files\\ImageMagick-7.1.0-Q16-HDRI\\',
+            'C:\\Program Files\\ImageMagick\\',
+            'C:\\Program Files\\poppler\\bin\\',
+            'C:\\Program Files\\poppler-24.02.0\\Library\\bin\\',
+            'C:\\Program Files\\gs\\gs10.06.0\\bin\\',
+            'C:\\Program Files\\gs\\gs10.02.1\\bin\\',
+            'C:\\Program Files\\gs\\gs10.00.0\\bin\\',
+        ];
+
+        $unixPaths = ['/usr/bin/', '/usr/local/bin/', '/opt/homebrew/bin/'];
+        $paths = PHP_OS_FAMILY === 'Windows' ? $windowsPaths : $unixPaths;
 
         foreach ($names as $name) {
-            foreach ($paths as $path) {
-                $ext = PHP_OS_FAMILY === 'Windows' ? '.exe' : '';
-                $fullPath = $path . $name . $ext;
-                if (file_exists($fullPath)) {
-                    return $fullPath;
+            if (PHP_OS_FAMILY === 'Windows') {
+                foreach ($paths as $path) {
+                    $fullPath = $path . $name . '.exe';
+                    if (file_exists($fullPath)) {
+                        return $fullPath;
+                    }
                 }
             }
 
             $which = PHP_OS_FAMILY === 'Windows' ? 'where' : 'which';
             $output = [];
             exec("$which $name 2>&1", $output, $returnCode);
-            if ($returnCode === 0 && !empty($output[0]) && file_exists(trim($output[0]))) {
-                return trim($output[0]);
+
+            if ($returnCode === 0 && !empty($output[0])) {
+                $foundPath = trim($output[0]);
+                // On Windows, skip System32 convert.exe (disk utility)
+                if (PHP_OS_FAMILY === 'Windows' && str_contains(strtolower($foundPath), 'system32')) {
+                    continue;
+                }
+                if (!str_contains($foundPath, 'INFO:') && !str_contains($foundPath, 'not found') && file_exists($foundPath)) {
+                    return $foundPath;
+                }
+            }
+
+            if (PHP_OS_FAMILY !== 'Windows') {
+                foreach ($paths as $path) {
+                    $fullPath = $path . $name;
+                    if (file_exists($fullPath)) {
+                        return $fullPath;
+                    }
+                }
             }
         }
 
