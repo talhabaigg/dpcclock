@@ -180,10 +180,13 @@ class DrawingTileService
 
     protected function calculateMaxZoom(int $maxDimension, int $tileSize): int
     {
+        // Zoom levels based on fitting the image in a ~2000px viewport at zoom 0.
+        // Independent of tile size — tile size only affects how many tiles per level.
+        $viewportRef = 2000;
         $zoom = 0;
         $currentSize = $maxDimension;
 
-        while ($currentSize > $tileSize * 2 && $zoom < $this->maxZoomLevel) {
+        while ($currentSize > $viewportRef && $zoom < $this->maxZoomLevel) {
             $currentSize = $currentSize / 2;
             $zoom++;
         }
