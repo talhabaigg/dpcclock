@@ -42,13 +42,6 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
     active: { label: 'Active', variant: 'secondary', icon: CheckCircle },
 };
 
-const extractionConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-    queued: { label: 'Queued', variant: 'secondary' },
-    processing: { label: 'Extracting', variant: 'default' },
-    success: { label: 'Extracted', variant: 'secondary' },
-    needs_review: { label: 'Needs Review', variant: 'outline' },
-    failed: { label: 'Failed', variant: 'destructive' },
-};
 
 function formatFileSize(bytes: number | null): string {
     if (!bytes) return '-';
@@ -230,9 +223,8 @@ export default function DrawingsUpload() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>File</TableHead>
-                                        <TableHead>Extracted Info</TableHead>
+                                        <TableHead>Title</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead>Extraction</TableHead>
                                         <TableHead>Size</TableHead>
                                         <TableHead>Uploaded</TableHead>
                                         <TableHead />
@@ -241,7 +233,6 @@ export default function DrawingsUpload() {
                                 <TableBody>
                                     {drawings.map((drawing) => {
                                         const sConfig = statusConfig[drawing.status] || statusConfig.draft;
-                                        const eConfig = drawing.extraction_status ? extractionConfig[drawing.extraction_status] : null;
                                         const StatusIcon = sConfig.icon;
 
                                         return (
@@ -252,18 +243,9 @@ export default function DrawingsUpload() {
                                                     </p>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <div className="text-muted-foreground text-xs">
-                                                        {drawing.sheet_number || drawing.drawing_number ? (
-                                                            <span className="text-foreground font-medium">
-                                                                {drawing.sheet_number || drawing.drawing_number}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="italic">Pending extraction</span>
-                                                        )}
-                                                        {(drawing.title || drawing.drawing_title) && (
-                                                            <span className="ml-1">- {drawing.title || drawing.drawing_title}</span>
-                                                        )}
-                                                    </div>
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {drawing.title || drawing.drawing_title || '-'}
+                                                    </span>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant={sConfig.variant} className="gap-1 text-xs">
@@ -272,15 +254,6 @@ export default function DrawingsUpload() {
                                                         />
                                                         {sConfig.label}
                                                     </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {eConfig ? (
-                                                        <Badge variant={eConfig.variant} className="text-xs">
-                                                            {eConfig.label}
-                                                        </Badge>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-xs">-</span>
-                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-xs">
                                                     {formatFileSize(drawing.file_size)}

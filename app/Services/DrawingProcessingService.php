@@ -74,7 +74,7 @@ class DrawingProcessingService
 
             // Update status based on results
             $newStatus = empty($results['errors'])
-                ? Drawing::STATUS_PENDING_REVIEW
+                ? Drawing::STATUS_ACTIVE
                 : Drawing::STATUS_DRAFT; // Stay in draft if processing failed
 
             $drawing->update(['status' => $newStatus]);

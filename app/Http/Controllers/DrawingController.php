@@ -131,7 +131,6 @@ class DrawingController extends Controller
                         'title' => $validated['title'] ?? pathinfo($fileName, PATHINFO_FILENAME),
                         'revision_number' => $validated['revision_number'] ?? null,
                         'status' => Drawing::STATUS_DRAFT,
-                        'extraction_status' => Drawing::EXTRACTION_QUEUED,
                     ]);
 
                     // If sheet_number provided, handle revision chain
