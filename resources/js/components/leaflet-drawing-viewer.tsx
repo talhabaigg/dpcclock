@@ -337,8 +337,9 @@ export function LeafletDrawingViewer({
     }, [coordHeight, coordWidth]);
 
     // Calculate appropriate min/max zoom levels
+    // Allow zooming 2 levels beyond native tiles — Leaflet upscales from maxNativeZoom
     const { minZoom, maxZoom } = useMemo(() => {
-        if (tiles) return { minZoom: 0, maxZoom: tiles.maxZoom };
+        if (tiles) return { minZoom: 0, maxZoom: tiles.maxZoom + 2 };
         return { minZoom: -5, maxZoom: 4 };
     }, [tiles]);
 
@@ -381,7 +382,7 @@ export function LeafletDrawingViewer({
                         bounds={bounds}
                         minZoom={minZoom}
                         maxZoom={maxZoom}
-                        maxNativeZoom={maxZoom}
+                        maxNativeZoom={tiles.maxZoom}
                         minNativeZoom={tiles.minNativeZoom ?? 0}
                         detectRetina={true}
                     />

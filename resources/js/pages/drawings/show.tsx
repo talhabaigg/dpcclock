@@ -87,6 +87,7 @@ type Revision = {
 type TilesInfo = {
     baseUrl: string;
     maxZoom: number;
+    minNativeZoom?: number;
     width: number;
     height: number;
     tileSize: number;

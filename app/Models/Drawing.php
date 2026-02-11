@@ -289,7 +289,7 @@ class Drawing extends Model
             'minNativeZoom' => min($minNativeZoom, $maxZoom),
             'width' => $this->tiles_width ?? 0,
             'height' => $this->tiles_height ?? 0,
-            'tileSize' => $this->tile_size ?? 256,
+            'tileSize' => $this->tile_size ?? 2048,
         ];
     }
 

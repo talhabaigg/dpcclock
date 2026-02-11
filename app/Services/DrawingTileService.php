@@ -11,7 +11,7 @@ class DrawingTileService
 {
     protected string $storageDisk;
     protected string $tilesDir = 'drawing-tiles';
-    protected int $defaultTileSize = 1024;
+    protected int $defaultTileSize = 2048;
     protected int $maxZoomLevel = 5;
 
     protected DrawingProcessingService $processingService;
@@ -52,7 +52,7 @@ class DrawingTileService
                 throw new \Exception('Could not read image dimensions');
             }
 
-            $tileSize = $drawing->tile_size ?? $this->defaultTileSize;
+            $tileSize = $this->defaultTileSize;
             $maxZoom = $this->calculateMaxZoom(max($width, $height), $tileSize);
             $tilesBasePath = "{$this->tilesDir}/{$drawing->id}";
 
