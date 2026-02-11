@@ -64,6 +64,7 @@ jobs:
 
             # Restart queue workers to pick up new code
             php artisan queue:restart
+            sudo supervisorctl restart all
 
             # Reload PHP-FPM to pick up new code
             sudo systemctl reload php8.3-fpm
