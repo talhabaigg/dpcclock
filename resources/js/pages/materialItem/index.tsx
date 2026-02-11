@@ -1,33 +1,26 @@
-import CsvImporterDialog from '@/components/csv-importer';
+import { ImporterWizardTrigger } from '@/components/importer-wizard';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { darkTheme, myTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
-import { AgGridReact } from 'ag-grid-react';
-import { CirclePlus, Download, Search, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ColumnDef, type ColumnOrderState, type ColumnSizingState, type VisibilityState, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, CirclePlus, Columns3, Download, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-ModuleRegistry.registerModules([AllCommunityModule]);
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Items',
-        href: '/material-items/all',
-    },
-];
+
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Items', href: '/material-items/all' }];
 
 type SupplierCategory = {
     id: number;
     code: string;
     name: string;
     supplier_id: number;
-    supplier?: {
-        id: number;
-        code: string;
-        name: string;
-    };
+    supplier?: { id: number; code: string; name: string };
 };
 
 type MaterialItem = {
@@ -37,104 +30,55 @@ type MaterialItem = {
     unit_cost: number;
     price_expiry_date: string | null;
     supplier_category_id: number | null;
-    cost_code: {
-        id: number;
-        code: string;
-    };
-    supplier: {
-        id: number;
-        code: string;
-    };
-    supplier_category: SupplierCategory | null;
-    actions?: string;
+    cost_code: { id: number; code: string } | null;
+    supplier: { id: number; code: string } | null;
 };
 
-export default function ItemList() {
-    const { items, flash, categories } = usePage<{
-        items: MaterialItem[];
-        categories: SupplierCategory[];
-        flash: { success: string; error: string };
-    }>().props;
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    const appliedTheme = isDarkMode ? darkTheme : myTheme;
-    const gridRef = useRef<AgGridReact>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const filteredItems = useMemo(() => {
-        return items.filter((item) => item.code.toLowerCase().includes(searchQuery.toLowerCase()));
-    }, [items, searchQuery]);
-    const [csvImportHeaders] = useState<string[]>(['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date', 'category_code']);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
-    const [selectedCount, setSelectedCount] = useState(0); // ⭐ NEW
-    // const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    //     if (e.target.files?.[0]) {
-    //         setSelectedFile(e.target.files[0]);
-    //     }
-    // };
+type PaginatedData = {
+    data: MaterialItem[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    per_page: number;
+};
 
-    const handleUpload = () => {
-        if (!selectedFile) return;
+type Filters = {
+    search: string;
+    sort: string;
+    dir: string;
+    per_page: number;
+};
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
+const IMPORT_COLUMNS = [
+    { key: 'code', label: 'Item Code', required: true, aliases: ['item_code', 'sku', 'product_code', 'material_code'] },
+    { key: 'description', label: 'Description', required: true, aliases: ['desc', 'item_description', 'name', 'item_name'] },
+    {
+        key: 'unit_cost',
+        label: 'Unit Cost',
+        required: true,
+        type: 'number' as const,
+        aliases: ['price', 'cost', 'unit_price', 'rate'],
+        validate: (v: string) => (Number(v) < 0 ? 'Must be >= 0' : null),
+    },
+    { key: 'supplier_code', label: 'Supplier Code', required: true, aliases: ['supplier', 'vendor_code', 'vendor'] },
+    { key: 'cost_code', label: 'Cost Code', required: true, aliases: ['costcode', 'cost_centre', 'cc'] },
+    { key: 'expiry_date', label: 'Expiry Date', type: 'date' as const, aliases: ['price_expiry', 'expiry', 'expiration', 'price_expiry_date'] },
+    { key: 'category_code', label: 'Category Code', aliases: ['category', 'cat_code', 'supplier_category'] },
+] as const;
 
-        router.post('/material-items/upload', formData, {
-            forceFormData: true,
-            onSuccess: () => setSelectedFile(null),
-        });
-    };
-    const handleCsvSubmit = (mappedData: any) => {
-        // Create CSV content from mapped data
-        const csvContent = `${csvImportHeaders.join(',')}\n${mappedData.map((row: any) => Object.values(row).join(',')).join('\n')}`;
-        const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
-        setSelectedFile(file);
-        setShouldUploadAfterSet(true);
-    };
-    useEffect(() => {
-        if (selectedFile && shouldUploadAfterSet) {
-            handleUpload();
-            setShouldUploadAfterSet(false); // reset the flag
-        }
-    }, [selectedFile, shouldUploadAfterSet]);
+const CSV_HEADERS = ['code', 'description', 'unit_cost', 'supplier_code', 'cost_code', 'expiry_date', 'category_code'];
+
+function CategoryCell({ itemId, value, categories }: { itemId: number; value: number | null; categories: SupplierCategory[] }) {
+    const [current, setCurrent] = useState(value);
 
     useEffect(() => {
-        if (flash.success) {
-            toast.success(flash.success);
-        }
-    }, [flash.success]);
-    const rowSelection = useMemo(() => {
-        return {
-            mode: 'multiRow',
-            selectAll: 'filtered',
-            enableClickSelection: true,
-        };
-    }, []);
+        setCurrent(value);
+    }, [value]);
 
-    const deleteSelectedRow = () => {
-        const selectedNodes = gridRef.current?.api.getSelectedNodes();
-        if (selectedNodes && selectedNodes.length > 0) {
-            if (!confirm('Are you sure you want to delete the selected material items?')) {
-                return;
-            }
-
-            const selectedIds = selectedNodes.map((node) => node.data.id);
-            router.delete('/material-items/delete-multiple', {
-                data: { ids: selectedIds },
-                onSuccess: () => {
-                    toast.success('Selected items deleted successfully.');
-                    setSelectedCount(0); // optional: reset count
-                },
-            });
-        } else {
-            toast.error('No rows selected for deletion.');
-        }
-    };
-    const handleSelectionChanged = () => {
-        const selectedNodes = gridRef.current?.api.getSelectedNodes() ?? [];
-        setSelectedCount(selectedNodes.length);
-    };
-
-    const handleCategoryChange = async (itemId: number, categoryId: number | null) => {
+    const handleChange = async (newValue: string) => {
+        const categoryId = newValue === 'none' ? null : Number(newValue);
+        const previous = current;
+        setCurrent(categoryId);
         try {
             const response = await fetch(`/material-items/${itemId}/category`, {
                 method: 'PATCH',
@@ -144,154 +88,514 @@ export default function ItemList() {
                 },
                 body: JSON.stringify({ supplier_category_id: categoryId }),
             });
-
-            if (response.ok) {
-                toast.success('Category updated successfully');
-            } else {
+            if (!response.ok) {
+                setCurrent(previous);
                 toast.error('Failed to update category');
             }
         } catch {
+            setCurrent(previous);
             toast.error('Failed to update category');
         }
     };
 
-    const categoryOptions = useMemo(() => {
-        return [{ id: null, label: '(None)' }, ...categories.map((c) => ({ id: c.id, label: `${c.code} - ${c.name}` }))];
-    }, [categories]);
+    return (
+        <Select value={current ? String(current) : 'none'} onValueChange={handleChange}>
+            <SelectTrigger className="h-7 border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="none">(None)</SelectItem>
+                {categories.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                        {c.code} - {c.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+function SortHeader({ label, field, currentSort, currentDir, onSort }: { label: string; field: string; currentSort: string; currentDir: string; onSort: (field: string) => void }) {
+    const isActive = currentSort === field;
+    return (
+        <Button variant="ghost" size="sm" className="-ml-2 h-8" onClick={() => onSort(field)}>
+            {label}
+            {isActive ? (
+                currentDir === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+            ) : (
+                <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+            )}
+        </Button>
+    );
+}
+
+export default function ItemList() {
+    const { items, flash, categories, filters } = usePage<{
+        items: PaginatedData;
+        categories: SupplierCategory[];
+        filters: Filters;
+        flash: {
+            success: string;
+            error: string;
+            issues_file: string | null;
+            imported_count: number | null;
+            issues_count: number | null;
+        };
+    }>().props;
+
+    const [searchQuery, setSearchQuery] = useState(filters.search || '');
+    const [rowSelection, setRowSelection] = useState({});
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+    const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+    const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
+    const isNavigating = useRef(false);
+
+    // Navigate with Inertia query params
+    const navigate = useCallback(
+        (params: Record<string, string | number>) => {
+            const query: Record<string, string | number> = {
+                search: filters.search,
+                sort: filters.sort,
+                dir: filters.dir,
+                page: items.current_page,
+                ...params,
+            };
+            // Remove empty search from URL
+            if (!query.search) delete query.search;
+            // Remove defaults from URL
+            if (query.sort === 'id' && query.dir === 'desc') {
+                delete query.sort;
+                delete query.dir;
+            }
+            if (query.page === 1) delete query.page;
+
+            isNavigating.current = true;
+            router.get('/material-items/all', query as Record<string, string>, {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => {
+                    isNavigating.current = false;
+                },
+            });
+        },
+        [filters, items.current_page],
+    );
+
+    // Debounced search
+    useEffect(() => {
+        if (searchQuery === filters.search) return;
+        const timer = setTimeout(() => {
+            navigate({ search: searchQuery, page: 1 });
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Sort handler
+    const handleSort = useCallback(
+        (field: string) => {
+            const newDir = filters.sort === field && filters.dir === 'asc' ? 'desc' : 'asc';
+            navigate({ sort: field, dir: newDir, page: 1 });
+        },
+        [filters, navigate],
+    );
+
+    // Import handler
+    const handleImport = async (rows: Record<string, string>[]) => {
+        const escapeCsv = (v: string) =>
+            v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')
+                ? `"${v.replace(/"/g, '""')}"`
+                : v;
+        const csvContent = `${CSV_HEADERS.join(',')}\n${rows.map((row) => CSV_HEADERS.map((h) => escapeCsv(row[h] ?? '')).join(',')).join('\n')}`;
+        const file = new File([csvContent], 'imported_data.csv', { type: 'text/csv' });
+        const formData = new FormData();
+        formData.append('file', file);
+        await new Promise<void>((resolve, reject) => {
+            router.post('/material-items/upload', formData, {
+                forceFormData: true,
+                onSuccess: () => resolve(),
+                onError: () => reject(new Error('Upload failed')),
+            });
+        });
+    };
+
+    // Flash messages
+    useEffect(() => {
+        if (flash.success) {
+            if (flash.issues_file) {
+                toast.warning(flash.success, { description: 'Downloading issues file...', duration: 8000 });
+                window.location.href = `/material-items/upload-issues/${flash.issues_file}`;
+            } else {
+                toast.success(flash.success);
+            }
+        }
+        if (flash.error) toast.error(flash.error);
+    }, [flash.success, flash.error]);
+
+    // Delete
+    const deleteSelected = () => {
+        const rows = table.getFilteredSelectedRowModel().rows;
+        if (!rows.length) return toast.error('No rows selected for deletion.');
+        if (!confirm('Are you sure you want to delete the selected material items?')) return;
+        router.delete('/material-items/delete-multiple', {
+            data: { ids: rows.map((r) => r.original.id) },
+            onSuccess: () => {
+                toast.success('Selected items deleted.');
+                setRowSelection({});
+            },
+        });
+    };
+
+    // Columns
+    const columns: ColumnDef<MaterialItem>[] = useMemo(
+        () => [
+            {
+                id: 'select',
+                header: ({ table }) => (
+                    <Checkbox
+                        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() ? 'indeterminate' : false)}
+                        onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                        aria-label="Select all"
+                    />
+                ),
+                cell: ({ row }) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(v) => row.toggleSelected(!!v)} aria-label="Select row" />,
+                enableSorting: false,
+                enableHiding: false,
+                enableResizing: false,
+                size: 40,
+                minSize: 40,
+                maxSize: 40,
+            },
+            {
+                accessorKey: 'id',
+                meta: { label: 'ID' },
+                header: () => <SortHeader label="ID" field="id" currentSort={filters.sort} currentDir={filters.dir} onSort={handleSort} />,
+                size: 80,
+                minSize: 50,
+            },
+            {
+                accessorKey: 'code',
+                meta: { label: 'Code' },
+                header: () => <SortHeader label="Code" field="code" currentSort={filters.sort} currentDir={filters.dir} onSort={handleSort} />,
+                size: 140,
+                minSize: 80,
+            },
+            {
+                accessorKey: 'description',
+                meta: { label: 'Description' },
+                header: () => <SortHeader label="Description" field="description" currentSort={filters.sort} currentDir={filters.dir} onSort={handleSort} />,
+                size: 250,
+                minSize: 120,
+            },
+            {
+                accessorKey: 'unit_cost',
+                meta: { label: 'Unit Cost' },
+                header: () => <SortHeader label="Unit Cost" field="unit_cost" currentSort={filters.sort} currentDir={filters.dir} onSort={handleSort} />,
+                cell: ({ row }) => {
+                    const val = row.getValue<number>('unit_cost');
+                    return `$${Number(val).toFixed(2)}`;
+                },
+                size: 110,
+                minSize: 80,
+            },
+            {
+                id: 'cost_code',
+                meta: { label: 'Cost Code' },
+                accessorFn: (row) => row.cost_code?.code ?? '',
+                header: 'Cost Code',
+                size: 110,
+                minSize: 70,
+            },
+            {
+                id: 'supplier_code',
+                meta: { label: 'Supplier' },
+                accessorFn: (row) => row.supplier?.code ?? '',
+                header: 'Supplier',
+                size: 110,
+                minSize: 70,
+            },
+            {
+                accessorKey: 'price_expiry_date',
+                meta: { label: 'Expiry Date' },
+                header: () => <SortHeader label="Expiry Date" field="price_expiry_date" currentSort={filters.sort} currentDir={filters.dir} onSort={handleSort} />,
+                cell: ({ row }) => {
+                    const v = row.getValue<string | null>('price_expiry_date');
+                    if (!v) return <span className="text-muted-foreground">-</span>;
+                    return new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                },
+                size: 130,
+                minSize: 90,
+            },
+            {
+                id: 'category',
+                meta: { label: 'Category' },
+                header: 'Category',
+                cell: ({ row }) => <CategoryCell itemId={row.original.id} value={row.original.supplier_category_id} categories={categories} />,
+                size: 180,
+                minSize: 100,
+            },
+            {
+                id: 'actions',
+                enableHiding: false,
+                enableResizing: false,
+                cell: ({ row }) => (
+                    <Link href={`/material-items/${row.original.id}/edit`}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs">
+                            Edit
+                        </Button>
+                    </Link>
+                ),
+                size: 60,
+                minSize: 60,
+                maxSize: 60,
+            },
+        ],
+        [categories, filters.sort, filters.dir, handleSort],
+    );
+
+    const table = useReactTable({
+        data: items.data,
+        columns,
+        state: { rowSelection, columnVisibility, columnSizing, columnOrder },
+        onRowSelectionChange: setRowSelection,
+        onColumnVisibilityChange: setColumnVisibility,
+        onColumnSizingChange: setColumnSizing,
+        onColumnOrderChange: setColumnOrder,
+        columnResizeMode: 'onChange',
+        getCoreRowModel: getCoreRowModel(),
+        manualPagination: true,
+        manualSorting: true,
+        pageCount: items.last_page,
+    });
+
+    const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+    const fromRow = items.total === 0 ? 0 : (items.current_page - 1) * items.per_page + 1;
+    const toRow = Math.min(items.current_page * items.per_page, items.total);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
-            <div className="m-2 flex flex-col items-center gap-2 sm:flex-row md:justify-between">
-                <div className="relative w-full sm:w-1/4">
-                    <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
-                    <Input
-                        type="text"
-                        placeholder="Search by name"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                    />
+
+            <div className="mx-auto flex w-full min-w-[320px] flex-col gap-4 p-3 sm:p-4">
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    {/* Search */}
+                    <div className="relative w-full min-w-0 sm:max-w-xs">
+                        <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                        <Input placeholder="Search code or description..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        {selectedCount > 0 && (
+                            <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                                <Trash2 className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Delete ({selectedCount})</span>
+                                <span className="sm:hidden">({selectedCount})</span>
+                            </Button>
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <Columns3 className="h-4 w-4 sm:mr-1" />
+                                    <span className="hidden sm:inline">Columns</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {table
+                                    .getAllColumns()
+                                    .filter((col) => col.getCanHide())
+                                    .map((col) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={col.id}
+                                            checked={col.getIsVisible()}
+                                            onCheckedChange={(v) => col.toggleVisibility(!!v)}
+                                            onSelect={(e) => e.preventDefault()}
+                                        >
+                                            {(col.columnDef.meta as { label?: string })?.label ?? col.id}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <ImporterWizardTrigger
+                            title="Import Material Items"
+                            description="Upload a CSV or Excel file to import material items."
+                            columns={IMPORT_COLUMNS as any}
+                            onSubmit={handleImport}
+                            serverValidateUrl="/material-items/validate-import"
+                        />
+                        <a href="/material-items/download">
+                            <Button variant="outline" size="sm">
+                                <Download className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Export</span>
+                            </Button>
+                        </a>
+                        <Link href="/material-items/create">
+                            <Button size="sm">
+                                <CirclePlus className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Add Item</span>
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
-                <div className="mr-auto flex w-full items-center gap-4 sm:w-auto">
-                    <Button variant="destructive" onClick={deleteSelectedRow} className="rounded-lg">
-                        <Trash2 />
-                    </Button>
 
-                    <span className="text-sm text-gray-600">{selectedCount} Items selected </span>
+                {/* Mobile card layout */}
+                <div className="flex flex-col gap-2 sm:hidden">
+                    {!items.data.length ? (
+                        <div className="text-muted-foreground py-12 text-center text-sm">
+                            {items.total === 0 && filters.search ? `No items match "${filters.search}"` : 'No items found.'}
+                        </div>
+                    ) : (
+                        items.data.map((item) => (
+                            <Link key={item.id} href={`/material-items/${item.id}/edit`} className="block">
+                                <div className="rounded-lg border p-3 active:bg-muted/50 ">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">{item.code}</p>
+                                            <p className="text-muted-foreground truncate text-xs">{item.description}</p>
+                                        </div>
+                                        <span className="shrink-0 text-sm font-semibold">${Number(item.unit_cost).toFixed(2)}</span>
+                                    </div>
+                                    <div className="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                                        {item.supplier && <span>Supplier: {item.supplier.code}</span>}
+                                        {item.cost_code && <span>Cost: {item.cost_code.code}</span>}
+                                        {item.price_expiry_date && (
+                                            <span>Exp: {new Date(item.price_expiry_date).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))
+                    )}
                 </div>
 
-                {/* <span className="">
-                    {flash.success && <div className="mt-2 text-sm text-green-600">{flash.success}</div>}
-                    {flash.error && <div className="mt-2 text-sm text-red-600">{flash.error}</div>}
-                </span> */}
+                {/* Desktop table layout */}
+                <div className="hidden overflow-hidden rounded-lg border sm:block">
+                    <Table>
+                        <TableHeader>
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <TableRow key={headerGroup.id} className="bg-muted/50">
+                                    {headerGroup.headers.map((header) => (
+                                        <TableHead
+                                            key={header.id}
+                                            className="group relative px-3"
+                                            style={{
+                                                ...(header.column.columnDef.enableResizing === false || columnSizing[header.column.id] != null
+                                                    ? { width: header.getSize() }
+                                                    : {}),
+                                                minWidth: header.column.columnDef.minSize,
+                                            }}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                e.dataTransfer.dropEffect = 'move';
+                                            }}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                const draggedId = e.dataTransfer.getData('text/plain');
+                                                if (draggedId === header.column.id) return;
+                                                const currentOrder = table.getState().columnOrder.length
+                                                    ? [...table.getState().columnOrder]
+                                                    : table.getAllLeafColumns().map((c) => c.id);
+                                                const fromIdx = currentOrder.indexOf(draggedId);
+                                                const toIdx = currentOrder.indexOf(header.column.id);
+                                                if (fromIdx === -1 || toIdx === -1) return;
+                                                currentOrder.splice(fromIdx, 1);
+                                                currentOrder.splice(toIdx, 0, draggedId);
+                                                setColumnOrder(currentOrder);
+                                            }}
+                                        >
+                                            <div
+                                                className={`truncate ${header.column.getCanHide() && !header.isPlaceholder ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                                draggable={header.column.getCanHide() && !header.isPlaceholder}
+                                                onDragStart={(e) => {
+                                                    e.dataTransfer.setData('text/plain', header.column.id);
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                }}
+                                            >
+                                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                            </div>
+                                            {header.column.getCanResize() && (
+                                                <div
+                                                    onMouseDown={header.getResizeHandler()}
+                                                    onTouchStart={header.getResizeHandler()}
+                                                    className={`absolute top-0 right-0 h-full w-1 cursor-col-resize select-none touch-none opacity-0 transition-opacity group-hover:opacity-100 ${header.column.getIsResizing() ? 'bg-primary opacity-100' : 'bg-border'}`}
+                                                />
+                                            )}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody>
+                            {!items.data.length ? (
+                                <TableRow>
+                                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                                        {items.total === 0 && filters.search ? (
+                                            <span className="text-muted-foreground">No items match "{filters.search}"</span>
+                                        ) : (
+                                            <span className="text-muted-foreground">No items found.</span>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                table.getRowModel().rows.map((row) => (
+                                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                                        {row.getVisibleCells().map((cell) => (
+                                            <TableCell
+                                                key={cell.id}
+                                                className="px-3"
+                                                style={{
+                                                    ...(cell.column.columnDef.enableResizing === false || columnSizing[cell.column.id] != null
+                                                        ? { width: cell.column.getSize() }
+                                                        : {}),
+                                                    minWidth: cell.column.columnDef.minSize,
+                                                }}
+                                            >
+                                                <div className="truncate">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
 
-                <div className="m-2 flex w-full items-center gap-2 sm:w-auto">
-                    <Link href="/material-items/create">
-                        <Button>
-                            <CirclePlus /> Add
+                {/* Pagination */}
+                <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+                    <p className="text-muted-foreground text-xs sm:text-sm">{items.total > 0 ? `${fromRow}\u2013${toRow} of ${items.total.toLocaleString()} items` : 'No items'}</p>
+                    <div className="flex items-center gap-1">
+                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: 1 })}>
+                            <ChevronFirst className="h-4 w-4" />
                         </Button>
-                    </Link>
-                    <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
-                    <a href="/material-items/download">
-                        <Button>
-                            {' '}
-                            <Download />
-                            Download
+                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: items.current_page - 1 })}>
+                            <ChevronLeft className="h-4 w-4" />
                         </Button>
-                    </a>
+                        <span className="text-muted-foreground px-2 text-xs tabular-nums sm:px-3 sm:text-sm">
+                            {items.current_page} / {items.last_page}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 sm:h-8 sm:w-8"
+                            disabled={items.current_page >= items.last_page}
+                            onClick={() => navigate({ page: items.current_page + 1 })}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 sm:h-8 sm:w-8"
+                            disabled={items.current_page >= items.last_page}
+                            onClick={() => navigate({ page: items.last_page })}
+                        >
+                            <ChevronLast className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
-
-            <div className="ag-theme-alpine m-2 h-full max-w-sm rounded-xl border-0 p-0 sm:max-w-full sm:pr-4">
-                <AgGridReact
-                    ref={gridRef}
-                    rowData={filteredItems}
-                    theme={appliedTheme}
-                    // @ts-expect-error AG Grid type mismatch
-                    rowSelection={rowSelection}
-                    enableCellTextSelection={true}
-                    onSelectionChanged={handleSelectionChanged}
-                    columnDefs={[
-                        { field: 'id', headerName: 'ID' },
-                        { field: 'code', headerName: 'Code' },
-                        { field: 'description', headerName: 'Description' },
-                        { field: 'unit_cost', headerName: 'Unit Cost', valueFormatter: ({ value }) => `$${value}` },
-                        { field: 'cost_code.code', headerName: 'Cost Code' },
-                        { field: 'supplier.code', headerName: 'Supplier Code' },
-                        {
-                            field: 'price_expiry_date',
-                            headerName: 'Expiry Date',
-                            valueFormatter: ({ value }) => {
-                                if (!value) return '';
-                                const date = new Date(value);
-                                return date.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                            },
-                        },
-                        {
-                            field: 'supplier_category_id',
-                            headerName: 'Category',
-                            editable: true,
-                            cellEditor: 'agSelectCellEditor',
-                            cellEditorParams: {
-                                values: categoryOptions.map((c) => c.id),
-                            },
-                            valueFormatter: ({ value }) => {
-                                if (!value) return '';
-                                const cat = categories.find((c) => c.id === value);
-                                return cat ? `${cat.code} - ${cat.name}` : '';
-                            },
-                            onCellValueChanged: (params: { data: MaterialItem; newValue: number | null }) => {
-                                handleCategoryChange(params.data.id, params.newValue);
-                            },
-                        },
-                        {
-                            field: 'actions',
-                            headerName: 'Actions',
-                            cellRenderer: (params: { data: { id: any } }) => (
-                                <a href={`/material-items/${params.data.id}/edit`}>
-                                    <Button variant="link">Edit</Button>
-                                </a>
-                            ),
-                        },
-                    ]}
-                    defaultColDef={{ flex: 1, minWidth: 100, filter: 'agTextColumnFilter' }}
-                    pagination={true}
-                    paginationPageSize={20}
-                />
-            </div>
-
-            {/* <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Code</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead>Unit Cost</TableHead>
-                            <TableHead>Cost Code</TableHead>
-                            <TableHead>Supplier Code</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredItems.map((item) => (
-                            <TableRow key={item.id}>
-                                <TableCell>{item.id}</TableCell>
-                                <TableCell>{item.code}</TableCell>
-                                <TableCell>{item.description || 'Not Found'}</TableCell>
-                                <TableCell>${item.unit_cost || 'no price'}</TableCell>
-                                <TableCell>{item.cost_code?.code || 'no code'}</TableCell>
-                                <TableCell>{item.supplier?.code || 'no supplier'}</TableCell>
-                                <TableCell>
-                                    <Link href={`/material-items/${item.id}/edit`}>
-                                        <Button variant="link">Edit</Button>
-                                    </Link>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div> */}
         </AppLayout>
     );
 }

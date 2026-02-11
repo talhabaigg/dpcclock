@@ -164,7 +164,7 @@ class KioskAuthController extends Controller
 
     private function verifyKioskPin($kioskId, $employeeId, $pin)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $request = [
             'employeeId' => (int) $employeeId,  // Assuming $employeeId is an integer
             'pin' => (string) $pin,
@@ -233,7 +233,7 @@ class KioskAuthController extends Controller
 
     private function changePinRequest($employeeId, $kioskId, $emailPin, $newPin)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $request = [
             'employeeId' => (int) $employeeId,  // Assuming $employeeId is an integer
             'oldPin' => (string) $emailPin,
@@ -260,7 +260,7 @@ class KioskAuthController extends Controller
 
     private function resetPinRequest($employeeId, $kioskId)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $request = [
             'employeeId' => (int) $employeeId,  // Assuming $employeeId is an integer
         ];

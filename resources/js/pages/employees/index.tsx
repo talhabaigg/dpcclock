@@ -3,15 +3,14 @@ import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
-import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowUpDown, CheckCircle2, RefreshCcw, RotateCcw, Users } from 'lucide-react';
+import { type ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, RefreshCcw, RotateCcw, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface Employee {
@@ -24,72 +23,150 @@ interface Employee {
     worktypes?: { eh_worktype_id: string; name: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Employees',
-        href: '/employees',
-    },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employees', href: '/employees' }];
+
+function SortHeader({ label, column }: { label: string; column: any }) {
+    const sorted = column.getIsSorted();
+    return (
+        <Button variant="ghost" size="sm" className="-ml-2 h-8" onClick={() => column.toggleSorting(sorted === 'asc')}>
+            {label}
+            {sorted === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : sorted === 'desc' ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
+        </Button>
+    );
+}
 
 export default function EmployeesList() {
     const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading] = useState(false);
     const [open, setOpen] = useState(false);
-
-    const { sortedItems: sortedEmployees, handleSort } = useSortableData<Employee>(employees, { field: 'name', order: 'asc' });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
 
     const filteredEmployees = useMemo(() => {
-        if (!searchQuery) return sortedEmployees;
+        if (!searchQuery) return employees;
         const query = searchQuery.toLowerCase();
-        return sortedEmployees.filter(
+        return employees.filter(
             (employee) =>
                 employee.name.toLowerCase().includes(query) ||
                 employee.external_id?.toLowerCase().includes(query) ||
                 employee.eh_employee_id?.toLowerCase().includes(query),
         );
-    }, [sortedEmployees, searchQuery]);
+    }, [employees, searchQuery]);
+
+    const columns: ColumnDef<Employee>[] = useMemo(
+        () => [
+            {
+                accessorKey: 'name',
+                header: ({ column }) => <SortHeader label="Employee" column={column} />,
+                cell: ({ row }) => (
+                    <div className="flex items-center gap-2">
+                        <UserInfo
+                            user={{
+                                ...row.original,
+                                email_verified_at: '',
+                                created_at: '',
+                                updated_at: '',
+                                phone: '',
+                            }}
+                        />
+                    </div>
+                ),
+            },
+            {
+                accessorKey: 'external_id',
+                header: ({ column }) => <SortHeader label="External ID" column={column} />,
+                cell: ({ row }) => {
+                    const val = row.original.external_id?.trim();
+                    return val ? (
+                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{val}</code>
+                    ) : (
+                        <span className="text-muted-foreground text-sm italic">N/A</span>
+                    );
+                },
+            },
+            {
+                accessorKey: 'eh_employee_id',
+                header: ({ column }) => <SortHeader label="EH Employee ID" column={column} />,
+                cell: ({ row }) => {
+                    const val = row.original.eh_employee_id?.trim();
+                    return val ? (
+                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{val}</code>
+                    ) : (
+                        <span className="text-muted-foreground text-sm italic">N/A</span>
+                    );
+                },
+            },
+            {
+                id: 'worktypes',
+                header: 'Work Types',
+                cell: ({ row }) => {
+                    const worktypes = row.original.worktypes;
+                    if (!worktypes || worktypes.length === 0) {
+                        return <span className="text-muted-foreground text-sm italic">None assigned</span>;
+                    }
+                    return (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {worktypes.slice(0, 2).map((wt) => (
+                                <Badge key={wt.eh_worktype_id} variant="secondary" className="text-xs">
+                                    {wt.name}
+                                </Badge>
+                            ))}
+                            {worktypes.length > 2 && (
+                                <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Badge variant="outline" className="text-muted-foreground hover:bg-muted cursor-pointer text-xs">
+                                                +{worktypes.length - 2}
+                                            </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="max-w-xs p-3">
+                                            <p className="mb-2 text-xs font-medium">All Work Types</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {worktypes.map((wt) => (
+                                                    <Badge key={wt.eh_worktype_id} variant="secondary" className="text-xs">
+                                                        {wt.name}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
+                    );
+                },
+            },
+            {
+                id: 'actions',
+                cell: ({ row }) => (
+                    <div className="text-right">
+                        <Link href={`/employee/${row.original.id}/worktypes/sync`}>
+                            <Button variant="outline" size="sm" className="gap-2 opacity-0 transition-all group-hover:opacity-100">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                Retry Sync
+                            </Button>
+                        </Link>
+                    </div>
+                ),
+            },
+        ],
+        [],
+    );
+
+    const table = useReactTable({
+        data: filteredEmployees,
+        columns,
+        state: { sorting },
+        onSortingChange: setSorting,
+        getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+    });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
             <LoadingDialog open={open} setOpen={setOpen} />
 
-            <div className="flex flex-col gap-6 p-4 md:p-6">
-                {/* Page Header */}
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <Users className="text-primary h-6 w-6" />
-                            Employees
-                        </h1>
-                        <p className="text-muted-foreground text-sm">
-                            {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} found
-                        </p>
-                    </div>
-
-                    {/* Actions & Search */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="relative w-full sm:w-64">
-                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Link href="/employees/sync" method="get">
-                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
-                                    <RefreshCcw className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-                                    Sync Employees
-                                </Button>
-                            </Link>
-                            <Link href="/employees/worktypes/sync" method="get">
-                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
-                                    <RefreshCcw className="h-4 w-4" />
-                                    Sync Worktypes
-                                </Button>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
+            <div className="flex flex-col gap-4 p-3 sm:p-4">
                 {/* Flash Message */}
                 {flash.success && (
                     <Alert className="border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20">
@@ -99,164 +176,103 @@ export default function EmployeesList() {
                     </Alert>
                 )}
 
-                {/* Table Card */}
-                <Card className="overflow-hidden">
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                        <TableHead className="pl-6">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="-ml-3 h-8 gap-1 font-medium hover:bg-transparent"
-                                                onClick={() => handleSort('name')}
-                                            >
-                                                Employee
-                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="-ml-3 h-8 gap-1 font-medium hover:bg-transparent"
-                                                onClick={() => handleSort('external_id')}
-                                            >
-                                                External ID
-                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="-ml-3 h-8 gap-1 font-medium hover:bg-transparent"
-                                                onClick={() => handleSort('eh_employee_id')}
-                                            >
-                                                EH Employee ID
-                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>Work Types</TableHead>
-                                        <TableHead className="pr-6 text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredEmployees.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="h-32 text-center">
-                                                <div className="text-muted-foreground flex flex-col items-center gap-2">
-                                                    <Users className="h-8 w-8 opacity-40" />
-                                                    <p>No employees found</p>
-                                                    {searchQuery && (
-                                                        <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
-                                                            Clear search
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        filteredEmployees.map((employee) => (
-                                            <TableRow key={employee.id} className="group hover:bg-muted/50 transition-colors">
-                                                <TableCell className="pl-6">
-                                                    <UserInfo
-                                                        user={{
-                                                            ...employee,
-                                                            email_verified_at: '',
-                                                            created_at: '',
-                                                            updated_at: '',
-                                                            phone: '',
-                                                        }}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    {employee.external_id?.trim() ? (
-                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                                            {employee.external_id}
-                                                        </code>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-sm italic">N/A</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {employee.eh_employee_id?.trim() ? (
-                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                                            {employee.eh_employee_id}
-                                                        </code>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-sm italic">N/A</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                        {employee.worktypes && employee.worktypes.length > 0 ? (
-                                                            <>
-                                                                {employee.worktypes.slice(0, 2).map((worktype) => (
-                                                                    <Badge
-                                                                        key={worktype.eh_worktype_id}
-                                                                        variant="secondary"
-                                                                        className="text-xs transition-transform hover:scale-105"
-                                                                    >
-                                                                        {worktype.name}
-                                                                    </Badge>
-                                                                ))}
-                                                                {employee.worktypes.length > 2 && (
-                                                                    <TooltipProvider delayDuration={200}>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <Badge
-                                                                                    variant="outline"
-                                                                                    className="text-muted-foreground hover:bg-muted cursor-pointer text-xs transition-all"
-                                                                                >
-                                                                                    +{employee.worktypes.length - 2}
-                                                                                </Badge>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent side="bottom" className="max-w-xs p-3">
-                                                                                <p className="mb-2 text-xs font-medium">All Work Types</p>
-                                                                                <div className="flex flex-wrap gap-1">
-                                                                                    {employee.worktypes.map((worktype) => (
-                                                                                        <Badge
-                                                                                            key={worktype.eh_worktype_id}
-                                                                                            variant="secondary"
-                                                                                            className="text-xs"
-                                                                                        >
-                                                                                            {worktype.name}
-                                                                                        </Badge>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm italic">None assigned</span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="pr-6 text-right">
-                                                    <Link href={`/employee/${employee.id}/worktypes/sync`}>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="gap-2 opacity-0 transition-all group-hover:opacity-100"
-                                                        >
-                                                            <RotateCcw className="h-3.5 w-3.5" />
-                                                            Retry Sync
-                                                        </Button>
-                                                    </Link>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-xs">
+                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Link href="/employees/sync" method="get">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                                <RefreshCcw className="h-4 w-4" />
+                                Sync Employees
+                            </Button>
+                        </Link>
+                        <Link href="/employees/worktypes/sync" method="get">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                                <RefreshCcw className="h-4 w-4" />
+                                Sync Worktypes
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+
+                {/* Mobile card layout */}
+                <div className="flex flex-col gap-2 sm:hidden">
+                    {!filteredEmployees.length ? (
+                        <div className="text-muted-foreground py-12 text-center text-sm">
+                            {searchQuery ? `No employees match "${searchQuery}"` : 'No employees found.'}
                         </div>
-                    </CardContent>
-                </Card>
+                    ) : (
+                        filteredEmployees.map((emp) => (
+                            <div key={emp.id} className="rounded-lg border p-3">
+                                <div className="flex items-center gap-2">
+                                    <UserInfo
+                                        user={{ ...emp, email_verified_at: '', created_at: '', updated_at: '', phone: '' }}
+                                        showEmail
+                                    />
+                                </div>
+                                <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                                    {emp.external_id?.trim() && <span>Ext: {emp.external_id}</span>}
+                                    {emp.eh_employee_id?.trim() && <span>EH: {emp.eh_employee_id}</span>}
+                                </div>
+                                {emp.worktypes && emp.worktypes.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                        {emp.worktypes.map((wt) => (
+                                            <Badge key={wt.eh_worktype_id} variant="secondary" className="text-[10px]">
+                                                {wt.name}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-hidden rounded-lg border sm:block">
+                    <Table>
+                        <TableHeader>
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <TableRow key={headerGroup.id} className="bg-muted/50">
+                                    {headerGroup.headers.map((header) => (
+                                        <TableHead key={header.id} className="px-3">
+                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody>
+                            {!table.getRowModel().rows.length ? (
+                                <TableRow>
+                                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
+                                            <Users className="h-8 w-8 opacity-40" />
+                                            <p>No employees found</p>
+                                            {searchQuery && (
+                                                <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
+                                                    Clear search
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                table.getRowModel().rows.map((row) => (
+                                    <TableRow key={row.id} className="group">
+                                        {row.getVisibleCells().map((cell) => (
+                                            <TableCell key={cell.id} className="px-3">
+                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
         </AppLayout>
     );

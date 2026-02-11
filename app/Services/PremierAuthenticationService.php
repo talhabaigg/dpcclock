@@ -32,8 +32,8 @@ class PremierAuthenticationService
             ->post($this->authUrl, [
                 'grant_type' => 'password',
                 'client_id' => 'Premier.ExternalAPI',
-                'username' => env('PREMIER_SWAGGER_API_USERNAME'),
-                'password' => env('PREMIER_SWAGGER_API_PASSWORD'),
+                'username' => config('premier.swagger_api.username'),
+                'password' => config('premier.swagger_api.password'),
             ]);
 
         if ($response->successful()) {

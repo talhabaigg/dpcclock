@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
@@ -10,6 +9,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -23,14 +23,11 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
-    ChevronLeft,
-    ChevronRight,
     CirclePlus,
     Copy,
     EllipsisVertical,
     Eye,
     FileText,
-    Filter,
     LayoutGrid,
     LayoutList,
     Search,
@@ -62,23 +59,104 @@ interface PageProps {
     [key: string]: unknown;
 }
 
-const getStatusStyles = (status: string) => {
-    switch (status) {
-        case 'success':
-            return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800';
-        case 'failed':
-            return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800';
-        case 'pending':
-            return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800';
-        case 'sent':
-            return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800';
-        case 'office_review':
-            return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800';
-        default:
-            return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-    }
+const statusVariants: Record<string, string> = {
+    success: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
+    failed: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
+    sent: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
+    office_review: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800',
 };
 
+function getStatusClasses(status: string) {
+    return statusVariants[status] ?? 'bg-muted text-muted-foreground border';
+}
+
+function formatCurrency(value: number | string) {
+    return `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// ── Actions dropdown (desktop) ────────────────────────────────────────
+function RequisitionActions({ requisition }: { requisition: { id: number; is_template: boolean } }) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link href={`/requisition/${requisition.id}`}>
+                    <DropdownMenuItem className="gap-2">
+                        <Eye className="h-4 w-4" />
+                        View Details
+                    </DropdownMenuItem>
+                </Link>
+                <Link href={`/requisition/${requisition.id}/copy`}>
+                    <DropdownMenuItem className="gap-2">
+                        <Copy className="h-4 w-4" />
+                        Copy
+                    </DropdownMenuItem>
+                </Link>
+                <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
+                    <DropdownMenuItem className="gap-2">
+                        <SquarePlus className="h-4 w-4" />
+                        {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                    </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+                <Link href={`/requisition/${requisition.id}/delete`}>
+                    <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                    </DropdownMenuItem>
+                </Link>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+// ── Actions sheet (mobile) ────────────────────────────────────────────
+function RequisitionActionsMobile({ requisition }: { requisition: { id: number; is_template: boolean } }) {
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-xl">
+                <SheetHeader>
+                    <SheetTitle>Requisition #{requisition.id}</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1 px-4 pb-6">
+                    <Link href={`/requisition/${requisition.id}`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                        <Eye className="text-muted-foreground h-4 w-4" />
+                        View Details
+                    </Link>
+                    <Link href={`/requisition/${requisition.id}/copy`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                        <Copy className="text-muted-foreground h-4 w-4" />
+                        Copy
+                    </Link>
+                    <Link href={`/requisition/${requisition.id}/toggle-requisition-template`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                        <SquarePlus className="text-muted-foreground h-4 w-4" />
+                        {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                    </Link>
+                    <Separator className="my-2" />
+                    <Link href={`/requisition/${requisition.id}/delete`} className="hover:bg-destructive/10 text-destructive flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                    </Link>
+                </nav>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────
 export default function RequisitionList() {
     const { requisitions, filterOptions, costRange, filters, flash } = usePage<PageProps>().props;
 
@@ -89,7 +167,6 @@ export default function RequisitionList() {
         filters.min_cost ? parseFloat(filters.min_cost) : costRange.min,
         filters.max_cost ? parseFloat(filters.max_cost) : costRange.max,
     ]);
-    const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const costRangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -98,41 +175,32 @@ export default function RequisitionList() {
         localStorage.setItem('viewMode', value);
     };
 
-    const handleSearchChange = useCallback(
-        (value: string) => {
-            setSearchInput(value);
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-            searchTimeoutRef.current = setTimeout(() => {
-                applyFilters({ search: value });
-            }, 400);
+    const applyFilters = useCallback(
+        (newFilters: Partial<Filters>) => {
+            const merged = { ...filters, ...newFilters };
+            const query: Record<string, string> = {};
+            if (merged.search) query.search = merged.search;
+            if (merged.status) query.status = merged.status;
+            if (merged.supplier) query.supplier = merged.supplier;
+            if (merged.location) query.location = merged.location;
+            if (merged.creator) query.creator = merged.creator;
+            if (merged.deliver_to) query.deliver_to = merged.deliver_to;
+            if (merged.contact) query.contact = merged.contact;
+            if (merged.templates_only) query.templates_only = '1';
+            if (merged.min_cost) query.min_cost = merged.min_cost;
+            if (merged.max_cost) query.max_cost = merged.max_cost;
+            router.get('/requisition/all', query, { preserveState: true, preserveScroll: true });
         },
         [filters],
     );
 
-    const applyFilters = useCallback(
-        (newFilters: Partial<Filters>) => {
-            const mergedFilters = { ...filters, ...newFilters };
-            const query: Record<string, string> = {};
-
-            if (mergedFilters.search) query.search = mergedFilters.search;
-            if (mergedFilters.status) query.status = mergedFilters.status;
-            if (mergedFilters.supplier) query.supplier = mergedFilters.supplier;
-            if (mergedFilters.location) query.location = mergedFilters.location;
-            if (mergedFilters.creator) query.creator = mergedFilters.creator;
-            if (mergedFilters.deliver_to) query.deliver_to = mergedFilters.deliver_to;
-            if (mergedFilters.contact) query.contact = mergedFilters.contact;
-            if (mergedFilters.templates_only) query.templates_only = '1';
-            if (mergedFilters.min_cost) query.min_cost = mergedFilters.min_cost;
-            if (mergedFilters.max_cost) query.max_cost = mergedFilters.max_cost;
-
-            router.get('/requisition/all', query, {
-                preserveState: true,
-                preserveScroll: true,
-            });
+    const handleSearchChange = useCallback(
+        (value: string) => {
+            setSearchInput(value);
+            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = setTimeout(() => applyFilters({ search: value }), 400);
         },
-        [filters],
+        [applyFilters],
     );
 
     const updateFilter = useCallback(
@@ -151,9 +219,7 @@ export default function RequisitionList() {
     const handleCostRangeChange = useCallback(
         (value: [number, number]) => {
             setLocalCostRange(value);
-            if (costRangeTimeoutRef.current) {
-                clearTimeout(costRangeTimeoutRef.current);
-            }
+            if (costRangeTimeoutRef.current) clearTimeout(costRangeTimeoutRef.current);
             costRangeTimeoutRef.current = setTimeout(() => {
                 applyFilters({
                     min_cost: value[0] > costRange.min ? value[0].toString() : '',
@@ -174,9 +240,7 @@ export default function RequisitionList() {
                 toast.success(flash.success);
             }
         }
-        if (flash.error) {
-            toast.error(flash.error);
-        }
+        if (flash.error) toast.error(flash.error);
     }, [flash.success, flash.error]);
 
     useEffect(() => {
@@ -205,645 +269,503 @@ export default function RequisitionList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Requisitions" />
 
-            <div className="dark:from-background dark:via-background dark:to-background flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50">
-                {/* Header Section */}
-                <div className="dark:border-border dark:bg-background/70 relative border-b border-slate-200/40 bg-white/70 px-3 py-4 backdrop-blur-xl sm:px-6 sm:py-6 md:px-8 lg:px-10">
-                    {/* Subtle gradient overlay */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-500/[0.02] via-purple-500/[0.02] to-pink-500/[0.02] dark:from-blue-500/[0.03] dark:via-purple-500/[0.03] dark:to-pink-500/[0.03]" />
-
-                    {/* Top Row: Title and Create Button */}
-                    <div className="relative mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="@container flex min-w-0 flex-col gap-4 p-4">
+                {/* ── Toolbar ──────────────────────────────────────────── */}
+                <div className="flex min-w-0 flex-col gap-3">
+                    {/* Row 1: Title + Create (wide) / Title only (narrow) */}
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-slate-50">Requisitions</h1>
-                            <p className="mt-0.5 text-xs font-medium text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
-                                Manage and track all purchase requisitions
-                            </p>
+                            <h1 className="text-xl font-semibold tracking-tight">Requisitions</h1>
+                            <p className="text-muted-foreground text-sm">Manage and track purchase requisitions</p>
                         </div>
                         <Link href="/requisition/create">
-                            <Button className="group h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-4 text-sm font-medium shadow-lg ring-1 shadow-slate-900/20 ring-slate-900/10 transition-all duration-300 hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 hover:ring-slate-800/20 sm:h-12 sm:w-auto sm:gap-2.5 sm:rounded-xl sm:px-6 sm:text-base dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white">
-                                <CirclePlus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 sm:h-5 sm:w-5" />
+                            <Button className="gap-2">
+                                <CirclePlus className="h-4 w-4" />
                                 Create Requisition
                             </Button>
                         </Link>
                     </div>
 
-                    {/* Search, Filters, and View Toggle Row */}
-                    <div className="relative flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center">
-                        {/* Search Bar */}
-                        <div className="relative w-full lg:max-w-md">
-                            <div
-                                className={cn(
-                                    'absolute inset-0 -z-10 rounded-2xl transition-all duration-500',
-                                    isSearchFocused && 'bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-2xl',
-                                )}
-                            />
-                            <Search
-                                className={cn(
-                                    'absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-all duration-200 sm:left-4 sm:h-5 sm:w-5',
-                                    isSearchFocused ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500',
-                                )}
-                            />
+                    {/* Row 2: Search + Filters + View Toggle (wide) */}
+                    <div className="hidden items-center gap-2 @3xl:flex">
+                        <div className="relative w-72">
+                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                             <Input
                                 type="text"
                                 placeholder="Search requisitions..."
                                 value={searchInput}
                                 onChange={(e) => handleSearchChange(e.target.value)}
-                                onFocus={() => setIsSearchFocused(true)}
-                                onBlur={() => setIsSearchFocused(false)}
-                                className="h-11 rounded-xl border-slate-200/60 bg-white/80 pr-10 pl-11 text-sm shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 placeholder:text-slate-400 hover:border-slate-300 hover:shadow-md focus:border-slate-300 focus:bg-white focus:shadow-lg focus:ring-slate-900/10 sm:h-12 sm:pr-12 sm:pl-12 sm:text-base dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-slate-600 dark:focus:bg-slate-800 dark:focus:ring-white/10"
+                                className="pl-9"
                             />
                             {searchInput && (
-                                <button
-                                    onClick={() => handleSearchChange('')}
-                                    className="absolute top-1/2 right-4 -translate-y-1/2 rounded-full p-1.5 text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-slate-600 active:scale-95 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                                >
+                                <button onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
                                     <X className="h-4 w-4" />
                                 </button>
                             )}
                         </div>
 
-                        {/* Filter Button, Active Badges, and View Toggle */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <Sheet>
-                                <SheetTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        className={cn(
-                                            'group h-10 gap-2 rounded-xl border-slate-200/60 bg-white/80 px-3 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-300 hover:border-slate-300 hover:bg-white hover:shadow-md hover:ring-slate-900/10 active:scale-[0.98] sm:h-12 sm:gap-2.5 sm:px-5 dark:border-slate-700/60 dark:bg-slate-800/80 dark:ring-white/5 dark:hover:border-slate-600 dark:hover:bg-slate-800',
-                                            totalActiveFilters > 0 &&
-                                                'border-blue-300/60 bg-blue-50/80 ring-blue-500/10 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-700/60 dark:bg-blue-950/40 dark:ring-blue-500/10 dark:hover:border-blue-600 dark:hover:bg-blue-950/60',
-                                        )}
-                                    >
-                                        <SlidersHorizontal
-                                            className={cn(
-                                                'h-4 w-4 transition-transform duration-300 group-hover:rotate-12 sm:h-5 sm:w-5',
-                                                totalActiveFilters > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500',
-                                            )}
-                                        />
-                                        <span
-                                            className={cn(
-                                                'text-sm font-medium sm:text-base',
-                                                totalActiveFilters > 0 ? 'text-blue-700 dark:text-blue-300' : '',
-                                            )}
-                                        >
-                                            Filters
-                                        </span>
-                                        {totalActiveFilters > 0 && (
-                                            <Badge className="ml-1 h-6 min-w-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-500 px-2 text-xs font-semibold text-white shadow-sm dark:from-blue-500 dark:to-blue-400">
-                                                {totalActiveFilters}
-                                            </Badge>
-                                        )}
-                                    </Button>
-                                </SheetTrigger>
-                                <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-                                    <SheetHeader className="pb-6">
-                                        <SheetTitle className="flex items-center gap-3 text-xl font-bold">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 shadow-sm ring-1 ring-slate-900/5 dark:from-slate-800 dark:to-slate-700 dark:ring-white/10">
-                                                <Filter className="h-5 w-5 text-slate-600 dark:text-slate-300" />
-                                            </div>
-                                            Filter Requisitions
-                                        </SheetTitle>
-                                    </SheetHeader>
-                                    <SheetDescription asChild>
-                                        <div className="space-y-8">
-                                            <div className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm ring-1 ring-slate-900/5 transition-all duration-300 hover:shadow-md dark:border-slate-700/60 dark:from-slate-800/50 dark:to-slate-800 dark:ring-white/5">
-                                                <div className="flex items-center gap-4">
-                                                    <Checkbox
-                                                        checked={filters.templates_only}
-                                                        onCheckedChange={(checked) => updateFilter('templates_only', checked === true)}
-                                                        id="filter-templates"
-                                                        className="h-6 w-6 rounded-lg"
-                                                    />
-                                                    <Label
-                                                        htmlFor="filter-templates"
-                                                        className="cursor-pointer text-base font-medium text-slate-700 dark:text-slate-300"
-                                                    >
-                                                        Show templates only
-                                                    </Label>
-                                                </div>
-                                            </div>
+                        <FilterSheetButton
+                            totalActiveFilters={totalActiveFilters}
+                            filters={filters}
+                            filterDefinitions={filterDefinitions}
+                            updateFilter={updateFilter}
+                            costRange={costRange}
+                            localCostRange={localCostRange}
+                            handleCostRangeChange={handleCostRangeChange}
+                            clearAllFilters={clearAllFilters}
+                        />
 
-                                            <Separator className="bg-slate-200/60 dark:bg-slate-700/60" />
+                        {/* Active filter badges */}
+                        <ActiveFilterBadges
+                            activeFilters={activeFilters}
+                            filters={filters}
+                            updateFilter={updateFilter}
+                        />
 
-                                            <div className="space-y-5">
-                                                {filterDefinitions.map(({ key, label, options }) => {
-                                                    const selectOptions = options.map((val) => ({ value: val, label: val }));
-                                                    const isActive = !!filters[key];
-                                                    return (
-                                                        <div
-                                                            key={key}
-                                                            className={cn(
-                                                                'rounded-2xl border p-5 shadow-sm ring-1 transition-all duration-300',
-                                                                isActive
-                                                                    ? 'border-blue-300/60 bg-gradient-to-br from-blue-50 to-white ring-blue-500/10 dark:border-blue-700/60 dark:from-blue-950/40 dark:to-slate-800 dark:ring-blue-500/10'
-                                                                    : 'border-slate-200/60 bg-white ring-slate-900/5 hover:border-slate-300 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/50 dark:ring-white/5 dark:hover:border-slate-600',
-                                                            )}
-                                                        >
-                                                            <Label
-                                                                htmlFor={`filter-${key}`}
-                                                                className={cn(
-                                                                    'mb-3 block text-xs font-semibold tracking-wider uppercase',
-                                                                    isActive
-                                                                        ? 'text-blue-600 dark:text-blue-400'
-                                                                        : 'text-slate-500 dark:text-slate-400',
-                                                                )}
-                                                            >
-                                                                {label}
-                                                            </Label>
-                                                            <SelectFilter
-                                                                filterName={`Filter by ${label}`}
-                                                                options={selectOptions}
-                                                                onChange={(val) => updateFilter(key, val)}
-                                                                value={(filters[key] as string) ?? ''}
-                                                            />
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                        <div className="ml-auto">
+                            <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+                        </div>
+                    </div>
 
-                                            <Separator className="bg-slate-200/60 dark:bg-slate-700/60" />
-
-                                            <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm ring-1 ring-slate-900/5 dark:border-slate-700/60 dark:bg-slate-800/50 dark:ring-white/5">
-                                                <Label className="mb-4 block text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                                                    Requisition Value Range
-                                                </Label>
-                                                <CostRangeSlider
-                                                    min={costRange.min}
-                                                    max={costRange.max}
-                                                    value={localCostRange}
-                                                    onChange={handleCostRangeChange}
-                                                />
-                                            </div>
-
-                                            {totalActiveFilters > 0 && (
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={clearAllFilters}
-                                                    className="h-12 w-full gap-2.5 rounded-xl border-red-200/60 text-red-600 ring-1 ring-red-500/10 transition-all duration-300 hover:border-red-300 hover:bg-red-50 hover:text-red-700 hover:shadow-md active:scale-[0.98] dark:border-red-800/60 dark:text-red-400 dark:ring-red-500/10 dark:hover:border-red-700 dark:hover:bg-red-950/30"
-                                                >
-                                                    <X className="h-5 w-5" />
-                                                    Clear All Filters
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </SheetDescription>
-                                </SheetContent>
-                            </Sheet>
-
-                            {/* Active Filter Badges */}
-                            <div className="flex flex-wrap items-center gap-2">
-                                {activeFilters.map(([key, value]) => (
-                                    <Badge
-                                        key={key}
-                                        variant="secondary"
-                                        className="group h-8 gap-2 rounded-lg bg-slate-100/80 pr-2 pl-3 text-slate-700 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm transition-all duration-200 hover:bg-slate-200 hover:shadow-md dark:bg-slate-700/80 dark:text-slate-300 dark:ring-white/5 dark:hover:bg-slate-600"
-                                    >
-                                        <span className="max-w-24 truncate text-sm font-medium sm:max-w-36">{String(value)}</span>
-                                        <button
-                                            className="rounded-full p-1 transition-all duration-200 hover:bg-slate-300 active:scale-90 dark:hover:bg-slate-500"
-                                            onClick={() => updateFilter(key as keyof Filters, null)}
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    </Badge>
-                                ))}
-                                {filters.templates_only && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="group h-8 gap-2 rounded-lg bg-purple-100/80 pr-2 pl-3 text-purple-700 shadow-sm ring-1 ring-purple-500/10 backdrop-blur-sm transition-all duration-200 hover:bg-purple-200 hover:shadow-md dark:bg-purple-900/50 dark:text-purple-300 dark:ring-purple-500/10 dark:hover:bg-purple-900"
-                                    >
-                                        <span className="text-sm font-medium">Templates Only</span>
-                                        <button
-                                            className="rounded-full p-1 transition-all duration-200 hover:bg-purple-200 active:scale-90 dark:hover:bg-purple-800"
-                                            onClick={() => updateFilter('templates_only', false)}
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    </Badge>
-                                )}
-                            </div>
-
-                            {/* View Toggle */}
+                    {/* Row 2 (narrow): Search full-width, filters + toggle below */}
+                    <div className="flex flex-col gap-2 @3xl:hidden">
+                        <div className="relative w-full">
+                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                            <Input
+                                type="text"
+                                placeholder="Search requisitions..."
+                                value={searchInput}
+                                onChange={(e) => handleSearchChange(e.target.value)}
+                                className="pl-9"
+                            />
+                            {searchInput && (
+                                <button onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <FilterSheetButton
+                                totalActiveFilters={totalActiveFilters}
+                                filters={filters}
+                                filterDefinitions={filterDefinitions}
+                                updateFilter={updateFilter}
+                                costRange={costRange}
+                                localCostRange={localCostRange}
+                                handleCostRangeChange={handleCostRangeChange}
+                                clearAllFilters={clearAllFilters}
+                            />
                             <div className="ml-auto">
-                                <Tabs value={viewMode} onValueChange={handleViewModeChange}>
-                                    <TabsList className="h-10 gap-1 rounded-xl bg-slate-100/80 p-1 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm sm:h-12 sm:gap-1.5 sm:p-1.5 dark:bg-slate-800/80 dark:ring-white/5">
-                                        <TabsTrigger
-                                            value="table"
-                                            className="h-8 gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 sm:h-9 sm:gap-2 sm:px-4 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
-                                        >
-                                            <LayoutList className="h-4 w-4" />
-                                            <span className="hidden sm:inline">Table</span>
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="cards"
-                                            className="h-8 gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-slate-900/5 sm:h-9 sm:gap-2 sm:px-4 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:ring-white/10"
-                                        >
-                                            <LayoutGrid className="h-4 w-4" />
-                                            <span className="hidden sm:inline">Cards</span>
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </Tabs>
+                                <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
                             </div>
                         </div>
+                        <ActiveFilterBadges
+                            activeFilters={activeFilters}
+                            filters={filters}
+                            updateFilter={updateFilter}
+                        />
                     </div>
                 </div>
 
-                {/* Content Area - Full Width */}
-                <div className="flex-1 p-2 sm:p-6 md:p-8 lg:p-10">
-                    <Tabs value={viewMode} onValueChange={handleViewModeChange}>
-                        {/* Table View */}
-                        <TabsContent value="table" className="mt-0">
-                            <Card className="dark:border-border dark:bg-card dark:shadow-background/50 overflow-hidden rounded-xl border-slate-200/40 bg-white/90 shadow-xl ring-1 shadow-slate-200/50 ring-slate-900/5 backdrop-blur-xl sm:rounded-2xl dark:ring-white/5">
-                                <CardHeader className="dark:border-border dark:from-background dark:via-muted/30 dark:to-background border-b border-slate-100/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 px-3 py-3 sm:px-8 sm:py-5">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 sm:gap-4">
-                                            <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-white shadow-sm ring-1 ring-slate-900/5 sm:flex dark:from-slate-800 dark:to-slate-900 dark:ring-white/10">
-                                                <FileText className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-                                            </div>
-                                            <span className="text-xs font-semibold text-slate-700 sm:text-base dark:text-slate-300">
-                                                Showing {reqs.length} of {requisitions.last_page * 50}+ requisitions
-                                            </span>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="min-w-0 p-0">
-                                    <div className="min-w-0 overflow-x-auto">
-                                        <Table className="w-full">
-                                            <TableHeader>
-                                                <TableRow className="dark:border-border dark:from-muted/50 dark:via-muted/30 dark:to-muted/50 dark:hover:bg-muted/50 border-b-2 border-slate-100/80 bg-gradient-to-r from-slate-50/80 via-slate-100/50 to-slate-50/80 hover:bg-slate-50/80">
-                                                    <TableHead className="px-2 py-3 text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        ID
-                                                    </TableHead>
-                                                    <TableHead className="px-2 py-3 text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        Supplier
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:table-cell sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        Project
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:table-cell sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        PO #
-                                                    </TableHead>
-                                                    <TableHead className="px-2 py-3 text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        Status
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs md:table-cell dark:text-slate-400">
-                                                        Template
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs lg:table-cell dark:text-slate-400">
-                                                        Order Ref
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs md:table-cell dark:text-slate-400">
-                                                        Created By
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs lg:table-cell dark:text-slate-400">
-                                                        Date Required
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs xl:table-cell dark:text-slate-400">
-                                                        Contact
-                                                    </TableHead>
-                                                    <TableHead className="hidden px-4 py-4 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs xl:table-cell dark:text-slate-400">
-                                                        Deliver To
-                                                    </TableHead>
-                                                    <TableHead className="px-2 py-3 text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        Value
-                                                    </TableHead>
-                                                    <TableHead className="px-1 py-3 text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-6 sm:py-5 sm:text-xs dark:text-slate-400">
-                                                        <span className="sr-only">Actions</span>
-                                                    </TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {reqs.map((requisition, index) => (
-                                                    <TableRow
-                                                        key={requisition.id}
-                                                        className={cn(
-                                                            'group transition-all duration-200',
-                                                            index % 2 === 0 ? 'dark:bg-card bg-white' : 'dark:bg-muted/20 bg-slate-50/30',
-                                                            'hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-blue-50/40 hover:to-transparent dark:hover:from-blue-950/30 dark:hover:via-blue-950/20 dark:hover:to-transparent',
+                {/* ── Content ──────────────────────────────────────────── */}
+                <Tabs value={viewMode} onValueChange={handleViewModeChange}>
+                    <TabsContent value="table" className="mt-0">
+                        {reqs.length === 0 ? (
+                            <Empty className="border">
+                                <EmptyMedia variant="icon">
+                                    <FileText />
+                                </EmptyMedia>
+                                <EmptyHeader>
+                                    <EmptyTitle>No requisitions found</EmptyTitle>
+                                    <EmptyDescription>
+                                        {totalActiveFilters > 0 || searchInput
+                                            ? 'Try adjusting your search or filters.'
+                                            : 'Create your first requisition to get started.'}
+                                    </EmptyDescription>
+                                </EmptyHeader>
+                                {(totalActiveFilters > 0 || searchInput) && (
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                                            Clear filters
+                                        </Button>
+                                    </EmptyContent>
+                                )}
+                            </Empty>
+                        ) : (
+                            <>
+                                {/* Card layout for narrow containers */}
+                                <div className="flex flex-col gap-2 @3xl:hidden">
+                                    {reqs.map((req) => (
+                                        <div key={req.id} className="rounded-lg border p-4">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <Link href={`/requisition/${req.id}`} className="font-mono text-sm font-semibold hover:underline">
+                                                            #{req.id}
+                                                        </Link>
+                                                        <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(req.status))}>
+                                                            {req.status.replace('_', ' ')}
+                                                        </Badge>
+                                                        {req.is_template && (
+                                                            <Badge variant="outline" className="text-xs">Template</Badge>
                                                         )}
-                                                    >
-                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
-                                                            <Link
-                                                                href={`/requisition/${requisition.id}`}
-                                                                className="inline-flex items-center rounded-lg bg-slate-100/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-900 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700 sm:px-2.5 sm:py-1 sm:text-sm dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-blue-900/50 dark:hover:text-blue-300"
-                                                            >
-                                                                #{requisition.id}
-                                                            </Link>
-                                                        </TableCell>
-
-                                                        <TableCell className="max-w-20 px-2 py-3 sm:max-w-36 sm:px-6 sm:py-5">
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <span className="block truncate text-xs font-semibold text-slate-700 sm:text-sm dark:text-slate-300">
-                                                                            {requisition.supplier?.name.toUpperCase()}
-                                                                        </span>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>
-                                                                        <p>{requisition.supplier?.name.toUpperCase()}</p>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden max-w-36 px-4 py-4 sm:table-cell sm:px-6 sm:py-5">
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <span className="block truncate text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                                            {requisition.location?.name || (
-                                                                                <span className="text-slate-400 italic">-</span>
-                                                                            )}
-                                                                        </span>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>
-                                                                        <p>{requisition.location?.name || 'Not Found'}</p>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden px-4 py-4 sm:table-cell sm:px-6 sm:py-5">
-                                                            {requisition.po_number ? (
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="rounded-lg border-slate-200/80 bg-slate-50/80 px-2.5 py-1 font-mono text-xs font-medium shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                                                                >
-                                                                    PO{requisition.po_number}
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-sm text-slate-400 italic">-</span>
-                                                            )}
-                                                        </TableCell>
-
-                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
-                                                            <Badge
-                                                                className={cn(
-                                                                    'rounded-md border px-1.5 py-0.5 text-[10px] font-semibold capitalize shadow-sm sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-xs',
-                                                                    getStatusStyles(requisition.status),
-                                                                )}
-                                                            >
-                                                                {requisition.status}
-                                                            </Badge>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden px-4 py-4 sm:px-6 sm:py-5 md:table-cell">
-                                                            {requisition.is_template ? (
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="rounded-lg border-purple-200/80 bg-purple-50/80 px-2.5 py-1 text-xs font-semibold text-purple-700 shadow-sm dark:border-purple-800/80 dark:bg-purple-950/50 dark:text-purple-400"
-                                                                >
-                                                                    Template
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-sm text-slate-400">-</span>
-                                                            )}
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden max-w-28 px-4 py-4 sm:px-6 sm:py-5 lg:table-cell">
-                                                            <span className="block truncate text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                                {requisition.order_reference || <span className="text-slate-400 italic">-</span>}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden px-4 py-4 sm:px-6 sm:py-5 md:table-cell">
-                                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                                {requisition.creator?.name}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden px-4 py-4 sm:px-6 sm:py-5 lg:table-cell">
-                                                            <span className="text-sm font-medium text-slate-600 tabular-nums dark:text-slate-400">
-                                                                {new Date(requisition.date_required).toLocaleDateString('en-GB')}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden max-w-28 px-4 py-4 sm:px-6 sm:py-5 xl:table-cell">
-                                                            <span className="block truncate text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                                {requisition.delivery_contact || <span className="text-slate-400 italic">-</span>}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="hidden max-w-28 px-4 py-4 sm:px-6 sm:py-5 xl:table-cell">
-                                                            <span className="block truncate text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                                {requisition.deliver_to || <span className="text-slate-400 italic">-</span>}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="px-2 py-3 sm:px-6 sm:py-5">
-                                                            <span className="inline-flex items-center rounded-md bg-emerald-50/80 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-700 sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-sm dark:bg-emerald-950/40 dark:text-emerald-400">
-                                                                $
-                                                                {(Number(requisition.line_items_sum_total_cost) || 0).toLocaleString('en-US', {
-                                                                    minimumFractionDigits: 2,
-                                                                    maximumFractionDigits: 2,
-                                                                })}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="px-1 py-3 sm:px-6 sm:py-5">
-                                                            <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Link href={`/requisition/${requisition.id}`}>
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-8 w-8 rounded-lg text-slate-500 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 hover:shadow-md active:scale-95 sm:h-10 sm:w-10 sm:rounded-xl dark:hover:bg-blue-950/50 dark:hover:text-blue-400"
-                                                                                >
-                                                                                    <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
-                                                                                </Button>
-                                                                            </Link>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>View</TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Link
-                                                                                href={`/requisition/${requisition.id}/copy`}
-                                                                                className="hidden sm:inline-flex"
-                                                                            >
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-10 w-10 rounded-xl text-slate-500 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-700 hover:shadow-md active:scale-95 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                                                                                >
-                                                                                    <Copy className="h-5 w-5" />
-                                                                                </Button>
-                                                                            </Link>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>Copy</TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 rounded-lg text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700 hover:shadow-md active:scale-95 sm:h-10 sm:w-10 sm:rounded-xl dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                                                                        >
-                                                                            <span className="sr-only">Open menu</span>
-                                                                            <EllipsisVertical className="h-4 w-4 sm:h-5 sm:w-5" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent
-                                                                        align="end"
-                                                                        className="w-56 rounded-xl p-2 shadow-xl ring-1 ring-slate-900/5 dark:ring-white/5"
-                                                                    >
-                                                                        <DropdownMenuLabel className="px-3 py-2 text-xs font-bold tracking-wider text-slate-500 uppercase">
-                                                                            Actions
-                                                                        </DropdownMenuLabel>
-                                                                        <DropdownMenuSeparator className="my-2" />
-                                                                        <Link href={`/requisition/${requisition.id}`}>
-                                                                            <DropdownMenuItem className="gap-3 rounded-lg px-3 py-3 text-sm font-medium">
-                                                                                <Eye className="h-4 w-4" />
-                                                                                View Details
-                                                                            </DropdownMenuItem>
-                                                                        </Link>
-                                                                        <Link href={`/requisition/${requisition.id}/copy`}>
-                                                                            <DropdownMenuItem className="gap-3 rounded-lg px-3 py-3 text-sm font-medium">
-                                                                                <Copy className="h-4 w-4" />
-                                                                                Copy
-                                                                            </DropdownMenuItem>
-                                                                        </Link>
-                                                                        <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
-                                                                            <DropdownMenuItem className="gap-3 rounded-lg px-3 py-3 text-sm font-medium">
-                                                                                <SquarePlus className="h-4 w-4" />
-                                                                                {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
-                                                                            </DropdownMenuItem>
-                                                                        </Link>
-                                                                        <DropdownMenuSeparator className="my-2" />
-                                                                        <Link href={`/requisition/${requisition.id}/delete`}>
-                                                                            <DropdownMenuItem className="gap-3 rounded-lg px-3 py-3 text-sm font-medium text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/50 dark:focus:text-red-300">
-                                                                                <Trash2 className="h-4 w-4" />
-                                                                                Delete
-                                                                            </DropdownMenuItem>
-                                                                        </Link>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Pagination */}
-                            <div className="mt-4 sm:mt-8">
-                                <Card className="dark:border-border dark:bg-card dark:shadow-background/50 rounded-xl border-slate-200/40 bg-white/90 shadow-lg ring-1 shadow-slate-200/50 ring-slate-900/5 backdrop-blur-xl sm:rounded-2xl dark:ring-white/5">
-                                    <CardContent className="px-3 py-3 sm:px-8 sm:py-6">
-                                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-6">
-                                            <p className="text-xs font-medium text-slate-500 sm:text-base dark:text-slate-400">
-                                                Page <span className="font-bold text-slate-700 dark:text-slate-300">{requisitions.current_page}</span>{' '}
-                                                of <span className="font-bold text-slate-700 dark:text-slate-300">{requisitions.last_page}</span>
-                                            </p>
-
-                                            <Pagination>
-                                                <PaginationContent className="gap-1 sm:gap-2">
-                                                    <PaginationItem>
-                                                        <PaginationLink
-                                                            href={requisitions.first_page_url}
-                                                            className={cn(
-                                                                'hidden h-11 gap-1 rounded-xl border border-slate-200/60 bg-white px-3 shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:flex sm:px-4 dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
-                                                                requisitions.current_page === 1 && 'pointer-events-none opacity-50',
-                                                            )}
-                                                        >
-                                                            <ChevronLeft className="h-5 w-5" />
-                                                            <ChevronLeft className="-ml-3 h-5 w-5" />
-                                                        </PaginationLink>
-                                                    </PaginationItem>
-
-                                                    <PaginationItem>
-                                                        <PaginationPrevious
-                                                            href={requisitions.prev_page_url || '#'}
-                                                            className={cn(
-                                                                'h-9 rounded-lg border border-slate-200/60 bg-white px-2 text-xs shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:h-11 sm:rounded-xl sm:px-4 sm:text-sm dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
-                                                                !requisitions.prev_page_url && 'pointer-events-none opacity-50',
-                                                            )}
-                                                        />
-                                                    </PaginationItem>
-
-                                                    {(() => {
-                                                        const current = requisitions.current_page;
-                                                        const last = requisitions.last_page;
-                                                        const start = Math.max(1, current - 1);
-                                                        const end = Math.min(last, current + 1);
-
-                                                        const pages = [];
-                                                        for (let page = start; page <= end; page++) {
-                                                            const pageUrl =
-                                                                requisitions.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
-                                                            pages.push(
-                                                                <PaginationItem key={page} className="hidden sm:block">
-                                                                    <PaginationLink
-                                                                        href={pageUrl}
-                                                                        isActive={current === page}
-                                                                        className={cn(
-                                                                            'h-11 min-w-11 rounded-xl border text-sm font-semibold transition-all duration-200 active:scale-95 sm:min-w-12',
-                                                                            current === page
-                                                                                ? 'border-slate-900 bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg shadow-slate-900/20 hover:from-slate-800 hover:to-slate-700 dark:border-white dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:hover:from-slate-50 dark:hover:to-white'
-                                                                                : 'border-slate-200/60 bg-white shadow-sm ring-1 ring-slate-900/5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
-                                                                        )}
-                                                                    >
-                                                                        {page}
-                                                                    </PaginationLink>
-                                                                </PaginationItem>,
-                                                            );
-                                                        }
-                                                        return pages;
-                                                    })()}
-
-                                                    <PaginationItem className="sm:hidden">
-                                                        <span className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-900 bg-gradient-to-r from-slate-900 to-slate-800 px-2 text-xs font-bold text-white shadow-lg shadow-slate-900/20 dark:border-white dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10">
-                                                            {requisitions.current_page}
-                                                        </span>
-                                                    </PaginationItem>
-
-                                                    <PaginationItem>
-                                                        <PaginationNext
-                                                            href={requisitions.next_page_url || '#'}
-                                                            className={cn(
-                                                                'h-9 rounded-lg border border-slate-200/60 bg-white px-2 text-xs shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:h-11 sm:rounded-xl sm:px-4 sm:text-sm dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
-                                                                !requisitions.next_page_url && 'pointer-events-none opacity-50',
-                                                            )}
-                                                        />
-                                                    </PaginationItem>
-
-                                                    <PaginationItem>
-                                                        <PaginationLink
-                                                            href={requisitions.last_page_url}
-                                                            className={cn(
-                                                                'hidden h-11 gap-1 rounded-xl border border-slate-200/60 bg-white px-3 shadow-sm ring-1 ring-slate-900/5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-95 sm:flex sm:px-4 dark:border-slate-800 dark:bg-slate-900 dark:ring-white/5 dark:hover:border-slate-700 dark:hover:bg-slate-800',
-                                                                requisitions.current_page === requisitions.last_page &&
-                                                                    'pointer-events-none opacity-50',
-                                                            )}
-                                                        >
-                                                            <ChevronRight className="h-5 w-5" />
-                                                            <ChevronRight className="-ml-3 h-5 w-5" />
-                                                        </PaginationLink>
-                                                    </PaginationItem>
-                                                </PaginationContent>
-                                            </Pagination>
+                                                    </div>
+                                                    <p className="mt-1 truncate text-sm font-medium">{req.supplier?.name}</p>
+                                                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                                        {req.location?.name && <span>{req.location.name}</span>}
+                                                        {req.creator?.name && <span>{req.creator.name}</span>}
+                                                        <span>{new Date(req.date_required).toLocaleDateString('en-GB')}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex shrink-0 items-center gap-1">
+                                                    <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                                                        {formatCurrency(req.line_items_sum_total_cost)}
+                                                    </span>
+                                                    <RequisitionActionsMobile requisition={req} />
+                                                </div>
+                                            </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </TabsContent>
+                                    ))}
+                                </div>
 
-                        {/* Cards View */}
-                        <TabsContent value="cards" className="mt-0">
-                            <CardsIndex filteredRequisitions={reqs} />
-                        </TabsContent>
-                    </Tabs>
-                </div>
+                                {/* Table layout for wide containers */}
+                                <div className="hidden rounded-lg border @3xl:block">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="hover:bg-transparent">
+                                                <TableHead className="w-[70px] pl-4">ID</TableHead>
+                                                <TableHead>Supplier</TableHead>
+                                                <TableHead className="hidden @5xl:table-cell">Project</TableHead>
+                                                <TableHead className="hidden @4xl:table-cell">PO #</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="hidden @5xl:table-cell">Template</TableHead>
+                                                <TableHead className="hidden @6xl:table-cell">Order Ref</TableHead>
+                                                <TableHead className="hidden @4xl:table-cell">Created By</TableHead>
+                                                <TableHead className="hidden @5xl:table-cell">Date Required</TableHead>
+                                                <TableHead className="hidden @7xl:table-cell">Contact</TableHead>
+                                                <TableHead className="hidden @7xl:table-cell">Deliver To</TableHead>
+                                                <TableHead className="text-right">Value</TableHead>
+                                                <TableHead className="w-[50px] pr-4"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {reqs.map((req) => (
+                                                <TableRow key={req.id}>
+                                                    <TableCell className="pl-4">
+                                                        <Link href={`/requisition/${req.id}`} className="font-mono text-xs font-semibold hover:underline">
+                                                            #{req.id}
+                                                        </Link>
+                                                    </TableCell>
+
+                                                    <TableCell className="max-w-[200px]">
+                                                        <TooltipProvider delayDuration={300}>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <span className="block truncate text-sm font-medium">
+                                                                        {req.supplier?.name}
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>{req.supplier?.name}</TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden max-w-[160px] @5xl:table-cell">
+                                                        <TooltipProvider delayDuration={300}>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <span className="text-muted-foreground block truncate text-sm">
+                                                                        {req.location?.name || '-'}
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>{req.location?.name || 'Not set'}</TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden @4xl:table-cell">
+                                                        {req.po_number ? (
+                                                            <Badge variant="outline" className="font-mono text-xs">
+                                                                PO{req.po_number}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                        )}
+                                                    </TableCell>
+
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(req.status))}>
+                                                            {req.status.replace('_', ' ')}
+                                                        </Badge>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden @5xl:table-cell">
+                                                        {req.is_template ? (
+                                                            <Badge variant="secondary" className="text-xs">Template</Badge>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                        )}
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden max-w-[120px] @6xl:table-cell">
+                                                        <span className="text-muted-foreground block truncate text-sm">
+                                                            {req.order_reference || '-'}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden @4xl:table-cell">
+                                                        <span className="text-muted-foreground text-sm">{req.creator?.name || '-'}</span>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden @5xl:table-cell">
+                                                        <span className="text-muted-foreground tabular-nums text-sm">
+                                                            {new Date(req.date_required).toLocaleDateString('en-GB')}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
+                                                        <span className="text-muted-foreground block truncate text-sm">
+                                                            {req.delivery_contact || '-'}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
+                                                        <span className="text-muted-foreground block truncate text-sm">
+                                                            {req.deliver_to || '-'}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-right">
+                                                        <span className="font-mono text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                                                            {formatCurrency(req.line_items_sum_total_cost)}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="pr-4">
+                                                        <RequisitionActions requisition={req} />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {/* Pagination */}
+                                {requisitions.last_page > 1 && (
+                                    <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+                                        <p className="text-muted-foreground text-sm">
+                                            Page <span className="text-foreground font-medium">{requisitions.current_page}</span> of{' '}
+                                            <span className="text-foreground font-medium">{requisitions.last_page}</span>
+                                        </p>
+                                        <Pagination>
+                                            <PaginationContent className="gap-1">
+                                                <PaginationItem>
+                                                    <PaginationPrevious
+                                                        href={requisitions.prev_page_url || '#'}
+                                                        className={cn(!requisitions.prev_page_url && 'pointer-events-none opacity-50')}
+                                                    />
+                                                </PaginationItem>
+
+                                                {(() => {
+                                                    const current = requisitions.current_page;
+                                                    const last = requisitions.last_page;
+                                                    const start = Math.max(1, current - 1);
+                                                    const end = Math.min(last, current + 1);
+                                                    const pages = [];
+                                                    for (let page = start; page <= end; page++) {
+                                                        const url = requisitions.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
+                                                        pages.push(
+                                                            <PaginationItem key={page} className="hidden sm:block">
+                                                                <PaginationLink href={url} isActive={current === page}>
+                                                                    {page}
+                                                                </PaginationLink>
+                                                            </PaginationItem>,
+                                                        );
+                                                    }
+                                                    return pages;
+                                                })()}
+
+                                                <PaginationItem className="sm:hidden">
+                                                    <span className="bg-primary text-primary-foreground flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium">
+                                                        {requisitions.current_page}
+                                                    </span>
+                                                </PaginationItem>
+
+                                                <PaginationItem>
+                                                    <PaginationNext
+                                                        href={requisitions.next_page_url || '#'}
+                                                        className={cn(!requisitions.next_page_url && 'pointer-events-none opacity-50')}
+                                                    />
+                                                </PaginationItem>
+                                            </PaginationContent>
+                                        </Pagination>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="cards" className="mt-0">
+                        <CardsIndex filteredRequisitions={reqs} />
+                    </TabsContent>
+                </Tabs>
             </div>
         </AppLayout>
+    );
+}
+
+// ── Filter Sheet Button ───────────────────────────────────────────────
+function FilterSheetButton({
+    totalActiveFilters,
+    filters,
+    filterDefinitions,
+    updateFilter,
+    costRange,
+    localCostRange,
+    handleCostRangeChange,
+    clearAllFilters,
+}: {
+    totalActiveFilters: number;
+    filters: Filters;
+    filterDefinitions: { key: keyof Filters; label: string; options: string[] }[];
+    updateFilter: (key: keyof Filters, value: string | boolean | null) => void;
+    costRange: CostRange;
+    localCostRange: [number, number];
+    handleCostRangeChange: (value: [number, number]) => void;
+    clearAllFilters: () => void;
+}) {
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters
+                    {totalActiveFilters > 0 && (
+                        <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">
+                            {totalActiveFilters}
+                        </Badge>
+                    )}
+                </Button>
+            </SheetTrigger>
+            <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+                <SheetHeader className="pb-4">
+                    <SheetTitle>Filter Requisitions</SheetTitle>
+                </SheetHeader>
+                <SheetDescription asChild>
+                    <div className="space-y-6">
+                        {/* Templates only */}
+                        <div className="flex items-center gap-3 rounded-lg border p-4">
+                            <Checkbox
+                                checked={filters.templates_only}
+                                onCheckedChange={(checked) => updateFilter('templates_only', checked === true)}
+                                id="filter-templates"
+                            />
+                            <Label htmlFor="filter-templates" className="cursor-pointer text-sm font-medium">
+                                Show templates only
+                            </Label>
+                        </div>
+
+                        <Separator />
+
+                        {/* Select filters */}
+                        <div className="space-y-4">
+                            {filterDefinitions.map(({ key, label, options }) => (
+                                <div key={key}>
+                                    <Label htmlFor={`filter-${key}`} className="text-muted-foreground mb-2 block text-xs font-medium uppercase tracking-wider">
+                                        {label}
+                                    </Label>
+                                    <SelectFilter
+                                        filterName={`Filter by ${label}`}
+                                        options={options.map((val) => ({ value: val, label: val }))}
+                                        onChange={(val) => updateFilter(key, val)}
+                                        value={(filters[key] as string) ?? ''}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <Separator />
+
+                        {/* Cost range */}
+                        <div>
+                            <Label className="text-muted-foreground mb-3 block text-xs font-medium uppercase tracking-wider">
+                                Requisition Value Range
+                            </Label>
+                            <CostRangeSlider
+                                min={costRange.min}
+                                max={costRange.max}
+                                value={localCostRange}
+                                onChange={handleCostRangeChange}
+                            />
+                        </div>
+
+                        {totalActiveFilters > 0 && (
+                            <Button variant="outline" onClick={clearAllFilters} className="text-destructive hover:text-destructive w-full gap-2">
+                                <X className="h-4 w-4" />
+                                Clear All Filters
+                            </Button>
+                        )}
+                    </div>
+                </SheetDescription>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+// ── Active Filter Badges ──────────────────────────────────────────────
+function ActiveFilterBadges({
+    activeFilters,
+    filters,
+    updateFilter,
+}: {
+    activeFilters: [string, unknown][];
+    filters: Filters;
+    updateFilter: (key: keyof Filters, value: string | boolean | null) => void;
+}) {
+    if (activeFilters.length === 0 && !filters.templates_only) return null;
+
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            {activeFilters.map(([key, value]) => (
+                <Badge key={key} variant="secondary" className="gap-1.5 pr-1.5">
+                    <span className="max-w-24 truncate text-xs sm:max-w-36">{String(value)}</span>
+                    <button
+                        className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                        onClick={() => updateFilter(key as keyof Filters, null)}
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </Badge>
+            ))}
+            {filters.templates_only && (
+                <Badge variant="secondary" className="gap-1.5 pr-1.5">
+                    <span className="text-xs">Templates Only</span>
+                    <button
+                        className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                        onClick={() => updateFilter('templates_only', false)}
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </Badge>
+            )}
+        </div>
+    );
+}
+
+// ── View Toggle ───────────────────────────────────────────────────────
+function ViewToggle({ viewMode, onChange }: { viewMode: string; onChange: (v: string) => void }) {
+    return (
+        <Tabs value={viewMode} onValueChange={onChange}>
+            <TabsList>
+                <TabsTrigger value="table" className="gap-1.5">
+                    <LayoutList className="h-4 w-4" />
+                    <span className="hidden sm:inline">Table</span>
+                </TabsTrigger>
+                <TabsTrigger value="cards" className="gap-1.5">
+                    <LayoutGrid className="h-4 w-4" />
+                    <span className="hidden sm:inline">Cards</span>
+                </TabsTrigger>
+            </TabsList>
+        </Tabs>
     );
 }

@@ -169,7 +169,7 @@ export default function Clockout() {
     useEffect(() => {
         const clockEntries = generateClockEntries();
         setData('entries', clockEntries);
-    }, [taskAllocations]);
+    }, [taskAllocations, laserAllowance]);
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();

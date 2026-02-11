@@ -10,7 +10,7 @@ class TimesheetService
 {
     public function deleteTimesheetInEH($timesheetId)
     {
-        $apiKey = env('EH_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
 
         $apiResponse = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),

@@ -3,7 +3,6 @@ import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -12,30 +11,30 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
-import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
     ArrowUpDown,
-    Building2,
     CheckCircle2,
-    ChevronRight,
     CirclePlus,
     ClockAlert,
     Download,
+    EllipsisVertical,
     Eye,
     MapPin,
-    MoreHorizontal,
     Pencil,
     RefreshCcw,
     XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -64,22 +63,107 @@ type Location = {
     }>;
 };
 
-const companyOptions = [
+const companyTabs = [
+    { value: 'all', label: 'All' },
     { value: '1149031', label: 'SWC' },
     { value: '1249093', label: 'SWCP' },
     { value: '1198645', label: 'Greenline' },
 ];
 
-const stateColorMap: Record<string, string> = {
-    NSW: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400',
-    VIC: 'bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400',
-    QLD: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400',
-    WA: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400',
-    SA: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400',
-    TAS: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20 dark:text-cyan-400',
-    NT: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400',
-    ACT: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:text-indigo-400',
-};
+function getLocationActions(location: Location) {
+    return [
+        {
+            group: 'Actions',
+            items: [{ href: `locations/${location.id}`, icon: Eye, label: 'View Details' }],
+        },
+        {
+            group: 'Material Items',
+            items: [
+                { href: `location/${location.id}/material-items`, icon: Eye, label: 'View Items' },
+                { href: `location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
+            ],
+        },
+        {
+            group: 'Variations',
+            items: [
+                { href: `locations/${location.id}/variations`, icon: CirclePlus, label: 'Create New' },
+                { href: `locations/${location.id}/variations`, icon: Eye, label: 'View All' },
+            ],
+        },
+        {
+            group: 'Requisition',
+            items: [{ href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Edit Header' }],
+        },
+    ];
+}
+
+function LocationActions({ location }: { location: Location }) {
+    const actions = getLocationActions(location);
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+                {actions.map((group, gi) => (
+                    <div key={group.group}>
+                        {gi > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className={gi === 0 ? '' : 'text-muted-foreground text-xs'}>{group.group}</DropdownMenuLabel>
+                        {gi === 0 && <DropdownMenuSeparator />}
+                        {group.items.map((item) => (
+                            <Link key={item.label} href={item.href}>
+                                <DropdownMenuItem className="gap-2">
+                                    <item.icon className="h-4 w-4" />
+                                    {item.label}
+                                </DropdownMenuItem>
+                            </Link>
+                        ))}
+                    </div>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+function LocationActionsMobile({ location }: { location: Location }) {
+    const actions = getLocationActions(location);
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-xl">
+                <SheetHeader>
+                    <SheetTitle>{location.name}</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1 px-4 pb-6">
+                    {actions.map((group, gi) => (
+                        <div key={group.group}>
+                            {gi > 0 && <Separator className="my-2" />}
+                            <p className="text-muted-foreground mb-1 px-3 text-xs font-medium">{group.group}</p>
+                            {group.items.map((item) => (
+                                <Link
+                                    key={item.label}
+                                    href={item.href}
+                                    className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                                >
+                                    <item.icon className="text-muted-foreground h-4 w-4" />
+                                    {item.label}
+                                </Link>
+                            ))}
+                        </div>
+                    ))}
+                </nav>
+            </SheetContent>
+        </Sheet>
+    );
+}
 
 export default function LocationsList() {
     const { locations, flash, auth } = usePage<{
@@ -91,82 +175,54 @@ export default function LocationsList() {
     const isLoading = false;
     const [open, setOpen] = useState(isLoading);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('companySelected') ?? null);
+    const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('companySelected') ?? 'all');
 
     const { sortedItems: sortedLocations, handleSort } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
 
-    const handleCompanyChange = (value: string) => {
-        setFilter(value);
+    const handleTabChange = (value: string) => {
+        setActiveTab(value);
         localStorage.setItem('companySelected', value);
     };
 
+    const companyFilteredLocations = useMemo(() => {
+        return activeTab === 'all' ? sortedLocations : sortedLocations.filter((location) => location.eh_parent_id === activeTab);
+    }, [sortedLocations, activeTab]);
+
     const filteredLocations = useMemo(() => {
-        let result = filter ? sortedLocations.filter((location) => location.eh_parent_id === filter) : sortedLocations;
+        if (!searchQuery) return companyFilteredLocations;
 
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            result = result.filter(
-                (location) =>
-                    location.name.toLowerCase().includes(query) ||
-                    location.external_id?.toLowerCase().includes(query) ||
-                    location.eh_location_id?.toLowerCase().includes(query),
-            );
+        const query = searchQuery.toLowerCase();
+        return companyFilteredLocations.filter(
+            (location) =>
+                location.name.toLowerCase().includes(query) ||
+                location.external_id?.toLowerCase().includes(query) ||
+                location.eh_location_id?.toLowerCase().includes(query),
+        );
+    }, [companyFilteredLocations, searchQuery]);
+
+    const tabCounts = useMemo(() => {
+        const counts: Record<string, number> = { all: sortedLocations.length };
+        for (const tab of companyTabs) {
+            if (tab.value !== 'all') {
+                counts[tab.value] = sortedLocations.filter((l) => l.eh_parent_id === tab.value).length;
+            }
         }
-
-        return result;
-    }, [sortedLocations, filter, searchQuery]);
+        return counts;
+    }, [sortedLocations]);
 
     const isAdmin = auth?.user?.roles?.some((role) => role.name === 'admin') ?? false;
-
-    const selectedCompanyLabel = companyOptions.find((opt) => opt.value === filter)?.label;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
 
-            <div className="flex flex-col gap-6 p-4 md:p-6">
-                {/* Page Header */}
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-                            <MapPin className="text-primary h-6 w-6" />
-                            Locations
-                        </h1>
-                        <p className="text-muted-foreground text-sm">
-                            Manage and configure your project locations
-                            {selectedCompanyLabel && (
-                                <Badge variant="secondary" className="ml-2">
-                                    {selectedCompanyLabel}
-                                </Badge>
-                            )}
-                        </p>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Link href="/locations/sync" method="get">
-                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
-                                <RefreshCcw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-                                {isLoading ? 'Syncing...' : 'Sync Locations'}
-                            </Button>
-                        </Link>
-                        {isAdmin && (
-                            <Link href="/locations/load-job-data" method="get">
-                                <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all" onClick={() => setOpen(true)}>
-                                    <Download className="h-4 w-4" />
-                                    Load Job Data
-                                </Button>
-                            </Link>
-                        )}
-                    </div>
-                </div>
-
+            <div className="@container flex min-w-0 flex-col gap-4 p-4">
                 {/* Flash Messages */}
                 {flash.success && (
-                    <Alert className="border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        <AlertTitle className="text-emerald-700 dark:text-emerald-400">Success</AlertTitle>
-                        <AlertDescription className="text-emerald-600 dark:text-emerald-300">{flash.success}</AlertDescription>
+                    <Alert>
+                        <CheckCircle2 className="h-4 w-4" />
+                        <AlertTitle>Success</AlertTitle>
+                        <AlertDescription>{flash.success}</AlertDescription>
                     </Alert>
                 )}
                 {flash.error && (
@@ -177,253 +233,229 @@ export default function LocationsList() {
                     </Alert>
                 )}
 
-                {/* Main Card */}
-                <Card className="overflow-hidden border-0 shadow-sm">
-                    <CardHeader className="bg-muted/30 border-b px-6 py-4">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle className="flex items-center gap-2 text-lg">
-                                    <Building2 className="text-muted-foreground h-5 w-5" />
-                                    All Locations
-                                </CardTitle>
-                                <CardDescription>
-                                    {filteredLocations.length} location{filteredLocations.length !== 1 ? 's' : ''} found
-                                </CardDescription>
-                            </div>
+                {/* Toolbar */}
+                <div className="flex min-w-0 flex-col gap-3">
+                    {/* Row 1: Tabs + actions (wide) / Tabs only (narrow) */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0 shrink-0">
+                            <TabsList>
+                                {companyTabs.map((tab) => (
+                                    <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
+                                        {tab.label}
+                                        <Badge variant={activeTab === tab.value ? 'default' : 'secondary'} className="px-1.5 text-[10px]">
+                                            {tabCounts[tab.value] ?? 0}
+                                        </Badge>
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
 
-                            {/* Filters */}
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <div className="relative w-full sm:w-64">
-                                    <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
-                                </div>
-                                <div className="w-full sm:w-44">
-                                    <SelectFilter value={filter} options={companyOptions} filterName="All Companies" onChange={handleCompanyChange} />
-                                </div>
+                        {/* Search + actions inline on wide containers */}
+                        <div className="ml-auto hidden items-center gap-2 @3xl:flex">
+                            <div className="relative w-64">
+                                <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                             </div>
+                            <Link href="/locations/sync" method="get">
+                                <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                                    <RefreshCcw className="h-4 w-4" />
+                                    Sync Locations
+                                </Button>
+                            </Link>
+                            {isAdmin && (
+                                <Link href="/locations/load-job-data" method="get">
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                                        <Download className="h-4 w-4" />
+                                        Load Job Data
+                                    </Button>
+                                </Link>
+                            )}
                         </div>
-                    </CardHeader>
+                    </div>
 
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <Table>
+                    {/* Row 2: Search full-width + actions on narrow containers */}
+                    <div className="flex flex-col gap-2 @3xl:hidden">
+                        <div className="relative w-full">
+                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Link href="/locations/sync" method="get" className="flex-1">
+                                <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
+                                    <RefreshCcw className="h-4 w-4" />
+                                    Sync
+                                </Button>
+                            </Link>
+                            {isAdmin && (
+                                <Link href="/locations/load-job-data" method="get" className="flex-1">
+                                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
+                                        <Download className="h-4 w-4" />
+                                        Load Jobs
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                {filteredLocations.length === 0 ? (
+                    <Empty className="border">
+                        <EmptyMedia variant="icon">
+                            <MapPin />
+                        </EmptyMedia>
+                        <EmptyHeader>
+                            <EmptyTitle>No locations found</EmptyTitle>
+                            <EmptyDescription>
+                                {searchQuery
+                                    ? 'Try adjusting your search criteria.'
+                                    : activeTab !== 'all'
+                                      ? 'No locations for this company.'
+                                      : 'Sync locations to get started.'}
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        {(searchQuery || activeTab !== 'all') && (
+                            <EmptyContent>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setActiveTab('all');
+                                    }}
+                                >
+                                    Clear filters
+                                </Button>
+                            </EmptyContent>
+                        )}
+                    </Empty>
+                ) : (
+                    <>
+                        {/* Card layout for narrow containers */}
+                        <div className="@3xl:hidden flex flex-col gap-2">
+                            {filteredLocations.map((location) => (
+                                <div key={location.id} className="rounded-lg border p-4">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <Link href={`locations/${location.id}`} className="font-medium hover:underline">
+                                                {location.name}
+                                            </Link>
+                                            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                                <span className="font-mono">{location.eh_location_id}</span>
+                                                {location.external_id && <span className="font-mono">{location.external_id}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            {location.state && <Badge variant="secondary">{location.state}</Badge>}
+                                            <LocationActionsMobile location={location} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Table layout for wide containers */}
+                        <div className="hidden rounded-lg border @3xl:block">
+                            <Table className="table-fixed">
+                                <colgroup>
+                                    <col className="w-[10%]" />
+                                    <col className="w-[30%]" />
+                                    <col className="w-[8%]" />
+                                    <col className="w-[14%]" />
+                                    <col className="w-[32%]" />
+                                    <col className="w-[6%]" />
+                                </colgroup>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="w-24 pl-6">ID</TableHead>
+                                        <TableHead className="pl-4">ID</TableHead>
                                         <TableHead>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="-ml-3 h-8 gap-1 font-medium hover:bg-transparent"
+                                            <button
+                                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
                                                 onClick={() => handleSort('name')}
                                             >
                                                 Name
-                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
-                                            </Button>
+                                                <ArrowUpDown className="h-3.5 w-3.5" />
+                                            </button>
                                         </TableHead>
-                                        <TableHead className="w-24">State</TableHead>
+                                        <TableHead>State</TableHead>
                                         <TableHead>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="-ml-3 h-8 gap-1 font-medium hover:bg-transparent"
+                                            <button
+                                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
                                                 onClick={() => handleSort('external_id')}
                                             >
                                                 External ID
-                                                <ArrowUpDown className="text-muted-foreground h-3.5 w-3.5" />
-                                            </Button>
+                                                <ArrowUpDown className="h-3.5 w-3.5" />
+                                            </button>
                                         </TableHead>
                                         <TableHead>Shift Conditions</TableHead>
-                                        <TableHead className="w-32 pr-6 text-right">Actions</TableHead>
+                                        <TableHead className="pr-4"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredLocations.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="h-32 text-center">
-                                                <div className="text-muted-foreground flex flex-col items-center gap-2">
-                                                    <MapPin className="h-8 w-8 opacity-40" />
-                                                    <p>No locations found</p>
-                                                    {searchQuery && (
-                                                        <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
-                                                            Clear search
-                                                        </Button>
+                                    {filteredLocations.map((location) => (
+                                        <TableRow key={location.id}>
+                                            <TableCell className="text-muted-foreground overflow-hidden truncate pl-4 font-mono text-xs">
+                                                {location.eh_location_id}
+                                            </TableCell>
+                                            <TableCell className="overflow-hidden whitespace-normal font-medium">
+                                                <Link href={`locations/${location.id}`} className="hover:underline">
+                                                    {location.name}
+                                                </Link>
+                                            </TableCell>
+                                            <TableCell className="overflow-hidden truncate">
+                                                {location.state && <Badge variant="secondary">{location.state}</Badge>}
+                                            </TableCell>
+                                            <TableCell className="overflow-hidden truncate">
+                                                {location.external_id ? (
+                                                    <span className="text-muted-foreground font-mono text-xs">{location.external_id}</span>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="overflow-hidden whitespace-normal">
+                                                <div className="flex flex-wrap items-center gap-1">
+                                                    {location.worktypes?.length > 0 ? (
+                                                        <>
+                                                            {location.worktypes.slice(0, 2).map((worktype) => (
+                                                                <Badge key={worktype.eh_worktype_id} variant="outline" className="text-xs font-normal">
+                                                                    {worktype.name}
+                                                                </Badge>
+                                                            ))}
+                                                            {location.worktypes.length > 2 && (
+                                                                <TooltipProvider delayDuration={200}>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Badge variant="outline" className="cursor-default text-xs font-normal">
+                                                                                +{location.worktypes.length - 2}
+                                                                            </Badge>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="bottom" className="max-w-xs p-3">
+                                                                            <p className="mb-2 text-xs font-medium">All Shift Conditions</p>
+                                                                            <div className="flex flex-wrap gap-1">
+                                                                                {location.worktypes.map((worktype) => (
+                                                                                    <Badge key={worktype.eh_worktype_id} variant="secondary" className="text-xs">
+                                                                                        {worktype.name}
+                                                                                    </Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
                                                     )}
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="pr-4">
+                                                <LocationActions location={location} />
+                                            </TableCell>
                                         </TableRow>
-                                    ) : (
-                                        filteredLocations.map((location, index) => (
-                                            <TableRow
-                                                key={location.id}
-                                                className="group hover:bg-muted/50 transition-colors"
-                                                style={{ animationDelay: `${index * 20}ms` }}
-                                            >
-                                                <TableCell className="text-muted-foreground pl-6 font-mono text-xs">
-                                                    {location.eh_location_id}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Link
-                                                        href={`locations/${location.id}`}
-                                                        className="group/link hover:text-primary inline-flex items-center gap-1 font-medium transition-colors"
-                                                    >
-                                                        {location.name}
-                                                        <ChevronRight className="h-3.5 w-3.5 opacity-0 transition-all group-hover/link:translate-x-0.5 group-hover/link:opacity-100" />
-                                                    </Link>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {location.state && (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={cn(
-                                                                'font-medium transition-transform hover:scale-105',
-                                                                stateColorMap[location.state] || 'border-gray-500/20 bg-gray-500/10 text-gray-600',
-                                                            )}
-                                                        >
-                                                            {location.state}
-                                                        </Badge>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {location.external_id ? (
-                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                                            {location.external_id}
-                                                        </code>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-sm italic">Not set</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                        {location.worktypes?.length > 0 ? (
-                                                            <>
-                                                                {location.worktypes.slice(0, 2).map((worktype) => (
-                                                                    <Badge
-                                                                        key={worktype.eh_worktype_id}
-                                                                        variant="secondary"
-                                                                        className="text-xs transition-transform hover:scale-105"
-                                                                    >
-                                                                        {worktype.name}
-                                                                    </Badge>
-                                                                ))}
-                                                                {location.worktypes.length > 2 && (
-                                                                    <TooltipProvider delayDuration={200}>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <Badge
-                                                                                    variant="outline"
-                                                                                    className="text-muted-foreground hover:bg-muted cursor-pointer text-xs transition-all"
-                                                                                >
-                                                                                    +{location.worktypes.length - 2}
-                                                                                </Badge>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent side="bottom" className="max-w-xs p-3">
-                                                                                <p className="mb-2 text-xs font-medium">All Shift Conditions</p>
-                                                                                <div className="flex flex-wrap gap-1">
-                                                                                    {location.worktypes.map((worktype) => (
-                                                                                        <Badge
-                                                                                            key={worktype.eh_worktype_id}
-                                                                                            variant="secondary"
-                                                                                            className="text-xs"
-                                                                                        >
-                                                                                            {worktype.name}
-                                                                                        </Badge>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm italic">None configured</span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="pr-6 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <Link href={`locations/${location.id}`}>
-                                                            <Button size="sm" className="h-8 gap-1.5 transition-all">
-                                                                Open
-                                                                <ChevronRight className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                        </Link>
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                                                                >
-                                                                    <span className="sr-only">More actions</span>
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end" className="w-48">
-                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuSeparator />
-                                                                <Link href={`locations/${location.id}`}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <Eye className="h-4 w-4" />
-                                                                        View Details
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                                                                    Material Items
-                                                                </DropdownMenuLabel>
-                                                                <Link href={`location/${location.id}/material-items`}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <Eye className="h-4 w-4" />
-                                                                        View Items
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-                                                                <Link href={`location/${location.id}/material-item-price-list-uploads`}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <ClockAlert className="h-4 w-4" />
-                                                                        Audit Uploads
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                                                                    Variations
-                                                                </DropdownMenuLabel>
-                                                                <Link href={`locations/${location.id}/variations`}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <CirclePlus className="h-4 w-4" />
-                                                                        Create New
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-                                                                <Link href={`locations/${location.id}/variations`}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <Eye className="h-4 w-4" />
-                                                                        View All
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                                                                    Requisition
-                                                                </DropdownMenuLabel>
-                                                                <Link href={route('location.req-header.edit', { locationId: location.id })}>
-                                                                    <DropdownMenuItem className="gap-2">
-                                                                        <Pencil className="h-4 w-4" />
-                                                                        Edit Header
-                                                                    </DropdownMenuItem>
-                                                                </Link>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
+                                    ))}
                                 </TableBody>
                             </Table>
                         </div>
-                    </CardContent>
-                </Card>
+                    </>
+                )}
             </div>
 
             <LoadingDialog open={open} setOpen={setOpen} />

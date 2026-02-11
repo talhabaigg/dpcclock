@@ -1,12 +1,12 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Calculator, CheckCircle2, DollarSign, Loader2, Save, Target, TrendingUp } from 'lucide-react';
+import { Calculator, CheckCircle2, Loader2, Save, Target, TrendingUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type RevenueTargetProps = {
@@ -17,13 +17,8 @@ type RevenueTargetProps = {
 };
 
 type PageProps = {
-    auth: {
-        isAdmin: boolean;
-    };
-    flash?: {
-        success?: string;
-        error?: string;
-    };
+    auth: { isAdmin: boolean };
+    flash?: { success?: string; error?: string };
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Budget Management', href: '/budget-management' }];
@@ -45,12 +40,8 @@ const formatCurrency = (value: number | null | undefined): string => {
 };
 
 const formatCompactCurrency = (value: number): string => {
-    if (value >= 1000000) {
-        return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-        return `$${(value / 1000).toFixed(0)}K`;
-    }
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
     return formatCurrency(value);
 };
 
@@ -60,10 +51,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
     const flashSuccess = props?.flash?.success;
     const [showSuccess, setShowSuccess] = useState(false);
 
-    const { data, setData, post, processing } = useForm({
-        fyYear,
-        targets,
-    });
+    const { data, setData, post, processing } = useForm({ fyYear, targets });
 
     useEffect(() => {
         if (!flashSuccess) return;
@@ -100,48 +88,41 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Budget Management" />
 
-            <div className="m-4 space-y-6">
-                {/* Loading Overlay */}
-                {processing && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
-                            <div className="flex flex-col items-center justify-center gap-4">
-                                <div className="relative">
-                                    <div className="h-14 w-14 rounded-full border-4 border-gray-200 dark:border-gray-700" />
-                                    <div className="absolute inset-0 h-14 w-14 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400" />
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Saving targets...</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Please wait, do not close this page</p>
-                                </div>
+            {/* Loading Overlay */}
+            {processing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-card rounded-xl border p-8 shadow-lg">
+                        <div className="flex flex-col items-center gap-4">
+                            <Loader2 className="text-primary h-10 w-10 animate-spin" />
+                            <div className="text-center">
+                                <p className="text-lg font-semibold">Saving targets...</p>
+                                <p className="text-muted-foreground text-sm">Please wait</p>
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Success Overlay */}
-                {showSuccess && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                        <div className="rounded-2xl border border-green-200 bg-white p-8 shadow-2xl dark:border-green-800 dark:bg-gray-900">
-                            <div className="flex flex-col items-center justify-center gap-4">
-                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50">
-                                    <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
-                                </div>
-                                <p className="text-lg font-semibold text-green-600 dark:text-green-400">{flashSuccess ?? 'Saved successfully!'}</p>
+            {/* Success Overlay */}
+            {showSuccess && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-card rounded-xl border border-emerald-500/50 p-8 shadow-lg">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+                                <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
                             </div>
+                            <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{flashSuccess ?? 'Saved successfully!'}</p>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Header Section */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Set monthly revenue targets for each financial year to track performance against goals.
-                        </p>
-                    </div>
+            <div className="flex flex-col gap-4 p-3 sm:p-4">
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-muted-foreground text-sm">Set monthly revenue targets for {currentFYLabel}</p>
                     <Select value={String(data.fyYear)} onValueChange={handleFyChange}>
-                        <SelectTrigger className="h-9 w-[180px] bg-white dark:bg-gray-900">
+                        <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Select FY" />
                         </SelectTrigger>
                         <SelectContent>
@@ -156,175 +137,153 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
 
                 {/* Stats Cards */}
                 <div className="grid gap-4 sm:grid-cols-3">
-                    <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white dark:border-blue-800 dark:from-blue-950/30 dark:to-gray-900">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Annual Target</CardTitle>
-                            <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/50">
-                                <Target className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <Card className="border-l-4 border-l-blue-500">
+                        <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-muted-foreground text-sm font-medium">Total Annual Target</p>
+                                    <p className="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+                                        {formatCurrency(totalTarget)}
+                                    </p>
+                                    <p className="text-muted-foreground mt-1 text-xs">{currentFYLabel}</p>
+                                </div>
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                    <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                </div>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalTarget)}</div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{currentFYLabel}</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white dark:border-emerald-800 dark:from-emerald-950/30 dark:to-gray-900">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Monthly Average</CardTitle>
-                            <div className="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/50">
-                                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <Card className="border-l-4 border-l-emerald-500">
+                        <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-muted-foreground text-sm font-medium">Monthly Average</p>
+                                    <p className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                                        {formatCompactCurrency(monthlyAverage)}
+                                    </p>
+                                    <p className="text-muted-foreground mt-1 text-xs">Per active month</p>
+                                </div>
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                                    <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                                </div>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCompactCurrency(monthlyAverage)}</div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Per active month</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-white dark:border-purple-800 dark:from-purple-950/30 dark:to-gray-900">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Months Configured</CardTitle>
-                            <div className="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/50">
-                                <Calculator className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <Card className="border-l-4 border-l-purple-500">
+                        <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-muted-foreground text-sm font-medium">Months Configured</p>
+                                    <p className="text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">
+                                        {filledMonths} <span className="text-muted-foreground text-base font-normal">/ 12</span>
+                                    </p>
+                                    <p className="text-muted-foreground mt-1 text-xs">With targets set</p>
+                                </div>
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
+                                    <Calculator className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                                </div>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                                {filledMonths} <span className="text-base font-normal text-gray-500 dark:text-gray-400">/ 12</span>
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">With targets set</p>
                         </CardContent>
                     </Card>
                 </div>
 
                 {/* Budget Form */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <Card className="overflow-hidden">
-                        <CardHeader className="border-b border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/50">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/50">
-                                        <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                    </div>
-                                    <div>
-                                        <CardTitle className="text-base">Monthly Revenue Targets</CardTitle>
-                                        <CardDescription>Enter budget targets for each month of {currentFYLabel}</CardDescription>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div className="overflow-hidden rounded-lg border">
+                        <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+                            <div className="min-w-[800px]">
+                                {/* Month Headers */}
+                                <div className="bg-muted/50 grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] text-xs font-semibold tracking-wide uppercase">
+                                    {months.map((month, index) => {
+                                        const quarterColors = [
+                                            'border-l-blue-400 dark:border-l-blue-500',
+                                            'border-l-emerald-400 dark:border-l-emerald-500',
+                                            'border-l-amber-400 dark:border-l-amber-500',
+                                            'border-l-purple-400 dark:border-l-purple-500',
+                                        ];
+                                        return (
+                                            <div
+                                                key={month}
+                                                className={`text-muted-foreground border-border border-r px-3 py-3 text-center ${index % 3 === 0 ? `border-l-2 ${quarterColors[Math.floor(index / 3)]}` : ''}`}
+                                            >
+                                                {formatMonthShort(month)}
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="text-muted-foreground px-4 py-3 text-right">FY Total</div>
+                                </div>
+
+                                {/* Input Row */}
+                                <div className="border-border grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center border-b">
+                                    {months.map((month, index) => {
+                                        const value = Number(data.targets[month] ?? 0);
+                                        const hasValue = value > 0;
+                                        return (
+                                            <Tooltip key={month}>
+                                                <TooltipTrigger asChild>
+                                                    <div className={`border-border border-r px-2 py-3 ${index % 3 === 0 ? 'border-l' : ''}`}>
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            step="1000"
+                                                            value={data.targets[month] ?? 0}
+                                                            onChange={(e) =>
+                                                                setData('targets', {
+                                                                    ...data.targets,
+                                                                    [month]: e.target.value === '' ? 0 : Number(e.target.value),
+                                                                })
+                                                            }
+                                                            className={`h-9 w-full min-w-[70px] text-right text-sm font-medium ${
+                                                                hasValue ? 'border-primary/30 bg-primary/5' : ''
+                                                            }`}
+                                                            disabled={!isAdmin}
+                                                        />
+                                                    </div>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{formatCurrency(value)}</TooltipContent>
+                                            </Tooltip>
+                                        );
+                                    })}
+                                    <div className="px-4 py-3 text-right">
+                                        <span className="text-lg font-bold">{formatCurrency(totalTarget)}</span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Annual Total:</span>
-                                    <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalTarget)}</span>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                                <div className="min-w-[800px]">
-                                    {/* Month Headers */}
-                                    <div className="grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] border-b border-gray-200 bg-gray-50 text-xs font-semibold tracking-wide uppercase dark:border-gray-700 dark:bg-gray-800/50">
-                                        {months.map((month, index) => {
-                                            const isQ1 = index < 3;
-                                            const isQ2 = index >= 3 && index < 6;
-                                            const isQ3 = index >= 6 && index < 9;
-                                            const isQ4 = index >= 9;
-                                            let quarterColor = '';
-                                            if (isQ1) quarterColor = 'border-l-blue-400 dark:border-l-blue-500';
-                                            else if (isQ2) quarterColor = 'border-l-emerald-400 dark:border-l-emerald-500';
-                                            else if (isQ3) quarterColor = 'border-l-amber-400 dark:border-l-amber-500';
-                                            else if (isQ4) quarterColor = 'border-l-purple-400 dark:border-l-purple-500';
 
-                                            return (
-                                                <div
-                                                    key={month}
-                                                    className={`border-r border-gray-200 px-3 py-3 text-center text-gray-600 dark:border-gray-700 dark:text-gray-400 ${index % 3 === 0 ? `border-l-2 ${quarterColor}` : ''}`}
-                                                >
-                                                    {formatMonthShort(month)}
-                                                </div>
-                                            );
-                                        })}
-                                        <div className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">FY Total</div>
-                                    </div>
-
-                                    {/* Input Row */}
-                                    <div className="grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center border-b border-gray-100 dark:border-gray-800">
-                                        {months.map((month, index) => {
-                                            const value = Number(data.targets[month] ?? 0);
-                                            const hasValue = value > 0;
-
-                                            return (
-                                                <Tooltip key={month}>
-                                                    <TooltipTrigger asChild>
-                                                        <div
-                                                            className={`border-r border-gray-200 px-2 py-3 dark:border-gray-700 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
-                                                        >
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                step="1000"
-                                                                value={data.targets[month] ?? 0}
-                                                                onChange={(e) =>
-                                                                    setData('targets', {
-                                                                        ...data.targets,
-                                                                        [month]: e.target.value === '' ? 0 : Number(e.target.value),
-                                                                    })
-                                                                }
-                                                                className={`h-9 w-full min-w-[70px] text-right text-sm font-medium transition-colors ${
-                                                                    hasValue
-                                                                        ? 'border-blue-200 bg-blue-50 focus:border-blue-400 dark:border-blue-800 dark:bg-blue-950/30'
-                                                                        : 'bg-white dark:bg-gray-900'
-                                                                }`}
-                                                                disabled={!isAdmin}
-                                                            />
-                                                        </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{formatCurrency(value)}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            );
-                                        })}
-                                        <div className="px-4 py-3 text-right">
-                                            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalTarget)}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Formatted Display Row */}
-                                    <div className="grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center bg-gray-50/50 dark:bg-gray-800/30">
-                                        {months.map((month, index) => {
-                                            const value = Number(data.targets[month] ?? 0);
-                                            return (
-                                                <div
-                                                    key={`display-${month}`}
-                                                    className={`border-r border-gray-200 px-2 py-2 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 ${index % 3 === 0 ? 'border-l border-gray-100 dark:border-gray-800' : ''}`}
-                                                >
-                                                    {value > 0 ? formatCompactCurrency(value) : '-'}
-                                                </div>
-                                            );
-                                        })}
-                                        <div className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">
-                                            {formatCompactCurrency(totalTarget)}
-                                        </div>
+                                {/* Formatted Display Row */}
+                                <div className="bg-muted/30 grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center">
+                                    {months.map((month, index) => {
+                                        const value = Number(data.targets[month] ?? 0);
+                                        return (
+                                            <div
+                                                key={`display-${month}`}
+                                                className={`text-muted-foreground border-border border-r px-2 py-2 text-center text-xs ${index % 3 === 0 ? 'border-l' : ''}`}
+                                            >
+                                                {value > 0 ? formatCompactCurrency(value) : '-'}
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="text-muted-foreground px-4 py-2 text-right text-xs font-medium">
+                                        {formatCompactCurrency(totalTarget)}
                                     </div>
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
                     {/* Action Bar */}
-                    <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+                    <div className="bg-muted/50 flex items-center justify-between rounded-lg border px-4 py-3">
                         {isAdmin ? (
                             <>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">Make sure to save your changes after editing targets.</p>
-                                <Button type="submit" disabled={processing} className="gap-2">
+                                <p className="text-muted-foreground text-sm">Save your changes after editing targets.</p>
+                                <Button type="submit" size="sm" disabled={processing} className="gap-2">
                                     {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                     Save Targets
                                 </Button>
                             </>
                         ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Only administrators can edit and save revenue targets. Contact your admin for changes.
-                            </p>
+                            <p className="text-muted-foreground text-sm">Only administrators can edit revenue targets.</p>
                         )}
                     </div>
                 </form>

@@ -206,6 +206,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'Reports' => [
             'reports.view' => 'View reports',
             'reports.requisition-lines' => 'View requisition line reports',
+            'reports.missing-sign-out' => 'View missing sign-out report',
         ],
 
         // ============================================
@@ -329,6 +330,7 @@ class RolesAndPermissionsSeeder extends Seeder
             // Reports
             'reports.view',
             'reports.requisition-lines',
+            'reports.missing-sign-out',
             // System
             'queue-status.view',
         ],
@@ -391,6 +393,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'drawings.create',
             // Reports
             'reports.view',
+            'reports.missing-sign-out',
         ],
 
         'kiosk' => [

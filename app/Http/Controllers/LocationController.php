@@ -124,7 +124,7 @@ class LocationController extends Controller
 
     public function sync()
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         // $apiKey = 'PAYROLL_API_KEY';
         $user = auth()->user();
         $response = Http::withHeaders([
@@ -226,7 +226,7 @@ class LocationController extends Controller
 
     private function createEHLocation($data)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
         ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/location', $data);

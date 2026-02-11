@@ -20,6 +20,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
 use App\Http\Controllers\MaterialItemController;
+use App\Http\Controllers\MissingSignOutReportController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
@@ -296,7 +297,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('material-items/{materialItem}', [MaterialItemController::class, 'destroy'])->name('material-items.destroy')
         ->middleware('permission:materials.delete');
     Route::middleware('permission:materials.import')->group(function () {
+        Route::post('/material-items/validate-import', [MaterialItemController::class, 'validateImport']);
         Route::post('/material-items/upload', [MaterialItemController::class, 'upload']);
+        Route::get('/material-items/upload-issues/{filename}', [MaterialItemController::class, 'downloadIssuesFile']);
         Route::post('/material-items/location/upload', [MaterialItemController::class, 'uploadLocationPricing']);
     });
     Route::middleware('permission:materials.export')->group(function () {
@@ -601,6 +604,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/reports/po-comparison/insights/refresh', [POComparisonReportController::class, 'refreshInsights'])->name('reports.poComparison.insights.refresh');
         Route::get('/reports/po-comparison/sync-status', [POComparisonReportController::class, 'getSyncStatus'])->name('reports.poComparison.syncStatus');
         Route::post('/reports/po-comparison/queue-sync', [POComparisonReportController::class, 'queueSync'])->name('reports.poComparison.queueSync');
+    });
+
+    // Missing Sign-Out Report
+    Route::middleware('permission:reports.missing-sign-out')->group(function () {
+        Route::get('/reports/missing-sign-out', [MissingSignOutReportController::class, 'index'])->name('reports.missingSignOut');
+        Route::get('/reports/missing-sign-out/data', [MissingSignOutReportController::class, 'getData'])->name('reports.missingSignOut.data');
     });
 
     // ============================================

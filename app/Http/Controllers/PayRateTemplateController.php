@@ -29,8 +29,8 @@ class PayRateTemplateController extends Controller
      */
     public function syncPayCategories()
     {
-        $apiKey = env('PAYROLL_API_KEY');
-        $businessId = env('PAYROLL_BUSINESS_ID', '431152');
+        $apiKey = config('services.employment_hero.api_key');
+        $businessId = config('services.employment_hero.business_id');
 
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
@@ -82,8 +82,8 @@ class PayRateTemplateController extends Controller
      */
     public function syncPayRateTemplates()
     {
-        $apiKey = env('PAYROLL_API_KEY');
-        $businessId = env('PAYROLL_BUSINESS_ID', '431152');
+        $apiKey = config('services.employment_hero.api_key');
+        $businessId = config('services.employment_hero.business_id');
 
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),

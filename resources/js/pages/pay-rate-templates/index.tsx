@@ -58,7 +58,6 @@ interface PageProps {
     payRateTemplates: PayRateTemplate[];
     payCategories: PayCategory[];
     flash: { success?: string; error?: string };
-    [key: string]: unknown;
 }
 
 export default function PayRateTemplatesIndex() {
@@ -123,7 +122,7 @@ export default function PayRateTemplatesIndex() {
                         </Link>
                     </div>
                     <div className="relative w-full sm:w-72">
-                        <Search className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         <Input
                             type="text"
                             placeholder="Search..."
@@ -136,9 +135,13 @@ export default function PayRateTemplatesIndex() {
 
                 {/* Flash messages */}
                 {flash.success && (
-                    <div className="mb-4 rounded-lg bg-green-50 p-3 text-green-700 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
+                    <div className="mb-4 rounded-lg bg-green-50 p-3 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                        {flash.success}
+                    </div>
                 )}
-                {flash.error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>}
+                {flash.error && (
+                    <div className="mb-4 rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
+                )}
 
                 {/* Tab buttons */}
                 <div className="mb-4 flex gap-2">
@@ -221,9 +224,7 @@ export default function PayRateTemplatesIndex() {
                                                                 <TableBody>
                                                                     {template.pay_categories.map((pc) => (
                                                                         <TableRow key={pc.id}>
-                                                                            <TableCell>
-                                                                                {pc.pay_category?.name || pc.pay_category_name || '-'}
-                                                                            </TableCell>
+                                                                            <TableCell>{pc.pay_category?.name || pc.pay_category_name || '-'}</TableCell>
                                                                             <TableCell>{pc.pay_category_id}</TableCell>
                                                                             <TableCell>{formatCurrency(pc.user_supplied_rate)}</TableCell>
                                                                             <TableCell>{formatCurrency(pc.calculated_rate)}</TableCell>

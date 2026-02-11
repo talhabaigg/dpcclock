@@ -79,8 +79,13 @@
       "Bash(vendor\\\\bin\\\\pint:*)",
       "Bash(npm uninstall:*)",
       "Bash(npx vite build)",
+<<<<<<< HEAD
       "Bash(Select-String -Pattern \"drawing\")",
       "Bash(Select-String -Pattern \"drawing\" -CaseSensitive:$false)"
+=======
+      "Bash(git -C \"c:\\\\Laravel\\\\dpcclock\" remote get-url origin 2>&1:*)",
+      "Bash(gh auth:*)"
+>>>>>>> ce149efdd6de7f70982bfb63778d01fdaa1032fc
     ]
   }
 }

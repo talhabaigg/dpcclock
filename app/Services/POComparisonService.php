@@ -185,7 +185,7 @@ class POComparisonService
         try {
             $authService = new PremierAuthenticationService;
             $token = $authService->getAccessToken();
-            $baseUrl = env('PREMIER_SWAGGER_API_URL');
+            $baseUrl = config('premier.swagger_api.base_url');
 
             $response = \Illuminate\Support\Facades\Http::withToken($token)
                 ->acceptJson()

@@ -239,7 +239,7 @@ class KioskController extends Controller
 
     public function sync()
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key
         ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/kiosk');
@@ -261,7 +261,7 @@ class KioskController extends Controller
 
     public function syncEmployees($kioskId)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
 
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),  // Manually encode the API key

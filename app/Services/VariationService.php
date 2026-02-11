@@ -14,7 +14,7 @@ class VariationService
             'parameter.job' => $location->external_id,
             'parameter.pageSize' => 1000,
         ];
-        $base_url = env('PREMIER_SWAGGER_API_URL');
+        $base_url = config('premier.swagger_api.base_url');
         $response = Http::withToken($token)
             ->acceptJson()
             ->get($base_url.'/api/ChangeOrder/GetChangeOrders', $queryParams);
@@ -28,7 +28,7 @@ class VariationService
             'parameter.company' => $companyId,
             'parameter.changeOrder' => $changeOrderId,
         ];
-        $base_url = env('PREMIER_SWAGGER_API_URL');
+        $base_url = config('premier.swagger_api.base_url');
         $response = Http::withToken($token)
             ->acceptJson()
             ->get($base_url.'/api/ChangeOrder/GetChangeOrderLines', $queryParams);

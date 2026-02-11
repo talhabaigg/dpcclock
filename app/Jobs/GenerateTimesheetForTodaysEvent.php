@@ -202,7 +202,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
 
     private function sync($chunkData): bool
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         // Send POST request to the API with correct headers and JSON data
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
@@ -224,7 +224,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
 
     private function getLeaveBalanceByEmployeeId($employeeId)
     {
-        $apiKey = env('PAYROLL_API_KEY');
+        $apiKey = config('services.employment_hero.api_key');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON

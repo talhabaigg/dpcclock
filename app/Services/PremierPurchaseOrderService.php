@@ -18,7 +18,7 @@ class PremierPurchaseOrderService
     public function __construct()
     {
         $this->authService = new PremierAuthenticationService;
-        $this->baseUrl = env('PREMIER_SWAGGER_API_URL');
+        $this->baseUrl = config('premier.swagger_api.base_url');
     }
 
     /**

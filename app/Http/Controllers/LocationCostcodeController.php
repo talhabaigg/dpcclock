@@ -21,7 +21,7 @@ class LocationCostcodeController extends Controller
             '1249093' => '3341c7c6-2abb-49e1-8a59-839d1bcff972', // SWCP
         ];
         $companyId = $company[$location->eh_parent_id] ?? null;
-        $base_url = env('PREMIER_SWAGGER_API_URL');
+        $base_url = config('premier.swagger_api.base_url');
         $queryParams = [
             'parameter.companyId' => $companyId,      // Or hardcoded ID
             'parameter.jobNumber' => $location->external_id,      // Or 'ANU00'

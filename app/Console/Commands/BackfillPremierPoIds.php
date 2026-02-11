@@ -22,7 +22,7 @@ class BackfillPremierPoIds extends Command
 
     public function handle(): int
     {
-        $this->baseUrl = env('PREMIER_SWAGGER_API_URL');
+        $this->baseUrl = config('premier.swagger_api.base_url');
         $dryRun = $this->option('dry-run');
         $limit = $this->option('limit');
 

@@ -290,9 +290,8 @@ export function TurnoverPrintReport({
         });
 
         const monthCount = next12Months.length || 1;
-        const averageMonthlyCost = totalCost / monthCount;
-        const averageOperationalCost = averageMonthlyCost + overheadAmount;
-        const monthsSustainable = averageOperationalCost > 0 ? totalProfit / averageOperationalCost : 0;
+        const averageMonthlyProfit = totalProfit / monthCount;
+        const monthsSustainable = overheadAmount > 0 ? totalProfit / overheadAmount : 0;
 
         // Status tiers: green (>=6), amber (>=4 but <6), red (<4)
         const status: 'healthy' | 'warning' | 'critical' = monthsSustainable >= 6 ? 'healthy' : monthsSustainable >= 4 ? 'warning' : 'critical';
@@ -303,9 +302,8 @@ export function TurnoverPrintReport({
             monthlyCosts,
             totalProfit,
             totalCost,
-            averageMonthlyCost,
-            overhead: overheadAmount,
-            averageOperationalCost,
+            averageMonthlyProfit,
+            monthlyOverhead: overheadAmount,
             monthsSustainable,
             kpiThreshold: KPI_THRESHOLD,
             status,
@@ -561,26 +559,22 @@ export function TurnoverPrintReport({
                                     </div>
                                 </div>
                             </div>
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 12px 16px; background: ${sustainabilityData.status === 'healthy' ? '#ecfdf5' : sustainabilityData.status === 'warning' ? '#fffbeb' : '#fef2f2'};">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 12px 16px; background: ${sustainabilityData.status === 'healthy' ? '#ecfdf5' : sustainabilityData.status === 'warning' ? '#fffbeb' : '#fef2f2'};">
                                 <div>
                                     <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Total Profit (12mo)</div>
                                     <div style="font-size: 14px; font-weight: 700; color: ${sustainabilityData.totalProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.totalProfit)}</div>
                                 </div>
                                 <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Avg Monthly Cost</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.averageMonthlyCost)}</div>
+                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Monthly Overhead</div>
+                                    <div style="font-size: 14px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.monthlyOverhead)}</div>
                                 </div>
                                 <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Overhead</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.overhead)}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Avg Operational Cost</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.averageOperationalCost)}</div>
+                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Avg Monthly Profit</div>
+                                    <div style="font-size: 14px; font-weight: 700; color: ${sustainabilityData.averageMonthlyProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.averageMonthlyProfit)}</div>
                                 </div>
                             </div>
                             <div style="background: white; border-top: 1px solid #e2e8f0; padding: 8px 16px; font-size: 9px; color: #64748b;">
-                                <strong>Formula:</strong> Months Sustainable = Total Profit / Avg Operational Cost | Avg Operational Cost = Avg Monthly Cost + ${formatCurrency(overheadAmount)} Overhead
+                                <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
                             </div>
                         </div>
                     </div>
@@ -1074,7 +1068,7 @@ export function TurnoverPrintReport({
                                           : 'Below threshold (<4 months)'}
                                 </p>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 p-4 md:grid-cols-4">
+                            <div className="grid grid-cols-3 gap-4 p-4">
                                 <div>
                                     <div className="text-xs font-medium text-slate-500 uppercase">Total Profit (12mo)</div>
                                     <div className={`text-lg font-bold ${sustainabilityData.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
@@ -1082,23 +1076,18 @@ export function TurnoverPrintReport({
                                     </div>
                                 </div>
                                 <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Avg Monthly Cost</div>
-                                    <div className="text-lg font-bold text-slate-700">{formatCurrency(sustainabilityData.averageMonthlyCost)}</div>
+                                    <div className="text-xs font-medium text-slate-500 uppercase">Monthly Overhead</div>
+                                    <div className="text-lg font-bold text-slate-700">{formatCurrency(sustainabilityData.monthlyOverhead)}</div>
                                 </div>
                                 <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Overhead</div>
-                                    <div className="text-lg font-bold text-slate-700">{formatCurrency(sustainabilityData.overhead)}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Avg Operational Cost</div>
-                                    <div className="text-lg font-bold text-slate-700">
-                                        {formatCurrency(sustainabilityData.averageOperationalCost)}
+                                    <div className="text-xs font-medium text-slate-500 uppercase">Avg Monthly Profit</div>
+                                    <div className={`text-lg font-bold ${sustainabilityData.averageMonthlyProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                        {formatCurrency(sustainabilityData.averageMonthlyProfit)}
                                     </div>
                                 </div>
                             </div>
                             <div className="border-t bg-white/50 px-4 py-2 text-xs text-slate-600">
-                                <strong>Formula:</strong> Months Sustainable = Total Profit / Avg Operational Cost | Avg Operational Cost = Avg
-                                Monthly Cost + {formatCurrency(overheadAmount)} Overhead
+                                <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
                             </div>
                         </div>
                     </div>
