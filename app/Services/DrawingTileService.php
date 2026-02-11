@@ -11,7 +11,7 @@ class DrawingTileService
 {
     protected string $storageDisk;
     protected string $tilesDir = 'drawing-tiles';
-    protected int $defaultTileSize = 512;
+    protected int $defaultTileSize = 1024;
     protected int $maxZoomLevel = 5;
 
     protected DrawingProcessingService $processingService;
@@ -219,7 +219,7 @@ class DrawingTileService
         // Use ImageMagick to resize + crop into tiles in one pass
         // -extent pads edge tiles with white background
         // Use proc_open with array syntax to bypass CMD shell on Windows (avoids %d variable expansion)
-        $outputPattern = $tempDir . '/tile_%d.jpg';
+        $outputPattern = $tempDir . '/tile_%d.png';
         $extentSize = ($cols * $tileSize) . 'x' . ($rows * $tileSize);
 
         // Build args: IM7 uses "magick convert", IM6 uses just "convert"
@@ -231,7 +231,6 @@ class DrawingTileService
             '-resize', "{$scaledWidth}x{$scaledHeight}!",
             '-background', 'white', '-extent', $extentSize,
             '-crop', "{$tileSize}x{$tileSize}", '+repage',
-            '-quality', '90',
             $outputPattern,
         ]);
 
@@ -261,15 +260,15 @@ class DrawingTileService
             return 0;
         }
 
-        // Upload tiles to S3 (ImageMagick numbers sequentially: tile_0.jpg, tile_1.jpg, ...)
+        // Upload tiles to storage (ImageMagick numbers sequentially: tile_0.png, tile_1.png, ...)
         // The sequential order is: row by row, left to right
         $tilesCreated = 0;
         $index = 0;
         for ($y = 0; $y < $rows; $y++) {
             for ($x = 0; $x < $cols; $x++) {
-                $tileFile = $tempDir . "/tile_{$index}.jpg";
+                $tileFile = $tempDir . "/tile_{$index}.png";
                 if (file_exists($tileFile)) {
-                    $s3Path = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.jpg";
+                    $s3Path = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.png";
                     Storage::disk($this->storageDisk)->put($s3Path, file_get_contents($tileFile));
                     @unlink($tileFile);
                     $tilesCreated++;
@@ -333,9 +332,9 @@ class DrawingTileService
                 imagefill($tile, 0, 0, $white);
                 imagecopy($tile, $sourceImage, 0, 0, $tileX, $tileY, $actualTileWidth, $actualTileHeight);
 
-                $tilePath = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.jpg";
+                $tilePath = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.png";
                 ob_start();
-                imagejpeg($tile, null, 90);
+                imagepng($tile, null, 6);
                 $imageData = ob_get_clean();
                 Storage::disk($this->storageDisk)->put($tilePath, $imageData);
 
@@ -368,7 +367,7 @@ class DrawingTileService
         if ($extension === 'pdf') {
             $tempImagePath = sys_get_temp_dir() . '/drawing_tile_' . $drawing->id . '_' . uniqid() . '.png';
 
-            if ($this->convertPdfToImage($originalPath, $tempImagePath, $drawing->page_number ?? 1, 300)) {
+            if ($this->convertPdfToImage($originalPath, $tempImagePath, $drawing->page_number ?? 1, 400)) {
                 return $tempImagePath;
             }
             return null;

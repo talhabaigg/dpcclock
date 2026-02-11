@@ -484,7 +484,7 @@ class DrawingController extends Controller
             abort(404);
         }
 
-        $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.jpg";
+        $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.png";
         $disk = config('filesystems.drawings_disk', 'public');
 
         // S3: redirect to a temporary signed URL — browser fetches directly from S3
@@ -515,7 +515,7 @@ class DrawingController extends Controller
                     },
                     200,
                     [
-                        'Content-Type' => 'image/jpeg',
+                        'Content-Type' => 'image/png',
                         'Content-Length' => $size,
                         'Cache-Control' => 'public, max-age=604800',
                     ]
