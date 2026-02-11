@@ -15,7 +15,7 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
-    'tiles_disk' => env('TILES_DISK', 'public'),
+    'drawings_disk' => env('APP_ENV') === 'production' ? 's3' : 'public',
 
     /*
     |--------------------------------------------------------------------------

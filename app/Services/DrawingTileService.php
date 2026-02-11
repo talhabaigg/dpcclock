@@ -19,7 +19,7 @@ class DrawingTileService
     public function __construct(DrawingProcessingService $processingService)
     {
         $this->processingService = $processingService;
-        $this->storageDisk = config('filesystems.tiles_disk', 'public');
+        $this->storageDisk = config('filesystems.drawings_disk', 'public');
     }
 
     /**
@@ -357,9 +357,12 @@ class DrawingTileService
     {
         $storagePath = $drawing->storage_path ?? $drawing->file_path;
         if ($storagePath) {
-            $localPath = Storage::disk('public')->path($storagePath);
-            if (file_exists($localPath)) {
-                return $localPath;
+            $disk = config('filesystems.drawings_disk', 'public');
+            if ($disk !== 's3') {
+                $localPath = Storage::disk($disk)->path($storagePath);
+                if (file_exists($localPath)) {
+                    return $localPath;
+                }
             }
         }
 

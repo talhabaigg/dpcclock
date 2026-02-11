@@ -541,6 +541,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');
         Route::get('/drawings/{drawing}/thumbnail', [DrawingController::class, 'serveThumbnail'])->name('drawings.thumbnail');
+        Route::get('/drawings/{drawing}/diff', [DrawingController::class, 'serveDiff'])->name('drawings.diff');
         Route::get('/drawings/{drawing}/preview', [DrawingController::class, 'servePreview'])->name('drawings.preview');
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
     });

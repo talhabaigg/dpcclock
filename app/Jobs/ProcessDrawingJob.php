@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Drawing;
-use App\Services\DrawingMetadataService;
 use App\Services\DrawingProcessingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,22 +25,19 @@ class ProcessDrawingJob implements ShouldQueue
 
     protected bool $generateDiff;
 
-    protected bool $extractMetadata;
-
     /**
      * Create a new job instance.
      */
-    public function __construct(int $drawingId, bool $generateDiff = true, bool $extractMetadata = true)
+    public function __construct(int $drawingId, bool $generateDiff = true)
     {
         $this->drawingId = $drawingId;
         $this->generateDiff = $generateDiff;
-        $this->extractMetadata = $extractMetadata;
     }
 
     /**
      * Execute the job.
      */
-    public function handle(DrawingProcessingService $processingService, DrawingMetadataService $metadataService): void
+    public function handle(DrawingProcessingService $processingService): void
     {
         $drawing = Drawing::find($this->drawingId);
 
@@ -64,27 +60,7 @@ class ProcessDrawingJob implements ShouldQueue
             'results' => $results,
         ]);
 
-        // Step 2: Extract metadata using AI (only if thumbnail was generated successfully)
-        if ($this->extractMetadata && $results['thumbnail']) {
-            Log::info('ProcessDrawingJob: Starting AI metadata extraction', [
-                'drawing_id' => $drawing->id,
-            ]);
-
-            $metadataResult = $metadataService->extractMetadata($drawing);
-
-            Log::info('ProcessDrawingJob: AI metadata extraction complete', [
-                'drawing_id' => $drawing->id,
-                'success' => $metadataResult['success'],
-                'confidence' => $metadataResult['metadata']['confidence'] ?? null,
-            ]);
-
-            $results['metadata'] = $metadataResult['success'];
-            if (! $metadataResult['success']) {
-                $results['errors'][] = $metadataResult['error'] ?? 'Metadata extraction failed';
-            }
-        }
-
-        // Step 3: Generate tiles for high-res viewing (runs on separate queue)
+        // Step 2: Generate tiles for high-res viewing (runs on separate queue)
         if ($results['thumbnail']) {
             GenerateDrawingTilesJob::dispatch($drawing->id);
             Log::info('ProcessDrawingJob: Tile generation job dispatched', [

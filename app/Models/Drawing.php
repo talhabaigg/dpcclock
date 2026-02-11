@@ -247,7 +247,7 @@ class Drawing extends Model
             return null;
         }
 
-        return '/storage/' . $this->diff_image_path;
+        return route('drawings.diff', ['drawing' => $this->id]);
     }
 
     public function getDisplayRevisionAttribute(): string
@@ -273,10 +273,10 @@ class Drawing extends Model
             return null;
         }
 
-        $tilesDisk = config('filesystems.tiles_disk', 'public');
-        $baseUrl = $tilesDisk === 'public'
+        $drawingsDisk = config('filesystems.drawings_disk', 'public');
+        $baseUrl = $drawingsDisk !== 's3'
             ? '/storage/' . $this->tiles_base_url
-            : Storage::disk($tilesDisk)->url($this->tiles_base_url);
+            : Storage::disk('s3')->url($this->tiles_base_url);
 
         return [
             'baseUrl' => $baseUrl,

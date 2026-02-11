@@ -107,18 +107,18 @@ class DrawingController extends Controller
                     $fileName = $file->getClientOriginalName();
                     $directory = 'drawings/'.$project->id;
 
+                    $sha256 = hash_file('sha256', $file->getRealPath());
+
+                    $disk = config('filesystems.drawings_disk');
                     $filePath = $file->storeAs(
                         $directory,
                         time().'_'.$fileName,
-                        'public'
+                        $disk
                     );
 
                     if (! $filePath) {
                         throw new \RuntimeException("Failed to store file: {$fileName}");
                     }
-
-                    $fullPath = Storage::disk('public')->path($filePath);
-                    $sha256 = hash_file('sha256', $fullPath);
 
                     $drawing = Drawing::create([
                         'project_id' => $project->id,
@@ -416,6 +416,62 @@ class DrawingController extends Controller
         }
 
         abort(404, 'Thumbnail not found.');
+    }
+
+    /**
+     * Serve a drawing diff image.
+     */
+    public function serveDiff(Drawing $drawing)
+    {
+        if (! $drawing->diff_image_path) {
+            abort(404, 'No diff image available.');
+        }
+
+        $disk = config('filesystems.drawings_disk', 'public');
+
+        if ($disk !== 's3' && Storage::disk($disk)->exists($drawing->diff_image_path)) {
+            $stream = Storage::disk($disk)->readStream($drawing->diff_image_path);
+            $size = Storage::disk($disk)->size($drawing->diff_image_path);
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => 'image/png',
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]
+            );
+        }
+
+        if (Storage::disk('s3')->exists($drawing->diff_image_path)) {
+            $stream = Storage::disk('s3')->readStream($drawing->diff_image_path);
+            $size = Storage::disk('s3')->size($drawing->diff_image_path);
+
+            return response()->stream(
+                function () use ($stream) {
+                    fpassthru($stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                [
+                    'Content-Type' => 'image/png',
+                    'Content-Length' => $size,
+                    'Content-Disposition' => 'inline',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]
+            );
+        }
+
+        abort(404, 'Diff image not found.');
     }
 
     /**

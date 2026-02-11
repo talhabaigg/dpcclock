@@ -9,11 +9,18 @@ use Illuminate\Support\Str;
 
 class DrawingProcessingService
 {
-    protected string $storageDisk = 'public';
+    protected string $storageDisk;
 
     protected string $thumbnailDir = 'qa-drawing-thumbnails';
 
     protected string $diffDir = 'qa-drawing-diffs';
+
+    protected array $tempFiles = [];
+
+    public function __construct()
+    {
+        $this->storageDisk = config('filesystems.drawings_disk', 'public');
+    }
 
     /**
      * Process a newly uploaded drawing:
@@ -34,12 +41,12 @@ class DrawingProcessingService
             // Update status to processing
             $drawing->update(['status' => Drawing::STATUS_PROCESSING]);
 
-            // Get the full file path
+            // Get the full file path (downloads from S3 to temp if needed)
             $storagePath = $drawing->storage_path ?? $drawing->file_path;
-            $filePath = Storage::disk($this->storageDisk)->path($storagePath);
+            $filePath = $this->resolveLocalPath($storagePath);
 
-            if (! file_exists($filePath)) {
-                throw new \Exception("Drawing file not found: {$filePath}");
+            if (! $filePath || ! file_exists($filePath)) {
+                throw new \Exception("Drawing file not found: {$storagePath}");
             }
 
             // Generate thumbnail
@@ -79,6 +86,8 @@ class DrawingProcessingService
             ]);
             $results['errors'][] = $e->getMessage();
             $drawing->update(['status' => Drawing::STATUS_DRAFT]);
+        } finally {
+            $this->cleanupTempFiles();
         }
 
         return $results;
@@ -89,35 +98,39 @@ class DrawingProcessingService
      */
     public function generateThumbnail(Drawing $drawing, ?string $filePath = null): array
     {
-        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
+        $filePath = $filePath ?? $this->resolveLocalPath($drawing->storage_path ?? $drawing->file_path);
 
         try {
             $isPdf = Str::lower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
 
-            // Ensure thumbnail directory exists
-            $thumbnailDir = Storage::disk($this->storageDisk)->path($this->thumbnailDir);
-            if (! is_dir($thumbnailDir)) {
-                mkdir($thumbnailDir, 0755, true);
-            }
-
             $thumbnailFilename = "{$drawing->id}_thumb.png";
             $thumbnailPath = "{$this->thumbnailDir}/{$thumbnailFilename}";
-            $fullThumbnailPath = Storage::disk($this->storageDisk)->path($thumbnailPath);
+
+            // Always generate to a temp file first
+            $tempThumbnail = sys_get_temp_dir().'/thumb_'.$drawing->id.'_'.uniqid().'.png';
 
             if ($isPdf) {
-                // Try different PDF to image conversion methods
-                // Use higher resolution (1200px) for better AI text recognition
-                $success = $this->pdfToImage($filePath, $fullThumbnailPath, 1, 1200);
+                $success = $this->pdfToImage($filePath, $tempThumbnail, 1, 1200);
             } else {
-                // For images, just resize - use higher resolution for better AI reading
-                $success = $this->resizeImage($filePath, $fullThumbnailPath, 1200);
+                $success = $this->resizeImage($filePath, $tempThumbnail, 1200);
             }
 
-            if ($success) {
-                $drawing->update(['thumbnail_path' => $thumbnailPath]);
+            if ($success && file_exists($tempThumbnail)) {
+                // Upload to the configured disk
+                $this->storeProcessedFile($tempThumbnail, $thumbnailPath);
+
+                $updateData = ['thumbnail_path' => $thumbnailPath];
+                if ($this->isS3()) {
+                    $updateData['thumbnail_s3_key'] = $thumbnailPath;
+                }
+                $drawing->update($updateData);
+
+                @unlink($tempThumbnail);
 
                 return ['success' => true, 'path' => $thumbnailPath];
             }
+
+            @unlink($tempThumbnail);
 
             return ['success' => false, 'error' => 'Failed to generate thumbnail'];
 
@@ -182,7 +195,7 @@ class DrawingProcessingService
      */
     public function extractPageDimensions(Drawing $drawing, ?string $filePath = null): array
     {
-        $filePath = $filePath ?? Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
+        $filePath = $filePath ?? $this->resolveLocalPath($drawing->storage_path ?? $drawing->file_path);
 
         try {
             $dimensions = $this->extractPageDimensionsFromPath($filePath);
@@ -216,19 +229,16 @@ class DrawingProcessingService
                 return ['success' => false, 'error' => 'Previous revision not found'];
             }
 
-            // Ensure diff directory exists
-            $diffDir = Storage::disk($this->storageDisk)->path($this->diffDir);
-            if (! is_dir($diffDir)) {
-                mkdir($diffDir, 0755, true);
-            }
-
             $diffFilename = "{$drawing->id}_diff_{$previousRevision->id}.png";
             $diffPath = "{$this->diffDir}/{$diffFilename}";
-            $fullDiffPath = Storage::disk($this->storageDisk)->path($diffPath);
 
-            // Get paths to both files
-            $currentPath = Storage::disk($this->storageDisk)->path($drawing->storage_path ?? $drawing->file_path);
-            $previousPath = Storage::disk($this->storageDisk)->path($previousRevision->storage_path ?? $previousRevision->file_path);
+            // Resolve both files to local paths (downloads from S3 if needed)
+            $currentPath = $this->resolveLocalPath($drawing->storage_path ?? $drawing->file_path);
+            $previousPath = $this->resolveLocalPath($previousRevision->storage_path ?? $previousRevision->file_path);
+
+            if (! $currentPath || ! $previousPath) {
+                return ['success' => false, 'error' => 'Could not resolve drawing files for comparison'];
+            }
 
             // Convert PDFs to images first if needed
             $currentImage = $this->getFirstPageImage($currentPath);
@@ -238,10 +248,11 @@ class DrawingProcessingService
                 return ['success' => false, 'error' => 'Could not convert PDFs to images for comparison'];
             }
 
-            // Generate the diff
-            $success = $this->compareImages($previousImage, $currentImage, $fullDiffPath);
+            // Generate the diff to a temp file
+            $tempDiff = sys_get_temp_dir().'/diff_'.$drawing->id.'_'.uniqid().'.png';
+            $success = $this->compareImages($previousImage, $currentImage, $tempDiff);
 
-            // Clean up temp files
+            // Clean up temp image conversions
             if ($currentImage !== $currentPath && file_exists($currentImage)) {
                 @unlink($currentImage);
             }
@@ -249,11 +260,15 @@ class DrawingProcessingService
                 @unlink($previousImage);
             }
 
-            if ($success) {
+            if ($success && file_exists($tempDiff)) {
+                $this->storeProcessedFile($tempDiff, $diffPath);
                 $drawing->update(['diff_image_path' => $diffPath]);
+                @unlink($tempDiff);
 
                 return ['success' => true, 'path' => $diffPath];
             }
+
+            @unlink($tempDiff);
 
             return ['success' => false, 'error' => 'Failed to generate diff image'];
 
@@ -265,6 +280,78 @@ class DrawingProcessingService
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Resolve a storage path to a local file path.
+     * For local disk, returns the filesystem path directly.
+     * For S3, downloads to a temp file and returns the temp path.
+     */
+    protected function resolveLocalPath(string $storagePath): ?string
+    {
+        if (! $this->isS3()) {
+            $localPath = Storage::disk($this->storageDisk)->path($storagePath);
+
+            return file_exists($localPath) ? $localPath : null;
+        }
+
+        // S3: download to temp
+        try {
+            if (! Storage::disk('s3')->exists($storagePath)) {
+                Log::warning('File not found on S3', ['path' => $storagePath]);
+
+                return null;
+            }
+
+            $extension = pathinfo($storagePath, PATHINFO_EXTENSION) ?: 'pdf';
+            $tempPath = sys_get_temp_dir().'/drawing_'.md5($storagePath).'_'.uniqid().'.'.$extension;
+
+            $content = Storage::disk('s3')->get($storagePath);
+            file_put_contents($tempPath, $content);
+
+            $this->tempFiles[] = $tempPath;
+
+            return $tempPath;
+        } catch (\Exception $e) {
+            Log::error('Failed to download from S3', [
+                'path' => $storagePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Store a locally-generated file to the configured disk.
+     * For local disk, copies the file into storage.
+     * For S3, uploads the file.
+     */
+    protected function storeProcessedFile(string $localPath, string $targetPath): void
+    {
+        Storage::disk($this->storageDisk)->put(
+            $targetPath,
+            file_get_contents($localPath),
+            'public'
+        );
+    }
+
+    protected function isS3(): bool
+    {
+        return $this->storageDisk === 's3';
+    }
+
+    /**
+     * Clean up any temp files downloaded during processing.
+     */
+    protected function cleanupTempFiles(): void
+    {
+        foreach ($this->tempFiles as $tempFile) {
+            if (file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+        }
+        $this->tempFiles = [];
     }
 
     /**
