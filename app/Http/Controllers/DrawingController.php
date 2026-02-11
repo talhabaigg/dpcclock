@@ -475,6 +475,8 @@ class DrawingController extends Controller
 
     /**
      * Serve a single map tile for the drawing viewer.
+     * For S3: redirects to a temporary signed URL (browser loads directly from S3).
+     * For local: streams from disk.
      */
     public function serveTile(Drawing $drawing, int $z, string $coords)
     {
@@ -485,6 +487,20 @@ class DrawingController extends Controller
         $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.jpg";
         $disk = config('filesystems.drawings_disk', 'public');
 
+        // S3: redirect to a temporary signed URL — browser fetches directly from S3
+        if ($disk === 's3') {
+            try {
+                $url = Storage::disk('s3')->temporaryUrl($tilePath, now()->addHour());
+
+                return redirect($url, 302, [
+                    'Cache-Control' => 'public, max-age=3600',
+                ]);
+            } catch (\Exception $e) {
+                abort(404);
+            }
+        }
+
+        // Local disk: stream directly
         try {
             $stream = Storage::disk($disk)->readStream($tilePath);
             if ($stream) {
@@ -506,7 +522,7 @@ class DrawingController extends Controller
                 );
             }
         } catch (\Exception $e) {
-            // Tile not found on configured disk
+            // Tile not found
         }
 
         abort(404);

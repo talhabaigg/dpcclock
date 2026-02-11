@@ -11,7 +11,7 @@ class DrawingTileService
 {
     protected string $storageDisk;
     protected string $tilesDir = 'drawing-tiles';
-    protected int $defaultTileSize = 256;
+    protected int $defaultTileSize = 512;
     protected int $maxZoomLevel = 5;
 
     protected DrawingProcessingService $processingService;
