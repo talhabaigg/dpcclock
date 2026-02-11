@@ -337,9 +337,12 @@ export function LeafletDrawingViewer({
     }, [coordHeight, coordWidth]);
 
     // Calculate appropriate min/max zoom levels
-    // Allow zooming 2 levels beyond native tiles — Leaflet upscales from maxNativeZoom
     const { minZoom, maxZoom } = useMemo(() => {
-        if (tiles) return { minZoom: 0, maxZoom: tiles.maxZoom + 2 };
+        if (tiles) {
+            // Allow zooming out enough to fit any viewport (negative zoom = zoom out)
+            // -3 lets the image shrink to 1/8 of zoom-0 size — enough for any screen
+            return { minZoom: -3, maxZoom: tiles.maxZoom };
+        }
         return { minZoom: -5, maxZoom: 4 };
     }, [tiles]);
 
@@ -366,7 +369,6 @@ export function LeafletDrawingViewer({
             <MapContainer
                 crs={L.CRS.Simple}
                 bounds={bounds}
-                maxBounds={bounds}
                 minZoom={minZoom}
                 maxZoom={maxZoom}
                 zoomSnap={0.25}
@@ -384,7 +386,6 @@ export function LeafletDrawingViewer({
                         maxZoom={maxZoom}
                         maxNativeZoom={tiles.maxZoom}
                         minNativeZoom={tiles.minNativeZoom ?? 0}
-                        detectRetina={true}
                     />
                 ) : imageUrl ? (
                     <ImageOverlay url={imageUrl} bounds={bounds} />
