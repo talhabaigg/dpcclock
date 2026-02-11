@@ -229,9 +229,23 @@ class DrawingTileService
         $isMagick7 = str_contains(basename($magick), 'magick');
         $args = $isMagick7
             ? [$magick, 'convert'] : [$magick];
+        // Sharpen after downscaling to preserve line/text crispness at lower zoom levels.
+        // -unsharp radiusxsigma+amount+threshold — mild sharpening that helps text readability.
+        // Stronger sharpening for lower zoom levels (more downscaling = more detail loss).
+        $zoomDiff = $maxZoom - $zoomLevel;
+        $sharpenAmount = match (true) {
+            $zoomDiff >= 3 => '0x1+1.0+0.01',   // Heavy sharpen for very zoomed-out
+            $zoomDiff >= 2 => '0x0.8+0.8+0.01',  // Medium sharpen
+            $zoomDiff >= 1 => '0x0.6+0.5+0.01',  // Light sharpen
+            default        => '',                  // Max zoom — no sharpening needed
+        };
+
+        $sharpenArgs = $sharpenAmount !== '' ? ['-unsharp', $sharpenAmount] : [];
+
         $args = array_merge($args, [
             $imagePath,
             '-resize', "{$scaledWidth}x{$scaledHeight}!",
+            ...$sharpenArgs,
             '-background', 'white', '-extent', $extentSize,
             '-crop', "{$tileSize}x{$tileSize}", '+repage',
             $outputPattern,

@@ -461,6 +461,7 @@ export function LeafletDrawingViewer({
                     border: none !important;
                 }
                 .leaflet-tile {
+                    image-rendering: -webkit-optimize-contrast;
                     image-rendering: auto;
                 }
             `}</style>
