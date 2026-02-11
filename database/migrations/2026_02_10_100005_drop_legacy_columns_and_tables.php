@@ -9,17 +9,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Helper to get FK constraint names for a table
-        $getForeignKeys = fn (string $table) => collect(DB::select(
-            "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
-            [$table]
-        ))->pluck('CONSTRAINT_NAME');
+        // This migration cleans up legacy MySQL schema artifacts.
+        // Skip on SQLite (used in tests) where these artifacts don't exist.
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return;
+        }
 
-        // Helper to get index names for a table
-        $getIndexes = fn (string $table) => collect(DB::select(
-            "SHOW INDEX FROM `{$table}`"
-        ))->pluck('Key_name')->unique();
+        // Helper to get FK constraint names for a table (cross-database compatible)
+        $getForeignKeys = fn (string $table) => collect(Schema::getForeignKeys($table))
+            ->pluck('name');
+
+        // Helper to get index names for a table (cross-database compatible)
+        $getIndexes = fn (string $table) => collect(Schema::getIndexes($table))
+            ->pluck('name');
 
         // Drop FK constraints on drawings table that reference legacy tables
         $drawingFks = $getForeignKeys('drawings');
@@ -92,6 +94,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Re-create legacy tables (minimal structure for rollback)
         Schema::create('qa_stages', function (Blueprint $table) {
             $table->id();
