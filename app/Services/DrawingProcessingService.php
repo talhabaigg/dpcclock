@@ -331,8 +331,7 @@ class DrawingProcessingService
     {
         Storage::disk($this->storageDisk)->put(
             $targetPath,
-            file_get_contents($localPath),
-            'public'
+            file_get_contents($localPath)
         );
     }
 

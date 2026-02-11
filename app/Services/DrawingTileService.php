@@ -246,7 +246,7 @@ class DrawingTileService
                 $tileFile = $tempDir . "/tile_{$index}.jpg";
                 if (file_exists($tileFile)) {
                     $s3Path = "{$tilesBasePath}/{$zoomLevel}/{$x}_{$y}.jpg";
-                    Storage::disk($this->storageDisk)->put($s3Path, file_get_contents($tileFile), 'public');
+                    Storage::disk($this->storageDisk)->put($s3Path, file_get_contents($tileFile));
                     @unlink($tileFile);
                     $tilesCreated++;
                 }
@@ -313,7 +313,7 @@ class DrawingTileService
                 ob_start();
                 imagejpeg($tile, null, 90);
                 $imageData = ob_get_clean();
-                Storage::disk($this->storageDisk)->put($tilePath, $imageData, 'public');
+                Storage::disk($this->storageDisk)->put($tilePath, $imageData);
 
                 imagedestroy($tile);
                 $tilesCreated++;
