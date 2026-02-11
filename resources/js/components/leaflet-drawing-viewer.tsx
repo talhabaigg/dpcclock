@@ -24,6 +24,7 @@ export type Observation = {
 type TileInfo = {
     baseUrl: string;
     maxZoom: number;
+    minNativeZoom?: number;
     width: number;
     height: number;
     tileSize: number;
@@ -380,6 +381,9 @@ export function LeafletDrawingViewer({
                         bounds={bounds}
                         minZoom={minZoom}
                         maxZoom={maxZoom}
+                        maxNativeZoom={maxZoom}
+                        minNativeZoom={tiles.minNativeZoom ?? 0}
+                        detectRetina={true}
                     />
                 ) : imageUrl ? (
                     <ImageOverlay url={imageUrl} bounds={bounds} />
@@ -444,6 +448,10 @@ export function LeafletDrawingViewer({
                 .leaflet-observation-marker {
                     background: transparent !important;
                     border: none !important;
+                }
+                .leaflet-tile {
+                    image-rendering: -webkit-optimize-contrast;
+                    image-rendering: crisp-edges;
                 }
             `}</style>
         </div>

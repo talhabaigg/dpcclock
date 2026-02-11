@@ -276,9 +276,17 @@ class Drawing extends Model
         // Always use the proxy route — works for both local and S3
         $baseUrl = "/drawings/{$this->id}/tiles";
 
+        $maxZoom = $this->tiles_max_zoom ?? 5;
+        $maxDim = max($this->tiles_width ?? 0, $this->tiles_height ?? 0);
+        // Min useful zoom: level where largest dimension >= 1500px
+        $minNativeZoom = $maxDim > 0
+            ? max(0, $maxZoom - (int) floor(log(max($maxDim, 1) / 1500, 2)))
+            : 0;
+
         return [
             'baseUrl' => $baseUrl,
-            'maxZoom' => $this->tiles_max_zoom ?? 5,
+            'maxZoom' => $maxZoom,
+            'minNativeZoom' => min($minNativeZoom, $maxZoom),
             'width' => $this->tiles_width ?? 0,
             'height' => $this->tiles_height ?? 0,
             'tileSize' => $this->tile_size ?? 256,

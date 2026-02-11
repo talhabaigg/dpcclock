@@ -62,11 +62,15 @@ class DrawingTileService
                 'max_zoom' => $maxZoom,
             ]);
 
+            // Skip zoom levels where the image is too small to be useful.
+            // We want the smallest generated level to have at least ~1500px in its largest dimension.
+            $minZoom = $this->calculateMinZoom(max($width, $height), $maxZoom);
+
             // Generate tiles for each zoom level using ImageMagick CLI
             $totalTiles = 0;
             $magick = $this->findExecutable(['magick', 'convert']);
 
-            for ($z = 0; $z <= $maxZoom; $z++) {
+            for ($z = $minZoom; $z <= $maxZoom; $z++) {
                 if ($magick) {
                     $tilesAtLevel = $this->generateTilesWithMagick(
                         $magick, $imagePath, $tilesBasePath,
@@ -159,6 +163,19 @@ class DrawingTileService
         }
 
         return [0, 0];
+    }
+
+    /**
+     * Calculate the minimum useful zoom level.
+     * Skips levels where the image would be smaller than ~1500px (too blurry for plans).
+     */
+    protected function calculateMinZoom(int $maxDimension, int $maxZoom): int
+    {
+        // At zoom z, the image dimension = maxDimension / 2^(maxZoom - z)
+        // We want: maxDimension / 2^(maxZoom - z) >= 1500
+        $minZoom = max(0, $maxZoom - (int) floor(log(max($maxDimension, 1) / 1500, 2)));
+
+        return min($minZoom, $maxZoom);
     }
 
     protected function calculateMaxZoom(int $maxDimension, int $tileSize): int
