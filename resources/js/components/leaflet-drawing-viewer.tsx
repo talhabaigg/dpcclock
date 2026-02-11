@@ -329,7 +329,16 @@ export function LeafletDrawingViewer({
     const imgCoordW = imageWidth / scale;
     const imgCoordH = imageHeight / scale;
 
-    const bounds: L.LatLngBoundsExpression = useMemo(() => {
+    // Image bounds = actual drawing area (for fit-to-screen and panning constraint)
+    const imageBounds: L.LatLngBoundsExpression = useMemo(() => {
+        return [
+            [-imgCoordH, 0],
+            [0, imgCoordW],
+        ];
+    }, [imgCoordH, imgCoordW]);
+
+    // Tile bounds = padded area (tiles extend to full tileSize grid)
+    const tileBounds: L.LatLngBoundsExpression = useMemo(() => {
         return [
             [-coordHeight, 0],
             [0, coordWidth],
@@ -368,7 +377,9 @@ export function LeafletDrawingViewer({
         <div className={`relative w-full h-full ${className}`}>
             <MapContainer
                 crs={L.CRS.Simple}
-                bounds={bounds}
+                bounds={imageBounds}
+                maxBounds={imageBounds}
+                maxBoundsViscosity={1.0}
                 minZoom={minZoom}
                 maxZoom={maxZoom}
                 zoomSnap={0.25}
@@ -381,20 +392,20 @@ export function LeafletDrawingViewer({
                         url={tileUrl}
                         tileSize={tiles.tileSize}
                         noWrap={true}
-                        bounds={bounds}
+                        bounds={tileBounds}
                         minZoom={minZoom}
                         maxZoom={maxZoom}
                         maxNativeZoom={tiles.maxZoom}
                         minNativeZoom={tiles.minNativeZoom ?? 0}
                     />
                 ) : imageUrl ? (
-                    <ImageOverlay url={imageUrl} bounds={bounds} />
+                    <ImageOverlay url={imageUrl} bounds={imageBounds} />
                 ) : null}
 
                 {comparisonImageUrl && (
                     <ImageOverlay
                         url={comparisonImageUrl}
-                        bounds={bounds}
+                        bounds={imageBounds}
                         opacity={comparisonOpacity / 100}
                     />
                 )}
@@ -411,7 +422,7 @@ export function LeafletDrawingViewer({
                 />
 
                 <MapControlsInternal
-                    bounds={bounds}
+                    bounds={imageBounds}
                 />
             </MapContainer>
 
