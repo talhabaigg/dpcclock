@@ -559,8 +559,19 @@ export function TakeoffPanel({
                                                                 </span>
                                                             )}
                                                             <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                                                                {c.materials?.length > 0 && (
-                                                                    <span>{c.materials.length} material{c.materials.length !== 1 ? 's' : ''}</span>
+                                                                {c.pricing_method === 'unit_rate' ? (
+                                                                    <>
+                                                                        <Badge variant="outline" className="text-[9px] h-3.5 px-1">Unit Rate</Badge>
+                                                                        {(c.cost_codes || []).length > 0 && (
+                                                                            <span>{(c.cost_codes || []).length} cost code{(c.cost_codes || []).length !== 1 ? 's' : ''}</span>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        {c.materials?.length > 0 && (
+                                                                            <span>{c.materials.length} material{c.materials.length !== 1 ? 's' : ''}</span>
+                                                                        )}
+                                                                    </>
                                                                 )}
                                                                 {measureCount > 0 && (
                                                                     <span>{measureCount} measurement{measureCount !== 1 ? 's' : ''}</span>
@@ -624,45 +635,64 @@ export function TakeoffPanel({
                                         0,
                                     );
 
-                                    // Compute per-unit material rate from condition definition
-                                    const materialRatePerUnit = (c.materials || []).reduce(
-                                        (sum, mat) => {
-                                            const unitCost =
-                                                mat.material_item?.effective_unit_cost ??
-                                                (typeof mat.material_item?.unit_cost === 'string'
-                                                    ? parseFloat(mat.material_item.unit_cost)
-                                                    : mat.material_item?.unit_cost || 0);
-                                            const effectiveQty =
-                                                mat.qty_per_unit *
-                                                (1 + (mat.waste_percentage || 0) / 100);
-                                            return sum + effectiveQty * unitCost;
-                                        },
-                                        0,
-                                    );
+                                    const isUnitRate = c.pricing_method === 'unit_rate';
+                                    let materialRatePerUnit: number;
+                                    let labourRatePerUnit: number;
+                                    let effectiveQtyMultiplier = 1;
 
-                                    // Compute per-unit labour rate
-                                    const effectiveLabourRate =
-                                        c.labour_rate_source === 'manual'
-                                            ? c.manual_labour_rate || 0
-                                            : c.pay_rate_template?.hourly_rate
-                                              ? typeof c.pay_rate_template.hourly_rate === 'string'
-                                                  ? parseFloat(c.pay_rate_template.hourly_rate)
-                                                  : c.pay_rate_template.hourly_rate
-                                              : 0;
-                                    const labourRatePerUnit =
-                                        c.production_rate && c.production_rate > 0
-                                            ? effectiveLabourRate / c.production_rate
-                                            : 0;
+                                    if (isUnitRate) {
+                                        // Unit Rate: flat rates from cost codes + labour unit rate
+                                        materialRatePerUnit = (c.cost_codes || []).reduce(
+                                            (sum, cc) => sum + (cc.unit_rate || 0), 0,
+                                        );
+                                        labourRatePerUnit = c.labour_unit_rate || 0;
+                                        if (c.type === 'linear' && c.wall_height && c.wall_height > 0) {
+                                            effectiveQtyMultiplier = c.wall_height;
+                                        }
+                                    } else {
+                                        // Build-Up: from materials and production rate
+                                        materialRatePerUnit = (c.materials || []).reduce(
+                                            (sum, mat) => {
+                                                const unitCost =
+                                                    mat.material_item?.effective_unit_cost ??
+                                                    (typeof mat.material_item?.unit_cost === 'string'
+                                                        ? parseFloat(mat.material_item.unit_cost)
+                                                        : mat.material_item?.unit_cost || 0);
+                                                const effectiveQty =
+                                                    mat.qty_per_unit *
+                                                    (1 + (mat.waste_percentage || 0) / 100);
+                                                return sum + effectiveQty * unitCost;
+                                            },
+                                            0,
+                                        );
+                                        const effectiveLabourRate =
+                                            c.labour_rate_source === 'manual'
+                                                ? c.manual_labour_rate || 0
+                                                : c.pay_rate_template?.hourly_rate
+                                                  ? typeof c.pay_rate_template.hourly_rate === 'string'
+                                                      ? parseFloat(c.pay_rate_template.hourly_rate)
+                                                      : c.pay_rate_template.hourly_rate
+                                                  : 0;
+                                        labourRatePerUnit =
+                                            c.production_rate && c.production_rate > 0
+                                                ? effectiveLabourRate / c.production_rate
+                                                : 0;
+                                    }
 
                                     const totalRatePerUnit =
                                         materialRatePerUnit + labourRatePerUnit;
 
+                                    const effectiveMeasuredQty = measuredQty * effectiveQtyMultiplier;
+
+                                    // Show converted unit label for unit rate with wall height
                                     const unitLabel =
-                                        c.type === 'linear'
-                                            ? linearUnit
-                                            : c.type === 'area'
-                                              ? areaUnit
-                                              : 'ea';
+                                        isUnitRate && c.type === 'linear' && c.wall_height && c.wall_height > 0
+                                            ? 'm2'
+                                            : c.type === 'linear'
+                                              ? linearUnit
+                                              : c.type === 'area'
+                                                ? areaUnit
+                                                : 'ea';
 
                                     return (
                                         <div
@@ -683,6 +713,12 @@ export function TakeoffPanel({
                                                     className="text-[10px]"
                                                 >
                                                     {TYPE_LABELS[c.type]}
+                                                </Badge>
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[9px]"
+                                                >
+                                                    {isUnitRate ? 'Unit Rate' : 'Build-Up'}
                                                 </Badge>
                                             </div>
 
@@ -728,8 +764,13 @@ export function TakeoffPanel({
                                                     </span>
                                                     <span className="font-semibold">
                                                         {c.type === 'count'
-                                                            ? `${Math.round(measuredQty)} ${unitLabel}`
-                                                            : `${measuredQty.toFixed(2)} ${unitLabel}`}
+                                                            ? `${Math.round(effectiveMeasuredQty)} ${unitLabel}`
+                                                            : `${effectiveMeasuredQty.toFixed(2)} ${unitLabel}`}
+                                                        {isUnitRate && c.type === 'linear' && c.wall_height && c.wall_height > 0 && (
+                                                            <span className="font-normal text-[10px] text-muted-foreground ml-1">
+                                                                ({measuredQty.toFixed(2)} lm x {c.wall_height}m)
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center justify-between text-xs">

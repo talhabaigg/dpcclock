@@ -589,6 +589,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'update'])->name('takeoff-conditions.update');
         Route::delete('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'destroy'])->name('takeoff-conditions.destroy');
         Route::get('/locations/{location}/material-items/search', [TakeoffConditionController::class, 'searchMaterials'])->name('takeoff-conditions.search-materials');
+        Route::get('/locations/{location}/cost-codes/search', [TakeoffConditionController::class, 'searchCostCodes'])->name('takeoff-conditions.search-cost-codes');
     });
 
     // Drawing Alignment

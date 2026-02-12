@@ -20,8 +20,37 @@ class TakeoffCostCalculator
             return ['material_cost' => 0, 'labour_cost' => 0, 'total_cost' => 0];
         }
 
+        if ($condition->pricing_method === 'unit_rate') {
+            return $this->computeUnitRate($condition, $measurement);
+        }
+
         $materialCost = $this->computeMaterialCost($condition, $measurement);
         $labourCost = $this->computeLabourCost($condition, $measurement);
+
+        return [
+            'material_cost' => round($materialCost, 2),
+            'labour_cost' => round($labourCost, 2),
+            'total_cost' => round($materialCost + $labourCost, 2),
+        ];
+    }
+
+    /**
+     * Compute costs using the Unit Rate method.
+     *
+     * effective_qty = computed_value * wall_height (if linear) or computed_value
+     * material_cost = effective_qty * sum(cost_code unit_rates)
+     * labour_cost   = effective_qty * labour_unit_rate
+     */
+    private function computeUnitRate(TakeoffCondition $condition, DrawingMeasurement $measurement): array
+    {
+        $condition->loadMissing('costCodes');
+
+        $effectiveQty = $measurement->computed_value * $condition->unit_rate_multiplier;
+
+        $totalCostCodeRate = $condition->costCodes->sum('unit_rate');
+
+        $materialCost = $effectiveQty * $totalCostCodeRate;
+        $labourCost = $effectiveQty * ($condition->labour_unit_rate ?? 0);
 
         return [
             'material_cost' => round($materialCost, 2),

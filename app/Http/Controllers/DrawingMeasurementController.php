@@ -253,7 +253,7 @@ class DrawingMeasurementController extends Controller
 
         $drawing->measurements()
             ->whereNotNull('takeoff_condition_id')
-            ->with('condition.materials.materialItem')
+            ->with(['condition.materials.materialItem', 'condition.costCodes'])
             ->chunk(100, function ($measurements) use ($calculator) {
                 foreach ($measurements as $m) {
                     $costs = $calculator->compute($m);

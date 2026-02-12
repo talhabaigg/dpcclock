@@ -20,6 +20,17 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+export type ConditionCostCode = {
+    id?: number;
+    cost_code_id: number;
+    unit_rate: number;
+    cost_code?: {
+        id: number;
+        code: string;
+        description: string;
+    };
+};
+
 export type TakeoffCondition = {
     id: number;
     location_id: number;
@@ -27,6 +38,10 @@ export type TakeoffCondition = {
     type: 'linear' | 'area' | 'count';
     color: string;
     description: string | null;
+    pricing_method: 'unit_rate' | 'build_up';
+    wall_height: number | null;
+    labour_unit_rate: number | null;
+    cost_codes: ConditionCostCode[];
     labour_rate_source: 'manual' | 'template';
     manual_labour_rate: number | null;
     pay_rate_template_id: number | null;
@@ -55,6 +70,12 @@ type MaterialSearchResult = {
     description: string;
     unit_cost: number | string;
     effective_unit_cost: number;
+};
+
+type CostCodeSearchResult = {
+    id: number;
+    code: string;
+    description: string;
 };
 
 type PayRateTemplate = {
@@ -111,6 +132,19 @@ export function ConditionManager({
     const [formType, setFormType] = useState<'linear' | 'area' | 'count'>('linear');
     const [formColor, setFormColor] = useState('#3b82f6');
     const [formDescription, setFormDescription] = useState('');
+    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up'>('build_up');
+
+    // Unit Rate form state
+    const [formWallHeight, setFormWallHeight] = useState('');
+    const [formLabourUnitRate, setFormLabourUnitRate] = useState('');
+    const [formCostCodes, setFormCostCodes] = useState<Array<{
+        cost_code_id: number;
+        code: string;
+        description: string;
+        unit_rate: string;
+    }>>([]);
+
+    // Build-Up form state
     const [formLabourSource, setFormLabourSource] = useState<'manual' | 'template'>('manual');
     const [formManualRate, setFormManualRate] = useState('');
     const [formTemplateId, setFormTemplateId] = useState<string>('');
@@ -129,10 +163,15 @@ export function ConditionManager({
     const [materialResults, setMaterialResults] = useState<MaterialSearchResult[]>([]);
     const [searchingMaterials, setSearchingMaterials] = useState(false);
 
+    // Cost code search
+    const [costCodeSearch, setCostCodeSearch] = useState('');
+    const [costCodeResults, setCostCodeResults] = useState<CostCodeSearchResult[]>([]);
+    const [searchingCostCodes, setSearchingCostCodes] = useState(false);
+
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
 
-    // Load pay rate templates
+    // Load conditions and pay rate templates
     useEffect(() => {
         if (!open || !locationId) return;
         fetch(`/locations/${locationId}/takeoff-conditions`, {
@@ -145,7 +184,6 @@ export function ConditionManager({
             })
             .catch(() => {});
 
-        // Load pay rate templates for the location
         fetch(`/api/locations/${locationId}/pay-rate-templates`, {
             headers: { Accept: 'application/json' },
             credentials: 'same-origin',
@@ -170,6 +208,12 @@ export function ConditionManager({
         setFormType('linear');
         setFormColor('#3b82f6');
         setFormDescription('');
+        setFormPricingMethod('build_up');
+        setFormWallHeight('');
+        setFormLabourUnitRate('');
+        setFormCostCodes([]);
+        setCostCodeSearch('');
+        setCostCodeResults([]);
         setFormLabourSource('manual');
         setFormManualRate('');
         setFormTemplateId('');
@@ -184,6 +228,17 @@ export function ConditionManager({
         setFormType(c.type);
         setFormColor(c.color);
         setFormDescription(c.description || '');
+        setFormPricingMethod(c.pricing_method || 'build_up');
+        setFormWallHeight(c.wall_height?.toString() || '');
+        setFormLabourUnitRate(c.labour_unit_rate?.toString() || '');
+        setFormCostCodes(
+            (c.cost_codes || []).map((cc) => ({
+                cost_code_id: cc.cost_code_id,
+                code: cc.cost_code?.code || '',
+                description: cc.cost_code?.description || '',
+                unit_rate: cc.unit_rate.toString(),
+            }))
+        );
         setFormLabourSource(c.labour_rate_source);
         setFormManualRate(c.manual_labour_rate?.toString() || '');
         setFormTemplateId(c.pay_rate_template_id?.toString() || '');
@@ -229,21 +284,35 @@ export function ConditionManager({
 
         setSaving(true);
         try {
-            const payload = {
+            const payload: Record<string, unknown> = {
                 name: formName.trim(),
                 type: formType,
                 color: formColor,
                 description: formDescription || null,
-                labour_rate_source: formLabourSource,
-                manual_labour_rate: formLabourSource === 'manual' && formManualRate ? parseFloat(formManualRate) : null,
-                pay_rate_template_id: formLabourSource === 'template' && formTemplateId ? parseInt(formTemplateId) : null,
-                production_rate: formProductionRate ? parseFloat(formProductionRate) : null,
-                materials: formMaterials.map((m) => ({
+                pricing_method: formPricingMethod,
+            };
+
+            if (formPricingMethod === 'unit_rate') {
+                payload.wall_height = formWallHeight ? parseFloat(formWallHeight) : null;
+                payload.labour_unit_rate = formLabourUnitRate ? parseFloat(formLabourUnitRate) : null;
+                payload.cost_codes = formCostCodes.map((cc) => ({
+                    cost_code_id: cc.cost_code_id,
+                    unit_rate: parseFloat(cc.unit_rate) || 0,
+                }));
+                payload.labour_rate_source = 'manual';
+                payload.materials = [];
+            } else {
+                payload.labour_rate_source = formLabourSource;
+                payload.manual_labour_rate = formLabourSource === 'manual' && formManualRate ? parseFloat(formManualRate) : null;
+                payload.pay_rate_template_id = formLabourSource === 'template' && formTemplateId ? parseInt(formTemplateId) : null;
+                payload.production_rate = formProductionRate ? parseFloat(formProductionRate) : null;
+                payload.materials = formMaterials.map((m) => ({
                     material_item_id: m.material_item_id,
                     qty_per_unit: parseFloat(m.qty_per_unit) || 0,
                     waste_percentage: parseFloat(m.waste_percentage) || 0,
-                })),
-            };
+                }));
+                payload.cost_codes = [];
+            }
 
             const isUpdating = editing && selectedId;
             const url = isUpdating
@@ -328,6 +397,26 @@ export function ConditionManager({
         return () => clearTimeout(timeout);
     }, [materialSearch, locationId]);
 
+    // Cost code search
+    useEffect(() => {
+        if (!costCodeSearch.trim() || costCodeSearch.length < 2) {
+            setCostCodeResults([]);
+            return;
+        }
+        const timeout = setTimeout(() => {
+            setSearchingCostCodes(true);
+            fetch(`/locations/${locationId}/cost-codes/search?q=${encodeURIComponent(costCodeSearch)}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then((res) => res.json())
+                .then((data) => setCostCodeResults(data.items || []))
+                .catch(() => setCostCodeResults([]))
+                .finally(() => setSearchingCostCodes(false));
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [costCodeSearch, locationId]);
+
     const addMaterial = (item: MaterialSearchResult) => {
         if (formMaterials.some((m) => m.material_item_id === item.id)) {
             toast.error('Material already added.');
@@ -354,6 +443,32 @@ export function ConditionManager({
 
     const updateMaterial = (index: number, field: 'qty_per_unit' | 'waste_percentage', value: string) => {
         setFormMaterials((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
+    };
+
+    const addCostCode = (item: CostCodeSearchResult) => {
+        if (formCostCodes.some((cc) => cc.cost_code_id === item.id)) {
+            toast.error('Cost code already added.');
+            return;
+        }
+        setFormCostCodes((prev) => [
+            ...prev,
+            {
+                cost_code_id: item.id,
+                code: item.code,
+                description: item.description,
+                unit_rate: '0',
+            },
+        ]);
+        setCostCodeSearch('');
+        setCostCodeResults([]);
+    };
+
+    const removeCostCode = (index: number) => {
+        setFormCostCodes((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const updateCostCodeRate = (index: number, value: string) => {
+        setFormCostCodes((prev) => prev.map((cc, i) => (i === index ? { ...cc, unit_rate: value } : cc)));
     };
 
     const showForm = creating || editing;
@@ -478,163 +593,320 @@ export function ConditionManager({
                                     />
                                 </div>
 
-                                {/* Labour Section */}
-                                <div className="rounded-lg border p-3 space-y-3">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        Labour
-                                    </h4>
-                                    <div className="grid gap-2">
-                                        <Label className="text-xs">Rate Source</Label>
-                                        <Select value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="manual">Manual All-in Rate</SelectItem>
-                                                <SelectItem value="template">Pay Rate Template</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                {/* Pricing Method Toggle */}
+                                <div className="grid gap-2">
+                                    <Label className="text-xs">Pricing Method</Label>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        <button
+                                            type="button"
+                                            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                                                formPricingMethod === 'unit_rate'
+                                                    ? 'border-primary bg-primary/10 text-primary'
+                                                    : 'border-border hover:bg-muted/50'
+                                            }`}
+                                            onClick={() => setFormPricingMethod('unit_rate')}
+                                        >
+                                            Unit Rate
+                                            <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                                                Cost codes + flat $/unit
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                                                formPricingMethod === 'build_up'
+                                                    ? 'border-primary bg-primary/10 text-primary'
+                                                    : 'border-border hover:bg-muted/50'
+                                            }`}
+                                            onClick={() => setFormPricingMethod('build_up')}
+                                        >
+                                            Build-Up
+                                            <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                                                Materials + production rate
+                                            </span>
+                                        </button>
                                     </div>
+                                </div>
 
-                                    {formLabourSource === 'manual' ? (
-                                        <div className="grid gap-2">
-                                            <Label className="text-xs">All-in Hourly Rate ($)</Label>
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                value={formManualRate}
-                                                onChange={(e) => setFormManualRate(e.target.value)}
-                                                placeholder="e.g. 85.00"
-                                                className="h-9"
-                                            />
+                                {formPricingMethod === 'unit_rate' ? (
+                                    <>
+                                        {/* Unit Rate: Wall Height (linear only) */}
+                                        {formType === 'linear' && (
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Wall Height (m)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={formWallHeight}
+                                                    onChange={(e) => setFormWallHeight(e.target.value)}
+                                                    placeholder="e.g. 2.70"
+                                                    className="h-9"
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Converts linear meters to area: m2 = lm x height
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Unit Rate: Labour */}
+                                        <div className="rounded-lg border p-3 space-y-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Labour
+                                            </h4>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">
+                                                    Labour Rate ($/{formType === 'linear' && formWallHeight ? 'm2' : formType === 'area' ? 'sq m' : formType === 'count' ? 'ea' : 'unit'})
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={formLabourUnitRate}
+                                                    onChange={(e) => setFormLabourUnitRate(e.target.value)}
+                                                    placeholder="e.g. 10.00"
+                                                    className="h-9"
+                                                />
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="grid gap-2">
-                                            <Label className="text-xs">Pay Rate Template</Label>
-                                            <Select value={formTemplateId} onValueChange={setFormTemplateId}>
-                                                <SelectTrigger className="h-9">
-                                                    <SelectValue placeholder="Select template..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {payRateTemplates.map((t) => (
-                                                        <SelectItem key={t.id} value={t.id.toString()}>
-                                                            {t.custom_label || t.pay_rate_template?.name || `Template #${t.id}`}
-                                                            {t.hourly_rate ? ` ($${parseFloat(String(t.hourly_rate)).toFixed(2)}/hr)` : ''}
-                                                        </SelectItem>
+
+                                        {/* Unit Rate: Cost Codes */}
+                                        <div className="rounded-lg border p-3 space-y-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Cost Codes
+                                            </h4>
+
+                                            {/* Cost Code Search */}
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                                <Input
+                                                    value={costCodeSearch}
+                                                    onChange={(e) => setCostCodeSearch(e.target.value)}
+                                                    placeholder="Search cost codes..."
+                                                    className="h-9 pl-8"
+                                                />
+                                                {searchingCostCodes && (
+                                                    <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                                )}
+                                                {costCodeResults.length > 0 && (
+                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                                        {costCodeResults.map((item) => (
+                                                            <div
+                                                                key={item.id}
+                                                                className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted/50"
+                                                                onClick={() => addCostCode(item)}
+                                                            >
+                                                                <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
+                                                                <span className="truncate flex-1">{item.description}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Cost Code Lines */}
+                                            {formCostCodes.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <div className="grid grid-cols-[1fr_100px_28px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                                                        <span>Cost Code</span>
+                                                        <span>Unit Rate ($)</span>
+                                                        <span />
+                                                    </div>
+                                                    {formCostCodes.map((cc, idx) => (
+                                                        <div key={idx} className="grid grid-cols-[1fr_100px_28px] gap-1.5 items-center">
+                                                            <div className="text-xs truncate" title={`${cc.code} - ${cc.description}`}>
+                                                                <span className="font-mono text-muted-foreground">{cc.code}</span>{' '}
+                                                                <span>{cc.description}</span>
+                                                            </div>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={cc.unit_rate}
+                                                                onChange={(e) => updateCostCodeRate(idx, e.target.value)}
+                                                                className="h-7 text-xs"
+                                                            />
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                                                onClick={() => removeCostCode(idx)}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
                                                     ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
-
-                                    <div className="grid gap-2">
-                                        <Label className="text-xs">Production Rate (units/hour)</Label>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={formProductionRate}
-                                            onChange={(e) => setFormProductionRate(e.target.value)}
-                                            placeholder="e.g. 5.0"
-                                            className="h-9"
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            How many units of measurement a worker completes per hour.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Materials Section */}
-                                <div className="rounded-lg border p-3 space-y-3">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        Materials
-                                    </h4>
-
-                                    {/* Material Search */}
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                                        <Input
-                                            value={materialSearch}
-                                            onChange={(e) => setMaterialSearch(e.target.value)}
-                                            placeholder="Search materials by code or description..."
-                                            className="h-9 pl-8"
-                                        />
-                                        {searchingMaterials && (
-                                            <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                                        )}
-                                        {materialResults.length > 0 && (
-                                            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
-                                                {materialResults.map((item) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted/50"
-                                                        onClick={() => addMaterial(item)}
-                                                    >
-                                                        <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
-                                                        <span className="truncate flex-1">{item.description}</span>
-                                                        <span className="shrink-0 font-medium">${item.effective_unit_cost.toFixed(2)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Material Lines */}
-                                    {formMaterials.length > 0 && (
-                                        <div className="space-y-2">
-                                            <div className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
-                                                <span>Material</span>
-                                                <span>Qty/Unit</span>
-                                                <span>Waste %</span>
-                                                <span>Unit Cost</span>
-                                                <span />
-                                            </div>
-                                            {formMaterials.map((m, idx) => (
-                                                <div key={idx} className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 items-center">
-                                                    <div className="text-xs truncate" title={`${m.code} - ${m.description}`}>
-                                                        <span className="font-mono text-muted-foreground">{m.code}</span>{' '}
-                                                        <span>{m.description}</span>
-                                                    </div>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={m.qty_per_unit}
-                                                        onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
-                                                        className="h-7 text-xs"
-                                                    />
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        max="100"
-                                                        value={m.waste_percentage}
-                                                        onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
-                                                        className="h-7 text-xs"
-                                                    />
-                                                    <div className="text-xs text-right font-medium pr-1">
-                                                        ${m.unit_cost.toFixed(2)}
-                                                    </div>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                                                        onClick={() => removeMaterial(idx)}
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                            )}
 
-                                    {formMaterials.length === 0 && (
-                                        <p className="text-[10px] text-muted-foreground text-center py-4">
-                                            Search and add materials above.
-                                        </p>
-                                    )}
-                                </div>
+                                            {formCostCodes.length === 0 && (
+                                                <p className="text-[10px] text-muted-foreground text-center py-4">
+                                                    Search and add cost codes above.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Build-Up: Labour Section */}
+                                        <div className="rounded-lg border p-3 space-y-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Labour
+                                            </h4>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Rate Source</Label>
+                                                <Select value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
+                                                    <SelectTrigger className="h-9">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="manual">Manual All-in Rate</SelectItem>
+                                                        <SelectItem value="template">Pay Rate Template</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {formLabourSource === 'manual' ? (
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs">All-in Hourly Rate ($)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={formManualRate}
+                                                        onChange={(e) => setFormManualRate(e.target.value)}
+                                                        placeholder="e.g. 85.00"
+                                                        className="h-9"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs">Pay Rate Template</Label>
+                                                    <Select value={formTemplateId} onValueChange={setFormTemplateId}>
+                                                        <SelectTrigger className="h-9">
+                                                            <SelectValue placeholder="Select template..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {payRateTemplates.map((t) => (
+                                                                <SelectItem key={t.id} value={t.id.toString()}>
+                                                                    {t.custom_label || t.pay_rate_template?.name || `Template #${t.id}`}
+                                                                    {t.hourly_rate ? ` ($${parseFloat(String(t.hourly_rate)).toFixed(2)}/hr)` : ''}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Production Rate (units/hour)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={formProductionRate}
+                                                    onChange={(e) => setFormProductionRate(e.target.value)}
+                                                    placeholder="e.g. 5.0"
+                                                    className="h-9"
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    How many units of measurement a worker completes per hour.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Build-Up: Materials Section */}
+                                        <div className="rounded-lg border p-3 space-y-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Materials
+                                            </h4>
+
+                                            {/* Material Search */}
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                                <Input
+                                                    value={materialSearch}
+                                                    onChange={(e) => setMaterialSearch(e.target.value)}
+                                                    placeholder="Search materials by code or description..."
+                                                    className="h-9 pl-8"
+                                                />
+                                                {searchingMaterials && (
+                                                    <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                                )}
+                                                {materialResults.length > 0 && (
+                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                                        {materialResults.map((item) => (
+                                                            <div
+                                                                key={item.id}
+                                                                className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted/50"
+                                                                onClick={() => addMaterial(item)}
+                                                            >
+                                                                <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
+                                                                <span className="truncate flex-1">{item.description}</span>
+                                                                <span className="shrink-0 font-medium">${item.effective_unit_cost.toFixed(2)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Material Lines */}
+                                            {formMaterials.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <div className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                                                        <span>Material</span>
+                                                        <span>Qty/Unit</span>
+                                                        <span>Waste %</span>
+                                                        <span>Unit Cost</span>
+                                                        <span />
+                                                    </div>
+                                                    {formMaterials.map((m, idx) => (
+                                                        <div key={idx} className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 items-center">
+                                                            <div className="text-xs truncate" title={`${m.code} - ${m.description}`}>
+                                                                <span className="font-mono text-muted-foreground">{m.code}</span>{' '}
+                                                                <span>{m.description}</span>
+                                                            </div>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={m.qty_per_unit}
+                                                                onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
+                                                                className="h-7 text-xs"
+                                                            />
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                max="100"
+                                                                value={m.waste_percentage}
+                                                                onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
+                                                                className="h-7 text-xs"
+                                                            />
+                                                            <div className="text-xs text-right font-medium pr-1">
+                                                                ${m.unit_cost.toFixed(2)}
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                                                onClick={() => removeMaterial(idx)}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {formMaterials.length === 0 && (
+                                                <p className="text-[10px] text-muted-foreground text-center py-4">
+                                                    Search and add materials above.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
 
                                 {/* Save / Cancel */}
                                 <div className="flex justify-end gap-2">
@@ -675,6 +947,9 @@ export function ConditionManager({
                                         <Badge variant="secondary" className="text-[10px]">
                                             {TYPE_LABELS[selectedCondition.type]}
                                         </Badge>
+                                        <Badge variant="outline" className="text-[10px]">
+                                            {selectedCondition.pricing_method === 'unit_rate' ? 'Unit Rate' : 'Build-Up'}
+                                        </Badge>
                                     </div>
                                     <Button size="sm" variant="outline" onClick={handleEdit}>
                                         <Pencil className="h-3 w-3 mr-1" />
@@ -686,70 +961,126 @@ export function ConditionManager({
                                     <p className="text-xs text-muted-foreground">{selectedCondition.description}</p>
                                 )}
 
-                                {/* Labour Info */}
-                                <div className="rounded-lg border p-3 space-y-2">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        Labour
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div>
-                                            <span className="text-muted-foreground">Rate Source:</span>{' '}
-                                            <span className="font-medium">
-                                                {selectedCondition.labour_rate_source === 'manual' ? 'Manual' : 'Template'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Hourly Rate:</span>{' '}
-                                            <span className="font-medium">
-                                                {selectedCondition.labour_rate_source === 'manual'
-                                                    ? selectedCondition.manual_labour_rate
-                                                        ? `$${selectedCondition.manual_labour_rate.toFixed(2)}`
-                                                        : 'Not set'
-                                                    : selectedCondition.pay_rate_template?.hourly_rate
-                                                        ? `$${parseFloat(String(selectedCondition.pay_rate_template.hourly_rate)).toFixed(2)}`
-                                                        : 'Not set'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Production Rate:</span>{' '}
-                                            <span className="font-medium">
-                                                {selectedCondition.production_rate
-                                                    ? `${selectedCondition.production_rate} units/hr`
-                                                    : 'Not set'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Materials Info */}
-                                <div className="rounded-lg border p-3 space-y-2">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        Materials ({selectedCondition.materials.length})
-                                    </h4>
-                                    {selectedCondition.materials.length > 0 ? (
-                                        <div className="space-y-1.5">
-                                            {selectedCondition.materials.map((m, idx) => (
-                                                <div key={idx} className="flex items-center justify-between text-xs">
-                                                    <div className="flex-1 truncate">
-                                                        <span className="font-mono text-muted-foreground">{m.material_item?.code}</span>{' '}
-                                                        <span>{m.material_item?.description}</span>
-                                                    </div>
-                                                    <div className="shrink-0 text-right ml-2">
-                                                        <span className="font-medium">{m.qty_per_unit}</span>
-                                                        {m.waste_percentage > 0 && (
-                                                            <span className="text-muted-foreground ml-1">(+{m.waste_percentage}%)</span>
-                                                        )}
-                                                        <span className="text-muted-foreground ml-2">
-                                                            @ ${(m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0))).toFixed(2)}
-                                                        </span>
-                                                    </div>
+                                {selectedCondition.pricing_method === 'unit_rate' ? (
+                                    <>
+                                        {/* Unit Rate View */}
+                                        {selectedCondition.type === 'linear' && selectedCondition.wall_height && (
+                                            <div className="rounded-lg border p-3 space-y-2">
+                                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                    Conversion
+                                                </h4>
+                                                <div className="text-xs">
+                                                    <span className="text-muted-foreground">Wall Height:</span>{' '}
+                                                    <span className="font-medium">{selectedCondition.wall_height}m</span>
+                                                    <span className="text-muted-foreground ml-2">(lm x {selectedCondition.wall_height} = m2)</span>
                                                 </div>
-                                            ))}
+                                            </div>
+                                        )}
+
+                                        <div className="rounded-lg border p-3 space-y-2">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Labour
+                                            </h4>
+                                            <div className="text-xs">
+                                                <span className="text-muted-foreground">Rate:</span>{' '}
+                                                <span className="font-medium">
+                                                    {selectedCondition.labour_unit_rate
+                                                        ? `$${selectedCondition.labour_unit_rate.toFixed(2)}/unit`
+                                                        : 'Not set'}
+                                                </span>
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <p className="text-[10px] text-muted-foreground">No materials added.</p>
-                                    )}
-                                </div>
+
+                                        <div className="rounded-lg border p-3 space-y-2">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Cost Codes ({(selectedCondition.cost_codes || []).length})
+                                            </h4>
+                                            {(selectedCondition.cost_codes || []).length > 0 ? (
+                                                <div className="space-y-1.5">
+                                                    {(selectedCondition.cost_codes || []).map((cc, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                            <div className="flex-1 truncate">
+                                                                <span className="font-mono text-muted-foreground">{cc.cost_code?.code}</span>{' '}
+                                                                <span>{cc.cost_code?.description}</span>
+                                                            </div>
+                                                            <div className="shrink-0 text-right ml-2">
+                                                                <span className="font-medium">${cc.unit_rate.toFixed(2)}/unit</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-muted-foreground">No cost codes added.</p>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Build-Up View */}
+                                        <div className="rounded-lg border p-3 space-y-2">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Labour
+                                            </h4>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div>
+                                                    <span className="text-muted-foreground">Rate Source:</span>{' '}
+                                                    <span className="font-medium">
+                                                        {selectedCondition.labour_rate_source === 'manual' ? 'Manual' : 'Template'}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground">Hourly Rate:</span>{' '}
+                                                    <span className="font-medium">
+                                                        {selectedCondition.labour_rate_source === 'manual'
+                                                            ? selectedCondition.manual_labour_rate
+                                                                ? `$${selectedCondition.manual_labour_rate.toFixed(2)}`
+                                                                : 'Not set'
+                                                            : selectedCondition.pay_rate_template?.hourly_rate
+                                                                ? `$${parseFloat(String(selectedCondition.pay_rate_template.hourly_rate)).toFixed(2)}`
+                                                                : 'Not set'}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground">Production Rate:</span>{' '}
+                                                    <span className="font-medium">
+                                                        {selectedCondition.production_rate
+                                                            ? `${selectedCondition.production_rate} units/hr`
+                                                            : 'Not set'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-lg border p-3 space-y-2">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Materials ({selectedCondition.materials.length})
+                                            </h4>
+                                            {selectedCondition.materials.length > 0 ? (
+                                                <div className="space-y-1.5">
+                                                    {selectedCondition.materials.map((m, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                            <div className="flex-1 truncate">
+                                                                <span className="font-mono text-muted-foreground">{m.material_item?.code}</span>{' '}
+                                                                <span>{m.material_item?.description}</span>
+                                                            </div>
+                                                            <div className="shrink-0 text-right ml-2">
+                                                                <span className="font-medium">{m.qty_per_unit}</span>
+                                                                {m.waste_percentage > 0 && (
+                                                                    <span className="text-muted-foreground ml-1">(+{m.waste_percentage}%)</span>
+                                                                )}
+                                                                <span className="text-muted-foreground ml-2">
+                                                                    @ ${(m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0))).toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-muted-foreground">No materials added.</p>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

@@ -14,6 +14,9 @@ class TakeoffCondition extends Model
         'type',
         'color',
         'description',
+        'pricing_method',
+        'wall_height',
+        'labour_unit_rate',
         'labour_rate_source',
         'manual_labour_rate',
         'pay_rate_template_id',
@@ -24,6 +27,8 @@ class TakeoffCondition extends Model
     protected $casts = [
         'manual_labour_rate' => 'float',
         'production_rate' => 'float',
+        'wall_height' => 'float',
+        'labour_unit_rate' => 'float',
     ];
 
     protected static function booted()
@@ -45,6 +50,11 @@ class TakeoffCondition extends Model
         return $this->hasMany(TakeoffConditionMaterial::class);
     }
 
+    public function costCodes(): HasMany
+    {
+        return $this->hasMany(TakeoffConditionCostCode::class);
+    }
+
     public function payRateTemplate(): BelongsTo
     {
         return $this->belongsTo(LocationPayRateTemplate::class, 'pay_rate_template_id');
@@ -58,6 +68,23 @@ class TakeoffCondition extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the multiplier for converting measured quantity to pricing quantity.
+     * For unit_rate + linear type with wall_height, converts lm to m2.
+     */
+    public function getUnitRateMultiplierAttribute(): float
+    {
+        if ($this->pricing_method !== 'unit_rate') {
+            return 1.0;
+        }
+
+        if ($this->type === 'linear' && $this->wall_height && $this->wall_height > 0) {
+            return $this->wall_height;
+        }
+
+        return 1.0;
     }
 
     /**
