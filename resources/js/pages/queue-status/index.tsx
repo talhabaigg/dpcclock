@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import Echo from 'laravel-echo';
 import { Activity, CheckCircle2, Clock, FileX2, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';

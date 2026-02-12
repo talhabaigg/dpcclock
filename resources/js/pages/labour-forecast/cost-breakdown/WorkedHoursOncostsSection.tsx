@@ -14,7 +14,7 @@
 import type { Template } from './types';
 import { OncostItemLine } from './OncostItemLine';
 import { TotalRow } from './TotalRow';
-import { formatCurrency, formatOncostCodeWithSeries, getBaseComponentEntries, getTemplatePrefix } from './utils';
+import { formatOncostCodeWithSeries, getBaseComponentEntries, getTemplatePrefix } from './utils';
 
 export interface WorkedHoursOncostsSectionProps {
     template: Template;

@@ -1,12 +1,14 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { TakeoffCondition } from './condition-manager';
 import {
     Box,
     Calculator,
+    ChevronDown,
+    ChevronRight,
     DollarSign,
     Hash,
     Maximize2,
@@ -20,6 +22,7 @@ import {
     Square,
     Trash2,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { CalibrationData, MeasurementData, ViewMode } from './measurement-layer';
 
 type TakeoffPanelProps = {
@@ -48,8 +51,10 @@ const TYPE_ICONS = {
 const TYPE_LABELS = {
     linear: 'Linear',
     area: 'Area',
-    count: 'Count',
+    count: 'Each',
 };
+
+type TabId = 'takeoff' | 'conditions' | 'budget';
 
 export function TakeoffPanel({
     viewMode,
@@ -67,6 +72,8 @@ export function TakeoffPanel({
     onOpenConditionManager,
     onActivateCondition,
 }: TakeoffPanelProps) {
+    const [activeTab, setActiveTab] = useState<TabId>('takeoff');
+    const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
     const hasCalibration = !!calibration;
     const activeCondition = conditions.find((c) => c.id === activeConditionId) || null;
 
@@ -111,529 +118,421 @@ export function TakeoffPanel({
     const isMeasuring = viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_count';
 
     return (
-        <Tabs defaultValue="takeoff" className="flex h-full flex-col">
-            {/* Header with tabs */}
-            <div className="border-b px-3 pt-3 pb-0">
-                <TabsList className="h-8 w-full">
-                    <TabsTrigger value="takeoff" className="flex-1 gap-1.5 text-xs">
-                        <Ruler className="h-3.5 w-3.5" />
+        <TooltipProvider delayDuration={200}>
+            <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as TabId)}
+                className="flex h-full flex-col bg-background text-xs"
+            >
+                {/* Industrial tab strip */}
+                <TabsList className="h-auto w-full rounded-none border-b bg-muted/40 p-0">
+                    <TabsTrigger
+                        value="takeoff"
+                        className="flex-1 gap-1 rounded-none border-r px-2 py-1.5 text-[11px] font-medium shadow-none data-[state=active]:border-b-2 data-[state=active]:border-b-primary data-[state=active]:bg-background data-[state=active]:shadow-none"
+                    >
+                        <Ruler className="h-3 w-3" />
                         Takeoff
                     </TabsTrigger>
-                    <TabsTrigger value="conditions" className="flex-1 gap-1.5 text-xs">
-                        <Settings className="h-3.5 w-3.5" />
+                    <TabsTrigger
+                        value="conditions"
+                        className="flex-1 gap-1 rounded-none border-r px-2 py-1.5 text-[11px] font-medium shadow-none data-[state=active]:border-b-2 data-[state=active]:border-b-primary data-[state=active]:bg-background data-[state=active]:shadow-none"
+                    >
+                        <Settings className="h-3 w-3" />
                         Conditions
                     </TabsTrigger>
-                    <TabsTrigger value="budget" className="flex-1 gap-1.5 text-xs">
-                        <Calculator className="h-3.5 w-3.5" />
+                    <TabsTrigger
+                        value="budget"
+                        className="flex-1 gap-1 rounded-none px-2 py-1.5 text-[11px] font-medium shadow-none data-[state=active]:border-b-2 data-[state=active]:border-b-primary data-[state=active]:bg-background data-[state=active]:shadow-none"
+                    >
+                        <Calculator className="h-3 w-3" />
                         Budget
                     </TabsTrigger>
                 </TabsList>
-            </div>
 
-            {/* ===== TAKEOFF TAB ===== */}
-            <TabsContent value="takeoff" className="mt-0 flex min-h-0 flex-1 flex-col">
-                <ScrollArea className="flex-1">
-                    <div className="space-y-4 p-4">
-                        {/* Scale Calibration Section */}
-                        <div className="rounded-lg border p-3">
-                            <div className="mb-2 flex items-center justify-between">
-                                <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                    <Scale className="h-3.5 w-3.5" />
-                                    Scale
-                                </h4>
-                                {hasCalibration && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-5 px-1.5 text-[10px] text-red-500 hover:text-red-700"
-                                        onClick={onDeleteCalibration}
-                                    >
-                                        <Trash2 className="mr-0.5 h-3 w-3" />
-                                        Clear
-                                    </Button>
-                                )}
-                            </div>
-
-                            {hasCalibration ? (
-                                <div className="space-y-2">
-                                    <div className="rounded bg-green-50 px-2.5 py-1.5 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-300">
-                                        {calibration.method === 'preset' ? (
-                                            <span>
-                                                {calibration.paper_size} at {calibration.drawing_scale} ({calibration.unit})
-                                            </span>
-                                        ) : (
-                                            <span>
-                                                Manual: {calibration.real_distance?.toFixed(2)} {calibration.unit}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 flex-1 text-xs"
-                                            onClick={() => onOpenCalibrationDialog('manual')}
+                {/* ===== TAKEOFF TAB ===== */}
+                <TabsContent value="takeoff" className="mt-0 flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
+                    <ScrollArea className="flex-1">
+                        <div className="space-y-0">
+                            {/* Scale - compact inline bar */}
+                            <div className="border-b px-2 py-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <Scale className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Scale</span>
+                                    <div className="flex-1" />
+                                    {hasCalibration && (
+                                        <button
+                                            onClick={onDeleteCalibration}
+                                            className="text-[10px] text-red-500 hover:text-red-700 hover:underline"
                                         >
-                                            <PenLine className="mr-1 h-3 w-3" />
-                                            Recalibrate
-                                        </Button>
-                                    </div>
+                                            Clear
+                                        </button>
+                                    )}
                                 </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <p className="text-xs text-muted-foreground">
-                                        Set the scale to enable measurements.
-                                    </p>
-                                    <div className="flex gap-1">
+
+                                {hasCalibration ? (
+                                    <div className="mt-1 flex items-center gap-1.5">
+                                        <div className="flex-1 rounded-sm bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                                            {calibration.method === 'preset' ? (
+                                                <span>{calibration.paper_size} @ {calibration.drawing_scale} ({calibration.unit})</span>
+                                            ) : (
+                                                <span>Manual: {calibration.real_distance?.toFixed(2)} {calibration.unit}</span>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-5 px-1 text-[10px]"
+                                            onClick={() => onOpenCalibrationDialog('manual')}
+                                        >
+                                            <PenLine className="h-2.5 w-2.5" />
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="mt-1 flex gap-1">
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            className="h-7 flex-1 text-xs"
+                                            className="h-6 flex-1 rounded-sm text-[10px]"
                                             onClick={() => onOpenCalibrationDialog('manual')}
                                         >
-                                            <PenLine className="mr-1 h-3 w-3" />
-                                            Draw Line
+                                            <PenLine className="mr-0.5 h-2.5 w-2.5" />
+                                            Draw
                                         </Button>
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            className="h-7 flex-1 text-xs"
+                                            className="h-6 flex-1 rounded-sm text-[10px]"
                                             onClick={() => onOpenCalibrationDialog('preset')}
                                         >
-                                            <Scale className="mr-1 h-3 w-3" />
-                                            Paper Scale
+                                            <Scale className="mr-0.5 h-2.5 w-2.5" />
+                                            Preset
                                         </Button>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Active Condition Banner */}
-                        {activeCondition && (
-                            <div className="rounded-lg border-2 p-3" style={{ borderColor: activeCondition.color }}>
-                                <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-2">
-                                        <div
-                                            className="h-3.5 w-3.5 rounded-sm"
-                                            style={{ backgroundColor: activeCondition.color }}
-                                        />
-                                        <span className="text-xs font-semibold">{activeCondition.name}</span>
-                                        <Badge variant="secondary" className="text-[10px]">
-                                            {TYPE_LABELS[activeCondition.type]}
-                                        </Badge>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-[10px]"
-                                        onClick={() => onActivateCondition(null)}
-                                    >
-                                        <Square className="h-3 w-3 mr-0.5" />
-                                        Stop
-                                    </Button>
-                                </div>
-                                <p className="text-[10px] text-muted-foreground">
-                                    {isMeasuring
-                                        ? 'Drawing... click to add points, double-click to finish.'
-                                        : 'Click on the drawing to start measuring.'}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Free Tools (no condition) */}
-                        <div className="rounded-lg border p-3">
-                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Free Tools
-                            </h4>
-                            <div className="flex gap-1">
-                                <Button
-                                    variant={viewMode === 'measure_line' && !activeConditionId ? 'default' : 'outline'}
-                                    size="sm"
-                                    className="h-8 flex-1 gap-1.5 text-xs"
-                                    disabled={!hasCalibration}
-                                    onClick={() => {
-                                        onActivateCondition(null);
-                                        onSetViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line');
-                                    }}
-                                    title={!hasCalibration ? 'Set scale first' : 'Measure linear distance'}
-                                >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    Line
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'measure_area' && !activeConditionId ? 'default' : 'outline'}
-                                    size="sm"
-                                    className="h-8 flex-1 gap-1.5 text-xs"
-                                    disabled={!hasCalibration}
-                                    onClick={() => {
-                                        onActivateCondition(null);
-                                        onSetViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area');
-                                    }}
-                                    title={!hasCalibration ? 'Set scale first' : 'Measure area'}
-                                >
-                                    <Maximize2 className="h-3.5 w-3.5" />
-                                    Area
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'measure_count' && !activeConditionId ? 'default' : 'outline'}
-                                    size="sm"
-                                    className="h-8 flex-1 gap-1.5 text-xs"
-                                    onClick={() => {
-                                        onActivateCondition(null);
-                                        onSetViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count');
-                                    }}
-                                    title="Count items"
-                                >
-                                    <Hash className="h-3.5 w-3.5" />
-                                    Count
-                                </Button>
-                            </div>
-                            <p className="mt-1.5 text-[10px] text-muted-foreground">
-                                Measure without a condition (no costing).
-                            </p>
-                        </div>
-
-                        {/* Measurements List */}
-                        {measurements.length > 0 && (
-                            <div>
-                                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                    Measurements ({measurements.length})
-                                </h4>
-
-                                {categories.length > 0 && (
-                                    <Accordion type="multiple" defaultValue={categories} className="w-full">
-                                        {categories.map(category => {
-                                            const items = grouped[category];
-                                            const catLinear = items
-                                                .filter(m => m.type === 'linear' && m.computed_value != null)
-                                                .reduce((s, m) => s + (m.computed_value || 0), 0);
-                                            const catArea = items
-                                                .filter(m => m.type === 'area' && m.computed_value != null)
-                                                .reduce((s, m) => s + (m.computed_value || 0), 0);
-                                            const catCount = items
-                                                .filter(m => m.type === 'count' && m.computed_value != null)
-                                                .reduce((s, m) => s + (m.computed_value || 0), 0);
-                                            const catCost = items
-                                                .filter(m => m.total_cost != null)
-                                                .reduce((s, m) => s + (m.total_cost || 0), 0);
-
-                                            return (
-                                                <AccordionItem key={category} value={category} className="border-b-0">
-                                                    <AccordionTrigger className="py-2 text-xs font-medium hover:no-underline">
-                                                        <div className="flex items-center gap-2">
-                                                            <span>{category}</span>
-                                                            <Badge variant="secondary" className="text-[10px]">
-                                                                {items.length}
-                                                            </Badge>
-                                                        </div>
-                                                    </AccordionTrigger>
-                                                    <AccordionContent className="pb-2">
-                                                        <div className="space-y-1">
-                                                            {items.map(m => (
-                                                                <div
-                                                                    key={m.id}
-                                                                    className={`group flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors hover:bg-muted/50 ${
-                                                                        selectedMeasurementId === m.id ? 'bg-muted' : ''
-                                                                    }`}
-                                                                    onClick={() => onMeasurementSelect(
-                                                                        selectedMeasurementId === m.id ? null : m.id
-                                                                    )}
-                                                                >
-                                                                    <div
-                                                                        className="h-3 w-3 shrink-0 rounded-sm"
-                                                                        style={{ backgroundColor: m.color }}
-                                                                    />
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="flex items-center gap-1">
-                                                                            {m.type === 'linear' ? (
-                                                                                <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                                            ) : m.type === 'count' ? (
-                                                                                <Hash className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                                            ) : (
-                                                                                <Box className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                                            )}
-                                                                            <span className="truncate font-medium">{m.name}</span>
-                                                                        </div>
-                                                                        {m.computed_value != null && (
-                                                                            <span className="text-muted-foreground">
-                                                                                {m.type === 'count' ? `${Math.round(m.computed_value)} ea` : `${m.computed_value.toFixed(2)} ${m.unit}`}
-                                                                            </span>
-                                                                        )}
-                                                                        {m.total_cost != null && m.total_cost > 0 && (
-                                                                            <span className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
-                                                                                <DollarSign className="h-2.5 w-2.5" />
-                                                                                {m.total_cost.toFixed(2)}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            className="h-5 w-5 p-0"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                onMeasurementEdit(m);
-                                                                            }}
-                                                                        >
-                                                                            <Pencil className="h-3 w-3" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            className="h-5 w-5 p-0 text-red-500 hover:text-red-700"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                onMeasurementDelete(m);
-                                                                            }}
-                                                                        >
-                                                                            <Trash2 className="h-3 w-3" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-
-                                                            {/* Category subtotals */}
-                                                            <div className="mt-1 border-t pt-1 text-[10px] text-muted-foreground">
-                                                                {catLinear > 0 && (
-                                                                    <span className="mr-3">
-                                                                        Linear: {catLinear.toFixed(2)} {linearUnit}
-                                                                    </span>
-                                                                )}
-                                                                {catArea > 0 && (
-                                                                    <span className="mr-3">
-                                                                        Area: {catArea.toFixed(2)} {areaUnit}
-                                                                    </span>
-                                                                )}
-                                                                {catCount > 0 && (
-                                                                    <span className="mr-3">
-                                                                        Count: {Math.round(catCount)} ea
-                                                                    </span>
-                                                                )}
-                                                                {catCost > 0 && (
-                                                                    <span className="text-emerald-600 dark:text-emerald-400">
-                                                                        Cost: ${catCost.toFixed(2)}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            );
-                                        })}
-                                    </Accordion>
                                 )}
                             </div>
-                        )}
-                    </div>
-                </ScrollArea>
 
-                {/* Grand Totals Footer */}
-                {measurements.length > 0 && (hasCalibration || totalCount > 0 || totalCost > 0) && (
-                    <div className="border-t bg-muted/30 px-4 py-3">
-                        <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Totals
-                        </h4>
-                        <div className="flex flex-col gap-1 text-xs">
-                            {totalLinear > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="flex items-center gap-1 text-muted-foreground">
-                                        <Pencil className="h-3 w-3" />
-                                        Linear
-                                    </span>
-                                    <span className="font-semibold">
-                                        {totalLinear.toFixed(2)} {linearUnit}
-                                    </span>
+                            {/* Active Condition Banner */}
+                            {activeCondition && (
+                                <div className="border-b px-2 py-1.5" style={{ borderLeftWidth: 3, borderLeftColor: activeCondition.color }}>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: activeCondition.color }} />
+                                        <span className="flex-1 truncate text-[11px] font-semibold">{activeCondition.name}</span>
+                                        <span className="rounded-sm bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground">
+                                            {TYPE_LABELS[activeCondition.type]}
+                                        </span>
+                                        <button
+                                            onClick={() => onActivateCondition(null)}
+                                            className="rounded-sm p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                        >
+                                            <Square className="h-2.5 w-2.5" />
+                                        </button>
+                                    </div>
+                                    <p className="mt-0.5 text-[9px] text-muted-foreground">
+                                        {isMeasuring ? 'Click to place points. Double-click to finish.' : 'Click the drawing to start.'}
+                                    </p>
                                 </div>
                             )}
-                            {totalArea > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="flex items-center gap-1 text-muted-foreground">
-                                        <Box className="h-3 w-3" />
-                                        Area
-                                    </span>
-                                    <span className="font-semibold">
-                                        {totalArea.toFixed(2)} {areaUnit}
-                                    </span>
+
+                            {/* Quick Tools strip */}
+                            <div className="border-b px-2 py-1.5">
+                                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tools</div>
+                                <div className="flex gap-0.5">
+                                    {([
+                                        { mode: 'measure_line' as const, icon: Pencil, label: 'Line', disabled: !hasCalibration },
+                                        { mode: 'measure_area' as const, icon: Maximize2, label: 'Area', disabled: !hasCalibration },
+                                        { mode: 'measure_count' as const, icon: Hash, label: 'Count', disabled: false },
+                                    ] as const).map(({ mode, icon: Icon, label, disabled }) => {
+                                        const isActive = viewMode === mode && !activeConditionId;
+                                        return (
+                                            <Tooltip key={mode}>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        disabled={disabled}
+                                                        onClick={() => {
+                                                            onActivateCondition(null);
+                                                            onSetViewMode(viewMode === mode ? 'pan' : mode);
+                                                        }}
+                                                        className={`flex flex-1 items-center justify-center gap-1 rounded-sm border py-1 text-[10px] font-medium transition-colors ${
+                                                            isActive
+                                                                ? 'border-primary bg-primary text-primary-foreground'
+                                                                : 'border-border bg-background hover:bg-muted'
+                                                        } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+                                                    >
+                                                        <Icon className="h-3 w-3" />
+                                                        {label}
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="bottom" className="text-xs">
+                                                    {disabled ? 'Set scale first' : `Free ${label.toLowerCase()} measure`}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                            {totalCount > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="flex items-center gap-1 text-muted-foreground">
-                                        <Hash className="h-3 w-3" />
-                                        Count
-                                    </span>
-                                    <span className="font-semibold">
-                                        {Math.round(totalCount)} ea
-                                    </span>
-                                </div>
-                            )}
-                            {totalCost > 0 && (
-                                <div className="flex items-center justify-between border-t pt-1 mt-1">
-                                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                                        <DollarSign className="h-3 w-3" />
-                                        Total Cost
-                                    </span>
-                                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                        ${totalCost.toFixed(2)}
-                                    </span>
+                            </div>
+
+                            {/* Measurements table */}
+                            {measurements.length > 0 && (
+                                <div className="border-b">
+                                    {/* Table header */}
+                                    <div className="grid grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b bg-muted/50 px-2 py-1">
+                                        <span />
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Name</span>
+                                        <span className="text-right text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Qty</span>
+                                        <span />
+                                    </div>
+
+                                    {categories.map(category => {
+                                        const items = grouped[category];
+                                        const isOpen = !collapsedCategories.has(category);
+                                        const catCount = items.length;
+                                        const catCost = items
+                                            .filter(m => m.total_cost != null)
+                                            .reduce((s, m) => s + (m.total_cost || 0), 0);
+
+                                        return (
+                                            <Collapsible
+                                                key={category}
+                                                open={isOpen}
+                                                onOpenChange={(open) => {
+                                                    setCollapsedCategories(prev => {
+                                                        const next = new Set(prev);
+                                                        if (open) next.delete(category);
+                                                        else next.add(category);
+                                                        return next;
+                                                    });
+                                                }}
+                                            >
+                                                <CollapsibleTrigger className="flex w-full items-center gap-1 border-b bg-muted/30 px-2 py-1 text-left hover:bg-muted/50">
+                                                    {isOpen ? (
+                                                        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                    ) : (
+                                                        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                    )}
+                                                    <span className="flex-1 truncate text-[11px] font-semibold">{category}</span>
+                                                    <span className="text-[9px] text-muted-foreground">{catCount}</span>
+                                                    {catCost > 0 && (
+                                                        <span className="ml-1 text-[9px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                            ${catCost.toFixed(0)}
+                                                        </span>
+                                                    )}
+                                                </CollapsibleTrigger>
+
+                                                <CollapsibleContent>
+                                                    {items.map(m => {
+                                                        const isSelected = selectedMeasurementId === m.id;
+                                                        return (
+                                                            <div
+                                                                key={m.id}
+                                                                onClick={() => onMeasurementSelect(isSelected ? null : m.id)}
+                                                                className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/50 px-2 py-[3px] transition-colors ${
+                                                                    isSelected ? 'bg-primary/8' : 'hover:bg-muted/30'
+                                                                }`}
+                                                            >
+                                                                <div
+                                                                    className="h-2.5 w-2.5 rounded-[2px]"
+                                                                    style={{ backgroundColor: m.color }}
+                                                                />
+                                                                <div className="flex min-w-0 items-center gap-1">
+                                                                    {m.type === 'linear' ? (
+                                                                        <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                    ) : m.type === 'count' ? (
+                                                                        <Hash className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                    ) : (
+                                                                        <Box className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                    )}
+                                                                    <span className="truncate text-[11px]">{m.name}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    {m.computed_value != null && (
+                                                                        <span className="font-mono text-[10px] tabular-nums">
+                                                                            {m.type === 'count'
+                                                                                ? `${Math.round(m.computed_value)} ea`
+                                                                                : `${m.computed_value.toFixed(2)}`}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                    <button
+                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+                                                                    >
+                                                                        <Pencil className="h-2.5 w-2.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
+                                                                    >
+                                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </CollapsibleContent>
+                                            </Collapsible>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
-                    </div>
-                )}
-            </TabsContent>
+                    </ScrollArea>
 
-            {/* ===== CONDITIONS TAB ===== */}
-            <TabsContent value="conditions" className="mt-0 flex min-h-0 flex-1 flex-col">
-                <ScrollArea className="flex-1">
-                    <div className="space-y-4 p-4">
-                        {/* Manage button */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full gap-1.5 text-xs"
-                            onClick={onOpenConditionManager}
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            Create / Edit Conditions
-                        </Button>
-
-                        {!hasCalibration && (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 px-1">
-                                Set scale first to enable line &amp; area conditions.
-                            </p>
-                        )}
-
-                        {conditions.length === 0 ? (
-                            <div className="py-8 text-center">
-                                <Settings className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-xs text-muted-foreground">
-                                    No conditions yet.
-                                </p>
-                                <p className="mt-1 text-[10px] text-muted-foreground">
-                                    Create conditions to measure with automatic costing.
-                                </p>
+                    {/* Totals footer - status bar style */}
+                    {measurements.length > 0 && (hasCalibration || totalCount > 0 || totalCost > 0) && (
+                        <div className="border-t bg-muted/40 px-2 py-1.5">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                                {totalLinear > 0 && (
+                                    <span className="text-[10px]">
+                                        <Pencil className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
+                                        <span className="font-mono font-semibold tabular-nums">{totalLinear.toFixed(2)}</span>
+                                        <span className="ml-0.5 text-muted-foreground">{linearUnit}</span>
+                                    </span>
+                                )}
+                                {totalArea > 0 && (
+                                    <span className="text-[10px]">
+                                        <Box className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
+                                        <span className="font-mono font-semibold tabular-nums">{totalArea.toFixed(2)}</span>
+                                        <span className="ml-0.5 text-muted-foreground">{areaUnit}</span>
+                                    </span>
+                                )}
+                                {totalCount > 0 && (
+                                    <span className="text-[10px]">
+                                        <Hash className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
+                                        <span className="font-mono font-semibold tabular-nums">{Math.round(totalCount)}</span>
+                                        <span className="ml-0.5 text-muted-foreground">ea</span>
+                                    </span>
+                                )}
+                                {totalCost > 0 && (
+                                    <span className="ml-auto text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                        <DollarSign className="mr-0.5 inline h-2.5 w-2.5" />
+                                        <span className="font-mono tabular-nums">{totalCost.toFixed(2)}</span>
+                                    </span>
+                                )}
                             </div>
-                        ) : (
-                            (['linear', 'area', 'count'] as const).map((type) => {
-                                const items = conditionsByType[type];
-                                if (!items?.length) return null;
-                                const Icon = TYPE_ICONS[type];
-                                const isDisabled = type !== 'count' && !hasCalibration;
-                                return (
-                                    <div key={type}>
-                                        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 px-1">
-                                            <Icon className="h-3 w-3" />
-                                            {TYPE_LABELS[type]}
-                                            <Badge variant="outline" className="ml-auto text-[9px] h-4">
-                                                {items.length}
-                                            </Badge>
-                                        </div>
-                                        <div className="space-y-0.5">
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ===== CONDITIONS TAB ===== */}
+                <TabsContent value="conditions" className="mt-0 flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
+                    <ScrollArea className="flex-1">
+                        <div className="space-y-0">
+                            {/* Top action bar */}
+                            <div className="border-b px-2 py-1.5">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 w-full rounded-sm gap-1 text-[10px]"
+                                    onClick={onOpenConditionManager}
+                                >
+                                    <Plus className="h-2.5 w-2.5" />
+                                    Create / Edit Conditions
+                                </Button>
+                                {!hasCalibration && (
+                                    <p className="mt-1 text-[9px] text-amber-600 dark:text-amber-400">
+                                        Set scale to enable line &amp; area conditions.
+                                    </p>
+                                )}
+                            </div>
+
+                            {conditions.length === 0 ? (
+                                <div className="px-2 py-6 text-center">
+                                    <Settings className="mx-auto mb-1 h-5 w-5 text-muted-foreground/30" />
+                                    <p className="text-[11px] text-muted-foreground">No conditions yet.</p>
+                                </div>
+                            ) : (
+                                (['linear', 'area', 'count'] as const).map((type) => {
+                                    const items = conditionsByType[type];
+                                    if (!items?.length) return null;
+                                    const Icon = TYPE_ICONS[type];
+                                    const isDisabled = type !== 'count' && !hasCalibration;
+                                    return (
+                                        <div key={type}>
+                                            {/* Type header row */}
+                                            <div className="flex items-center gap-1.5 border-b bg-muted/30 px-2 py-1">
+                                                <Icon className="h-2.5 w-2.5 text-muted-foreground" />
+                                                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    {TYPE_LABELS[type]}
+                                                </span>
+                                                <span className="ml-auto rounded-sm bg-muted px-1 py-px text-[9px] text-muted-foreground">
+                                                    {items.length}
+                                                </span>
+                                            </div>
+
+                                            {/* Condition items */}
                                             {items.map((c) => {
                                                 const isActive = activeConditionId === c.id;
                                                 const measureCount = measurements.filter(m => m.takeoff_condition_id === c.id).length;
                                                 return (
                                                     <div
                                                         key={c.id}
-                                                        className={`group flex items-center gap-2 rounded px-2 py-2 text-xs transition-colors ${
+                                                        className={`group flex cursor-pointer items-center gap-1.5 border-b border-border/50 px-2 py-1.5 transition-colors ${
                                                             isActive
-                                                                ? 'bg-primary/10 ring-1 ring-primary/30'
-                                                                : 'hover:bg-muted/50'
-                                                        } ${isDisabled ? 'opacity-50' : 'cursor-pointer'}`}
+                                                                ? 'bg-primary/8 border-l-2'
+                                                                : 'hover:bg-muted/30'
+                                                        } ${isDisabled ? 'cursor-not-allowed opacity-40' : ''}`}
+                                                        style={isActive ? { borderLeftColor: c.color } : undefined}
                                                         onClick={() => {
                                                             if (isDisabled) return;
                                                             onActivateCondition(isActive ? null : c.id);
                                                         }}
                                                     >
                                                         <div
-                                                            className="h-3.5 w-3.5 shrink-0 rounded-sm"
+                                                            className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
                                                             style={{ backgroundColor: c.color }}
                                                         />
                                                         <div className="min-w-0 flex-1">
-                                                            <span className="truncate font-medium block">{c.name}</span>
-                                                            {c.description && (
-                                                                <span className="truncate block text-[10px] text-muted-foreground">
-                                                                    {c.description}
-                                                                </span>
+                                                            <div className="flex items-center gap-1">
+                                                                {c.condition_number != null && (
+                                                                    <span className="font-mono text-[9px] text-muted-foreground">#{c.condition_number}</span>
+                                                                )}
+                                                                <span className="truncate text-[11px] font-medium">{c.name}</span>
+                                                            </div>
+                                                            {c.condition_type && (
+                                                                <span className="block truncate text-[9px] text-muted-foreground">{c.condition_type.name}</span>
                                                             )}
-                                                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                                                                {c.pricing_method === 'unit_rate' ? (
-                                                                    <>
-                                                                        <Badge variant="outline" className="text-[9px] h-3.5 px-1">Unit Rate</Badge>
-                                                                        {(c.cost_codes || []).length > 0 && (
-                                                                            <span>{(c.cost_codes || []).length} cost code{(c.cost_codes || []).length !== 1 ? 's' : ''}</span>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        {c.materials?.length > 0 && (
-                                                                            <span>{c.materials.length} material{c.materials.length !== 1 ? 's' : ''}</span>
-                                                                        )}
-                                                                    </>
+                                                            <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                                                                {c.pricing_method === 'unit_rate' && (
+                                                                    <span className="rounded-[2px] border px-0.5 text-[8px]">UR</span>
                                                                 )}
-                                                                {measureCount > 0 && (
-                                                                    <span>{measureCount} measurement{measureCount !== 1 ? 's' : ''}</span>
-                                                                )}
+                                                                {measureCount > 0 && <span>{measureCount} meas.</span>}
                                                             </div>
                                                         </div>
                                                         {isActive ? (
-                                                            <Badge variant="default" className="text-[10px] h-5 shrink-0">
-                                                                Active
-                                                            </Badge>
+                                                            <span className="shrink-0 rounded-[2px] bg-primary px-1 py-px text-[9px] font-bold text-primary-foreground">
+                                                                ACTIVE
+                                                            </span>
                                                         ) : (
-                                                            <Play className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                                            <Play className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
                                                         )}
                                                     </div>
                                                 );
                                             })}
                                         </div>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-                </ScrollArea>
-            </TabsContent>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </ScrollArea>
+                </TabsContent>
 
-            {/* ===== BUDGET TAB ===== */}
-            <TabsContent value="budget" className="mt-0 flex min-h-0 flex-1 flex-col">
-                <ScrollArea className="flex-1">
-                    <div className="space-y-3 p-4">
-                        {conditions.length === 0 ? (
-                            <div className="py-8 text-center">
-                                <Calculator className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-xs text-muted-foreground">
-                                    No conditions yet.
-                                </p>
-                                <p className="mt-1 text-[10px] text-muted-foreground">
-                                    Create conditions to see budget breakdown.
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                {/* Budget table per condition */}
-                                {conditions.map((c) => {
-                                    const condMeasurements = measurements.filter(
-                                        (m) => m.takeoff_condition_id === c.id,
-                                    );
-                                    const measuredQty = condMeasurements.reduce(
-                                        (sum, m) => sum + (m.computed_value || 0),
-                                        0,
-                                    );
-                                    const totalMaterialCost = condMeasurements.reduce(
-                                        (sum, m) => sum + (m.material_cost || 0),
-                                        0,
-                                    );
-                                    const totalLabourCost = condMeasurements.reduce(
-                                        (sum, m) => sum + (m.labour_cost || 0),
-                                        0,
-                                    );
-                                    const totalCondCost = condMeasurements.reduce(
-                                        (sum, m) => sum + (m.total_cost || 0),
-                                        0,
-                                    );
+                {/* ===== BUDGET TAB ===== */}
+                <TabsContent value="budget" className="mt-0 flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
+                    <ScrollArea className="flex-1">
+                        <div className="space-y-0">
+                            {conditions.length === 0 ? (
+                                <div className="px-2 py-6 text-center">
+                                    <Calculator className="mx-auto mb-1 h-5 w-5 text-muted-foreground/30" />
+                                    <p className="text-[11px] text-muted-foreground">No conditions yet.</p>
+                                </div>
+                            ) : (
+                                conditions.map((c) => {
+                                    const condMeasurements = measurements.filter(m => m.takeoff_condition_id === c.id);
+                                    const measuredQty = condMeasurements.reduce((sum, m) => sum + (m.computed_value || 0), 0);
+                                    const totalMaterialCost = condMeasurements.reduce((sum, m) => sum + (m.material_cost || 0), 0);
+                                    const totalLabourCost = condMeasurements.reduce((sum, m) => sum + (m.labour_cost || 0), 0);
+                                    const totalCondCost = condMeasurements.reduce((sum, m) => sum + (m.total_cost || 0), 0);
 
                                     const isUnitRate = c.pricing_method === 'unit_rate';
                                     let materialRatePerUnit: number;
@@ -641,217 +540,117 @@ export function TakeoffPanel({
                                     let effectiveQtyMultiplier = 1;
 
                                     if (isUnitRate) {
-                                        // Unit Rate: flat rates from cost codes + labour unit rate
-                                        materialRatePerUnit = (c.cost_codes || []).reduce(
-                                            (sum, cc) => sum + (cc.unit_rate || 0), 0,
-                                        );
+                                        materialRatePerUnit = (c.cost_codes || []).reduce((sum, cc) => sum + (cc.unit_rate || 0), 0);
                                         labourRatePerUnit = c.labour_unit_rate || 0;
-                                        if (c.type === 'linear' && c.wall_height && c.wall_height > 0) {
-                                            effectiveQtyMultiplier = c.wall_height;
+                                        if (c.type === 'linear' && c.height && c.height > 0) {
+                                            effectiveQtyMultiplier = c.height;
                                         }
                                     } else {
-                                        // Build-Up: from materials and production rate
-                                        materialRatePerUnit = (c.materials || []).reduce(
-                                            (sum, mat) => {
-                                                const unitCost =
-                                                    mat.material_item?.effective_unit_cost ??
-                                                    (typeof mat.material_item?.unit_cost === 'string'
-                                                        ? parseFloat(mat.material_item.unit_cost)
-                                                        : mat.material_item?.unit_cost || 0);
-                                                const effectiveQty =
-                                                    mat.qty_per_unit *
-                                                    (1 + (mat.waste_percentage || 0) / 100);
-                                                return sum + effectiveQty * unitCost;
-                                            },
-                                            0,
-                                        );
-                                        const effectiveLabourRate =
-                                            c.labour_rate_source === 'manual'
-                                                ? c.manual_labour_rate || 0
-                                                : c.pay_rate_template?.hourly_rate
-                                                  ? typeof c.pay_rate_template.hourly_rate === 'string'
-                                                      ? parseFloat(c.pay_rate_template.hourly_rate)
-                                                      : c.pay_rate_template.hourly_rate
-                                                  : 0;
-                                        labourRatePerUnit =
-                                            c.production_rate && c.production_rate > 0
-                                                ? effectiveLabourRate / c.production_rate
+                                        materialRatePerUnit = (c.materials || []).reduce((sum, mat) => {
+                                            const unitCost = mat.material_item?.effective_unit_cost ?? (typeof mat.material_item?.unit_cost === 'string' ? parseFloat(mat.material_item.unit_cost) : mat.material_item?.unit_cost || 0);
+                                            const effectiveQty = mat.qty_per_unit * (1 + (mat.waste_percentage || 0) / 100);
+                                            return sum + effectiveQty * unitCost;
+                                        }, 0);
+                                        const effectiveLabourRate = c.labour_rate_source === 'manual'
+                                            ? c.manual_labour_rate || 0
+                                            : c.pay_rate_template?.hourly_rate
+                                                ? typeof c.pay_rate_template.hourly_rate === 'string' ? parseFloat(c.pay_rate_template.hourly_rate) : c.pay_rate_template.hourly_rate
                                                 : 0;
+                                        labourRatePerUnit = c.production_rate && c.production_rate > 0 ? effectiveLabourRate / c.production_rate : 0;
                                     }
 
-                                    const totalRatePerUnit =
-                                        materialRatePerUnit + labourRatePerUnit;
-
+                                    const totalRatePerUnit = materialRatePerUnit + labourRatePerUnit;
                                     const effectiveMeasuredQty = measuredQty * effectiveQtyMultiplier;
 
-                                    // Show converted unit label for unit rate with wall height
-                                    const unitLabel =
-                                        isUnitRate && c.type === 'linear' && c.wall_height && c.wall_height > 0
-                                            ? 'm2'
-                                            : c.type === 'linear'
-                                              ? linearUnit
-                                              : c.type === 'area'
-                                                ? areaUnit
-                                                : 'ea';
+                                    const unitLabel = isUnitRate && c.type === 'linear' && c.height && c.height > 0
+                                        ? 'm2'
+                                        : c.type === 'linear' ? linearUnit : c.type === 'area' ? areaUnit : 'ea';
 
                                     return (
-                                        <div
-                                            key={c.id}
-                                            className="rounded-lg border overflow-hidden"
-                                        >
-                                            {/* Condition header */}
-                                            <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
-                                                <div
-                                                    className="h-3 w-3 shrink-0 rounded-sm"
-                                                    style={{ backgroundColor: c.color }}
-                                                />
-                                                <span className="truncate text-xs font-semibold flex-1">
-                                                    {c.name}
-                                                </span>
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="text-[10px]"
-                                                >
-                                                    {TYPE_LABELS[c.type]}
-                                                </Badge>
-                                                <Badge
-                                                    variant="outline"
-                                                    className="text-[9px]"
-                                                >
-                                                    {isUnitRate ? 'Unit Rate' : 'Build-Up'}
-                                                </Badge>
+                                        <div key={c.id} className="border-b">
+                                            {/* Condition header row */}
+                                            <div className="flex items-center gap-1.5 bg-muted/30 px-2 py-1" style={{ borderLeftWidth: 3, borderLeftColor: c.color }}>
+                                                <span className="flex-1 truncate text-[11px] font-semibold">{c.name}</span>
+                                                <span className="rounded-[2px] bg-muted px-1 text-[9px] text-muted-foreground">{TYPE_LABELS[c.type]}</span>
+                                                <span className="rounded-[2px] border px-1 text-[8px] text-muted-foreground">{isUnitRate ? 'UR' : 'BU'}</span>
                                             </div>
 
-                                            {/* Rates & totals */}
-                                            <div className="p-3 space-y-2">
-                                                {/* Per-unit rates */}
-                                                <div>
-                                                    <h5 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                                                        Rate per {unitLabel || 'unit'}
-                                                    </h5>
-                                                    <div className="grid grid-cols-3 gap-1 text-xs">
-                                                        <div className="rounded bg-muted/50 px-2 py-1.5 text-center">
-                                                            <div className="text-[10px] text-muted-foreground">
-                                                                Material
-                                                            </div>
-                                                            <div className="font-semibold">
-                                                                ${materialRatePerUnit.toFixed(2)}
-                                                            </div>
-                                                        </div>
-                                                        <div className="rounded bg-muted/50 px-2 py-1.5 text-center">
-                                                            <div className="text-[10px] text-muted-foreground">
-                                                                Labour
-                                                            </div>
-                                                            <div className="font-semibold">
-                                                                ${labourRatePerUnit.toFixed(2)}
-                                                            </div>
-                                                        </div>
-                                                        <div className="rounded bg-primary/10 px-2 py-1.5 text-center">
-                                                            <div className="text-[10px] text-muted-foreground">
-                                                                Total
-                                                            </div>
-                                                            <div className="font-semibold">
-                                                                ${totalRatePerUnit.toFixed(2)}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                            {/* Compact rate grid */}
+                                            <div className="grid grid-cols-3 gap-px bg-border px-0">
+                                                <div className="bg-background px-2 py-1 text-center">
+                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Mat</div>
+                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${materialRatePerUnit.toFixed(2)}</div>
                                                 </div>
+                                                <div className="bg-background px-2 py-1 text-center">
+                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Lab</div>
+                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${labourRatePerUnit.toFixed(2)}</div>
+                                                </div>
+                                                <div className="bg-primary/5 px-2 py-1 text-center">
+                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Rate</div>
+                                                    <div className="font-mono text-[10px] font-bold tabular-nums">${totalRatePerUnit.toFixed(2)}</div>
+                                                </div>
+                                            </div>
 
-                                                {/* Measured quantity */}
-                                                <div className="flex items-center justify-between text-xs border-t pt-2">
-                                                    <span className="text-muted-foreground">
-                                                        Measured
-                                                    </span>
-                                                    <span className="font-semibold">
-                                                        {c.type === 'count'
-                                                            ? `${Math.round(effectiveMeasuredQty)} ${unitLabel}`
-                                                            : `${effectiveMeasuredQty.toFixed(2)} ${unitLabel}`}
-                                                        {isUnitRate && c.type === 'linear' && c.wall_height && c.wall_height > 0 && (
-                                                            <span className="font-normal text-[10px] text-muted-foreground ml-1">
-                                                                ({measuredQty.toFixed(2)} lm x {c.wall_height}m)
+                                            {/* Qty + cost rows */}
+                                            <div className="space-y-0 px-2 py-1">
+                                                <div className="flex items-center justify-between py-px">
+                                                    <span className="text-[10px] text-muted-foreground">Measured</span>
+                                                    <span className="font-mono text-[10px] font-medium tabular-nums">
+                                                        {c.type === 'count' ? `${Math.round(effectiveMeasuredQty)}` : effectiveMeasuredQty.toFixed(2)} {unitLabel}
+                                                        {isUnitRate && c.type === 'linear' && c.height && c.height > 0 && (
+                                                            <span className="font-sans text-[8px] text-muted-foreground ml-0.5">
+                                                                ({measuredQty.toFixed(1)}lm x {c.height}m)
                                                             </span>
                                                         )}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <span className="text-muted-foreground">
-                                                        Measurements
-                                                    </span>
-                                                    <span className="font-medium">
-                                                        {condMeasurements.length}
-                                                    </span>
+                                                <div className="flex items-center justify-between py-px">
+                                                    <span className="text-[10px] text-muted-foreground">Mat. Cost</span>
+                                                    <span className="font-mono text-[10px] tabular-nums">${totalMaterialCost.toFixed(2)}</span>
                                                 </div>
-
-                                                {/* Cost breakdown */}
-                                                <div className="border-t pt-2 space-y-1">
-                                                    <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-muted-foreground">
-                                                            Material Cost
-                                                        </span>
-                                                        <span className="font-medium">
-                                                            ${totalMaterialCost.toFixed(2)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-muted-foreground">
-                                                            Labour Cost
-                                                        </span>
-                                                        <span className="font-medium">
-                                                            ${totalLabourCost.toFixed(2)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                                        <span className="flex items-center gap-1">
-                                                            <DollarSign className="h-3 w-3" />
-                                                            Total
-                                                        </span>
-                                                        <span>
-                                                            ${totalCondCost.toFixed(2)}
-                                                        </span>
-                                                    </div>
+                                                <div className="flex items-center justify-between py-px">
+                                                    <span className="text-[10px] text-muted-foreground">Lab. Cost</span>
+                                                    <span className="font-mono text-[10px] tabular-nums">${totalLabourCost.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between border-t py-px">
+                                                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Total</span>
+                                                    <span className="font-mono text-[10px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                        ${totalCondCost.toFixed(2)}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
                                     );
-                                })}
-                            </>
-                        )}
-                    </div>
-                </ScrollArea>
+                                })
+                            )}
+                        </div>
+                    </ScrollArea>
 
-                {/* Budget Grand Total Footer */}
-                {conditions.length > 0 && (
-                    <div className="border-t bg-muted/30 px-4 py-3">
-                        <div className="flex flex-col gap-1 text-xs">
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Total Materials</span>
-                                <span className="font-semibold">
-                                    ${measurements
-                                        .filter((m) => m.material_cost != null)
-                                        .reduce((s, m) => s + (m.material_cost || 0), 0)
-                                        .toFixed(2)}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Total Labour</span>
-                                <span className="font-semibold">
-                                    ${measurements
-                                        .filter((m) => m.labour_cost != null)
-                                        .reduce((s, m) => s + (m.labour_cost || 0), 0)
-                                        .toFixed(2)}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between border-t pt-1 mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                                <span className="flex items-center gap-1">
-                                    <DollarSign className="h-3 w-3" />
-                                    Grand Total
-                                </span>
-                                <span>${totalCost.toFixed(2)}</span>
+                    {/* Budget Grand Total - status bar */}
+                    {conditions.length > 0 && (
+                        <div className="border-t bg-muted/40 px-2 py-1.5">
+                            <div className="space-y-0.5">
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-muted-foreground">Materials</span>
+                                    <span className="font-mono font-medium tabular-nums">
+                                        ${measurements.filter(m => m.material_cost != null).reduce((s, m) => s + (m.material_cost || 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-muted-foreground">Labour</span>
+                                    <span className="font-mono font-medium tabular-nums">
+                                        ${measurements.filter(m => m.labour_cost != null).reduce((s, m) => s + (m.labour_cost || 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between border-t pt-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                    <span>Grand Total</span>
+                                    <span className="font-mono tabular-nums">${totalCost.toFixed(2)}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </TabsContent>
-        </Tabs>
+                    )}
+                </TabsContent>
+            </Tabs>
+        </TooltipProvider>
     );
 }

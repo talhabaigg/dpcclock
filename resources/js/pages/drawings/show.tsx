@@ -40,7 +40,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type Project = {
@@ -263,6 +263,14 @@ export default function DrawingShow() {
     const [conditions, setConditions] = useState<TakeoffCondition[]>([]);
     const [showConditionManager, setShowConditionManager] = useState(false);
     const [activeConditionId, setActiveConditionId] = useState<number | null>(null);
+
+    const conditionPatterns = useMemo(() => {
+        const map: Record<number, string> = {};
+        for (const c of conditions) {
+            if (c.pattern) map[c.id] = c.pattern;
+        }
+        return map;
+    }, [conditions]);
 
     const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
     const PAPER_SIZES = ['A0', 'A1', 'A2', 'A3', 'A4'];
@@ -1047,21 +1055,21 @@ export default function DrawingShow() {
             <Head title={displayName} />
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
-                {/* Header Bar */}
-                <div className="bg-background flex shrink-0 items-center justify-between border-b px-4 py-2">
-                    <div className="flex items-center gap-3">
+                {/* Header Bar - compact */}
+                <div className="bg-background flex shrink-0 items-center justify-between border-b px-3 py-1.5">
+                    <div className="flex items-center gap-2">
                         <Link href={`/projects/${projectId}/drawings`}>
-                            <Button variant="ghost" size="sm">
-                                <ArrowLeft className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0">
+                                <ArrowLeft className="h-3.5 w-3.5" />
                             </Button>
                         </Link>
                         <div className="flex flex-col">
-                            <h1 className="text-sm leading-tight font-semibold">{displayName}</h1>
-                            <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                            <h1 className="text-xs leading-tight font-semibold">{displayName}</h1>
+                            <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
                                 <span>{projectName}</span>
                                 {drawing.revision_number && (
                                     <>
-                                        <span className="text-muted-foreground/50">|</span>
+                                        <span className="text-muted-foreground/40">|</span>
                                         <span>Rev {drawing.revision_number}</span>
                                     </>
                                 )}
@@ -1069,7 +1077,7 @@ export default function DrawingShow() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         {/* Version Selector */}
                         {revisions.length > 1 && (
                             <Select
@@ -1082,20 +1090,20 @@ export default function DrawingShow() {
                                     setSelectedRevisionId(revId);
                                 }}
                             >
-                                <SelectTrigger className="h-8 w-[140px] text-xs">
-                                    <History className="mr-1.5 h-3.5 w-3.5" />
+                                <SelectTrigger className="h-6 w-[120px] rounded-sm text-[11px]">
+                                    <History className="mr-1 h-3 w-3" />
                                     <SelectValue placeholder="Version" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {revisions.map((rev) => (
                                         <SelectItem key={rev.id} value={String(rev.id)}>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5">
                                                 <span>
                                                     Rev {rev.revision_number || rev.revision || '?'}
                                                     {rev.id === drawing.id && ' (Current)'}
                                                 </span>
                                                 {rev.status === 'active' && (
-                                                    <Badge variant="secondary" className="h-4 text-[9px]">
+                                                    <Badge variant="secondary" className="h-3.5 text-[8px]">
                                                         Latest
                                                     </Badge>
                                                 )}
@@ -1109,97 +1117,97 @@ export default function DrawingShow() {
                         <div className="bg-border h-4 w-px" />
 
                         {/* Download button */}
-                        <Button variant="ghost" size="sm" asChild>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0" asChild>
                             <a href={`/drawings/${drawing.id}/download`} download>
-                                <Download className="h-4 w-4" />
+                                <Download className="h-3 w-3" />
                             </a>
                         </Button>
                     </div>
                 </div>
 
-                {/* Toolbar */}
-                <div className="bg-muted/30 flex shrink-0 flex-wrap items-center gap-2 overflow-x-auto border-b px-4 py-2">
+                {/* Toolbar - compact industrial strip */}
+                <div className="bg-muted/20 flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 py-1">
                     {/* View Mode */}
-                    <div className="bg-background flex items-center rounded-md border p-0.5">
+                    <div className="bg-background flex items-center rounded-sm border p-px">
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('pan')}
-                            className="h-7 px-2"
+                            className="h-6 w-6 rounded-sm p-0"
                             title="Pan mode"
                         >
-                            <Hand className="h-3.5 w-3.5" />
+                            <Hand className="h-3 w-3" />
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'select' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('select')}
-                            className="h-7 px-2"
+                            className="h-6 w-6 rounded-sm p-0"
                             title="Add observation"
                         >
-                            <MousePointer className="h-3.5 w-3.5" />
+                            <MousePointer className="h-3 w-3" />
                         </Button>
                     </div>
 
                     <div className="bg-border h-4 w-px" />
 
-                    {/* Takeoff Tools */}
+                    {/* Takeoff Toggle */}
                     <Button
                         type="button"
                         size="sm"
-                        variant={showTakeoffPanel ? 'secondary' : 'outline'}
+                        variant={showTakeoffPanel ? 'secondary' : 'ghost'}
                         onClick={() => setShowTakeoffPanel(!showTakeoffPanel)}
-                        className="h-7 gap-1.5 px-2 text-xs"
+                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                     >
-                        <Ruler className="h-3.5 w-3.5" />
+                        <Ruler className="h-3 w-3" />
                         Takeoff
                     </Button>
 
                     {showTakeoffPanel && (
-                        <div className="bg-background flex items-center rounded-md border p-0.5">
+                        <div className="bg-background flex items-center rounded-sm border p-px">
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
-                                className="h-7 px-2"
-                                title="Calibrate scale (draw reference line)"
+                                className="h-6 w-6 rounded-sm p-0"
+                                title="Calibrate scale"
                             >
-                                <Scale className="h-3.5 w-3.5" />
+                                <Scale className="h-3 w-3" />
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                                className="h-7 px-2"
+                                className="h-6 w-6 rounded-sm p-0"
                                 title={!calibration ? 'Set scale first' : 'Measure line'}
                                 disabled={!calibration}
                             >
-                                <Pencil className="h-3.5 w-3.5" />
+                                <Pencil className="h-3 w-3" />
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                                className="h-7 px-2"
+                                className="h-6 w-6 rounded-sm p-0"
                                 title={!calibration ? 'Set scale first' : 'Measure area'}
                                 disabled={!calibration}
                             >
-                                <Maximize2 className="h-3.5 w-3.5" />
+                                <Maximize2 className="h-3 w-3" />
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                                className="h-7 px-2"
+                                className="h-6 w-6 rounded-sm p-0"
                                 title="Count items"
                             >
-                                <Hash className="h-3.5 w-3.5" />
+                                <Hash className="h-3 w-3" />
                             </Button>
                         </div>
                     )}
@@ -1208,10 +1216,10 @@ export default function DrawingShow() {
 
                     {/* Compare Toggle */}
                     {canCompare && (
-                        <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                                <Layers className="text-muted-foreground h-3.5 w-3.5" />
-                                <Label htmlFor="compare-toggle" className="cursor-pointer text-xs">
+                        <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1">
+                                <Layers className="text-muted-foreground h-3 w-3" />
+                                <Label htmlFor="compare-toggle" className="cursor-pointer text-[11px]">
                                     Compare
                                 </Label>
                                 <Switch
@@ -1226,7 +1234,7 @@ export default function DrawingShow() {
                                             }
                                         }
                                     }}
-                                    className="scale-75"
+                                    className="scale-[0.65]"
                                 />
                             </div>
 
@@ -1237,8 +1245,8 @@ export default function DrawingShow() {
                                             value={compareRevisionId ? String(compareRevisionId) : ''}
                                             onValueChange={(value) => setCompareRevisionId(Number(value))}
                                         >
-                                            <SelectTrigger className="h-7 w-[100px] text-xs">
-                                                <SelectValue placeholder="Revision" />
+                                            <SelectTrigger className="h-6 w-[90px] rounded-sm text-[11px]">
+                                                <SelectValue placeholder="Rev" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {revisions
@@ -1252,23 +1260,23 @@ export default function DrawingShow() {
                                         </Select>
                                     )}
 
-                                    <div className="flex items-center gap-1.5">
-                                        <Eye className="text-muted-foreground h-3.5 w-3.5" />
+                                    <div className="flex items-center gap-1">
+                                        <Eye className="text-muted-foreground h-3 w-3" />
                                         <Slider
                                             value={[overlayOpacity]}
                                             onValueChange={(values) => setOverlayOpacity(values[0])}
                                             min={0}
                                             max={100}
                                             step={5}
-                                            className="w-20"
+                                            className="w-16"
                                         />
-                                        <span className="text-muted-foreground w-7 text-xs tabular-nums">{overlayOpacity}%</span>
+                                        <span className="text-muted-foreground w-6 text-[10px] tabular-nums">{overlayOpacity}%</span>
                                     </div>
 
                                     {hasDiffImage && (
-                                        <div className="flex items-center gap-1.5">
-                                            <GitCompare className="text-muted-foreground h-3.5 w-3.5" />
-                                            <Label htmlFor="diff-mode" className="cursor-pointer text-xs">
+                                        <div className="flex items-center gap-1">
+                                            <GitCompare className="text-muted-foreground h-3 w-3" />
+                                            <Label htmlFor="diff-mode" className="cursor-pointer text-[11px]">
                                                 Diff
                                             </Label>
                                             <Switch
@@ -1284,7 +1292,7 @@ export default function DrawingShow() {
                                                         }
                                                     }
                                                 }}
-                                                className="scale-75"
+                                                className="scale-[0.65]"
                                             />
                                         </div>
                                     )}
@@ -1300,8 +1308,8 @@ export default function DrawingShow() {
                             <Button
                                 type="button"
                                 size="sm"
-                                variant="outline"
-                                className="h-7 gap-1.5 px-2 text-xs"
+                                variant="ghost"
+                                className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                                 onClick={() => {
                                     const currentId = String(drawing.id);
                                     const otherRevisions = revisions.filter((r) => r.id !== drawing.id);
@@ -1312,8 +1320,8 @@ export default function DrawingShow() {
                                     setShowAICompareDialog(true);
                                 }}
                             >
-                                <Sparkles className="h-3.5 w-3.5" />
-                                AI Compare
+                                <Sparkles className="h-3 w-3" />
+                                AI
                             </Button>
                         </>
                     )}
@@ -1322,31 +1330,26 @@ export default function DrawingShow() {
                     {selectedObservationIds.size > 0 && (
                         <>
                             <div className="ml-auto" />
-                            <Badge
-                                variant="secondary"
-                                className="gap-1 bg-yellow-100 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                            >
-                                {selectedObservationIds.size} selected
-                            </Badge>
+                            <span className="rounded-sm bg-yellow-100 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                {selectedObservationIds.size} sel
+                            </span>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 gap-1 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                className="h-5 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
                                 onClick={handleDeleteSelectedObservations}
                                 disabled={bulkDeleting}
                             >
-                                <Trash2 className="h-3 w-3" />
-                                {bulkDeleting ? 'Deleting...' : 'Delete'}
+                                <Trash2 className="h-2.5 w-2.5" />
+                                {bulkDeleting ? '...' : 'Del'}
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                            <button
+                                className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
                                 onClick={handleClearSelection}
                                 title="Clear selection"
                             >
-                                <X className="h-3.5 w-3.5" />
-                            </Button>
+                                <X className="h-3 w-3" />
+                            </button>
                         </>
                     )}
 
@@ -1354,21 +1357,21 @@ export default function DrawingShow() {
                     {serverObservations.length > 0 && selectedObservationIds.size === 0 && (
                         <>
                             <div className="ml-auto" />
-                            <Badge variant="outline" className="text-xs">
-                                {serverObservations.length} observation{serverObservations.length !== 1 ? 's' : ''}
-                            </Badge>
+                            <span className="rounded-sm border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {serverObservations.length} obs
+                            </span>
                             {serverObservations.filter((obs) => obs.source === 'ai_comparison').length > 0 && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 gap-1 px-2 text-xs text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
+                                    className="h-5 gap-0.5 rounded-sm px-1 text-[10px] text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
                                     onClick={handleDeleteAllAIObservations}
                                     disabled={bulkDeleting}
                                 >
-                                    <Trash2 className="h-3 w-3" />
+                                    <Trash2 className="h-2.5 w-2.5" />
                                     {bulkDeleting
-                                        ? 'Deleting...'
-                                        : `Delete ${serverObservations.filter((obs) => obs.source === 'ai_comparison').length} AI`}
+                                        ? '...'
+                                        : `${serverObservations.filter((obs) => obs.source === 'ai_comparison').length} AI`}
                                 </Button>
                             )}
                         </>
@@ -1411,6 +1414,7 @@ export default function DrawingShow() {
                             measurements={measurements}
                             selectedMeasurementId={selectedMeasurementId}
                             calibration={calibration}
+                            conditionPatterns={conditionPatterns}
                             onCalibrationComplete={handleCalibrationComplete}
                             onMeasurementComplete={handleMeasurementComplete}
                             onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
@@ -1420,7 +1424,7 @@ export default function DrawingShow() {
 
                     {/* Takeoff Side Panel */}
                     {showTakeoffPanel && (
-                        <div className="w-72 shrink-0 overflow-hidden border-l bg-background">
+                        <div className="w-64 shrink-0 overflow-hidden border-l bg-background">
                             <TakeoffPanel
                                 viewMode={viewMode}
                                 calibration={calibration}

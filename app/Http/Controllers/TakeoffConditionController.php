@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConditionType;
 use App\Models\CostCode;
 use App\Models\Location;
 use App\Models\MaterialItem;
@@ -13,8 +14,8 @@ class TakeoffConditionController extends Controller
     public function index(Location $location)
     {
         $conditions = TakeoffCondition::where('location_id', $location->id)
-            ->with(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode'])
-            ->orderBy('type')
+            ->with(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType'])
+            ->orderBy('condition_number')
             ->orderBy('name')
             ->get();
 
@@ -28,12 +29,15 @@ class TakeoffConditionController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|string|in:linear,area,count',
+            'condition_type_id' => 'nullable|integer|exists:condition_types,id',
             'color' => 'required|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'pattern' => 'nullable|string|in:solid,dashed,dotted,dashdot',
             'description' => 'nullable|string|max:2000',
+            'height' => 'nullable|numeric|min:0.0001|max:100',
+            'thickness' => 'nullable|numeric|min:0.0001|max:100',
             'pricing_method' => 'required|string|in:unit_rate,build_up',
 
             // Unit Rate fields
-            'wall_height' => 'nullable|numeric|min:0.01|max:100',
             'labour_unit_rate' => 'nullable|numeric|min:0',
             'cost_codes' => 'nullable|array',
             'cost_codes.*.cost_code_id' => 'required|integer|exists:cost_codes,id',
@@ -54,12 +58,15 @@ class TakeoffConditionController extends Controller
 
         $condition = TakeoffCondition::create([
             'location_id' => $location->id,
+            'condition_type_id' => $validated['condition_type_id'] ?? null,
             'name' => $validated['name'],
             'type' => $validated['type'],
             'color' => $validated['color'],
+            'pattern' => $validated['pattern'] ?? 'solid',
             'description' => $validated['description'] ?? null,
+            'height' => $validated['height'] ?? null,
+            'thickness' => $validated['thickness'] ?? null,
             'pricing_method' => $pricingMethod,
-            'wall_height' => $pricingMethod === 'unit_rate' ? ($validated['wall_height'] ?? null) : null,
             'labour_unit_rate' => $pricingMethod === 'unit_rate' ? ($validated['labour_unit_rate'] ?? null) : null,
             'labour_rate_source' => $pricingMethod === 'build_up' ? ($validated['labour_rate_source'] ?? 'manual') : 'manual',
             'manual_labour_rate' => $pricingMethod === 'build_up' ? ($validated['manual_labour_rate'] ?? null) : null,
@@ -86,7 +93,7 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode']);
+        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType']);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -100,12 +107,15 @@ class TakeoffConditionController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'condition_type_id' => 'nullable|integer|exists:condition_types,id',
             'color' => 'sometimes|required|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'pattern' => 'nullable|string|in:solid,dashed,dotted,dashdot',
             'description' => 'nullable|string|max:2000',
+            'height' => 'nullable|numeric|min:0.0001|max:100',
+            'thickness' => 'nullable|numeric|min:0.0001|max:100',
             'pricing_method' => 'sometimes|required|string|in:unit_rate,build_up',
 
             // Unit Rate fields
-            'wall_height' => 'nullable|numeric|min:0.01|max:100',
             'labour_unit_rate' => 'nullable|numeric|min:0',
             'cost_codes' => 'nullable|array',
             'cost_codes.*.cost_code_id' => 'required|integer|exists:cost_codes,id',
@@ -134,7 +144,6 @@ class TakeoffConditionController extends Controller
             $validated['pay_rate_template_id'] = null;
             $validated['production_rate'] = null;
         } elseif ($pricingMethod === 'build_up') {
-            $validated['wall_height'] = null;
             $validated['labour_unit_rate'] = null;
         }
 
@@ -173,7 +182,7 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode']);
+        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType']);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -230,6 +239,40 @@ class TakeoffConditionController extends Controller
             ->get();
 
         return response()->json(['items' => $items]);
+    }
+
+    // ---- Condition Type CRUD ----
+
+    public function indexTypes(Location $location)
+    {
+        $types = ConditionType::where('location_id', $location->id)->orderBy('name')->get();
+
+        return response()->json(['types' => $types]);
+    }
+
+    public function storeType(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+        ]);
+
+        $type = ConditionType::firstOrCreate([
+            'location_id' => $location->id,
+            'name' => $validated['name'],
+        ]);
+
+        return response()->json($type);
+    }
+
+    public function destroyType(Location $location, ConditionType $conditionType)
+    {
+        if ($conditionType->location_id !== $location->id) {
+            abort(404);
+        }
+
+        $conditionType->delete();
+
+        return response()->json(['message' => 'Condition type deleted.']);
     }
 
     /**

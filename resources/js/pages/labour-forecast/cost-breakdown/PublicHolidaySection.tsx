@@ -15,7 +15,7 @@ import { CostLine } from './CostLine';
 import { OncostItemLine } from './OncostItemLine';
 import { SectionHeader } from './SectionHeader';
 import { TotalRow } from './TotalRow';
-import { formatCurrency, getBaseComponentEntries } from './utils';
+import { getBaseComponentEntries } from './utils';
 
 export interface PublicHolidaySectionProps {
     template: Template;

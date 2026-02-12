@@ -37,7 +37,7 @@ class TakeoffCostCalculator
     /**
      * Compute costs using the Unit Rate method.
      *
-     * effective_qty = computed_value * wall_height (if linear) or computed_value
+     * effective_qty = computed_value * height (if linear) or computed_value
      * material_cost = effective_qty * sum(cost_code unit_rates)
      * labour_cost   = effective_qty * labour_unit_rate
      */

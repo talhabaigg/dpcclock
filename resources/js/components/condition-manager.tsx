@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -31,15 +30,25 @@ export type ConditionCostCode = {
     };
 };
 
+export type ConditionType = {
+    id: number;
+    name: string;
+};
+
 export type TakeoffCondition = {
     id: number;
     location_id: number;
+    condition_type_id: number | null;
+    condition_type?: ConditionType | null;
     name: string;
+    condition_number: number | null;
     type: 'linear' | 'area' | 'count';
     color: string;
+    pattern: 'solid' | 'dashed' | 'dotted' | 'dashdot';
     description: string | null;
+    height: number | null;
+    thickness: number | null;
     pricing_method: 'unit_rate' | 'build_up';
-    wall_height: number | null;
     labour_unit_rate: number | null;
     cost_codes: ConditionCostCode[];
     labour_rate_source: 'manual' | 'template';
@@ -103,17 +112,24 @@ function getXsrfToken() {
 
 const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
-const TYPE_ICONS = {
+const STYLE_ICONS = {
     linear: Pencil,
     area: Maximize2,
     count: Hash,
 };
 
-const TYPE_LABELS = {
+const STYLE_LABELS: Record<string, string> = {
     linear: 'Linear',
     area: 'Area',
-    count: 'Count',
+    count: 'Each',
 };
+
+const PATTERN_OPTIONS: { value: TakeoffCondition['pattern']; label: string; dash?: string }[] = [
+    { value: 'solid', label: 'Solid' },
+    { value: 'dashed', label: 'Dashed', dash: '12,6' },
+    { value: 'dotted', label: 'Dotted', dash: '3,5' },
+    { value: 'dashdot', label: 'Dash-Dot', dash: '12,5,3,5' },
+];
 
 export function ConditionManager({
     open,
@@ -127,15 +143,23 @@ export function ConditionManager({
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Condition Types
+    const [conditionTypes, setConditionTypes] = useState<ConditionType[]>([]);
+    const [newTypeName, setNewTypeName] = useState('');
+    const [creatingType, setCreatingType] = useState(false);
+
     // Form state
     const [formName, setFormName] = useState('');
     const [formType, setFormType] = useState<'linear' | 'area' | 'count'>('linear');
+    const [formConditionTypeId, setFormConditionTypeId] = useState<string>('');
     const [formColor, setFormColor] = useState('#3b82f6');
+    const [formPattern, setFormPattern] = useState<TakeoffCondition['pattern']>('solid');
     const [formDescription, setFormDescription] = useState('');
+    const [formHeight, setFormHeight] = useState('');
+    const [formThickness, setFormThickness] = useState('');
     const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up'>('build_up');
 
     // Unit Rate form state
-    const [formWallHeight, setFormWallHeight] = useState('');
     const [formLabourUnitRate, setFormLabourUnitRate] = useState('');
     const [formCostCodes, setFormCostCodes] = useState<Array<{
         cost_code_id: number;
@@ -171,7 +195,7 @@ export function ConditionManager({
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
 
-    // Load conditions and pay rate templates
+    // Load conditions, pay rate templates, and condition types
     useEffect(() => {
         if (!open || !locationId) return;
         fetch(`/locations/${locationId}/takeoff-conditions`, {
@@ -193,7 +217,70 @@ export function ConditionManager({
                 setPayRateTemplates(data.templates || []);
             })
             .catch(() => {});
+
+        fetchConditionTypes();
     }, [open, locationId]);
+
+    const fetchConditionTypes = useCallback(() => {
+        fetch(`/locations/${locationId}/condition-types`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => setConditionTypes(data.types || []))
+            .catch(() => {});
+    }, [locationId]);
+
+    const handleCreateType = async () => {
+        if (!newTypeName.trim()) return;
+        setCreatingType(true);
+        try {
+            const res = await fetch(`/locations/${locationId}/condition-types`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: newTypeName.trim() }),
+            });
+            if (!res.ok) throw new Error('Failed');
+            const created = await res.json();
+            setConditionTypes((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+            setFormConditionTypeId(created.id.toString());
+            setNewTypeName('');
+            toast.success(`Type "${created.name}" created.`);
+        } catch {
+            toast.error('Failed to create type.');
+        } finally {
+            setCreatingType(false);
+        }
+    };
+
+    const handleDeleteType = async (typeId: number) => {
+        const t = conditionTypes.find((ct) => ct.id === typeId);
+        if (!t || !confirm(`Delete type "${t.name}"? Conditions using this type will be unlinked.`)) return;
+        try {
+            await fetch(`/locations/${locationId}/condition-types/${typeId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+            setConditionTypes((prev) => prev.filter((ct) => ct.id !== typeId));
+            if (formConditionTypeId === typeId.toString()) {
+                setFormConditionTypeId('');
+            }
+            toast.success('Type deleted.');
+        } catch {
+            toast.error('Failed to delete type.');
+        }
+    };
 
     const selectedCondition = conditions.find((c) => c.id === selectedId) || null;
 
@@ -206,10 +293,13 @@ export function ConditionManager({
     const resetForm = useCallback(() => {
         setFormName('');
         setFormType('linear');
+        setFormConditionTypeId('');
         setFormColor('#3b82f6');
+        setFormPattern('solid');
         setFormDescription('');
+        setFormHeight('');
+        setFormThickness('');
         setFormPricingMethod('build_up');
-        setFormWallHeight('');
         setFormLabourUnitRate('');
         setFormCostCodes([]);
         setCostCodeSearch('');
@@ -221,15 +311,19 @@ export function ConditionManager({
         setFormMaterials([]);
         setMaterialSearch('');
         setMaterialResults([]);
+        setNewTypeName('');
     }, []);
 
     const loadConditionIntoForm = useCallback((c: TakeoffCondition) => {
         setFormName(c.name);
         setFormType(c.type);
+        setFormConditionTypeId(c.condition_type_id?.toString() || '');
         setFormColor(c.color);
+        setFormPattern(c.pattern || 'solid');
         setFormDescription(c.description || '');
+        setFormHeight(c.height?.toString() || '');
+        setFormThickness(c.thickness?.toString() || '');
         setFormPricingMethod(c.pricing_method || 'build_up');
-        setFormWallHeight(c.wall_height?.toString() || '');
         setFormLabourUnitRate(c.labour_unit_rate?.toString() || '');
         setFormCostCodes(
             (c.cost_codes || []).map((cc) => ({
@@ -287,13 +381,16 @@ export function ConditionManager({
             const payload: Record<string, unknown> = {
                 name: formName.trim(),
                 type: formType,
+                condition_type_id: formConditionTypeId ? parseInt(formConditionTypeId) : null,
                 color: formColor,
+                pattern: formPattern,
                 description: formDescription || null,
+                height: formHeight ? parseFloat(formHeight) : null,
+                thickness: formThickness ? parseFloat(formThickness) : null,
                 pricing_method: formPricingMethod,
             };
 
             if (formPricingMethod === 'unit_rate') {
-                payload.wall_height = formWallHeight ? parseFloat(formWallHeight) : null;
                 payload.labour_unit_rate = formLabourUnitRate ? parseFloat(formLabourUnitRate) : null;
                 payload.cost_codes = formCostCodes.map((cc) => ({
                     cost_code_id: cc.cost_code_id,
@@ -475,131 +572,263 @@ export function ConditionManager({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
+            <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0">
+                <DialogHeader className="border-b px-4 py-2.5">
+                    <DialogTitle className="flex items-center gap-1.5 text-sm">
+                        <DollarSign className="h-3.5 w-3.5" />
                         Manage Conditions
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex flex-1 gap-4 min-h-0">
+                <div className="flex flex-1 min-h-0">
                     {/* Left: Condition List */}
-                    <div className="w-64 shrink-0 flex flex-col border-r pr-4">
-                        <Button size="sm" className="mb-3 w-full" onClick={handleCreate}>
-                            <Plus className="h-3.5 w-3.5 mr-1" />
-                            New Condition
-                        </Button>
-                        <ScrollArea className="flex-1">
-                            <div className="space-y-1 pr-2">
+                    <div className="w-56 shrink-0 flex flex-col border-r bg-muted/20">
+                        <div className="border-b px-2 py-1.5">
+                            <Button size="sm" className="h-7 w-full rounded-sm gap-1 text-[11px]" onClick={handleCreate}>
+                                <Plus className="h-3 w-3" />
+                                New Condition
+                            </Button>
+                        </div>
+                        <div className="flex-1 min-h-0 overflow-y-auto">
+                            <div className="py-0.5">
                                 {(['linear', 'area', 'count'] as const).map((type) => {
                                     const items = groupedConditions[type];
                                     if (!items?.length) return null;
-                                    const Icon = TYPE_ICONS[type];
+                                    const Icon = STYLE_ICONS[type];
                                     return (
-                                        <div key={type} className="mb-3">
-                                            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                                                <Icon className="h-3 w-3" />
-                                                {TYPE_LABELS[type]}
+                                        <div key={type}>
+                                            <div className="flex items-center gap-1.5 bg-muted/40 border-b px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                <Icon className="h-2.5 w-2.5" />
+                                                {STYLE_LABELS[type]}
+                                                <span className="ml-auto rounded-sm bg-muted px-1 py-px text-[9px]">{items.length}</span>
                                             </div>
                                             {items.map((c) => (
                                                 <div
                                                     key={c.id}
-                                                    className={`group flex items-center gap-2 rounded px-2 py-1.5 text-xs cursor-pointer transition-colors hover:bg-muted/50 ${selectedId === c.id && !creating ? 'bg-muted' : ''}`}
+                                                    className={`group flex min-w-0 items-center gap-1.5 border-b border-border/50 px-2 py-1.5 text-[11px] cursor-pointer transition-colors hover:bg-muted/50 ${selectedId === c.id && !creating ? 'bg-background border-l-2' : ''}`}
+                                                    style={selectedId === c.id && !creating ? { borderLeftColor: c.color } : undefined}
                                                     onClick={() => handleSelect(c.id)}
                                                 >
                                                     <div
-                                                        className="h-3 w-3 shrink-0 rounded-sm"
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
                                                         style={{ backgroundColor: c.color }}
                                                     />
-                                                    <span className="truncate flex-1 font-medium">{c.name}</span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                                                    <span className="min-w-0 truncate flex-1 font-medium">
+                                                        {c.condition_number != null && (
+                                                            <span className="font-mono text-[9px] text-muted-foreground mr-0.5">#{c.condition_number}</span>
+                                                        )}
+                                                        {c.name}
+                                                    </span>
+                                                    <button
+                                                        className="h-5 w-5 shrink-0 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-colors"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDelete(c.id);
                                                         }}
                                                     >
-                                                        <Trash2 className="h-3 w-3" />
-                                                    </Button>
+                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                    </button>
                                                 </div>
                                             ))}
                                         </div>
                                     );
                                 })}
                                 {conditions.length === 0 && (
-                                    <p className="text-xs text-muted-foreground text-center py-8">
-                                        No conditions yet. Create one to get started.
+                                    <p className="text-[11px] text-muted-foreground text-center py-8">
+                                        No conditions yet.
                                     </p>
                                 )}
                             </div>
-                        </ScrollArea>
+                        </div>
                     </div>
 
                     {/* Right: Detail / Form */}
-                    <div className="flex-1 min-h-0 overflow-y-auto">
+                    <div className="flex-1 min-h-0 overflow-y-auto p-3">
                         {showForm ? (
-                            <div className="space-y-4">
-                                <div className="grid gap-2">
-                                    <Label className="text-xs">Name</Label>
+                            <div className="space-y-2.5">
+                                {/* 1. Name */}
+                                <div className="grid gap-1">
+                                    <Label className="text-[11px] font-semibold">Name</Label>
                                     <Input
                                         value={formName}
                                         onChange={(e) => setFormName(e.target.value)}
-                                        placeholder="e.g. Interior Walls - Plasterboard"
-                                        className="h-9"
+                                        placeholder="e.g. WT14 - Firefly Sarking"
+                                        className="h-7 text-xs rounded-sm"
                                         autoFocus
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="grid gap-2">
-                                        <Label className="text-xs">Type</Label>
+                                {/* 2. Style + Condition Number */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid gap-1">
+                                        <Label className="text-[11px] font-semibold">Style</Label>
                                         <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={editing}>
-                                            <SelectTrigger className="h-9">
+                                            <SelectTrigger className="h-7 text-xs rounded-sm">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="linear">Linear</SelectItem>
                                                 <SelectItem value="area">Area</SelectItem>
-                                                <SelectItem value="count">Count</SelectItem>
+                                                <SelectItem value="count">Each</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="grid gap-2">
-                                        <Label className="text-xs">Color</Label>
-                                        <div className="flex gap-1.5 items-center h-9">
+                                    <div className="grid gap-1">
+                                        <Label className="text-[11px] font-semibold">Condition #</Label>
+                                        <div className="flex items-center h-7 px-2 rounded-sm border bg-muted/30 text-[11px] text-muted-foreground">
+                                            {editing && selectedCondition?.condition_number != null
+                                                ? `#${selectedCondition.condition_number}`
+                                                : 'Auto-assigned'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. Type (Category) */}
+                                <div className="grid gap-1">
+                                    <Label className="text-[11px] font-semibold">Type</Label>
+                                    <Select value={formConditionTypeId || '__none__'} onValueChange={(v) => setFormConditionTypeId(v === '__none__' ? '' : v)}>
+                                        <SelectTrigger className="h-7 text-xs rounded-sm">
+                                            <SelectValue placeholder="Select type..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">None</SelectItem>
+                                            {conditionTypes.map((ct) => (
+                                                <SelectItem key={ct.id} value={ct.id.toString()}>
+                                                    {ct.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {/* Inline create + manage types */}
+                                    <div className="flex gap-1 items-center">
+                                        <Input
+                                            value={newTypeName}
+                                            onChange={(e) => setNewTypeName(e.target.value)}
+                                            placeholder="New type name..."
+                                            className="h-6 text-[11px] flex-1 rounded-sm"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleCreateType()}
+                                        />
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 rounded-sm"
+                                            onClick={handleCreateType}
+                                            disabled={creatingType || !newTypeName.trim()}
+                                        >
+                                            {creatingType ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
+                                        </Button>
+                                    </div>
+                                    {conditionTypes.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {conditionTypes.map((ct) => (
+                                                <Badge key={ct.id} variant="secondary" className="text-[9px] gap-0.5 pr-0.5 h-5 rounded-sm">
+                                                    {ct.name}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteType(ct.id)}
+                                                        className="hover:text-red-500 transition-colors"
+                                                    >
+                                                        <X className="h-2.5 w-2.5" />
+                                                    </button>
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 4. General: Height, Thickness */}
+                                <div className="rounded-sm border p-2 space-y-2">
+                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        General
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid gap-1">
+                                            <Label className="text-[11px]">Height (m)</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={formHeight}
+                                                onChange={(e) => setFormHeight(e.target.value)}
+                                                placeholder="e.g. 2.70"
+                                                className="h-7 text-xs rounded-sm"
+                                            />
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <Label className="text-[11px]">Thickness (m)</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.001"
+                                                min="0"
+                                                value={formThickness}
+                                                onChange={(e) => setFormThickness(e.target.value)}
+                                                placeholder="e.g. 0.013"
+                                                className="h-7 text-xs rounded-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    {formType === 'linear' && formHeight && (
+                                        <p className="text-[9px] text-muted-foreground">
+                                            Height converts linear meters to area for unit rate pricing: m2 = lm x height
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* 5. Appearance: Color, Pattern */}
+                                <div className="rounded-sm border p-2 space-y-2">
+                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Appearance
+                                    </h4>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[11px]">Color</Label>
+                                        <div className="flex gap-1 items-center">
                                             {PRESET_COLORS.map((color) => (
                                                 <button
                                                     key={color}
                                                     type="button"
-                                                    className={`h-6 w-6 rounded-md border-2 transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                                                    className={`h-5 w-5 rounded-sm border-2 transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
                                                     style={{ backgroundColor: color }}
                                                     onClick={() => setFormColor(color)}
                                                 />
                                             ))}
                                         </div>
                                     </div>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[11px]">Pattern</Label>
+                                        <div className="grid grid-cols-4 gap-1">
+                                            {PATTERN_OPTIONS.map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    className={`rounded-sm border px-1.5 py-1.5 text-[10px] transition-colors flex flex-col items-center gap-0.5 ${
+                                                        formPattern === opt.value
+                                                            ? 'border-primary bg-primary/10 text-primary'
+                                                            : 'border-border hover:bg-muted/50'
+                                                    }`}
+                                                    onClick={() => setFormPattern(opt.value)}
+                                                >
+                                                    <svg width="36" height="4" className="shrink-0">
+                                                        <line
+                                                            x1="0" y1="2" x2="36" y2="2"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2"
+                                                            strokeDasharray={opt.dash || 'none'}
+                                                        />
+                                                    </svg>
+                                                    <span>{opt.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label className="text-xs">Description</Label>
-                                    <Textarea
-                                        value={formDescription}
-                                        onChange={(e) => setFormDescription(e.target.value)}
-                                        placeholder="Notes about this condition..."
-                                        className="h-16 resize-none"
-                                    />
-                                </div>
-
-                                {/* Pricing Method Toggle */}
-                                <div className="grid gap-2">
-                                    <Label className="text-xs">Pricing Method</Label>
-                                    <div className="grid grid-cols-2 gap-1.5">
+                                {/* 6. Pricing Method Toggle */}
+                                <div className="grid gap-1">
+                                    <Label className="text-[11px] font-semibold">Pricing Method</Label>
+                                    <div className="grid grid-cols-2 gap-1">
                                         <button
                                             type="button"
-                                            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
                                                 formPricingMethod === 'unit_rate'
                                                     ? 'border-primary bg-primary/10 text-primary'
                                                     : 'border-border hover:bg-muted/50'
@@ -607,13 +836,13 @@ export function ConditionManager({
                                             onClick={() => setFormPricingMethod('unit_rate')}
                                         >
                                             Unit Rate
-                                            <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                                            <span className="block text-[9px] font-normal text-muted-foreground">
                                                 Cost codes + flat $/unit
                                             </span>
                                         </button>
                                         <button
                                             type="button"
-                                            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
                                                 formPricingMethod === 'build_up'
                                                     ? 'border-primary bg-primary/10 text-primary'
                                                     : 'border-border hover:bg-muted/50'
@@ -621,42 +850,24 @@ export function ConditionManager({
                                             onClick={() => setFormPricingMethod('build_up')}
                                         >
                                             Build-Up
-                                            <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                                            <span className="block text-[9px] font-normal text-muted-foreground">
                                                 Materials + production rate
                                             </span>
                                         </button>
                                     </div>
                                 </div>
 
+                                {/* 7. Pricing-specific fields */}
                                 {formPricingMethod === 'unit_rate' ? (
                                     <>
-                                        {/* Unit Rate: Wall Height (linear only) */}
-                                        {formType === 'linear' && (
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Wall Height (m)</Label>
-                                                <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={formWallHeight}
-                                                    onChange={(e) => setFormWallHeight(e.target.value)}
-                                                    placeholder="e.g. 2.70"
-                                                    className="h-9"
-                                                />
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    Converts linear meters to area: m2 = lm x height
-                                                </p>
-                                            </div>
-                                        )}
-
                                         {/* Unit Rate: Labour */}
-                                        <div className="rounded-lg border p-3 space-y-3">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-2">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Labour
                                             </h4>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">
-                                                    Labour Rate ($/{formType === 'linear' && formWallHeight ? 'm2' : formType === 'area' ? 'sq m' : formType === 'count' ? 'ea' : 'unit'})
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">
+                                                    Labour Rate ($/{formType === 'linear' && formHeight ? 'm2' : formType === 'area' ? 'sq m' : formType === 'count' ? 'ea' : 'unit'})
                                                 </Label>
                                                 <Input
                                                     type="number"
@@ -665,35 +876,35 @@ export function ConditionManager({
                                                     value={formLabourUnitRate}
                                                     onChange={(e) => setFormLabourUnitRate(e.target.value)}
                                                     placeholder="e.g. 10.00"
-                                                    className="h-9"
+                                                    className="h-7 text-xs rounded-sm"
                                                 />
                                             </div>
                                         </div>
 
                                         {/* Unit Rate: Cost Codes */}
-                                        <div className="rounded-lg border p-3 space-y-3">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-2">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Cost Codes
                                             </h4>
 
                                             {/* Cost Code Search */}
                                             <div className="relative">
-                                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                                <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
                                                 <Input
                                                     value={costCodeSearch}
                                                     onChange={(e) => setCostCodeSearch(e.target.value)}
                                                     placeholder="Search cost codes..."
-                                                    className="h-9 pl-8"
+                                                    className="h-7 text-xs pl-7 rounded-sm"
                                                 />
                                                 {searchingCostCodes && (
-                                                    <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                                    <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
                                                 )}
                                                 {costCodeResults.length > 0 && (
-                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                                    <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
                                                         {costCodeResults.map((item) => (
                                                             <div
                                                                 key={item.id}
-                                                                className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted/50"
+                                                                className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
                                                                 onClick={() => addCostCode(item)}
                                                             >
                                                                 <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
@@ -706,15 +917,15 @@ export function ConditionManager({
 
                                             {/* Cost Code Lines */}
                                             {formCostCodes.length > 0 && (
-                                                <div className="space-y-2">
-                                                    <div className="grid grid-cols-[1fr_100px_28px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                                                <div className="space-y-0">
+                                                    <div className="grid grid-cols-[1fr_80px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
                                                         <span>Cost Code</span>
-                                                        <span>Unit Rate ($)</span>
+                                                        <span>Rate ($)</span>
                                                         <span />
                                                     </div>
                                                     {formCostCodes.map((cc, idx) => (
-                                                        <div key={idx} className="grid grid-cols-[1fr_100px_28px] gap-1.5 items-center">
-                                                            <div className="text-xs truncate" title={`${cc.code} - ${cc.description}`}>
+                                                        <div key={idx} className="grid grid-cols-[1fr_80px_24px] gap-1 items-center border-b border-border/50 py-0.5">
+                                                            <div className="text-[11px] truncate" title={`${cc.code} - ${cc.description}`}>
                                                                 <span className="font-mono text-muted-foreground">{cc.code}</span>{' '}
                                                                 <span>{cc.description}</span>
                                                             </div>
@@ -724,23 +935,21 @@ export function ConditionManager({
                                                                 min="0"
                                                                 value={cc.unit_rate}
                                                                 onChange={(e) => updateCostCodeRate(idx, e.target.value)}
-                                                                className="h-7 text-xs"
+                                                                className="h-6 text-[11px] rounded-sm"
                                                             />
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                                            <button
+                                                                className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
                                                                 onClick={() => removeCostCode(idx)}
                                                             >
-                                                                <X className="h-3 w-3" />
-                                                            </Button>
+                                                                <X className="h-2.5 w-2.5" />
+                                                            </button>
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
 
                                             {formCostCodes.length === 0 && (
-                                                <p className="text-[10px] text-muted-foreground text-center py-4">
+                                                <p className="text-[10px] text-muted-foreground text-center py-3">
                                                     Search and add cost codes above.
                                                 </p>
                                             )}
@@ -749,14 +958,14 @@ export function ConditionManager({
                                 ) : (
                                     <>
                                         {/* Build-Up: Labour Section */}
-                                        <div className="rounded-lg border p-3 space-y-3">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-2">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Labour
                                             </h4>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Rate Source</Label>
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Rate Source</Label>
                                                 <Select value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
-                                                    <SelectTrigger className="h-9">
+                                                    <SelectTrigger className="h-7 text-xs rounded-sm">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -767,8 +976,8 @@ export function ConditionManager({
                                             </div>
 
                                             {formLabourSource === 'manual' ? (
-                                                <div className="grid gap-2">
-                                                    <Label className="text-xs">All-in Hourly Rate ($)</Label>
+                                                <div className="grid gap-1">
+                                                    <Label className="text-[11px]">All-in Hourly Rate ($)</Label>
                                                     <Input
                                                         type="number"
                                                         step="0.01"
@@ -776,14 +985,14 @@ export function ConditionManager({
                                                         value={formManualRate}
                                                         onChange={(e) => setFormManualRate(e.target.value)}
                                                         placeholder="e.g. 85.00"
-                                                        className="h-9"
+                                                        className="h-7 text-xs rounded-sm"
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="grid gap-2">
-                                                    <Label className="text-xs">Pay Rate Template</Label>
+                                                <div className="grid gap-1">
+                                                    <Label className="text-[11px]">Pay Rate Template</Label>
                                                     <Select value={formTemplateId} onValueChange={setFormTemplateId}>
-                                                        <SelectTrigger className="h-9">
+                                                        <SelectTrigger className="h-7 text-xs rounded-sm">
                                                             <SelectValue placeholder="Select template..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -798,8 +1007,8 @@ export function ConditionManager({
                                                 </div>
                                             )}
 
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Production Rate (units/hour)</Label>
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Production Rate (units/hour)</Label>
                                                 <Input
                                                     type="number"
                                                     step="0.01"
@@ -807,43 +1016,43 @@ export function ConditionManager({
                                                     value={formProductionRate}
                                                     onChange={(e) => setFormProductionRate(e.target.value)}
                                                     placeholder="e.g. 5.0"
-                                                    className="h-9"
+                                                    className="h-7 text-xs rounded-sm"
                                                 />
-                                                <p className="text-[10px] text-muted-foreground">
+                                                <p className="text-[9px] text-muted-foreground">
                                                     How many units of measurement a worker completes per hour.
                                                 </p>
                                             </div>
                                         </div>
 
                                         {/* Build-Up: Materials Section */}
-                                        <div className="rounded-lg border p-3 space-y-3">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-2">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Materials
                                             </h4>
 
                                             {/* Material Search */}
                                             <div className="relative">
-                                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                                <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
                                                 <Input
                                                     value={materialSearch}
                                                     onChange={(e) => setMaterialSearch(e.target.value)}
-                                                    placeholder="Search materials by code or description..."
-                                                    className="h-9 pl-8"
+                                                    placeholder="Search materials..."
+                                                    className="h-7 text-xs pl-7 rounded-sm"
                                                 />
                                                 {searchingMaterials && (
-                                                    <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                                    <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
                                                 )}
                                                 {materialResults.length > 0 && (
-                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                                    <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
                                                         {materialResults.map((item) => (
                                                             <div
                                                                 key={item.id}
-                                                                className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted/50"
+                                                                className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
                                                                 onClick={() => addMaterial(item)}
                                                             >
                                                                 <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
                                                                 <span className="truncate flex-1">{item.description}</span>
-                                                                <span className="shrink-0 font-medium">${item.effective_unit_cost.toFixed(2)}</span>
+                                                                <span className="shrink-0 font-mono font-medium">${item.effective_unit_cost.toFixed(2)}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -852,17 +1061,17 @@ export function ConditionManager({
 
                                             {/* Material Lines */}
                                             {formMaterials.length > 0 && (
-                                                <div className="space-y-2">
-                                                    <div className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+                                                <div className="space-y-0">
+                                                    <div className="grid grid-cols-[1fr_60px_60px_60px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
                                                         <span>Material</span>
                                                         <span>Qty/Unit</span>
                                                         <span>Waste %</span>
-                                                        <span>Unit Cost</span>
+                                                        <span>$/Unit</span>
                                                         <span />
                                                     </div>
                                                     {formMaterials.map((m, idx) => (
-                                                        <div key={idx} className="grid grid-cols-[1fr_80px_80px_80px_28px] gap-1.5 items-center">
-                                                            <div className="text-xs truncate" title={`${m.code} - ${m.description}`}>
+                                                        <div key={idx} className="grid grid-cols-[1fr_60px_60px_60px_24px] gap-1 items-center border-b border-border/50 py-0.5">
+                                                            <div className="text-[11px] truncate" title={`${m.code} - ${m.description}`}>
                                                                 <span className="font-mono text-muted-foreground">{m.code}</span>{' '}
                                                                 <span>{m.description}</span>
                                                             </div>
@@ -872,7 +1081,7 @@ export function ConditionManager({
                                                                 min="0"
                                                                 value={m.qty_per_unit}
                                                                 onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
-                                                                className="h-7 text-xs"
+                                                                className="h-6 text-[11px] rounded-sm"
                                                             />
                                                             <Input
                                                                 type="number"
@@ -881,26 +1090,24 @@ export function ConditionManager({
                                                                 max="100"
                                                                 value={m.waste_percentage}
                                                                 onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
-                                                                className="h-7 text-xs"
+                                                                className="h-6 text-[11px] rounded-sm"
                                                             />
-                                                            <div className="text-xs text-right font-medium pr-1">
+                                                            <div className="text-[11px] text-right font-mono font-medium pr-0.5">
                                                                 ${m.unit_cost.toFixed(2)}
                                                             </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                                            <button
+                                                                className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
                                                                 onClick={() => removeMaterial(idx)}
                                                             >
-                                                                <X className="h-3 w-3" />
-                                                            </Button>
+                                                                <X className="h-2.5 w-2.5" />
+                                                            </button>
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
 
                                             {formMaterials.length === 0 && (
-                                                <p className="text-[10px] text-muted-foreground text-center py-4">
+                                                <p className="text-[10px] text-muted-foreground text-center py-3">
                                                     Search and add materials above.
                                                 </p>
                                             )}
@@ -908,11 +1115,23 @@ export function ConditionManager({
                                     </>
                                 )}
 
+                                {/* 8. Notes */}
+                                <div className="grid gap-1">
+                                    <Label className="text-[11px] font-semibold">Notes</Label>
+                                    <Textarea
+                                        value={formDescription}
+                                        onChange={(e) => setFormDescription(e.target.value)}
+                                        placeholder="Notes about this condition..."
+                                        className="h-14 resize-none text-xs rounded-sm"
+                                    />
+                                </div>
+
                                 {/* Save / Cancel */}
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end gap-1.5 border-t pt-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
+                                        className="h-7 rounded-sm text-[11px]"
                                         onClick={() => {
                                             setCreating(false);
                                             setEditing(false);
@@ -920,10 +1139,10 @@ export function ConditionManager({
                                     >
                                         Cancel
                                     </Button>
-                                    <Button size="sm" onClick={handleSave} disabled={saving || !formName.trim()}>
+                                    <Button size="sm" className="h-7 rounded-sm text-[11px]" onClick={handleSave} disabled={saving || !formName.trim()}>
                                         {saving ? (
                                             <>
-                                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                                                 Saving...
                                             </>
                                         ) : editing ? (
@@ -936,54 +1155,110 @@ export function ConditionManager({
                             </div>
                         ) : selectedCondition ? (
                             /* View Mode */
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div
-                                            className="h-4 w-4 rounded-sm"
-                                            style={{ backgroundColor: selectedCondition.color }}
-                                        />
-                                        <h3 className="font-semibold">{selectedCondition.name}</h3>
-                                        <Badge variant="secondary" className="text-[10px]">
-                                            {TYPE_LABELS[selectedCondition.type]}
-                                        </Badge>
-                                        <Badge variant="outline" className="text-[10px]">
-                                            {selectedCondition.pricing_method === 'unit_rate' ? 'Unit Rate' : 'Build-Up'}
-                                        </Badge>
-                                    </div>
-                                    <Button size="sm" variant="outline" onClick={handleEdit}>
-                                        <Pencil className="h-3 w-3 mr-1" />
+                            <div className="space-y-2">
+                                {/* Header with name + edit button */}
+                                <div className="flex items-center gap-1.5 border-b pb-2">
+                                    <div
+                                        className="h-3 w-3 shrink-0 rounded-[2px]"
+                                        style={{ backgroundColor: selectedCondition.color }}
+                                    />
+                                    <h3 className="flex-1 truncate text-sm font-semibold">
+                                        {selectedCondition.condition_number != null && (
+                                            <span className="font-mono text-[11px] text-muted-foreground mr-1">#{selectedCondition.condition_number}</span>
+                                        )}
+                                        {selectedCondition.name}
+                                    </h3>
+                                    <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                                        {STYLE_LABELS[selectedCondition.type]}
+                                    </span>
+                                    <span className="rounded-sm border px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                                        {selectedCondition.pricing_method === 'unit_rate' ? 'UR' : 'BU'}
+                                    </span>
+                                    <Button size="sm" variant="outline" className="h-6 rounded-sm text-[11px] gap-1" onClick={handleEdit}>
+                                        <Pencil className="h-2.5 w-2.5" />
                                         Edit
                                     </Button>
                                 </div>
 
-                                {selectedCondition.description && (
-                                    <p className="text-xs text-muted-foreground">{selectedCondition.description}</p>
+                                {selectedCondition.condition_type && (
+                                    <div className="text-[11px]">
+                                        <span className="text-muted-foreground">Type:</span>{' '}
+                                        <span className="rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium">
+                                            {selectedCondition.condition_type.name}
+                                        </span>
+                                    </div>
                                 )}
+
+                                {/* General Info */}
+                                {(selectedCondition.height || selectedCondition.thickness) && (
+                                    <div className="rounded-sm border p-2 space-y-1">
+                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                            General
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                                            {selectedCondition.height && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Height:</span>{' '}
+                                                    <span className="font-mono font-medium">{selectedCondition.height}m</span>
+                                                </div>
+                                            )}
+                                            {selectedCondition.thickness && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Thickness:</span>{' '}
+                                                    <span className="font-mono font-medium">{selectedCondition.thickness}m</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Appearance */}
+                                <div className="rounded-sm border p-2 space-y-1">
+                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Appearance
+                                    </h4>
+                                    <div className="flex items-center gap-3 text-[11px]">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="h-3 w-3 rounded-[2px]" style={{ backgroundColor: selectedCondition.color }} />
+                                            <span className="font-mono text-muted-foreground">{selectedCondition.color}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <svg width="28" height="4">
+                                                <line
+                                                    x1="0" y1="2" x2="28" y2="2"
+                                                    stroke={selectedCondition.color}
+                                                    strokeWidth="2"
+                                                    strokeDasharray={PATTERN_OPTIONS.find((p) => p.value === selectedCondition.pattern)?.dash || 'none'}
+                                                />
+                                            </svg>
+                                            <span className="text-muted-foreground capitalize">{selectedCondition.pattern}</span>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 {selectedCondition.pricing_method === 'unit_rate' ? (
                                     <>
                                         {/* Unit Rate View */}
-                                        {selectedCondition.type === 'linear' && selectedCondition.wall_height && (
-                                            <div className="rounded-lg border p-3 space-y-2">
-                                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        {selectedCondition.type === 'linear' && selectedCondition.height && (
+                                            <div className="rounded-sm border p-2 space-y-1">
+                                                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                     Conversion
                                                 </h4>
-                                                <div className="text-xs">
-                                                    <span className="text-muted-foreground">Wall Height:</span>{' '}
-                                                    <span className="font-medium">{selectedCondition.wall_height}m</span>
-                                                    <span className="text-muted-foreground ml-2">(lm x {selectedCondition.wall_height} = m2)</span>
+                                                <div className="text-[11px]">
+                                                    <span className="text-muted-foreground">Height:</span>{' '}
+                                                    <span className="font-mono font-medium">{selectedCondition.height}m</span>
+                                                    <span className="text-muted-foreground ml-1.5">(lm x {selectedCondition.height} = m2)</span>
                                                 </div>
                                             </div>
                                         )}
 
-                                        <div className="rounded-lg border p-3 space-y-2">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-1">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Labour
                                             </h4>
-                                            <div className="text-xs">
+                                            <div className="text-[11px]">
                                                 <span className="text-muted-foreground">Rate:</span>{' '}
-                                                <span className="font-medium">
+                                                <span className="font-mono font-medium">
                                                     {selectedCondition.labour_unit_rate
                                                         ? `$${selectedCondition.labour_unit_rate.toFixed(2)}/unit`
                                                         : 'Not set'}
@@ -991,21 +1266,19 @@ export function ConditionManager({
                                             </div>
                                         </div>
 
-                                        <div className="rounded-lg border p-3 space-y-2">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-1">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Cost Codes ({(selectedCondition.cost_codes || []).length})
                                             </h4>
                                             {(selectedCondition.cost_codes || []).length > 0 ? (
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-0">
                                                     {(selectedCondition.cost_codes || []).map((cc, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                        <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
                                                             <div className="flex-1 truncate">
                                                                 <span className="font-mono text-muted-foreground">{cc.cost_code?.code}</span>{' '}
                                                                 <span>{cc.cost_code?.description}</span>
                                                             </div>
-                                                            <div className="shrink-0 text-right ml-2">
-                                                                <span className="font-medium">${cc.unit_rate.toFixed(2)}/unit</span>
-                                                            </div>
+                                                            <span className="shrink-0 font-mono font-medium ml-2">${cc.unit_rate.toFixed(2)}/unit</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -1017,58 +1290,58 @@ export function ConditionManager({
                                 ) : (
                                     <>
                                         {/* Build-Up View */}
-                                        <div className="rounded-lg border p-3 space-y-2">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-1">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Labour
                                             </h4>
-                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="grid grid-cols-2 gap-1 text-[11px]">
                                                 <div>
-                                                    <span className="text-muted-foreground">Rate Source:</span>{' '}
+                                                    <span className="text-muted-foreground">Source:</span>{' '}
                                                     <span className="font-medium">
                                                         {selectedCondition.labour_rate_source === 'manual' ? 'Manual' : 'Template'}
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-muted-foreground">Hourly Rate:</span>{' '}
-                                                    <span className="font-medium">
+                                                    <span className="text-muted-foreground">Rate:</span>{' '}
+                                                    <span className="font-mono font-medium">
                                                         {selectedCondition.labour_rate_source === 'manual'
                                                             ? selectedCondition.manual_labour_rate
-                                                                ? `$${selectedCondition.manual_labour_rate.toFixed(2)}`
-                                                                : 'Not set'
+                                                                ? `$${selectedCondition.manual_labour_rate.toFixed(2)}/hr`
+                                                                : '—'
                                                             : selectedCondition.pay_rate_template?.hourly_rate
-                                                                ? `$${parseFloat(String(selectedCondition.pay_rate_template.hourly_rate)).toFixed(2)}`
-                                                                : 'Not set'}
+                                                                ? `$${parseFloat(String(selectedCondition.pay_rate_template.hourly_rate)).toFixed(2)}/hr`
+                                                                : '—'}
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-muted-foreground">Production Rate:</span>{' '}
-                                                    <span className="font-medium">
+                                                    <span className="text-muted-foreground">Prod. Rate:</span>{' '}
+                                                    <span className="font-mono font-medium">
                                                         {selectedCondition.production_rate
-                                                            ? `${selectedCondition.production_rate} units/hr`
-                                                            : 'Not set'}
+                                                            ? `${selectedCondition.production_rate} u/hr`
+                                                            : '—'}
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="rounded-lg border p-3 space-y-2">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="rounded-sm border p-2 space-y-1">
+                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                                 Materials ({selectedCondition.materials.length})
                                             </h4>
                                             {selectedCondition.materials.length > 0 ? (
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-0">
                                                     {selectedCondition.materials.map((m, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                        <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
                                                             <div className="flex-1 truncate">
                                                                 <span className="font-mono text-muted-foreground">{m.material_item?.code}</span>{' '}
                                                                 <span>{m.material_item?.description}</span>
                                                             </div>
-                                                            <div className="shrink-0 text-right ml-2">
+                                                            <div className="shrink-0 text-right ml-2 font-mono">
                                                                 <span className="font-medium">{m.qty_per_unit}</span>
                                                                 {m.waste_percentage > 0 && (
-                                                                    <span className="text-muted-foreground ml-1">(+{m.waste_percentage}%)</span>
+                                                                    <span className="text-muted-foreground ml-0.5">(+{m.waste_percentage}%)</span>
                                                                 )}
-                                                                <span className="text-muted-foreground ml-2">
+                                                                <span className="text-muted-foreground ml-1">
                                                                     @ ${(m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0))).toFixed(2)}
                                                                 </span>
                                                             </div>
@@ -1081,17 +1354,26 @@ export function ConditionManager({
                                         </div>
                                     </>
                                 )}
+
+                                {selectedCondition.description && (
+                                    <div className="rounded-sm border p-2 space-y-1">
+                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Notes
+                                        </h4>
+                                        <p className="text-[11px] text-muted-foreground">{selectedCondition.description}</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
-                            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                            <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
                                 Select a condition or create a new one.
                             </div>
                         )}
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                <DialogFooter className="border-t px-4 py-2">
+                    <Button variant="outline" size="sm" className="h-7 rounded-sm text-[11px]" onClick={() => onOpenChange(false)}>
                         Close
                     </Button>
                 </DialogFooter>

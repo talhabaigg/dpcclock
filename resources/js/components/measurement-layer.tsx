@@ -49,9 +49,17 @@ type MeasurementLayerProps = {
     measurements: MeasurementData[];
     selectedMeasurementId: number | null;
     calibration: CalibrationData | null;
+    conditionPatterns?: Record<number, string>;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
     onMeasurementClick?: (measurement: MeasurementData) => void;
+};
+
+const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
+    solid: undefined,
+    dashed: '12, 6',
+    dotted: '3, 5',
+    dashdot: '12, 5, 3, 5',
 };
 
 function computePixelDistance(p1: Point, p2: Point, pixelW: number, pixelH: number): number {
@@ -110,6 +118,7 @@ export function MeasurementLayer({
     measurements,
     selectedMeasurementId,
     calibration,
+    conditionPatterns,
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
@@ -226,11 +235,14 @@ export function MeasurementLayer({
                     summaryMarker.addTo(group);
                 }
             } else if (m.type === 'linear') {
+                const pattern = m.takeoff_condition_id && conditionPatterns
+                    ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                    : 'solid';
                 const line = L.polyline(latlngs, {
                     color: m.color,
                     weight,
                     opacity,
-                    dashArray: isSelected ? undefined : undefined,
+                    dashArray: PATTERN_DASH_ARRAYS[pattern],
                 });
 
                 // Add vertex circles
@@ -254,12 +266,16 @@ export function MeasurementLayer({
                 });
                 line.addTo(group);
             } else {
+                const areaPattern = m.takeoff_condition_id && conditionPatterns
+                    ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                    : 'solid';
                 const polygon = L.polygon(latlngs, {
                     color: m.color,
                     weight,
                     opacity,
                     fillColor: m.color,
                     fillOpacity: isSelected ? 0.25 : 0.15,
+                    dashArray: PATTERN_DASH_ARRAYS[areaPattern],
                 });
 
                 // Add vertex circles
@@ -284,7 +300,7 @@ export function MeasurementLayer({
                 polygon.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns]);
 
     // Render calibration line
     useEffect(() => {
@@ -426,7 +442,7 @@ export function MeasurementLayer({
             });
         } else if (viewMode === 'measure_count') {
             // Render placed count markers
-            latlngs.forEach((ll, idx) => {
+            latlngs.forEach((ll) => {
                 L.circleMarker(ll, {
                     radius: 8,
                     color: '#8b5cf6',

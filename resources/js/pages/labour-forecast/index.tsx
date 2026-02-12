@@ -6,7 +6,7 @@ import { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { BarChart3, Building2, DollarSign, MapPin, TrendingUp, Users } from 'lucide-react';
+import { BarChart3, Building2, DollarSign, TrendingUp, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { buildLabourForecastColumnDefs } from './column-builders';
 import { CostBreakdownDialog } from './CostBreakdownDialog';

@@ -10,12 +10,16 @@ class TakeoffCondition extends Model
 {
     protected $fillable = [
         'location_id',
+        'condition_type_id',
         'name',
+        'condition_number',
         'type',
         'color',
+        'pattern',
         'description',
         'pricing_method',
-        'wall_height',
+        'height',
+        'thickness',
         'labour_unit_rate',
         'labour_rate_source',
         'manual_labour_rate',
@@ -27,8 +31,10 @@ class TakeoffCondition extends Model
     protected $casts = [
         'manual_labour_rate' => 'float',
         'production_rate' => 'float',
-        'wall_height' => 'float',
+        'height' => 'float',
+        'thickness' => 'float',
         'labour_unit_rate' => 'float',
+        'condition_number' => 'integer',
     ];
 
     protected static function booted()
@@ -37,12 +43,23 @@ class TakeoffCondition extends Model
             if ($model->created_by === null) {
                 $model->created_by = auth()->id();
             }
+
+            // Auto-assign condition_number per location
+            if ($model->condition_number === null && $model->location_id) {
+                $maxNumber = static::where('location_id', $model->location_id)->max('condition_number') ?? 0;
+                $model->condition_number = $maxNumber + 1;
+            }
         });
     }
 
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class);
+    }
+
+    public function conditionType(): BelongsTo
+    {
+        return $this->belongsTo(ConditionType::class);
     }
 
     public function materials(): HasMany
@@ -72,7 +89,7 @@ class TakeoffCondition extends Model
 
     /**
      * Get the multiplier for converting measured quantity to pricing quantity.
-     * For unit_rate + linear type with wall_height, converts lm to m2.
+     * For unit_rate + linear type with height, converts lm to m2.
      */
     public function getUnitRateMultiplierAttribute(): float
     {
@@ -80,8 +97,8 @@ class TakeoffCondition extends Model
             return 1.0;
         }
 
-        if ($this->type === 'linear' && $this->wall_height && $this->wall_height > 0) {
-            return $this->wall_height;
+        if ($this->type === 'linear' && $this->height && $this->height > 0) {
+            return $this->height;
         }
 
         return 1.0;
