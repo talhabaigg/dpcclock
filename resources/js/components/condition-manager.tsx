@@ -246,14 +246,18 @@ export function ConditionManager({
                 credentials: 'same-origin',
                 body: JSON.stringify({ name: newTypeName.trim() }),
             });
-            if (!res.ok) throw new Error('Failed');
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                const msg = errorData?.message || `Server returned ${res.status}`;
+                throw new Error(msg);
+            }
             const created = await res.json();
             setConditionTypes((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
             setFormConditionTypeId(created.id.toString());
             setNewTypeName('');
             toast.success(`Type "${created.name}" created.`);
-        } catch {
-            toast.error('Failed to create type.');
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to create type.');
         } finally {
             setCreatingType(false);
         }
