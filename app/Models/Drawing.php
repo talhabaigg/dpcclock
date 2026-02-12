@@ -144,6 +144,16 @@ class Drawing extends Model
         return $this->hasMany(DrawingObservation::class, 'drawing_id');
     }
 
+    public function measurements()
+    {
+        return $this->hasMany(DrawingMeasurement::class, 'drawing_id');
+    }
+
+    public function scaleCalibration()
+    {
+        return $this->hasOne(DrawingScaleCalibration::class, 'drawing_id');
+    }
+
     public function previousRevision()
     {
         return $this->belongsTo(self::class, 'previous_revision_id');

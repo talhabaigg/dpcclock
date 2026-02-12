@@ -9,6 +9,7 @@ use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
+use App\Http\Controllers\DrawingMeasurementController;
 use App\Http\Controllers\DrawingObservationController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
@@ -566,6 +567,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'destroy'])->name('drawings.observations.destroy');
         Route::post('/drawings/{drawing}/observations/{observation}/describe', [DrawingObservationController::class, 'describe'])->name('drawings.observations.describe');
         Route::get('/drawing-observations/{observation}/photo', [DrawingObservationController::class, 'photo'])->name('drawings.observations.photo');
+    });
+
+    // Drawing Measurements & Takeoff
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::get('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'index'])->name('drawings.measurements.index');
+        Route::post('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'store'])->name('drawings.measurements.store');
+        Route::put('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'update'])->name('drawings.measurements.update');
+        Route::delete('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'destroy'])->name('drawings.measurements.destroy');
+        Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
+        Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
+        Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
     });
 
     // Drawing Alignment

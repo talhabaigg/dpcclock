@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import { Loader2, Maximize, MinusCircle, PlusCircle, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MeasurementLayer, type CalibrationData, type MeasurementData, type Point, type ViewMode } from './measurement-layer';
 import { Button } from './ui/button';
 
 export type Observation = {
@@ -37,11 +38,18 @@ type LeafletDrawingViewerProps = {
     comparisonOpacity?: number;
     observations?: Observation[];
     selectedObservationIds?: Set<number>;
-    viewMode?: 'pan' | 'select';
+    viewMode?: ViewMode;
     onObservationClick?: (observation: Observation) => void;
     onMapClick?: (x: number, y: number) => void;
     onSelectionRectComplete?: (observations: Observation[]) => void;
     className?: string;
+    // Measurement/takeoff props
+    measurements?: MeasurementData[];
+    selectedMeasurementId?: number | null;
+    calibration?: CalibrationData | null;
+    onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
+    onMeasurementComplete?: (points: Point[], type: 'linear' | 'area') => void;
+    onMeasurementClick?: (measurement: MeasurementData) => void;
 };
 
 // Custom marker icon for observations
@@ -113,7 +121,7 @@ function MapEventHandler({
 }: {
     observations: Observation[];
     selectedObservationIds: Set<number>;
-    viewMode: 'pan' | 'select';
+    viewMode: ViewMode;
     imageHeight: number;
     imageWidth: number;
     onObservationClick?: (observation: Observation) => void;
@@ -290,6 +298,12 @@ export function LeafletDrawingViewer({
     onObservationClick,
     onMapClick,
     className = '',
+    measurements = [],
+    selectedMeasurementId = null,
+    calibration = null,
+    onCalibrationComplete,
+    onMeasurementComplete,
+    onMeasurementClick,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
     const previewPinRef = useRef<HTMLDivElement>(null);
@@ -422,6 +436,20 @@ export function LeafletDrawingViewer({
                 <MapControlsInternal
                     bounds={imageBounds}
                 />
+
+                <MeasurementLayer
+                    viewMode={viewMode}
+                    imageWidth={imgCoordW}
+                    imageHeight={imgCoordH}
+                    pixelWidth={imageWidth}
+                    pixelHeight={imageHeight}
+                    measurements={measurements}
+                    selectedMeasurementId={selectedMeasurementId}
+                    calibration={calibration}
+                    onCalibrationComplete={onCalibrationComplete}
+                    onMeasurementComplete={onMeasurementComplete}
+                    onMeasurementClick={onMeasurementClick}
+                />
             </MapContainer>
 
             {/* Preview pin overlay — positioned via ref, no React re-renders on mousemove */}
@@ -464,9 +492,37 @@ export function LeafletDrawingViewer({
                     image-rendering: -webkit-optimize-contrast;
                     image-rendering: auto;
                 }
+                .calibration-label {
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .measurement-tooltip {
+                    background: rgba(0,0,0,0.8) !important;
+                    color: #fff !important;
+                    border: none !important;
+                    border-radius: 4px !important;
+                    padding: 4px 8px !important;
+                    font-size: 12px !important;
+                }
+                .measurement-live-tooltip {
+                    background: rgba(0,0,0,0.85) !important;
+                    color: #fff !important;
+                    border: none !important;
+                    border-radius: 4px !important;
+                    padding: 4px 8px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    white-space: pre-line !important;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+                }
+                .measurement-live-tooltip::before {
+                    display: none !important;
+                }
             `}</style>
         </div>
     );
 }
 
+export type { CalibrationData, MeasurementData, Point, ViewMode };
 export default LeafletDrawingViewer;

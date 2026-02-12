@@ -1,5 +1,7 @@
 import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
+import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { PanoramaViewer } from '@/components/panorama-viewer';
+import { TakeoffPanel } from '@/components/takeoff-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,22 +17,29 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft,
+    Box,
     Camera,
     Download,
     Eye,
     GitCompare,
     Hand,
+    Hash,
     History,
     Layers,
     Loader2,
+    Maximize2,
     MousePointer,
+    Pencil,
+    PenLine,
     RotateCcw,
+    Ruler,
     Save,
+    Scale,
     Sparkles,
     Trash2,
     X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 type Project = {
@@ -220,8 +229,62 @@ export default function DrawingShow() {
     const [customPrompt, setCustomPrompt] = useState('');
     const [savingObservations, setSavingObservations] = useState(false);
 
-    // View mode: 'pan' for panning, 'select' for adding observations
-    const [viewMode, setViewMode] = useState<'pan' | 'select'>('pan');
+    // View mode: 'pan' for panning, 'select' for adding observations, measure modes
+    const [viewMode, setViewMode] = useState<ViewMode>('pan');
+
+    // Takeoff state
+    const [showTakeoffPanel, setShowTakeoffPanel] = useState(false);
+    const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
+    const [calibration, setCalibration] = useState<CalibrationData | null>(null);
+    const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
+
+    // Calibration dialog state
+    const [calibrationDialogOpen, setCalibrationDialogOpen] = useState(false);
+    const [calibrationMethod, setCalibrationMethod] = useState<'manual' | 'preset'>('preset');
+    const [pendingCalibrationPoints, setPendingCalibrationPoints] = useState<{ a: Point; b: Point } | null>(null);
+    const [calibrationDistance, setCalibrationDistance] = useState('');
+    const [calibrationUnit, setCalibrationUnit] = useState('m');
+    const [calibrationPaperSize, setCalibrationPaperSize] = useState('A1');
+    const [calibrationScale, setCalibrationScale] = useState('1:50');
+    const [customScale, setCustomScale] = useState('');
+    const [savingCalibration, setSavingCalibration] = useState(false);
+
+    // Measurement dialog state
+    const [measurementDialogOpen, setMeasurementDialogOpen] = useState(false);
+    const [pendingMeasurementData, setPendingMeasurementData] = useState<{ points: Point[]; type: 'linear' | 'area' | 'count' } | null>(null);
+    const [editingMeasurement, setEditingMeasurement] = useState<MeasurementData | null>(null);
+    const [measurementName, setMeasurementName] = useState('');
+    const [measurementCategory, setMeasurementCategory] = useState('');
+    const [measurementColor, setMeasurementColor] = useState('#3b82f6');
+    const [savingMeasurement, setSavingMeasurement] = useState(false);
+
+    const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+    const PAPER_SIZES = ['A0', 'A1', 'A2', 'A3', 'A4'];
+    const SCALE_OPTIONS = ['1:1', '1:2', '1:5', '1:10', '1:20', '1:25', '1:50', '1:100', '1:200', '1:250', '1:500', '1:1000', 'Custom'];
+    const UNIT_OPTIONS = [
+        { value: 'mm', label: 'mm' },
+        { value: 'cm', label: 'cm' },
+        { value: 'm', label: 'm' },
+        { value: 'in', label: 'in' },
+        { value: 'ft', label: 'ft' },
+    ];
+
+    // Load measurements and calibration on mount
+    useEffect(() => {
+        fetch(`/drawings/${drawing.id}/measurements`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setMeasurements(data.measurements || []);
+                setCalibration(data.calibration || null);
+            })
+            .catch(() => {});
+    }, [drawing.id]);
+
+    // Existing categories for datalist
+    const existingCategories = [...new Set(measurements.map((m) => m.category).filter(Boolean))] as string[];
 
     const resetDialog = () => {
         setPendingPoint(null);
@@ -709,6 +772,203 @@ export default function DrawingShow() {
         handleAICompare(customPrompt || undefined);
     };
 
+    // ---- Takeoff Handlers ----
+
+    const handleCalibrationComplete = (pointA: Point, pointB: Point) => {
+        setPendingCalibrationPoints({ a: pointA, b: pointB });
+        setCalibrationMethod('manual');
+        setCalibrationDialogOpen(true);
+        setViewMode('pan');
+    };
+
+    const handleSaveCalibration = async () => {
+        setSavingCalibration(true);
+        try {
+            let body: Record<string, unknown>;
+            if (calibrationMethod === 'manual') {
+                if (!pendingCalibrationPoints) {
+                    toast.error('Draw a reference line first.');
+                    setSavingCalibration(false);
+                    return;
+                }
+                body = {
+                    method: 'manual',
+                    point_a_x: pendingCalibrationPoints.a.x,
+                    point_a_y: pendingCalibrationPoints.a.y,
+                    point_b_x: pendingCalibrationPoints.b.x,
+                    point_b_y: pendingCalibrationPoints.b.y,
+                    real_distance: parseFloat(calibrationDistance),
+                    unit: calibrationUnit,
+                };
+            } else {
+                const scaleValue = calibrationScale === 'Custom' ? customScale : calibrationScale;
+                body = {
+                    method: 'preset',
+                    paper_size: calibrationPaperSize,
+                    drawing_scale: scaleValue,
+                    unit: calibrationUnit,
+                };
+            }
+
+            const response = await fetch(`/drawings/${drawing.id}/calibration`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            });
+
+            if (!response.ok) throw new Error('Failed to save calibration');
+
+            const data = await response.json();
+            setCalibration(data.calibration);
+            setMeasurements(data.measurements || []);
+            setCalibrationDialogOpen(false);
+            setPendingCalibrationPoints(null);
+            toast.success('Scale calibration saved.');
+        } catch {
+            toast.error('Failed to save calibration.');
+        } finally {
+            setSavingCalibration(false);
+        }
+    };
+
+    const handleDeleteCalibration = async () => {
+        if (!confirm('Delete scale calibration? Measurement values will be cleared.')) return;
+        try {
+            await fetch(`/drawings/${drawing.id}/calibration`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+            setCalibration(null);
+            setMeasurements((prev) => prev.map((m) => ({ ...m, computed_value: null, unit: null })));
+            toast.success('Calibration deleted.');
+        } catch {
+            toast.error('Failed to delete calibration.');
+        }
+    };
+
+    const handleMeasurementComplete = (points: Point[], type: 'linear' | 'area' | 'count') => {
+        setPendingMeasurementData({ points, type });
+        setEditingMeasurement(null);
+        setMeasurementName('');
+        setMeasurementCategory('');
+        setMeasurementColor('#3b82f6');
+        setMeasurementDialogOpen(true);
+    };
+
+    const handleSaveMeasurement = async () => {
+        const name = measurementName.trim();
+        if (!name) {
+            toast.error('Enter a name for the measurement.');
+            return;
+        }
+
+        setSavingMeasurement(true);
+        try {
+            if (editingMeasurement) {
+                const response = await fetch(`/drawings/${drawing.id}/measurements/${editingMeasurement.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-XSRF-TOKEN': getXsrfToken(),
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        name,
+                        category: measurementCategory || null,
+                        color: measurementColor,
+                    }),
+                });
+                if (!response.ok) throw new Error('Failed to update');
+                const updated = await response.json();
+                setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+                toast.success('Measurement updated.');
+            } else if (pendingMeasurementData) {
+                const response = await fetch(`/drawings/${drawing.id}/measurements`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-XSRF-TOKEN': getXsrfToken(),
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        name,
+                        type: pendingMeasurementData.type,
+                        color: measurementColor,
+                        category: measurementCategory || null,
+                        points: pendingMeasurementData.points,
+                    }),
+                });
+                if (!response.ok) throw new Error('Failed to save');
+                const saved = await response.json();
+                setMeasurements((prev) => [...prev, saved]);
+                toast.success('Measurement saved.');
+            }
+            setMeasurementDialogOpen(false);
+            setPendingMeasurementData(null);
+            setEditingMeasurement(null);
+        } catch {
+            toast.error('Failed to save measurement.');
+        } finally {
+            setSavingMeasurement(false);
+        }
+    };
+
+    const handleDeleteMeasurement = async (measurement: MeasurementData) => {
+        if (!confirm(`Delete "${measurement.name}"?`)) return;
+        try {
+            await fetch(`/drawings/${drawing.id}/measurements/${measurement.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+            setMeasurements((prev) => prev.filter((m) => m.id !== measurement.id));
+            if (selectedMeasurementId === measurement.id) setSelectedMeasurementId(null);
+            toast.success('Measurement deleted.');
+        } catch {
+            toast.error('Failed to delete measurement.');
+        }
+    };
+
+    const handleEditMeasurement = (measurement: MeasurementData) => {
+        setEditingMeasurement(measurement);
+        setPendingMeasurementData(null);
+        setMeasurementName(measurement.name);
+        setMeasurementCategory(measurement.category || '');
+        setMeasurementColor(measurement.color);
+        setMeasurementDialogOpen(true);
+    };
+
+    const handleOpenCalibrationDialog = (method: 'manual' | 'preset') => {
+        if (method === 'manual') {
+            setViewMode('calibrate');
+            setShowTakeoffPanel(true);
+        } else {
+            setCalibrationMethod('preset');
+            setCalibrationDialogOpen(true);
+        }
+    };
+
     // Determine comparison image URL
     const comparisonImageUrl = showCompareOverlay
         ? (!compareRevisionId && hasDiffImage
@@ -816,6 +1076,67 @@ export default function DrawingShow() {
                             <MousePointer className="h-3.5 w-3.5" />
                         </Button>
                     </div>
+
+                    <div className="bg-border h-4 w-px" />
+
+                    {/* Takeoff Tools */}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={showTakeoffPanel ? 'secondary' : 'outline'}
+                        onClick={() => setShowTakeoffPanel(!showTakeoffPanel)}
+                        className="h-7 gap-1.5 px-2 text-xs"
+                    >
+                        <Ruler className="h-3.5 w-3.5" />
+                        Takeoff
+                    </Button>
+
+                    {showTakeoffPanel && (
+                        <div className="bg-background flex items-center rounded-md border p-0.5">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
+                                onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
+                                className="h-7 px-2"
+                                title="Calibrate scale (draw reference line)"
+                            >
+                                <Scale className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
+                                onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
+                                className="h-7 px-2"
+                                title={!calibration ? 'Set scale first' : 'Measure line'}
+                                disabled={!calibration}
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
+                                onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
+                                className="h-7 px-2"
+                                title={!calibration ? 'Set scale first' : 'Measure area'}
+                                disabled={!calibration}
+                            >
+                                <Maximize2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
+                                onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
+                                className="h-7 px-2"
+                                title="Count items"
+                            >
+                                <Hash className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                    )}
 
                     <div className="bg-border h-4 w-px" />
 
@@ -988,40 +1309,66 @@ export default function DrawingShow() {
                     )}
                 </div>
 
-                {/* Main Viewer */}
-                <div className="relative flex-1 overflow-hidden">
-                    <LeafletDrawingViewer
-                        tiles={drawing.tiles_info || undefined}
-                        imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}
-                        comparisonImageUrl={comparisonImageUrl}
-                        comparisonOpacity={overlayOpacity}
-                        observations={serverObservations.map((obs) => ({
-                            ...obs,
-                            type: obs.type as 'defect' | 'observation',
-                        })) as LeafletObservation[]}
-                        selectedObservationIds={selectedObservationIds}
-                        viewMode={viewMode}
-                        onObservationClick={(obs) => {
-                            setPendingPoint(null);
-                            setEditingObservation(obs as unknown as Observation);
-                            setObservationType(obs.type);
-                            setDescription(obs.description);
-                            setPhotoFile(null);
-                            setIs360Photo((obs as unknown as Observation).is_360_photo ?? false);
-                            setDialogOpen(true);
-                        }}
-                        onMapClick={(x, y) => {
-                            if (viewMode !== 'select') return;
-                            setEditingObservation(null);
-                            setObservationType('defect');
-                            setDescription('');
-                            setPhotoFile(null);
-                            setIs360Photo(false);
-                            setPendingPoint({ pageNumber: 1, x, y });
-                            setDialogOpen(true);
-                        }}
-                        className="absolute inset-0"
-                    />
+                {/* Main Viewer + Takeoff Panel */}
+                <div className="relative flex flex-1 overflow-hidden">
+                    <div className="relative flex-1 overflow-hidden">
+                        <LeafletDrawingViewer
+                            tiles={drawing.tiles_info || undefined}
+                            imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}
+                            comparisonImageUrl={comparisonImageUrl}
+                            comparisonOpacity={overlayOpacity}
+                            observations={serverObservations.map((obs) => ({
+                                ...obs,
+                                type: obs.type as 'defect' | 'observation',
+                            })) as LeafletObservation[]}
+                            selectedObservationIds={selectedObservationIds}
+                            viewMode={viewMode}
+                            onObservationClick={(obs) => {
+                                setPendingPoint(null);
+                                setEditingObservation(obs as unknown as Observation);
+                                setObservationType(obs.type);
+                                setDescription(obs.description);
+                                setPhotoFile(null);
+                                setIs360Photo((obs as unknown as Observation).is_360_photo ?? false);
+                                setDialogOpen(true);
+                            }}
+                            onMapClick={(x, y) => {
+                                if (viewMode !== 'select') return;
+                                setEditingObservation(null);
+                                setObservationType('defect');
+                                setDescription('');
+                                setPhotoFile(null);
+                                setIs360Photo(false);
+                                setPendingPoint({ pageNumber: 1, x, y });
+                                setDialogOpen(true);
+                            }}
+                            measurements={measurements}
+                            selectedMeasurementId={selectedMeasurementId}
+                            calibration={calibration}
+                            onCalibrationComplete={handleCalibrationComplete}
+                            onMeasurementComplete={handleMeasurementComplete}
+                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                            className="absolute inset-0"
+                        />
+                    </div>
+
+                    {/* Takeoff Side Panel */}
+                    {showTakeoffPanel && (
+                        <div className="w-72 shrink-0 overflow-hidden border-l bg-background">
+                            <TakeoffPanel
+                                viewMode={viewMode}
+                                calibration={calibration}
+                                measurements={measurements}
+                                selectedMeasurementId={selectedMeasurementId}
+                                onSetViewMode={setViewMode}
+                                onOpenCalibrationDialog={handleOpenCalibrationDialog}
+                                onDeleteCalibration={handleDeleteCalibration}
+                                onMeasurementSelect={setSelectedMeasurementId}
+                                onMeasurementEdit={handleEditMeasurement}
+                                onMeasurementDelete={handleDeleteMeasurement}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1443,6 +1790,226 @@ export default function DrawingShow() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowAICompareDialog(false)}>
                             Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Calibration Dialog */}
+            <Dialog
+                open={calibrationDialogOpen}
+                onOpenChange={(open) => {
+                    setCalibrationDialogOpen(open);
+                    if (!open) {
+                        setPendingCalibrationPoints(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Scale className="h-4 w-4" />
+                            Set Scale
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                        {/* Method tabs */}
+                        <div className="bg-muted flex rounded-lg p-1">
+                            <button
+                                type="button"
+                                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                    calibrationMethod === 'preset' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                onClick={() => setCalibrationMethod('preset')}
+                            >
+                                Paper Scale
+                            </button>
+                            <button
+                                type="button"
+                                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                    calibrationMethod === 'manual' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                onClick={() => setCalibrationMethod('manual')}
+                            >
+                                Draw Line
+                            </button>
+                        </div>
+
+                        {calibrationMethod === 'preset' ? (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label className="text-xs">Paper Size</Label>
+                                    <Select value={calibrationPaperSize} onValueChange={setCalibrationPaperSize}>
+                                        <SelectTrigger className="h-9">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PAPER_SIZES.map((size) => (
+                                                <SelectItem key={size} value={size}>
+                                                    {size}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="text-xs">Drawing Scale</Label>
+                                    <Select value={calibrationScale} onValueChange={setCalibrationScale}>
+                                        <SelectTrigger className="h-9">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SCALE_OPTIONS.map((scale) => (
+                                                <SelectItem key={scale} value={scale}>
+                                                    {scale}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {calibrationScale === 'Custom' && (
+                                        <Input
+                                            value={customScale}
+                                            onChange={(e) => setCustomScale(e.target.value)}
+                                            placeholder="e.g. 1:75"
+                                            className="h-9 text-xs"
+                                        />
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {pendingCalibrationPoints ? (
+                                    <div className="rounded bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-300">
+                                        Reference line drawn. Enter the real-world distance.
+                                    </div>
+                                ) : (
+                                    <div className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                                        Click two points on the drawing to draw a reference line, then come back to enter the distance.
+                                    </div>
+                                )}
+                                <div className="grid gap-2">
+                                    <Label className="text-xs">Real Distance</Label>
+                                    <Input
+                                        type="number"
+                                        min="0.001"
+                                        step="any"
+                                        value={calibrationDistance}
+                                        onChange={(e) => setCalibrationDistance(e.target.value)}
+                                        placeholder="e.g. 10"
+                                        className="h-9"
+                                        disabled={!pendingCalibrationPoints}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        <div className="grid gap-2">
+                            <Label className="text-xs">Unit</Label>
+                            <Select value={calibrationUnit} onValueChange={setCalibrationUnit}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {UNIT_OPTIONS.map((u) => (
+                                        <SelectItem key={u.value} value={u.value}>
+                                            {u.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" size="sm" onClick={() => setCalibrationDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={handleSaveCalibration}
+                            disabled={
+                                savingCalibration ||
+                                (calibrationMethod === 'manual' && (!pendingCalibrationPoints || !calibrationDistance)) ||
+                                (calibrationMethod === 'preset' && calibrationScale === 'Custom' && !customScale)
+                            }
+                        >
+                            {savingCalibration ? 'Saving...' : 'Save Scale'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Measurement Dialog */}
+            <Dialog
+                open={measurementDialogOpen}
+                onOpenChange={(open) => {
+                    setMeasurementDialogOpen(open);
+                    if (!open) {
+                        setPendingMeasurementData(null);
+                        setEditingMeasurement(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            {(pendingMeasurementData?.type === 'count' || editingMeasurement?.type === 'count') ? (
+                                <Hash className="h-4 w-4" />
+                            ) : (pendingMeasurementData?.type === 'area' || editingMeasurement?.type === 'area') ? (
+                                <Box className="h-4 w-4" />
+                            ) : (
+                                <PenLine className="h-4 w-4" />
+                            )}
+                            {editingMeasurement ? 'Edit Measurement' : 'Save Measurement'}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs">Name</Label>
+                            <Input
+                                value={measurementName}
+                                onChange={(e) => setMeasurementName(e.target.value)}
+                                placeholder="e.g. North Wall, Living Room Floor"
+                                className="h-9"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs">Category</Label>
+                            <Input
+                                value={measurementCategory}
+                                onChange={(e) => setMeasurementCategory(e.target.value)}
+                                placeholder="e.g. Walls, Ceilings, Floors"
+                                className="h-9"
+                                list="measurement-categories"
+                            />
+                            <datalist id="measurement-categories">
+                                {existingCategories.map((cat) => (
+                                    <option key={cat} value={cat} />
+                                ))}
+                            </datalist>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs">Color</Label>
+                            <div className="flex gap-2">
+                                {PRESET_COLORS.map((color) => (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        className={`h-7 w-7 rounded-md border-2 transition-all ${
+                                            measurementColor === color ? 'border-foreground scale-110' : 'border-transparent'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => setMeasurementColor(color)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" size="sm" onClick={() => setMeasurementDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveMeasurement} disabled={savingMeasurement || !measurementName.trim()}>
+                            {savingMeasurement ? 'Saving...' : editingMeasurement ? 'Update' : 'Save'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
