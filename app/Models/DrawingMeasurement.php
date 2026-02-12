@@ -19,6 +19,10 @@ class DrawingMeasurement extends Model
         'points',
         'computed_value',
         'unit',
+        'takeoff_condition_id',
+        'material_cost',
+        'labour_cost',
+        'total_cost',
         'created_by',
         'updated_by',
     ];
@@ -26,6 +30,9 @@ class DrawingMeasurement extends Model
     protected $casts = [
         'points' => 'array',
         'computed_value' => 'float',
+        'material_cost' => 'float',
+        'labour_cost' => 'float',
+        'total_cost' => 'float',
     ];
 
     protected static function booted()
@@ -54,5 +61,10 @@ class DrawingMeasurement extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function condition(): BelongsTo
+    {
+        return $this->belongsTo(TakeoffCondition::class, 'takeoff_condition_id');
     }
 }

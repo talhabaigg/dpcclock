@@ -1,3 +1,4 @@
+import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
 import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { PanoramaViewer } from '@/components/panorama-viewer';
@@ -258,6 +259,11 @@ export default function DrawingShow() {
     const [measurementColor, setMeasurementColor] = useState('#3b82f6');
     const [savingMeasurement, setSavingMeasurement] = useState(false);
 
+    // Conditions state
+    const [conditions, setConditions] = useState<TakeoffCondition[]>([]);
+    const [showConditionManager, setShowConditionManager] = useState(false);
+    const [activeConditionId, setActiveConditionId] = useState<number | null>(null);
+
     const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
     const PAPER_SIZES = ['A0', 'A1', 'A2', 'A3', 'A4'];
     const SCALE_OPTIONS = ['1:1', '1:2', '1:5', '1:10', '1:20', '1:25', '1:50', '1:100', '1:200', '1:250', '1:500', '1:1000', 'Custom'];
@@ -282,6 +288,17 @@ export default function DrawingShow() {
             })
             .catch(() => {});
     }, [drawing.id]);
+
+    // Load conditions on mount
+    useEffect(() => {
+        fetch(`/locations/${projectId}/takeoff-conditions`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => setConditions(data.conditions || []))
+            .catch(() => {});
+    }, [projectId]);
 
     // Existing categories for datalist
     const existingCategories = [...new Set(measurements.map((m) => m.category).filter(Boolean))] as string[];
@@ -858,13 +875,62 @@ export default function DrawingShow() {
         }
     };
 
-    const handleMeasurementComplete = (points: Point[], type: 'linear' | 'area' | 'count') => {
-        setPendingMeasurementData({ points, type });
-        setEditingMeasurement(null);
-        setMeasurementName('');
-        setMeasurementCategory('');
-        setMeasurementColor('#3b82f6');
-        setMeasurementDialogOpen(true);
+    const handleActivateCondition = (conditionId: number | null) => {
+        setActiveConditionId(conditionId);
+        if (conditionId) {
+            const condition = conditions.find((c) => c.id === conditionId);
+            if (condition) {
+                const modeMap = { linear: 'measure_line', area: 'measure_area', count: 'measure_count' } as const;
+                setViewMode(modeMap[condition.type]);
+            }
+        } else {
+            setViewMode('pan');
+        }
+    };
+
+    const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
+        // Auto-save: generate name automatically
+        const activeCondition = activeConditionId ? conditions.find((c) => c.id === activeConditionId) : null;
+
+        const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
+        const existingOfType = measurements.filter((m) =>
+            activeCondition
+                ? m.takeoff_condition_id === activeCondition.id
+                : m.type === type && !m.takeoff_condition_id,
+        );
+        const counter = existingOfType.length + 1;
+        const name = activeCondition
+            ? `${activeCondition.name} #${counter}`
+            : `${typeLabel} #${counter}`;
+        const color = activeCondition?.color || '#3b82f6';
+        const category = activeCondition?.name || null;
+
+        try {
+            const response = await fetch(`/drawings/${drawing.id}/measurements`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    name,
+                    type,
+                    color,
+                    category,
+                    points,
+                    takeoff_condition_id: activeCondition?.id || null,
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to save');
+            const saved = await response.json();
+            setMeasurements((prev) => [...prev, saved]);
+            toast.success(`Saved: ${name}`);
+        } catch {
+            toast.error('Failed to save measurement.');
+        }
     };
 
     const handleSaveMeasurement = async () => {
@@ -1360,12 +1426,16 @@ export default function DrawingShow() {
                                 calibration={calibration}
                                 measurements={measurements}
                                 selectedMeasurementId={selectedMeasurementId}
+                                conditions={conditions}
+                                activeConditionId={activeConditionId}
                                 onSetViewMode={setViewMode}
                                 onOpenCalibrationDialog={handleOpenCalibrationDialog}
                                 onDeleteCalibration={handleDeleteCalibration}
                                 onMeasurementSelect={setSelectedMeasurementId}
                                 onMeasurementEdit={handleEditMeasurement}
                                 onMeasurementDelete={handleDeleteMeasurement}
+                                onOpenConditionManager={() => setShowConditionManager(true)}
+                                onActivateCondition={handleActivateCondition}
                             />
                         </div>
                     )}
@@ -1937,7 +2007,7 @@ export default function DrawingShow() {
                 </DialogContent>
             </Dialog>
 
-            {/* Measurement Dialog */}
+            {/* Measurement Edit Dialog (only for editing existing measurements) */}
             <Dialog
                 open={measurementDialogOpen}
                 onOpenChange={(open) => {
@@ -1951,14 +2021,14 @@ export default function DrawingShow() {
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            {(pendingMeasurementData?.type === 'count' || editingMeasurement?.type === 'count') ? (
+                            {editingMeasurement?.type === 'count' ? (
                                 <Hash className="h-4 w-4" />
-                            ) : (pendingMeasurementData?.type === 'area' || editingMeasurement?.type === 'area') ? (
+                            ) : editingMeasurement?.type === 'area' ? (
                                 <Box className="h-4 w-4" />
                             ) : (
                                 <PenLine className="h-4 w-4" />
                             )}
-                            {editingMeasurement ? 'Edit Measurement' : 'Save Measurement'}
+                            Edit Measurement
                         </DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4">
@@ -2009,11 +2079,22 @@ export default function DrawingShow() {
                             Cancel
                         </Button>
                         <Button size="sm" onClick={handleSaveMeasurement} disabled={savingMeasurement || !measurementName.trim()}>
-                            {savingMeasurement ? 'Saving...' : editingMeasurement ? 'Update' : 'Save'}
+                            {savingMeasurement ? 'Saving...' : 'Update'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Condition Manager Dialog */}
+            <ConditionManager
+                open={showConditionManager}
+                onOpenChange={setShowConditionManager}
+                locationId={projectId}
+                conditions={conditions}
+                onConditionsChange={(updated) => {
+                    setConditions(updated);
+                }}
+            />
         </AppLayout>
     );
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Drawing;
 use App\Models\DrawingMeasurement;
 use App\Models\DrawingScaleCalibration;
+use App\Services\TakeoffCostCalculator;
 use Illuminate\Http\Request;
 
 class DrawingMeasurementController extends Controller
@@ -126,6 +127,7 @@ class DrawingMeasurementController extends Controller
             'points' => 'required|array|min:1',
             'points.*.x' => 'required|numeric|min:0|max:1',
             'points.*.y' => 'required|numeric|min:0|max:1',
+            'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
         ]);
 
         $computedValue = null;
@@ -163,7 +165,16 @@ class DrawingMeasurementController extends Controller
             'points' => $validated['points'],
             'computed_value' => $computedValue,
             'unit' => $unit,
+            'takeoff_condition_id' => $validated['takeoff_condition_id'] ?? null,
         ]);
+
+        // Compute costs if a condition is assigned
+        if ($measurement->takeoff_condition_id) {
+            $measurement->load('condition');
+            $costs = (new TakeoffCostCalculator)->compute($measurement);
+            $measurement->update($costs);
+            $measurement->refresh();
+        }
 
         return response()->json($measurement);
     }
@@ -182,6 +193,7 @@ class DrawingMeasurementController extends Controller
             'points' => "sometimes|required|array|min:{$minPoints}",
             'points.*.x' => 'required_with:points|numeric|min:0|max:1',
             'points.*.y' => 'required_with:points|numeric|min:0|max:1',
+            'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
         ]);
 
         if (isset($validated['points'])) {
@@ -210,6 +222,17 @@ class DrawingMeasurementController extends Controller
 
         $measurement->update($validated);
 
+        // Recompute costs if condition or points changed
+        $conditionId = $measurement->takeoff_condition_id;
+        if ($conditionId) {
+            $measurement->load('condition');
+            $costs = (new TakeoffCostCalculator)->compute($measurement);
+            $measurement->update($costs);
+        } else {
+            // Clear costs if no condition
+            $measurement->update(['material_cost' => null, 'labour_cost' => null, 'total_cost' => null]);
+        }
+
         return response()->json($measurement->fresh());
     }
 
@@ -222,6 +245,25 @@ class DrawingMeasurementController extends Controller
         $measurement->delete();
 
         return response()->json(['message' => 'Measurement deleted.']);
+    }
+
+    public function recalculateCosts(Drawing $drawing)
+    {
+        $calculator = new TakeoffCostCalculator;
+
+        $drawing->measurements()
+            ->whereNotNull('takeoff_condition_id')
+            ->with('condition.materials.materialItem')
+            ->chunk(100, function ($measurements) use ($calculator) {
+                foreach ($measurements as $m) {
+                    $costs = $calculator->compute($m);
+                    $m->update($costs);
+                }
+            });
+
+        return response()->json([
+            'measurements' => $drawing->measurements()->orderBy('created_at')->get(),
+        ]);
     }
 
     // ---- Private computation helpers ----

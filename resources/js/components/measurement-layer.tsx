@@ -31,6 +31,10 @@ export type MeasurementData = {
     points: Point[];
     computed_value: number | null;
     unit: string | null;
+    takeoff_condition_id: number | null;
+    material_cost: number | null;
+    labour_cost: number | null;
+    total_cost: number | null;
     created_at?: string;
 };
 

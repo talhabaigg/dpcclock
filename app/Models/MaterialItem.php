@@ -54,7 +54,7 @@ class MaterialItem extends Model
 
     public function locations()
     {
-        return $this->belongsToMany(Location::class, 'project_item_pricing')
+        return $this->belongsToMany(Location::class, 'location_item_pricing')
             ->withPivot('unit_cost_override')
             ->withTimestamps();
     }

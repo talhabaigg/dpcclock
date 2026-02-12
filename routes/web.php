@@ -11,6 +11,7 @@ use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
 use App\Http\Controllers\DrawingMeasurementController;
 use App\Http\Controllers\DrawingObservationController;
+use App\Http\Controllers\TakeoffConditionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
@@ -578,6 +579,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
         Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
         Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
+        Route::post('/drawings/{drawing}/measurements/recalculate-costs', [DrawingMeasurementController::class, 'recalculateCosts'])->name('drawings.measurements.recalculate-costs');
+    });
+
+    // Takeoff Conditions (scoped to Location/project)
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::get('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'index'])->name('takeoff-conditions.index');
+        Route::post('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'store'])->name('takeoff-conditions.store');
+        Route::put('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'update'])->name('takeoff-conditions.update');
+        Route::delete('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'destroy'])->name('takeoff-conditions.destroy');
+        Route::get('/locations/{location}/material-items/search', [TakeoffConditionController::class, 'searchMaterials'])->name('takeoff-conditions.search-materials');
     });
 
     // Drawing Alignment
