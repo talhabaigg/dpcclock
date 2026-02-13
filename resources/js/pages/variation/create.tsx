@@ -1,17 +1,25 @@
+import { ConditionManager } from '@/components/condition-manager';
 import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
-import { AlertCircle, ArrowLeft, ClipboardList, FileText, GripHorizontal, Package, Plus, Save, Trash2, Wrench, Zap } from 'lucide-react';
+import axios from 'axios';
+import { AlertCircle, ArrowLeft, ClipboardList, DollarSign, FileText, GripHorizontal, Package, Plus, Save, Send, Trash2, TrendingUp, Wrench, Zap } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
+import ClientVariationTab from './partials/ClientVariationTab';
+import { Condition } from './partials/ConditionPricingPanel';
+import PremierVariationTab from './partials/PremierVariationTab';
 import VariationHeaderGrid, { VariationHeaderGridRef } from './partials/variationHeader/VariationHeaderGrid';
 import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
+import VariationPricingTab, { PricingItem } from './partials/VariationPricingTab';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -43,7 +51,14 @@ const CostTypes = [
     { value: 'REV', description: 'Revenue' },
 ];
 
-const VariationCreate = ({ locations, costCodes, variation }: { locations: Location[]; costCodes: CostCode[]; variation?: any }) => {
+interface VariationCreateProps {
+    locations: Location[];
+    costCodes: CostCode[];
+    variation?: any;
+    conditions?: Condition[];
+}
+
+const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: VariationCreateProps) => {
     const gridRef = useRef<VariationLineGridRef>(null);
     const headerGridRef = useRef<VariationHeaderGridRef>(null);
     const { data, setData, post, errors } = useForm({
@@ -51,6 +66,7 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         type: variation ? variation.type : 'dayworks',
         co_number: variation ? variation.co_number : '',
         description: variation ? variation.description : '',
+        client_notes: variation ? (variation.client_notes || '') : '',
         amount: variation ? variation.amount : '',
         date: variation ? variation.co_date : new Date().toISOString().split('T')[0],
         line_items: variation
@@ -77,6 +93,48 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                   },
               ],
     });
+
+    // Track variation ID (either from prop or auto-saved)
+    const [savedVariationId, setSavedVariationId] = useState<number | undefined>(variation?.id);
+
+    // Conditions state (mutable so condition manager can update)
+    const [localConditions, setLocalConditions] = useState<any[]>(conditions);
+    const [showConditionManager, setShowConditionManager] = useState(false);
+
+    // Pricing items state (from variation_pricing_items table)
+    const [pricingItems, setPricingItems] = useState<PricingItem[]>(
+        variation?.pricing_items ?? []
+    );
+
+    /**
+     * Persist any unsaved (local-only) pricing items to the server.
+     * Called after the variation has been saved/created.
+     */
+    const persistUnsavedPricingItems = async (varId: number) => {
+        const unsaved = pricingItems.filter((item) => !item.id);
+        if (unsaved.length === 0) return;
+
+        const persisted: PricingItem[] = pricingItems.filter((item) => !!item.id);
+        for (const item of unsaved) {
+            try {
+                const payload: Record<string, any> = {
+                    description: item.description,
+                    qty: item.qty,
+                    unit: item.unit,
+                    labour_cost: item.labour_cost,
+                    material_cost: item.material_cost,
+                };
+                if (item.takeoff_condition_id) {
+                    payload.takeoff_condition_id = item.takeoff_condition_id;
+                }
+                const { data: resp } = await axios.post(`/variations/${varId}/pricing-items`, payload);
+                persisted.push(resp.pricing_item);
+            } catch {
+                // skip failed items silently
+            }
+        }
+        setPricingItems(persisted);
+    };
 
     const [selectedCount, setSelectedCount] = useState(0);
     const [gridHeight, setGridHeight] = useState(() => {
@@ -156,13 +214,53 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
         setData('description', headerData.description);
     };
 
-    const handleSubmit = (e?: React.FormEvent) => {
+    const [saving, setSaving] = useState(false);
+
+    const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if (variation?.id) {
-            post(`/variations/${variation.id}/update`);
-            return;
+        setSaving(true);
+
+        try {
+            let varId = savedVariationId;
+
+            // If we have unsaved pricing items and no variation yet, quick-store first
+            const hasUnsaved = pricingItems.some((item) => !item.id);
+            if (!varId && hasUnsaved) {
+                if (!data.location_id || !data.co_number || !data.description) {
+                    toast.error('Please fill in Location, CO Number, and Description to save');
+                    setSaving(false);
+                    return;
+                }
+                try {
+                    const { data: response } = await axios.post('/variations/quick-store', {
+                        location_id: parseInt(data.location_id),
+                        co_number: data.co_number,
+                        description: data.description,
+                        type: data.type || 'extra',
+                    });
+                    varId = response.variation.id;
+                    setSavedVariationId(varId);
+                    window.history.replaceState({}, '', `/variations/${varId}/edit`);
+                } catch (err: any) {
+                    toast.error(err.response?.data?.message || 'Failed to save variation');
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            // Persist unsaved pricing items
+            if (varId && hasUnsaved) {
+                await persistUnsavedPricingItems(varId);
+            }
+
+            if (varId) {
+                post(`/variations/${varId}/update`);
+            } else {
+                post('/variations/store');
+            }
+        } finally {
+            setSaving(false);
         }
-        post('/variations/store');
     };
 
     const [open, setOpen] = useState(false);
@@ -281,10 +379,10 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div>
                             <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-50">
-                                {variation?.id ? 'Edit Variation' : 'Create Variation'}
+                                {savedVariationId ? 'Edit Variation' : 'Create Variation'}
                             </h1>
                             <p className="mt-0.5 text-xs font-medium text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
-                                {variation?.id ? 'Update variation details and line items' : 'Enter variation details and add line items'}
+                                {savedVariationId ? 'Update variation details and line items' : 'Enter variation details and add line items'}
                             </p>
                         </div>
                     </div>
@@ -353,158 +451,208 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                         />
                     </div>
 
-                    {/* Line Items Grid */}
-                    <div className="mb-4 space-y-3 sm:mb-6">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex items-center gap-2 sm:gap-3">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
-                                    <ClipboardList className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                                </div>
-                                <h3 className="text-base font-semibold sm:text-lg">Line Items</h3>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                    {selectedCount > 0 ? `${selectedCount} selected` : `${data.line_items.length} total`}
-                                </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-9 gap-1.5 rounded-lg border-amber-200/60 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                                        >
-                                            <Zap className="h-3.5 w-3.5" />
-                                            <span className="hidden sm:inline">Quick Gen</span>
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-lg">
-                                        <DialogHeader className="space-y-3">
-                                            <div className="from-primary to-primary/60 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br shadow-lg">
-                                                <Zap className="text-primary-foreground h-6 w-6" />
-                                            </div>
-                                            <DialogTitle className="text-center text-xl">Quick Generate</DialogTitle>
-                                            <DialogDescription className="text-center">
-                                                Automatically populate line items based on your base amount
-                                            </DialogDescription>
-                                        </DialogHeader>
+                    {/* 3-Tab Workflow */}
+                    <div className="mb-4 sm:mb-6">
+                        <Tabs defaultValue="pricing" className="w-full">
+                            <TabsList className="mb-4 w-full justify-start">
+                                <TabsTrigger value="pricing" className="gap-1.5">
+                                    <DollarSign className="h-3.5 w-3.5" />
+                                    Variation Pricing
+                                </TabsTrigger>
+                                <TabsTrigger value="client" className="gap-1.5">
+                                    <TrendingUp className="h-3.5 w-3.5" />
+                                    Client Variation
+                                </TabsTrigger>
+                                <TabsTrigger value="premier" className="gap-1.5">
+                                    <Send className="h-3.5 w-3.5" />
+                                    Premier Variation
+                                </TabsTrigger>
+                            </TabsList>
 
-                                        <div className="space-y-6 py-6">
-                                            {/* Amount Input Section */}
-                                            <div className="space-y-3">
-                                                <label htmlFor="amount" className="flex items-center gap-2 text-sm font-semibold">
-                                                    <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
-                                                        1
-                                                    </span>
-                                                    Enter Base Amount
-                                                </label>
-                                                <Input
-                                                    id="amount"
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    value={genAmount}
-                                                    onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
-                                                    placeholder="0.00"
-                                                    className="focus-visible:border-primary h-12 border-2 text-center text-lg font-medium"
-                                                />
-                                            </div>
+                            {/* Tab: Variation Pricing */}
+                            <TabsContent value="pricing">
+                                <VariationPricingTab
+                                    variationId={savedVariationId}
+                                    conditions={localConditions}
+                                    locationId={data.location_id}
+                                    pricingItems={pricingItems}
+                                    onPricingItemsChange={setPricingItems}
+                                    onManageConditions={() => setShowConditionManager(true)}
+                                />
+                            </TabsContent>
 
-                                            {/* Divider */}
-                                            <div className="relative">
-                                                <div className="absolute inset-0 flex items-center">
-                                                    <div className="border-muted w-full border-t"></div>
-                                                </div>
-                                                <div className="relative flex justify-center text-xs uppercase">
-                                                    <span className="bg-background text-muted-foreground px-2 font-medium">Choose Type</span>
-                                                </div>
-                                            </div>
+                            {/* Tab: Client Variation */}
+                            <TabsContent value="client">
+                                <ClientVariationTab
+                                    variationId={savedVariationId}
+                                    pricingItems={pricingItems}
+                                    clientNotes={data.client_notes}
+                                    onClientNotesChange={(notes) => setData('client_notes', notes)}
+                                    onPricingItemsChange={setPricingItems}
+                                />
+                            </TabsContent>
 
-                                            {/* Generation Options */}
-                                            <div className="space-y-3">
-                                                <label className="flex items-center gap-2 text-sm font-semibold">
-                                                    <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
-                                                        2
-                                                    </span>
-                                                    Select Generation Type
-                                                </label>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <button
-                                                        onClick={generatePrelimLabour}
-                                                        className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-blue-50/50 p-4 text-left transition-all duration-200 dark:from-blue-950/20"
-                                                    >
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 transition-transform group-hover:scale-110 dark:bg-blue-900/30">
-                                                                    <Wrench className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-sm font-semibold">Labour</div>
-                                                                <div className="text-muted-foreground text-xs">Generate labour costs</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
-                                                    </button>
+                            {/* Tab: Premier Variation */}
+                            <TabsContent value="premier">
+                                <PremierVariationTab
+                                    variationId={savedVariationId}
+                                    pricingItems={pricingItems}
+                                    lineItems={data.line_items}
+                                    onLineItemsChange={(items) => setData('line_items', items)}
+                                />
 
-                                                    <button
-                                                        onClick={generatePrelimMaterial}
-                                                        className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-purple-50/50 p-4 text-left transition-all duration-200 dark:from-purple-950/20"
-                                                    >
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 transition-transform group-hover:scale-110 dark:bg-purple-900/30">
-                                                                    <Package className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-sm font-semibold">Material</div>
-                                                                <div className="text-muted-foreground text-xs">Generate material costs</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
-                                                    </button>
-                                                </div>
+                                {/* Legacy Line Items Grid (editable) */}
+                                <div className="mt-6 space-y-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="flex items-center gap-2 sm:gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
+                                                <ClipboardList className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                                             </div>
+                                            <h3 className="text-base font-semibold sm:text-lg">Line Items</h3>
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                                {selectedCount > 0 ? `${selectedCount} selected` : `${data.line_items.length} total`}
+                                            </span>
                                         </div>
-                                    </DialogContent>
-                                </Dialog>
-                                <Button onClick={addRow} size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg">
-                                    <Plus className="h-3.5 w-3.5" />
-                                    <span className="xs:inline hidden">Add Row</span>
-                                    <span className="xs:hidden">Add</span>
-                                </Button>
-                                <Button
-                                    onClick={deleteSelectedRows}
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={selectedCount === 0}
-                                    className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive h-9 gap-1.5 rounded-lg disabled:opacity-50"
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Delete</span>
-                                    {selectedCount > 0 && <span>({selectedCount})</span>}
-                                </Button>
-                            </div>
-                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-9 gap-1.5 rounded-lg border-amber-200/60 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                                    >
+                                                        <Zap className="h-3.5 w-3.5" />
+                                                        <span className="hidden sm:inline">Quick Gen</span>
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="sm:max-w-lg">
+                                                    <DialogHeader className="space-y-3">
+                                                        <div className="from-primary to-primary/60 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br shadow-lg">
+                                                            <Zap className="text-primary-foreground h-6 w-6" />
+                                                        </div>
+                                                        <DialogTitle className="text-center text-xl">Quick Generate</DialogTitle>
+                                                        <DialogDescription className="text-center">
+                                                            Automatically populate line items based on your base amount
+                                                        </DialogDescription>
+                                                    </DialogHeader>
 
-                        <div ref={resizeRef}>
-                            <VariationLineGrid
-                                ref={gridRef}
-                                lineItems={data.line_items}
-                                costCodes={costData}
-                                costTypes={CostTypes}
-                                onDataChange={handleLineItemsChange}
-                                onSelectionChange={handleSelectionChange}
-                                height={gridHeight}
-                            />
-                        </div>
-                        {/* Drag Handle */}
-                        <div
-                            onMouseDown={handleResizeStart}
-                            className={`group flex w-full cursor-ns-resize items-center justify-center rounded py-1 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isResizing ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
-                            title="Drag to resize"
-                        >
-                            <GripHorizontal className="h-4 w-4 text-slate-400 transition-colors group-hover:text-slate-600 dark:group-hover:text-slate-300" />
-                        </div>
+                                                    <div className="space-y-6 py-6">
+                                                        <div className="space-y-3">
+                                                            <label htmlFor="amount" className="flex items-center gap-2 text-sm font-semibold">
+                                                                <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
+                                                                    1
+                                                                </span>
+                                                                Enter Base Amount
+                                                            </label>
+                                                            <Input
+                                                                id="amount"
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={genAmount}
+                                                                onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
+                                                                placeholder="0.00"
+                                                                className="focus-visible:border-primary h-12 border-2 text-center text-lg font-medium"
+                                                            />
+                                                        </div>
+
+                                                        <div className="relative">
+                                                            <div className="absolute inset-0 flex items-center">
+                                                                <div className="border-muted w-full border-t"></div>
+                                                            </div>
+                                                            <div className="relative flex justify-center text-xs uppercase">
+                                                                <span className="bg-background text-muted-foreground px-2 font-medium">Choose Type</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-3">
+                                                            <label className="flex items-center gap-2 text-sm font-semibold">
+                                                                <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
+                                                                    2
+                                                                </span>
+                                                                Select Generation Type
+                                                            </label>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <button
+                                                                    onClick={generatePrelimLabour}
+                                                                    className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-blue-50/50 p-4 text-left transition-all duration-200 dark:from-blue-950/20"
+                                                                >
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 transition-transform group-hover:scale-110 dark:bg-blue-900/30">
+                                                                                <Wrench className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-sm font-semibold">Labour</div>
+                                                                            <div className="text-muted-foreground text-xs">Generate labour costs</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={generatePrelimMaterial}
+                                                                    className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-purple-50/50 p-4 text-left transition-all duration-200 dark:from-purple-950/20"
+                                                                >
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 transition-transform group-hover:scale-110 dark:bg-purple-900/30">
+                                                                                <Package className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-sm font-semibold">Material</div>
+                                                                            <div className="text-muted-foreground text-xs">Generate material costs</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                            <Button onClick={addRow} size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg">
+                                                <Plus className="h-3.5 w-3.5" />
+                                                <span className="xs:inline hidden">Add Row</span>
+                                                <span className="xs:hidden">Add</span>
+                                            </Button>
+                                            <Button
+                                                onClick={deleteSelectedRows}
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={selectedCount === 0}
+                                                className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive h-9 gap-1.5 rounded-lg disabled:opacity-50"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline">Delete</span>
+                                                {selectedCount > 0 && <span>({selectedCount})</span>}
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div ref={resizeRef}>
+                                        <VariationLineGrid
+                                            ref={gridRef}
+                                            lineItems={data.line_items}
+                                            costCodes={costData}
+                                            costTypes={CostTypes}
+                                            onDataChange={handleLineItemsChange}
+                                            onSelectionChange={handleSelectionChange}
+                                            height={gridHeight}
+                                        />
+                                    </div>
+                                    {/* Drag Handle */}
+                                    <div
+                                        onMouseDown={handleResizeStart}
+                                        className={`group flex w-full cursor-ns-resize items-center justify-center rounded py-1 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isResizing ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                                        title="Drag to resize"
+                                    >
+                                        <GripHorizontal className="h-4 w-4 text-slate-400 transition-colors group-hover:text-slate-600 dark:group-hover:text-slate-300" />
+                                    </div>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </div>
 
                     {/* Action Buttons */}
@@ -536,15 +684,26 @@ const VariationCreate = ({ locations, costCodes, variation }: { locations: Locat
                             </Button>
                             <Button
                                 onClick={handleSubmit}
+                                disabled={saving}
                                 className="h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-6 shadow-lg ring-1 shadow-slate-900/20 ring-slate-900/10 transition-all hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 sm:h-11 sm:w-auto sm:rounded-xl dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white"
                             >
                                 <Save className="h-4 w-4" />
-                                {variation?.id ? 'Update Variation' : 'Create Variation'}
+                                {saving ? 'Saving...' : variation?.id ? 'Update Variation' : 'Create Variation'}
                             </Button>
                         </div>
                     </div>
                 </div>
             </div>
+            {/* Condition Manager Dialog */}
+            {data.location_id && (
+                <ConditionManager
+                    open={showConditionManager}
+                    onOpenChange={setShowConditionManager}
+                    locationId={Number(data.location_id)}
+                    conditions={localConditions as any}
+                    onConditionsChange={(updated) => setLocalConditions(updated as any)}
+                />
+            )}
         </AppLayout>
     );
 };

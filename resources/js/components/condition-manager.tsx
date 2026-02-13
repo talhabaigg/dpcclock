@@ -35,6 +35,21 @@ export type ConditionType = {
     name: string;
 };
 
+export type ConditionLabourCodeItem = {
+    id?: number;
+    labour_cost_code_id: number;
+    production_rate: number | null;
+    hourly_rate: number | null;
+    labour_cost_code?: {
+        id: number;
+        code: string;
+        name: string;
+        unit: string;
+        default_production_rate: number | null;
+        default_hourly_rate: number | null;
+    };
+};
+
 export type TakeoffCondition = {
     id: number;
     location_id: number;
@@ -57,6 +72,7 @@ export type TakeoffCondition = {
     pay_rate_template?: { id: number; custom_label: string | null; hourly_rate: string | number | null; pay_rate_template?: { name: string } } | null;
     production_rate: number | null;
     materials: ConditionMaterial[];
+    condition_labour_codes?: ConditionLabourCodeItem[];
 };
 
 export type ConditionMaterial = {
@@ -85,6 +101,15 @@ type CostCodeSearchResult = {
     id: number;
     code: string;
     description: string;
+};
+
+type LccSearchResult = {
+    id: number;
+    code: string;
+    name: string;
+    unit: string;
+    default_production_rate: number | null;
+    default_hourly_rate: number | null;
 };
 
 type PayRateTemplate = {
@@ -191,6 +216,27 @@ export function ConditionManager({
     const [costCodeSearch, setCostCodeSearch] = useState('');
     const [costCodeResults, setCostCodeResults] = useState<CostCodeSearchResult[]>([]);
     const [searchingCostCodes, setSearchingCostCodes] = useState(false);
+
+    // Labour Cost Codes form state
+    const [formLccs, setFormLccs] = useState<Array<{
+        labour_cost_code_id: number;
+        code: string;
+        name: string;
+        unit: string;
+        production_rate: string;
+        hourly_rate: string;
+        default_production_rate: number | null;
+        default_hourly_rate: number | null;
+    }>>([]);
+    const [lccSearch, setLccSearch] = useState('');
+    const [lccResults, setLccResults] = useState<LccSearchResult[]>([]);
+    const [searchingLccs, setSearchingLccs] = useState(false);
+    const [showCreateLcc, setShowCreateLcc] = useState(false);
+    const [newLccCode, setNewLccCode] = useState('');
+    const [newLccName, setNewLccName] = useState('');
+    const [newLccProdRate, setNewLccProdRate] = useState('');
+    const [newLccHourlyRate, setNewLccHourlyRate] = useState('');
+    const [creatingLcc, setCreatingLcc] = useState(false);
 
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
@@ -316,6 +362,14 @@ export function ConditionManager({
         setMaterialSearch('');
         setMaterialResults([]);
         setNewTypeName('');
+        setFormLccs([]);
+        setLccSearch('');
+        setLccResults([]);
+        setShowCreateLcc(false);
+        setNewLccCode('');
+        setNewLccName('');
+        setNewLccProdRate('');
+        setNewLccHourlyRate('');
     }, []);
 
     const loadConditionIntoForm = useCallback((c: TakeoffCondition) => {
@@ -349,6 +403,18 @@ export function ConditionManager({
                 unit_cost: m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0)),
                 qty_per_unit: m.qty_per_unit.toString(),
                 waste_percentage: m.waste_percentage.toString(),
+            }))
+        );
+        setFormLccs(
+            (c.condition_labour_codes || []).map((clc) => ({
+                labour_cost_code_id: clc.labour_cost_code_id,
+                code: clc.labour_cost_code?.code || '',
+                name: clc.labour_cost_code?.name || '',
+                unit: clc.labour_cost_code?.unit || 'm2',
+                production_rate: clc.production_rate?.toString() || '',
+                hourly_rate: clc.hourly_rate?.toString() || '',
+                default_production_rate: clc.labour_cost_code?.default_production_rate ?? null,
+                default_hourly_rate: clc.labour_cost_code?.default_hourly_rate ?? null,
             }))
         );
     }, []);
@@ -414,6 +480,13 @@ export function ConditionManager({
                 }));
                 payload.cost_codes = [];
             }
+
+            // Labour Cost Codes (independent of pricing method)
+            payload.labour_cost_codes = formLccs.map((l) => ({
+                labour_cost_code_id: l.labour_cost_code_id,
+                production_rate: l.production_rate ? parseFloat(l.production_rate) : null,
+                hourly_rate: l.hourly_rate ? parseFloat(l.hourly_rate) : null,
+            }));
 
             const isUpdating = editing && selectedId;
             const url = isUpdating
@@ -518,6 +591,26 @@ export function ConditionManager({
         return () => clearTimeout(timeout);
     }, [costCodeSearch, locationId]);
 
+    // Labour Cost Code search
+    useEffect(() => {
+        if (!lccSearch.trim() || lccSearch.length < 2) {
+            setLccResults([]);
+            return;
+        }
+        const timeout = setTimeout(() => {
+            setSearchingLccs(true);
+            fetch(`/locations/${locationId}/labour-cost-codes/search?q=${encodeURIComponent(lccSearch)}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then((res) => res.json())
+                .then((data) => setLccResults(data.items || []))
+                .catch(() => setLccResults([]))
+                .finally(() => setSearchingLccs(false));
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [lccSearch, locationId]);
+
     const addMaterial = (item: MaterialSearchResult) => {
         if (formMaterials.some((m) => m.material_item_id === item.id)) {
             toast.error('Material already added.');
@@ -570,6 +663,79 @@ export function ConditionManager({
 
     const updateCostCodeRate = (index: number, value: string) => {
         setFormCostCodes((prev) => prev.map((cc, i) => (i === index ? { ...cc, unit_rate: value } : cc)));
+    };
+
+    const addLcc = (item: LccSearchResult) => {
+        if (formLccs.some((l) => l.labour_cost_code_id === item.id)) {
+            toast.error('Labour cost code already added.');
+            return;
+        }
+        setFormLccs((prev) => [
+            ...prev,
+            {
+                labour_cost_code_id: item.id,
+                code: item.code,
+                name: item.name,
+                unit: item.unit,
+                production_rate: item.default_production_rate?.toString() || '',
+                hourly_rate: item.default_hourly_rate?.toString() || '',
+                default_production_rate: item.default_production_rate,
+                default_hourly_rate: item.default_hourly_rate,
+            },
+        ]);
+        setLccSearch('');
+        setLccResults([]);
+    };
+
+    const removeLcc = (index: number) => {
+        setFormLccs((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const updateLccField = (index: number, field: 'production_rate' | 'hourly_rate', value: string) => {
+        setFormLccs((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
+    };
+
+    const handleCreateLcc = async () => {
+        if (!newLccCode.trim() || !newLccName.trim()) {
+            toast.error('Code and name are required.');
+            return;
+        }
+        setCreatingLcc(true);
+        try {
+            const res = await fetch(`/locations/${locationId}/labour-cost-codes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    code: newLccCode.trim(),
+                    name: newLccName.trim(),
+                    default_production_rate: newLccProdRate ? parseFloat(newLccProdRate) : null,
+                    default_hourly_rate: newLccHourlyRate ? parseFloat(newLccHourlyRate) : null,
+                }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                const msg = errorData?.message || `Server returned ${res.status}`;
+                throw new Error(msg);
+            }
+            const created: LccSearchResult = await res.json();
+            addLcc(created);
+            setShowCreateLcc(false);
+            setNewLccCode('');
+            setNewLccName('');
+            setNewLccProdRate('');
+            setNewLccHourlyRate('');
+            toast.success(`LCC "${created.code}" created and added.`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to create LCC.');
+        } finally {
+            setCreatingLcc(false);
+        }
     };
 
     const showForm = creating || editing;
@@ -1119,7 +1285,178 @@ export function ConditionManager({
                                     </>
                                 )}
 
-                                {/* 8. Notes */}
+                                {/* 8. Labour Cost Codes (Production Tracking) */}
+                                <div className="rounded-sm border p-2 space-y-2">
+                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Labour Cost Codes (Production)
+                                    </h4>
+                                    <p className="text-[9px] text-muted-foreground">
+                                        Link labour cost codes for production tracking / statusing on drawings.
+                                    </p>
+
+                                    {/* LCC Search */}
+                                    <div className="relative">
+                                        <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
+                                        <Input
+                                            value={lccSearch}
+                                            onChange={(e) => setLccSearch(e.target.value)}
+                                            placeholder="Search labour cost codes..."
+                                            className="h-7 text-xs pl-7 rounded-sm"
+                                        />
+                                        {searchingLccs && (
+                                            <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
+                                        )}
+                                        {lccResults.length > 0 && (
+                                            <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
+                                                {lccResults.map((item) => (
+                                                    <div
+                                                        key={item.id}
+                                                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
+                                                        onClick={() => addLcc(item)}
+                                                    >
+                                                        <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
+                                                        <span className="truncate flex-1">{item.name}</span>
+                                                        {item.default_production_rate && (
+                                                            <span className="shrink-0 text-[9px] text-muted-foreground">{item.default_production_rate} u/hr</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Create new LCC inline */}
+                                    {!showCreateLcc ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 text-[10px] gap-1 rounded-sm"
+                                            onClick={() => setShowCreateLcc(true)}
+                                        >
+                                            <Plus className="h-2.5 w-2.5" />
+                                            New LCC
+                                        </Button>
+                                    ) : (
+                                        <div className="rounded-sm border border-dashed p-2 space-y-1.5">
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="grid gap-0.5">
+                                                    <Label className="text-[9px]">Code</Label>
+                                                    <Input
+                                                        value={newLccCode}
+                                                        onChange={(e) => setNewLccCode(e.target.value)}
+                                                        placeholder="e.g. 101_INT_FRM"
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-0.5">
+                                                    <Label className="text-[9px]">Name</Label>
+                                                    <Input
+                                                        value={newLccName}
+                                                        onChange={(e) => setNewLccName(e.target.value)}
+                                                        placeholder="e.g. Frame Internal Walls"
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="grid gap-0.5">
+                                                    <Label className="text-[9px]">Default Prod Rate (u/hr)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={newLccProdRate}
+                                                        onChange={(e) => setNewLccProdRate(e.target.value)}
+                                                        placeholder="e.g. 5.0"
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-0.5">
+                                                    <Label className="text-[9px]">Default Hourly Rate ($)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={newLccHourlyRate}
+                                                        onChange={(e) => setNewLccHourlyRate(e.target.value)}
+                                                        placeholder="e.g. 85.00"
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-1 justify-end">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 text-[10px] rounded-sm"
+                                                    onClick={() => { setShowCreateLcc(false); setNewLccCode(''); setNewLccName(''); setNewLccProdRate(''); setNewLccHourlyRate(''); }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="h-6 text-[10px] rounded-sm"
+                                                    onClick={handleCreateLcc}
+                                                    disabled={creatingLcc || !newLccCode.trim() || !newLccName.trim()}
+                                                >
+                                                    {creatingLcc ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 'Create & Add'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* LCC Lines */}
+                                    {formLccs.length > 0 && (
+                                        <div className="space-y-0">
+                                            <div className="grid grid-cols-[1fr_70px_70px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
+                                                <span>Labour Cost Code</span>
+                                                <span>Prod Rate</span>
+                                                <span>$/hr</span>
+                                                <span />
+                                            </div>
+                                            {formLccs.map((l, idx) => (
+                                                <div key={idx} className="grid grid-cols-[1fr_70px_70px_24px] gap-1 items-center border-b border-border/50 py-0.5">
+                                                    <div className="text-[11px] truncate" title={`${l.code} - ${l.name}`}>
+                                                        <span className="font-mono text-muted-foreground">{l.code}</span>{' '}
+                                                        <span>{l.name}</span>
+                                                    </div>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={l.production_rate}
+                                                        onChange={(e) => updateLccField(idx, 'production_rate', e.target.value)}
+                                                        placeholder={l.default_production_rate?.toString() || '—'}
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={l.hourly_rate}
+                                                        onChange={(e) => updateLccField(idx, 'hourly_rate', e.target.value)}
+                                                        placeholder={l.default_hourly_rate?.toString() || '—'}
+                                                        className="h-6 text-[11px] rounded-sm"
+                                                    />
+                                                    <button
+                                                        className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
+                                                        onClick={() => removeLcc(idx)}
+                                                    >
+                                                        <X className="h-2.5 w-2.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {formLccs.length === 0 && (
+                                        <p className="text-[10px] text-muted-foreground text-center py-2">
+                                            Search and add labour cost codes above, or create new ones.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* 9. Notes */}
                                 <div className="grid gap-1">
                                     <Label className="text-[11px] font-semibold">Notes</Label>
                                     <Textarea
@@ -1357,6 +1694,37 @@ export function ConditionManager({
                                             )}
                                         </div>
                                     </>
+                                )}
+
+                                {/* Labour Cost Codes (view) */}
+                                {(selectedCondition.condition_labour_codes || []).length > 0 && (
+                                    <div className="rounded-sm border p-2 space-y-1">
+                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Labour Cost Codes ({selectedCondition.condition_labour_codes!.length})
+                                        </h4>
+                                        <div className="space-y-0">
+                                            {selectedCondition.condition_labour_codes!.map((clc, idx) => (
+                                                <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
+                                                    <div className="flex-1 truncate">
+                                                        <span className="font-mono text-muted-foreground">{clc.labour_cost_code?.code}</span>{' '}
+                                                        <span>{clc.labour_cost_code?.name}</span>
+                                                    </div>
+                                                    <div className="shrink-0 flex gap-2 ml-2 text-[10px] font-mono">
+                                                        {(clc.production_rate || clc.labour_cost_code?.default_production_rate) && (
+                                                            <span>
+                                                                {clc.production_rate ?? clc.labour_cost_code?.default_production_rate} u/hr
+                                                            </span>
+                                                        )}
+                                                        {(clc.hourly_rate || clc.labour_cost_code?.default_hourly_rate) && (
+                                                            <span className="text-muted-foreground">
+                                                                ${Number(clc.hourly_rate ?? clc.labour_cost_code?.default_hourly_rate ?? 0).toFixed(2)}/hr
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
 
                                 {selectedCondition.description && (

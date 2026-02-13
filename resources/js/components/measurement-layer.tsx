@@ -53,6 +53,8 @@ type MeasurementLayerProps = {
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
     onMeasurementClick?: (measurement: MeasurementData) => void;
+    // Production labels: measurementId → percent_complete
+    productionLabels?: Record<number, number>;
 };
 
 const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
@@ -122,6 +124,7 @@ export function MeasurementLayer({
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
+    productionLabels,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -299,8 +302,32 @@ export function MeasurementLayer({
                 });
                 polygon.addTo(group);
             }
+
+            // Production % label badge
+            if (productionLabels && productionLabels[m.id] !== undefined) {
+                const percent = productionLabels[m.id];
+                // Compute centroid for label placement
+                let centroidLat = 0;
+                let centroidLng = 0;
+                for (const ll of latlngs) {
+                    centroidLat += ll.lat;
+                    centroidLng += ll.lng;
+                }
+                centroidLat /= latlngs.length;
+                centroidLng /= latlngs.length;
+
+                const badge = L.marker(L.latLng(centroidLat, centroidLng), {
+                    icon: L.divIcon({
+                        className: 'production-percent-label',
+                        html: `<div style="background:${m.color};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid rgba(255,255,255,0.3);text-align:center;min-width:28px;">${percent}%</div>`,
+                        iconAnchor: [14, 10],
+                    }),
+                    interactive: false,
+                });
+                badge.addTo(group);
+            }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels]);
 
     // Render calibration line
     useEffect(() => {

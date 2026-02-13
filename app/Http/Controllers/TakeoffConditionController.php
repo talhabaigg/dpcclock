@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConditionType;
 use App\Models\CostCode;
+use App\Models\LabourCostCode;
 use App\Models\Location;
 use App\Models\MaterialItem;
 use App\Models\TakeoffCondition;
@@ -14,7 +15,7 @@ class TakeoffConditionController extends Controller
     public function index(Location $location)
     {
         $conditions = TakeoffCondition::where('location_id', $location->id)
-            ->with(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType'])
+            ->with(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode'])
             ->orderBy('condition_number')
             ->orderBy('name')
             ->get();
@@ -52,6 +53,12 @@ class TakeoffConditionController extends Controller
             'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
             'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
             'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
+
+            // Labour Cost Codes (for production tracking)
+            'labour_cost_codes' => 'nullable|array',
+            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
+            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
         $pricingMethod = $validated['pricing_method'];
@@ -93,7 +100,18 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType']);
+        // Sync Labour Cost Codes (independent of pricing method)
+        if (! empty($validated['labour_cost_codes'])) {
+            foreach ($validated['labour_cost_codes'] as $lcc) {
+                $condition->conditionLabourCodes()->create([
+                    'labour_cost_code_id' => $lcc['labour_cost_code_id'],
+                    'production_rate' => $lcc['production_rate'] ?? null,
+                    'hourly_rate' => $lcc['hourly_rate'] ?? null,
+                ]);
+            }
+        }
+
+        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode']);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -130,11 +148,18 @@ class TakeoffConditionController extends Controller
             'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
             'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
             'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
+
+            // Labour Cost Codes (for production tracking)
+            'labour_cost_codes' => 'nullable|array',
+            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
+            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
         $materialData = $validated['materials'] ?? null;
         $costCodeData = $validated['cost_codes'] ?? null;
-        unset($validated['materials'], $validated['cost_codes']);
+        $labourCostCodeData = $validated['labour_cost_codes'] ?? null;
+        unset($validated['materials'], $validated['cost_codes'], $validated['labour_cost_codes']);
 
         $pricingMethod = $validated['pricing_method'] ?? $condition->pricing_method;
 
@@ -182,7 +207,19 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType']);
+        // Sync Labour Cost Codes (independent of pricing method)
+        if ($labourCostCodeData !== null) {
+            $condition->conditionLabourCodes()->delete();
+            foreach ($labourCostCodeData as $lcc) {
+                $condition->conditionLabourCodes()->create([
+                    'labour_cost_code_id' => $lcc['labour_cost_code_id'],
+                    'production_rate' => $lcc['production_rate'] ?? null,
+                    'hourly_rate' => $lcc['hourly_rate'] ?? null,
+                ]);
+            }
+        }
+
+        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode']);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -273,6 +310,55 @@ class TakeoffConditionController extends Controller
         $conditionType->delete();
 
         return response()->json(['message' => 'Condition type deleted.']);
+    }
+
+    // ---- Labour Cost Code CRUD ----
+
+    public function indexLabourCostCodes(Location $location)
+    {
+        $codes = LabourCostCode::where('location_id', $location->id)
+            ->ordered()
+            ->get();
+
+        return response()->json(['codes' => $codes]);
+    }
+
+    public function searchLabourCostCodes(Request $request, Location $location)
+    {
+        $query = $request->input('q', '');
+
+        $items = LabourCostCode::where('location_id', $location->id)
+            ->where(function ($q) use ($query) {
+                $q->where('code', 'like', "%{$query}%")
+                    ->orWhere('name', 'like', "%{$query}%");
+            })
+            ->ordered()
+            ->limit(30)
+            ->get();
+
+        return response()->json(['items' => $items]);
+    }
+
+    public function storeLabourCostCode(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'code' => 'required|string|max:50',
+            'name' => 'required|string|max:255',
+            'unit' => 'nullable|string|max:20',
+            'default_production_rate' => 'nullable|numeric|min:0',
+            'default_hourly_rate' => 'nullable|numeric|min:0',
+        ]);
+
+        $lcc = LabourCostCode::create([
+            'location_id' => $location->id,
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'unit' => $validated['unit'] ?? 'm2',
+            'default_production_rate' => $validated['default_production_rate'] ?? null,
+            'default_hourly_rate' => $validated['default_hourly_rate'] ?? null,
+        ]);
+
+        return response()->json($lcc);
     }
 
     /**

@@ -5,21 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class VariationLineItem extends Model
+class VariationPricingItem extends Model
 {
     protected $fillable = [
         'variation_id',
-        'line_number',
+        'takeoff_condition_id',
         'description',
         'qty',
-        'unit_cost',
+        'unit',
+        'labour_cost',
+        'material_cost',
         'total_cost',
-        'cost_item',
-        'cost_type',
-        'revenue',
-        'drawing_measurement_id',
-        'takeoff_condition_id',
-        'cost_code_id',
+        'sell_rate',
+        'sell_total',
+        'sort_order',
+    ];
+
+    protected $casts = [
+        'qty' => 'float',
+        'labour_cost' => 'float',
+        'material_cost' => 'float',
+        'total_cost' => 'float',
+        'sell_rate' => 'float',
+        'sell_total' => 'float',
+        'sort_order' => 'integer',
     ];
 
     public function variation(): BelongsTo
@@ -27,18 +36,8 @@ class VariationLineItem extends Model
         return $this->belongsTo(Variation::class);
     }
 
-    public function measurement(): BelongsTo
-    {
-        return $this->belongsTo(DrawingMeasurement::class, 'drawing_measurement_id');
-    }
-
     public function condition(): BelongsTo
     {
         return $this->belongsTo(TakeoffCondition::class, 'takeoff_condition_id');
-    }
-
-    public function costCode(): BelongsTo
-    {
-        return $this->belongsTo(CostCode::class);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TakeoffCondition extends Model
@@ -85,6 +86,18 @@ class TakeoffCondition extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function labourCostCodes(): BelongsToMany
+    {
+        return $this->belongsToMany(LabourCostCode::class, 'condition_labour_codes')
+            ->withPivot('production_rate', 'hourly_rate')
+            ->withTimestamps();
+    }
+
+    public function conditionLabourCodes(): HasMany
+    {
+        return $this->hasMany(ConditionLabourCode::class);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DrawingMeasurement extends Model
@@ -19,6 +20,9 @@ class DrawingMeasurement extends Model
         'points',
         'computed_value',
         'unit',
+        'scope',
+        'variation_id',
+        'source_measurement_id',
         'takeoff_condition_id',
         'material_cost',
         'labour_cost',
@@ -66,5 +70,20 @@ class DrawingMeasurement extends Model
     public function condition(): BelongsTo
     {
         return $this->belongsTo(TakeoffCondition::class, 'takeoff_condition_id');
+    }
+
+    public function variation(): BelongsTo
+    {
+        return $this->belongsTo(Variation::class);
+    }
+
+    public function sourceMeasurement(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_measurement_id');
+    }
+
+    public function statuses(): HasMany
+    {
+        return $this->hasMany(MeasurementStatus::class, 'drawing_measurement_id');
     }
 }

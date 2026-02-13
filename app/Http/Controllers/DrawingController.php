@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessDrawingJob;
 use App\Models\Drawing;
 use App\Models\DrawingAlignment;
+use App\Models\DrawingMeasurement;
 use App\Models\DrawingObservation;
 use App\Models\Location;
+use App\Models\MeasurementStatus;
 use App\Services\DrawingComparisonService;
 use App\Services\DrawingMetadataService;
 use App\Services\DrawingProcessingService;
@@ -185,6 +187,263 @@ class DrawingController extends Controller
      */
     public function show(Drawing $drawing): Response
     {
+        return $this->takeoff($drawing);
+    }
+
+    /**
+     * Takeoff workspace — measuring and conditions on a drawing.
+     */
+    public function takeoff(Drawing $drawing): Response
+    {
+        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+
+        return Inertia::render('drawings/takeoff', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'takeoff',
+        ]);
+    }
+
+    /**
+     * Variations workspace — measure and price change orders on a drawing.
+     */
+    public function variations(Drawing $drawing): Response
+    {
+        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+
+        return Inertia::render('drawings/variations', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'variations',
+        ]);
+    }
+
+    /**
+     * Production control workspace — track progress on a drawing.
+     */
+    public function production(Drawing $drawing): Response
+    {
+        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+
+        // Load takeoff measurements with condition's labour cost codes
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->orderBy('created_at')
+            ->get();
+
+        // Load calibration
+        $calibration = $drawing->scaleCalibration;
+
+        // Build statuses lookup: "measId-lccId" => percent
+        $statuses = [];
+        foreach ($measurements as $m) {
+            foreach ($m->statuses as $s) {
+                $statuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
+            }
+        }
+
+        // Build LCC summary from conditions used on this drawing
+        $lccSummary = $this->buildLccSummary($measurements, $statuses);
+
+        return Inertia::render('drawings/production', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'production',
+            'measurements' => $measurements,
+            'calibration' => $calibration,
+            'statuses' => $statuses,
+            'lccSummary' => array_values($lccSummary),
+        ]);
+    }
+
+    /**
+     * Update percent complete for a measurement / labour cost code pair.
+     */
+    public function updateMeasurementStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+        ]);
+
+        // Verify measurement belongs to this drawing
+        $measurement = DrawingMeasurement::where('id', $validated['measurement_id'])
+            ->where('drawing_id', $drawing->id)
+            ->firstOrFail();
+
+        $status = MeasurementStatus::updateOrCreate(
+            [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
+            ],
+            [
+                'percent_complete' => $validated['percent_complete'],
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        // Rebuild summary for response
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->get();
+
+        $allStatuses = [];
+        foreach ($measurements as $m) {
+            foreach ($m->statuses as $s) {
+                $allStatuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => $status,
+            'lccSummary' => array_values($this->buildLccSummary($measurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Bulk update percent complete for multiple measurements.
+     */
+    public function bulkUpdateMeasurementStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_ids' => 'required|array|min:1',
+            'measurement_ids.*' => 'integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+        ]);
+
+        // Verify all measurements belong to this drawing
+        $measurements = DrawingMeasurement::whereIn('id', $validated['measurement_ids'])
+            ->where('drawing_id', $drawing->id)
+            ->get();
+
+        foreach ($measurements as $measurement) {
+            MeasurementStatus::updateOrCreate(
+                [
+                    'drawing_measurement_id' => $measurement->id,
+                    'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                ],
+                [
+                    'percent_complete' => $validated['percent_complete'],
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
+
+        // Rebuild summary
+        $allMeasurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->get();
+
+        $allStatuses = [];
+        foreach ($allMeasurements as $m) {
+            foreach ($m->statuses as $s) {
+                $allStatuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'updated_count' => $measurements->count(),
+            'lccSummary' => array_values($this->buildLccSummary($allMeasurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Build aggregated Labour Cost Code summary for production tracking.
+     *
+     * Per LCC: quantity-weighted % = Sum(qty × %) / Sum(qty)
+     * Budget hours = Sum(qty / production_rate) for each measurement
+     */
+    private function buildLccSummary($measurements, array $statuses): array
+    {
+        $summary = [];
+
+        foreach ($measurements as $measurement) {
+            if (! $measurement->condition || ! $measurement->condition->conditionLabourCodes) {
+                continue;
+            }
+
+            $qty = (float) ($measurement->computed_value ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            foreach ($measurement->condition->conditionLabourCodes as $clc) {
+                $lcc = $clc->labourCostCode;
+                if (! $lcc) {
+                    continue;
+                }
+
+                $lccId = $lcc->id;
+                if (! isset($summary[$lccId])) {
+                    $summary[$lccId] = [
+                        'labour_cost_code_id' => $lccId,
+                        'code' => $lcc->code,
+                        'name' => $lcc->name,
+                        'unit' => $lcc->unit,
+                        'total_qty' => 0,
+                        'budget_hours' => 0,
+                        'weighted_qty_percent' => 0,
+                        'measurement_count' => 0,
+                    ];
+                }
+
+                $percent = $statuses[$measurement->id.'-'.$lccId] ?? 0;
+                // Use condition-level override, fallback to LCC default
+                $productionRate = (float) ($clc->production_rate ?? $lcc->default_production_rate ?? 0);
+                $budgetHours = $productionRate > 0 ? $qty / $productionRate : 0;
+
+                $summary[$lccId]['total_qty'] += $qty;
+                $summary[$lccId]['budget_hours'] += $budgetHours;
+                $summary[$lccId]['weighted_qty_percent'] += $qty * $percent;
+                $summary[$lccId]['measurement_count']++;
+            }
+        }
+
+        // Calculate final weighted percent and earned hours
+        foreach ($summary as &$item) {
+            $item['weighted_percent'] = $item['total_qty'] > 0
+                ? round($item['weighted_qty_percent'] / $item['total_qty'], 1)
+                : 0;
+            $item['earned_hours'] = round($item['budget_hours'] * ($item['weighted_percent'] / 100), 2);
+            $item['budget_hours'] = round($item['budget_hours'], 2);
+            unset($item['weighted_qty_percent']);
+        }
+
+        return $summary;
+    }
+
+    /**
+     * QA workspace — observations and defect tracking on a drawing.
+     */
+    public function qa(Drawing $drawing): Response
+    {
+        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+
+        return Inertia::render('drawings/qa', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'qa',
+        ]);
+    }
+
+    /**
+     * Load a drawing with its project, revisions, and observations.
+     *
+     * @return array{0: Drawing, 1: \Illuminate\Support\Collection}
+     */
+    private function loadDrawingWithRevisions(Drawing $drawing): array
+    {
         $drawing->load([
             'project:id,name',
             'previousRevision:id,sheet_number,revision_number,thumbnail_path,thumbnail_s3_key,page_preview_s3_key',
@@ -192,7 +451,6 @@ class DrawingController extends Controller
             'observations.createdBy',
         ]);
 
-        // Get revision history for same sheet
         $revisions = [];
         if ($drawing->sheet_number && $drawing->project_id) {
             $revisions = Drawing::where('project_id', $drawing->project_id)
@@ -206,11 +464,7 @@ class DrawingController extends Controller
                 ->get();
         }
 
-        return Inertia::render('drawings/show', [
-            'drawing' => $drawing,
-            'revisions' => $revisions,
-            'project' => $drawing->project,
-        ]);
+        return [$drawing, $revisions];
     }
 
     /**

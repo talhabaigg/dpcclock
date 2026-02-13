@@ -534,12 +534,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/variations/{id}/download/excel', [VariationController::class, 'download'])->name('variations.download')
         ->middleware('permission:variations.export');
 
+    // Drawing-specific variation API endpoints
+    Route::middleware('permission:variations.view')->group(function () {
+        Route::get('/drawings/{drawing}/variation-list', [VariationController::class, 'drawingVariations'])->name('drawings.variation-list');
+        Route::post('/locations/{location}/variation-preview', [VariationController::class, 'previewCosts'])->name('variations.preview');
+    });
+    Route::middleware('permission:variations.create')->group(function () {
+        Route::post('/locations/{location}/variation-generate', [VariationController::class, 'generateFromCondition'])->name('variations.generate');
+        Route::post('/variations/quick-store', [VariationController::class, 'quickStore'])->name('variations.quick-store');
+    });
+
+    // Variation Pricing Items (JSON API)
+    Route::middleware('permission:variations.edit')->group(function () {
+        Route::post('/variations/{variation}/pricing-items', [VariationController::class, 'storePricingItem'])->name('variations.pricing-items.store');
+        Route::put('/variations/{variation}/pricing-items/{item}', [VariationController::class, 'updatePricingItem'])->name('variations.pricing-items.update');
+        Route::delete('/variations/{variation}/pricing-items/{item}', [VariationController::class, 'destroyPricingItem'])->name('variations.pricing-items.destroy');
+        Route::post('/variations/{variation}/generate-premier', [VariationController::class, 'generatePremier'])->name('variations.generate-premier');
+        Route::post('/variations/{variation}/sell-rates', [VariationController::class, 'updateSellRates'])->name('variations.sell-rates');
+    });
+    Route::get('/variations/{variation}/client-quote', [VariationController::class, 'clientQuote'])->name('variations.client-quote')
+        ->middleware('permission:variations.view');
+
     // ============================================
     // DRAWINGS
     // ============================================
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
-        Route::get('/drawings/{drawing}', [DrawingController::class, 'show'])->name('drawings.show');
+        Route::get('/drawings/{drawing}', fn (\App\Models\Drawing $drawing) => redirect()->route('drawings.takeoff', $drawing))->name('drawings.show');
+        Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
+        Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
+        Route::get('/drawings/{drawing}/production', [DrawingController::class, 'production'])->name('drawings.production');
+        Route::get('/drawings/{drawing}/qa', [DrawingController::class, 'qa'])->name('drawings.qa');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');
         Route::get('/drawings/{drawing}/thumbnail', [DrawingController::class, 'serveThumbnail'])->name('drawings.thumbnail');
@@ -582,6 +607,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/measurements/recalculate-costs', [DrawingMeasurementController::class, 'recalculateCosts'])->name('drawings.measurements.recalculate-costs');
     });
 
+    // Production Control (statusing)
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::post('/drawings/{drawing}/measurement-status', [DrawingController::class, 'updateMeasurementStatus'])->name('drawings.measurement-status.update');
+        Route::post('/drawings/{drawing}/measurement-status-bulk', [DrawingController::class, 'bulkUpdateMeasurementStatus'])->name('drawings.measurement-status.bulk');
+    });
+
     // Takeoff Conditions (scoped to Location/project)
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'index'])->name('takeoff-conditions.index');
@@ -595,6 +626,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}/condition-types', [TakeoffConditionController::class, 'indexTypes'])->name('condition-types.index');
         Route::post('/locations/{location}/condition-types', [TakeoffConditionController::class, 'storeType'])->name('condition-types.store');
         Route::delete('/locations/{location}/condition-types/{conditionType}', [TakeoffConditionController::class, 'destroyType'])->name('condition-types.destroy');
+
+        // Labour Cost Codes
+        Route::get('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'indexLabourCostCodes'])->name('labour-cost-codes.index');
+        Route::get('/locations/{location}/labour-cost-codes/search', [TakeoffConditionController::class, 'searchLabourCostCodes'])->name('labour-cost-codes.search');
+        Route::post('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'storeLabourCostCode'])->name('labour-cost-codes.store');
     });
 
     // Drawing Alignment

@@ -51,6 +51,8 @@ type LeafletDrawingViewerProps = {
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area') => void;
     onMeasurementClick?: (measurement: MeasurementData) => void;
+    // Production labels: measurementId → percent_complete
+    productionLabels?: Record<number, number>;
 };
 
 // Custom marker icon for observations
@@ -306,6 +308,7 @@ export function LeafletDrawingViewer({
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
+    productionLabels,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
     const previewPinRef = useRef<HTMLDivElement>(null);
@@ -452,6 +455,7 @@ export function LeafletDrawingViewer({
                     onCalibrationComplete={onCalibrationComplete}
                     onMeasurementComplete={onMeasurementComplete}
                     onMeasurementClick={onMeasurementClick}
+                    productionLabels={productionLabels}
                 />
             </MapContainer>
 
