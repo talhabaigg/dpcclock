@@ -112,7 +112,10 @@ class DrawingMeasurementController extends Controller
     public function index(Drawing $drawing)
     {
         return response()->json([
-            'measurements' => $drawing->measurements()->orderBy('created_at')->get(),
+            'measurements' => $drawing->measurements()
+                ->with('variation:id,co_number,description')
+                ->orderBy('created_at')
+                ->get(),
             'calibration' => $drawing->scaleCalibration,
         ]);
     }
@@ -129,6 +132,8 @@ class DrawingMeasurementController extends Controller
             'points.*.y' => 'required|numeric|min:0|max:1',
             'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
             'bid_area_id' => 'nullable|integer|exists:bid_areas,id',
+            'scope' => 'nullable|string|in:takeoff,variation',
+            'variation_id' => 'nullable|integer|exists:variations,id',
         ]);
 
         $computedValue = null;
@@ -168,6 +173,8 @@ class DrawingMeasurementController extends Controller
             'unit' => $unit,
             'takeoff_condition_id' => $validated['takeoff_condition_id'] ?? null,
             'bid_area_id' => $validated['bid_area_id'] ?? null,
+            'scope' => $validated['scope'] ?? 'takeoff',
+            'variation_id' => $validated['variation_id'] ?? null,
         ]);
 
         // Compute costs if a condition is assigned
@@ -177,6 +184,8 @@ class DrawingMeasurementController extends Controller
             $measurement->update($costs);
             $measurement->refresh();
         }
+
+        $measurement->load('variation:id,co_number,description');
 
         return response()->json($measurement);
     }

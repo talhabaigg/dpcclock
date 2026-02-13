@@ -524,6 +524,19 @@ class VariationController extends Controller
     // ---- Pricing Item CRUD (JSON API) ----
 
     /**
+     * List pricing items for a variation.
+     */
+    public function indexPricingItems(Variation $variation): JsonResponse
+    {
+        $items = $variation->pricingItems()
+            ->with('condition.conditionType')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json(['pricing_items' => $items]);
+    }
+
+    /**
      * Add a pricing item to a variation.
      * For condition items: computes costs via VariationCostCalculator.
      * For manual items: uses provided costs directly.

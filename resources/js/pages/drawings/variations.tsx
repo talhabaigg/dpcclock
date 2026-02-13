@@ -1,10 +1,11 @@
 import type { TakeoffCondition } from '@/components/condition-manager';
 import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
-import { Hand, Hash, Maximize2, Pencil, Ruler, Trash2 } from 'lucide-react';
+import { DollarSign, FileText, Hand, Hash, Loader2, Maximize2, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -49,6 +50,31 @@ type Drawing = {
     tiles_info?: TilesInfo | null;
 };
 
+type VariationSummary = {
+    id: number;
+    co_number: string;
+    description: string;
+    status: string;
+    type: string;
+    total_cost?: number;
+    total_revenue?: number;
+};
+
+type PricingItem = {
+    id: number;
+    variation_id: number;
+    takeoff_condition_id: number | null;
+    description: string;
+    qty: number;
+    unit: string;
+    labour_cost: number;
+    material_cost: number;
+    total_cost: number;
+    sell_rate: number | null;
+    sell_total: number | null;
+    condition?: { id: number; name: string; condition_type?: { name: string; unit: string } | null } | null;
+};
+
 export default function DrawingVariations() {
     const { drawing, revisions, project, activeTab } = usePage<{
         drawing: Drawing;
@@ -67,6 +93,12 @@ export default function DrawingVariations() {
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [conditions, setConditions] = useState<TakeoffCondition[]>([]);
     const [showPanel, setShowPanel] = useState(true);
+
+    // Variation + pricing state
+    const [variations, setVariations] = useState<VariationSummary[]>([]);
+    const [selectedVariationId, setSelectedVariationId] = useState<number | null>(null);
+    const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
+    const [generatingPremier, setGeneratingPremier] = useState(false);
 
     const conditionPatterns = useMemo(() => {
         const map: Record<number, string> = {};
@@ -106,6 +138,76 @@ export default function DrawingVariations() {
             .then((data) => setConditions(data.conditions || []))
             .catch(() => {});
     }, [projectId]);
+
+    // Load project variations
+    useEffect(() => {
+        fetch(`/drawings/${drawing.id}/variation-list`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setVariations(data.variations || []);
+                // Auto-select first variation
+                if (data.variations?.length > 0 && !selectedVariationId) {
+                    setSelectedVariationId(data.variations[0].id);
+                }
+            })
+            .catch(() => {});
+    }, [drawing.id]);
+
+    // Load pricing items for selected variation
+    useEffect(() => {
+        if (!selectedVariationId) {
+            setPricingItems([]);
+            return;
+        }
+        // Pricing items are loaded via the variation's pricingItems relation
+        // We can fetch them via a variation detail endpoint or embed them
+        // For now, the variation-list already loads with lineItems; we need pricing items too
+        // Let's fetch the variation edit data which includes pricingItems
+        fetch(`/variations/${selectedVariationId}/pricing-items`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => {
+                if (!res.ok) return { pricing_items: [] };
+                return res.json();
+            })
+            .then((data) => setPricingItems(data.pricing_items || []))
+            .catch(() => setPricingItems([]));
+    }, [selectedVariationId]);
+
+    const handleGeneratePremier = async (variationId: number) => {
+        setGeneratingPremier(true);
+        try {
+            const response = await fetch(`/variations/${variationId}/generate-premier`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) throw new Error('Failed to generate');
+            const data = await response.json();
+            toast.success(`Generated ${data.variation?.line_items?.length || 0} Premier line items`);
+            // Refresh variations list
+            fetch(`/drawings/${drawing.id}/variation-list`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then((res) => res.json())
+                .then((d) => setVariations(d.variations || []))
+                .catch(() => {});
+        } catch {
+            toast.error('Failed to generate Premier line items');
+        } finally {
+            setGeneratingPremier(false);
+        }
+    };
 
     const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
         const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
@@ -165,12 +267,16 @@ export default function DrawingVariations() {
     };
 
     // Filter variation-scope measurements for the side panel
-    const variationMeasurements = measurements.filter((m) => m.scope === 'variation');
+    const variationMeasurements = selectedVariationId
+        ? measurements.filter((m) => m.scope === 'variation' && m.variation_id === selectedVariationId)
+        : measurements.filter((m) => m.scope === 'variation');
+
+    const selectedVariation = selectedVariationId ? variations.find((v) => v.id === selectedVariationId) : null;
 
     const formatValue = (m: MeasurementData): string => {
-        if (m.type === 'count') return `${m.count ?? m.points?.length ?? 0} pts`;
-        if (m.type === 'area') return m.calculated_value ? `${m.calculated_value.toFixed(2)} m\u00B2` : '--';
-        return m.calculated_value ? `${m.calculated_value.toFixed(2)} m` : '--';
+        if (m.type === 'count') return `${m.computed_value ?? m.points?.length ?? 0} ea`;
+        if (m.type === 'area') return m.computed_value ? `${m.computed_value.toFixed(2)} ${m.unit || 'sq m'}` : '--';
+        return m.computed_value ? `${m.computed_value.toFixed(2)} ${m.unit || 'm'}` : '--';
     };
 
     return (
@@ -269,55 +375,148 @@ export default function DrawingVariations() {
                     />
                 </div>
 
-                {/* Simple Measurement List */}
+                {/* Variation Panel */}
                 {showPanel && (
-                    <div className="bg-background w-56 shrink-0 overflow-y-auto border-l">
-                        <div className="border-b px-3 py-2">
-                            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Variation Measurements
-                            </div>
-                            <div className="mt-0.5 text-[11px] text-slate-400">
-                                {variationMeasurements.length} item{variationMeasurements.length !== 1 ? 's' : ''}
+                    <div className="bg-background flex w-64 shrink-0 flex-col overflow-hidden border-l">
+                        {/* Variation selector */}
+                        <div className="border-b px-2 py-1.5">
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Variations</div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                                {variations.map((v) => (
+                                    <button
+                                        key={v.id}
+                                        onClick={() => setSelectedVariationId(v.id)}
+                                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                                            selectedVariationId === v.id
+                                                ? 'border-primary bg-primary/10 font-semibold text-primary'
+                                                : 'border-border text-muted-foreground hover:bg-muted/50'
+                                        }`}
+                                    >
+                                        {v.co_number}
+                                    </button>
+                                ))}
+                                {variations.length === 0 && (
+                                    <span className="text-[10px] text-muted-foreground">No variations yet</span>
+                                )}
                             </div>
                         </div>
 
-                        {variationMeasurements.length === 0 ? (
-                            <div className="px-3 py-6 text-center text-xs text-slate-400">
-                                No variation measurements yet.
-                                <br />
-                                Use the measure tools to add.
+                        {/* Selected variation detail */}
+                        {selectedVariation && (
+                            <div className="border-b px-2 py-1.5">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-xs font-semibold">{selectedVariation.co_number}</div>
+                                    <Badge variant="outline" className="h-4 text-[9px]">{selectedVariation.status}</Badge>
+                                </div>
+                                <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{selectedVariation.description}</div>
+                                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                                    <span>{variationMeasurements.length} measurements</span>
+                                    <span>{pricingItems.length} priced</span>
+                                </div>
                             </div>
-                        ) : (
-                            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {variationMeasurements.map((m) => (
-                                    <div
-                                        key={m.id}
-                                        className={`flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
-                                            selectedMeasurementId === m.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                                        }`}
-                                        onClick={() => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                                    >
-                                        <span
-                                            className="h-2 w-2 shrink-0 rounded-full"
-                                            style={{ backgroundColor: m.color || '#f59e0b' }}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="truncate text-xs font-medium">{m.name}</div>
-                                            <div className="text-[10px] text-slate-400">{formatValue(m)}</div>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteMeasurement(m);
-                                            }}
-                                            className="h-5 w-5 p-0 text-slate-300 hover:text-red-500"
-                                        >
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
+                        )}
+
+                        {/* Scrollable content */}
+                        <div className="flex-1 overflow-y-auto">
+                            {/* Measurements */}
+                            <div className="border-b">
+                                <div className="bg-muted/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Measurements
+                                </div>
+                                {variationMeasurements.length === 0 ? (
+                                    <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+                                        No measurements for this variation.
                                     </div>
-                                ))}
+                                ) : (
+                                    <div className="divide-y">
+                                        {variationMeasurements.map((m) => (
+                                            <div
+                                                key={m.id}
+                                                className={`flex cursor-pointer items-center gap-1.5 px-2 py-1 hover:bg-muted/50 ${
+                                                    selectedMeasurementId === m.id ? 'bg-primary/5' : ''
+                                                }`}
+                                                onClick={() => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                                            >
+                                                <span
+                                                    className="h-2 w-2 shrink-0 rounded-full"
+                                                    style={{ backgroundColor: m.color || '#f59e0b' }}
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate text-[11px] font-medium">{m.name}</div>
+                                                    <div className="text-[10px] text-muted-foreground">{formatValue(m)}</div>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteMeasurement(m);
+                                                    }}
+                                                    className="h-5 w-5 p-0 text-muted-foreground/50 hover:text-red-500"
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pricing Items */}
+                            <div>
+                                <div className="bg-muted/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Pricing Items
+                                </div>
+                                {pricingItems.length === 0 ? (
+                                    <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+                                        No pricing items yet.
+                                    </div>
+                                ) : (
+                                    <div className="divide-y">
+                                        {pricingItems.map((item) => (
+                                            <div key={item.id} className="px-2 py-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="truncate text-[11px] font-medium">{item.description}</div>
+                                                    <span className="ml-1 shrink-0 text-[10px] font-semibold text-green-600">
+                                                        ${item.total_cost.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                    <span>{item.qty} {item.unit}</span>
+                                                    {item.condition && (
+                                                        <span className="truncate">{item.condition.name}</span>
+                                                    )}
+                                                    <span className="ml-auto">
+                                                        L: ${item.labour_cost.toFixed(0)} M: ${item.material_cost.toFixed(0)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer actions */}
+                        {selectedVariationId && pricingItems.length > 0 && (
+                            <div className="border-t p-2">
+                                <div className="mb-1.5 flex items-center justify-between text-[10px]">
+                                    <span className="text-muted-foreground">Total cost</span>
+                                    <span className="font-semibold">${pricingItems.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}</span>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    className="h-7 w-full gap-1 text-[11px]"
+                                    onClick={() => handleGeneratePremier(selectedVariationId)}
+                                    disabled={generatingPremier}
+                                >
+                                    {generatingPremier ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <FileText className="h-3 w-3" />
+                                    )}
+                                    Generate Premier
+                                </Button>
                             </div>
                         )}
                     </div>

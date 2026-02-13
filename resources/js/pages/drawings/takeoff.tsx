@@ -29,6 +29,7 @@ import {
     MousePointer,
     Pencil,
     Pentagon,
+    Plus,
     RotateCcw,
     Ruler,
     Save,
@@ -254,6 +255,23 @@ export default function DrawingTakeoff() {
     const [showBidAreaManager, setShowBidAreaManager] = useState(false);
     const [activeBidAreaId, setActiveBidAreaId] = useState<number | null>(null);
 
+    // Bid View layers state
+    type VariationSummary = { id: number; co_number: string; description: string; status: string };
+    const [projectVariations, setProjectVariations] = useState<VariationSummary[]>([]);
+    const [showBidViewPanel, setShowBidViewPanel] = useState(false);
+    const [bidViewLayers, setBidViewLayers] = useState<{
+        baseBid: boolean;
+        variations: Record<number, boolean>;
+    }>({ baseBid: true, variations: {} });
+    const [activeVariationId, setActiveVariationId] = useState<number | null>(null);
+    const [showNewVariationForm, setShowNewVariationForm] = useState(false);
+    const [newVarCoNumber, setNewVarCoNumber] = useState('');
+    const [newVarDescription, setNewVarDescription] = useState('');
+    const [newVarType, setNewVarType] = useState<'extra' | 'credit'>('extra');
+    const [creatingVariation, setCreatingVariation] = useState(false);
+
+    const activeVariation = activeVariationId ? projectVariations.find((v) => v.id === activeVariationId) : null;
+
     const conditionPatterns = useMemo(() => {
         const map: Record<number, string> = {};
         for (const c of conditions) {
@@ -321,6 +339,76 @@ export default function DrawingTakeoff() {
             .then((data) => setBidAreas(data.bidAreas || []))
             .catch(() => {});
     }, [projectId]);
+
+    // Load project variations for bid view layers
+    useEffect(() => {
+        fetch(`/drawings/${drawing.id}/variation-list`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => setProjectVariations(data.variations || []))
+            .catch(() => {});
+    }, [drawing.id]);
+
+    // Filter measurements based on bid view layer visibility
+    const visibleMeasurements = useMemo(() => {
+        // If no variation layers are toggled on and base bid is on, show all takeoff measurements (default behavior)
+        const anyVariationOn = Object.values(bidViewLayers.variations).some(Boolean);
+        if (bidViewLayers.baseBid && !anyVariationOn) {
+            return measurements.filter((m) => !m.scope || m.scope === 'takeoff');
+        }
+        return measurements.filter((m) => {
+            if (!m.scope || m.scope === 'takeoff') {
+                return bidViewLayers.baseBid;
+            }
+            if (m.scope === 'variation' && m.variation_id) {
+                return bidViewLayers.variations[m.variation_id] === true;
+            }
+            return bidViewLayers.baseBid;
+        });
+    }, [measurements, bidViewLayers]);
+
+    const handleCreateVariation = async () => {
+        if (!newVarCoNumber.trim() || !newVarDescription.trim()) {
+            toast.error('CO number and description are required.');
+            return;
+        }
+        setCreatingVariation(true);
+        try {
+            const response = await fetch('/variations/quick-store', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    location_id: projectId,
+                    co_number: newVarCoNumber.trim(),
+                    description: newVarDescription.trim(),
+                    type: newVarType,
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to create variation');
+            const data = await response.json();
+            const created = data.variation;
+            setProjectVariations((prev) => [...prev, created]);
+            setBidViewLayers((prev) => ({ ...prev, variations: { ...prev.variations, [created.id]: true } }));
+            setActiveVariationId(created.id);
+            setShowNewVariationForm(false);
+            setNewVarCoNumber('');
+            setNewVarDescription('');
+            setNewVarType('extra');
+            toast.success(`Created ${created.co_number}`);
+        } catch {
+            toast.error('Failed to create variation.');
+        } finally {
+            setCreatingVariation(false);
+        }
+    };
 
     // Existing categories for datalist
     const existingCategories = [...new Set(measurements.map((m) => m.category).filter(Boolean))] as string[];
@@ -945,12 +1033,34 @@ export default function DrawingTakeoff() {
                     points,
                     takeoff_condition_id: activeCondition?.id || null,
                     bid_area_id: activeBidAreaId || null,
+                    scope: activeVariationId ? 'variation' : 'takeoff',
+                    variation_id: activeVariationId || null,
                 }),
             });
             if (!response.ok) throw new Error('Failed to save');
             const saved = await response.json();
             setMeasurements((prev) => [...prev, saved]);
             toast.success(`Saved: ${name}`);
+
+            // Auto-create pricing item when variation + condition
+            if (activeVariationId && activeCondition?.id && saved.computed_value) {
+                fetch(`/variations/${activeVariationId}/pricing-items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-XSRF-TOKEN': getXsrfToken(),
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        takeoff_condition_id: activeCondition.id,
+                        description: name,
+                        qty: saved.computed_value,
+                        unit: saved.unit || 'EA',
+                    }),
+                }).catch(() => {});
+            }
         } catch {
             toast.error('Failed to save measurement.');
         }
@@ -1209,6 +1319,24 @@ export default function DrawingTakeoff() {
                         </>
                     )}
 
+                    {/* Bid View Toggle */}
+                    <div className="bg-border h-4 w-px" />
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={showBidViewPanel ? 'secondary' : 'ghost'}
+                        onClick={() => setShowBidViewPanel(!showBidViewPanel)}
+                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
+                    >
+                        <Layers className="h-3 w-3" />
+                        Bid View
+                    </Button>
+                    {activeVariation && (
+                        <Badge variant="outline" className="h-5 gap-0.5 rounded px-1.5 text-[10px] font-semibold text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800">
+                            {activeVariation.co_number}
+                        </Badge>
+                    )}
+
                     <div className="bg-border h-4 w-px" />
 
                     {/* Compare Toggle */}
@@ -1376,8 +1504,167 @@ export default function DrawingTakeoff() {
                 </>
             }
         >
-                {/* Main Viewer + Takeoff Panel */}
+                {/* Main Viewer + Panels */}
                 <div className="relative flex flex-1 overflow-hidden">
+                    {/* Bid View Left Panel */}
+                    {showBidViewPanel && (
+                        <div className="bg-background flex w-44 shrink-0 flex-col overflow-hidden border-r text-[11px]">
+                            {/* Quick toggle row */}
+                            <div className="flex items-center border-b bg-muted/30 px-1 py-px">
+                                <button
+                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                                    onClick={() => {
+                                        setBidViewLayers({
+                                            baseBid: true,
+                                            variations: Object.fromEntries(projectVariations.map((v) => [v.id, true])),
+                                        });
+                                        setActiveVariationId(null);
+                                    }}
+                                >
+                                    All
+                                </button>
+                                <span className="text-muted-foreground/40">|</span>
+                                <button
+                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                                    onClick={() => {
+                                        setBidViewLayers({ baseBid: true, variations: {} });
+                                        setActiveVariationId(null);
+                                    }}
+                                >
+                                    Base
+                                </button>
+                                <span className="text-muted-foreground/40">|</span>
+                                <button
+                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                        setBidViewLayers({
+                                            baseBid: false,
+                                            variations: Object.fromEntries(projectVariations.map((v) => [v.id, true])),
+                                        })
+                                    }
+                                >
+                                    Var
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto">
+                                {/* Base Bid row */}
+                                <div
+                                    className={`flex cursor-pointer items-center gap-1 px-1 py-px hover:bg-muted/50 ${!activeVariationId ? 'bg-primary/10 font-semibold' : ''}`}
+                                    onClick={() => setActiveVariationId(null)}
+                                >
+                                    <Checkbox
+                                        checked={bidViewLayers.baseBid}
+                                        onCheckedChange={(checked) => {
+                                            setBidViewLayers((prev) => ({ ...prev, baseBid: !!checked }));
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="h-3 w-3 rounded-sm"
+                                    />
+                                    <span className="leading-tight">Base Bid</span>
+                                </div>
+
+                                {/* Variation rows */}
+                                {projectVariations.length > 0 && (
+                                    <>
+                                        <div className="border-t border-dashed" />
+                                        {projectVariations.map((v) => (
+                                            <div
+                                                key={v.id}
+                                                className={`flex cursor-pointer items-center gap-1 px-1 py-px hover:bg-muted/50 ${activeVariationId === v.id ? 'bg-primary/10 font-semibold' : ''}`}
+                                                onClick={() => {
+                                                    setActiveVariationId(activeVariationId === v.id ? null : v.id);
+                                                    if (activeVariationId !== v.id) {
+                                                        setBidViewLayers((prev) => ({
+                                                            ...prev,
+                                                            variations: { ...prev.variations, [v.id]: true },
+                                                        }));
+                                                    }
+                                                }}
+                                            >
+                                                <Checkbox
+                                                    checked={bidViewLayers.variations[v.id] === true}
+                                                    onCheckedChange={(checked) =>
+                                                        setBidViewLayers((prev) => ({
+                                                            ...prev,
+                                                            variations: { ...prev.variations, [v.id]: !!checked },
+                                                        }))
+                                                    }
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="h-3 w-3 rounded-sm"
+                                                />
+                                                <span className="truncate leading-tight">{v.co_number}</span>
+                                                {v.description && (
+                                                    <span className="ml-auto truncate pl-1 text-[9px] text-muted-foreground">
+                                                        {v.description.length > 12 ? v.description.slice(0, 12) + '…' : v.description}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* + Variation footer */}
+                            <div className="border-t">
+                                {showNewVariationForm ? (
+                                    <div className="space-y-1 p-1.5">
+                                        <Input
+                                            value={newVarCoNumber}
+                                            onChange={(e) => setNewVarCoNumber(e.target.value)}
+                                            placeholder="CO number"
+                                            className="h-5 text-[10px]"
+                                        />
+                                        <Input
+                                            value={newVarDescription}
+                                            onChange={(e) => setNewVarDescription(e.target.value)}
+                                            placeholder="Description"
+                                            className="h-5 text-[10px]"
+                                        />
+                                        <div className="flex gap-1">
+                                            <select
+                                                value={newVarType}
+                                                onChange={(e) => setNewVarType(e.target.value as 'extra' | 'credit')}
+                                                className="h-5 flex-1 rounded border bg-background px-1 text-[10px]"
+                                            >
+                                                <option value="extra">Extra</option>
+                                                <option value="credit">Credit</option>
+                                            </select>
+                                            <Button
+                                                size="sm"
+                                                className="h-5 px-2 text-[10px]"
+                                                onClick={handleCreateVariation}
+                                                disabled={creatingVariation}
+                                            >
+                                                {creatingVariation ? '...' : 'Create'}
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-5 px-1 text-[10px]"
+                                                onClick={() => {
+                                                    setShowNewVariationForm(false);
+                                                    setNewVarCoNumber('');
+                                                    setNewVarDescription('');
+                                                }}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                        onClick={() => setShowNewVariationForm(true)}
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Variation
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="relative flex-1 overflow-hidden">
                         <LeafletDrawingViewer
                             tiles={drawing.tiles_info || undefined}
@@ -1409,7 +1696,7 @@ export default function DrawingTakeoff() {
                                 setPendingPoint({ pageNumber: 1, x, y });
                                 setDialogOpen(true);
                             }}
-                            measurements={measurements}
+                            measurements={visibleMeasurements}
                             selectedMeasurementId={selectedMeasurementId}
                             calibration={calibration}
                             conditionPatterns={conditionPatterns}
@@ -1427,7 +1714,7 @@ export default function DrawingTakeoff() {
                             <TakeoffPanel
                                 viewMode={viewMode}
                                 calibration={calibration}
-                                measurements={measurements}
+                                measurements={visibleMeasurements}
                                 selectedMeasurementId={selectedMeasurementId}
                                 conditions={conditions}
                                 activeConditionId={activeConditionId}

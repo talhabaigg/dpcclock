@@ -35,6 +35,13 @@ export type MeasurementData = {
     material_cost: number | null;
     labour_cost: number | null;
     total_cost: number | null;
+    scope?: 'takeoff' | 'variation' | null;
+    variation_id?: number | null;
+    variation?: {
+        id: number;
+        co_number: string;
+        description: string;
+    } | null;
     created_at?: string;
 };
 
@@ -205,9 +212,10 @@ export function MeasurementLayer({
 
             if (m.type === 'count') {
                 // Render count markers as numbered circle markers
+                const countCOPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                 const countLabel = m.computed_value != null
-                    ? `${m.name}: ${Math.round(m.computed_value)} ea`
-                    : m.name;
+                    ? `${countCOPrefix}${m.name}: ${Math.round(m.computed_value)} ea`
+                    : `${countCOPrefix}${m.name}`;
 
                 latlngs.forEach((ll, idx) => {
                     const marker = L.circleMarker(ll, {
@@ -238,9 +246,11 @@ export function MeasurementLayer({
                     summaryMarker.addTo(group);
                 }
             } else if (m.type === 'linear') {
-                const pattern = m.takeoff_condition_id && conditionPatterns
-                    ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                    : 'solid';
+                const pattern = m.scope === 'variation'
+                    ? 'dashed'
+                    : m.takeoff_condition_id && conditionPatterns
+                        ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                        : 'solid';
                 const line = L.polyline(latlngs, {
                     color: m.color,
                     weight,
@@ -259,9 +269,10 @@ export function MeasurementLayer({
                     }).addTo(group);
                 });
 
+                const coPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                 const label = m.computed_value != null
-                    ? `${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                    : m.name;
+                    ? `${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                    : `${coPrefix}${m.name}`;
                 line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                 line.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
@@ -269,9 +280,11 @@ export function MeasurementLayer({
                 });
                 line.addTo(group);
             } else {
-                const areaPattern = m.takeoff_condition_id && conditionPatterns
-                    ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                    : 'solid';
+                const areaPattern = m.scope === 'variation'
+                    ? 'dashed'
+                    : m.takeoff_condition_id && conditionPatterns
+                        ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                        : 'solid';
                 const polygon = L.polygon(latlngs, {
                     color: m.color,
                     weight,
@@ -292,9 +305,10 @@ export function MeasurementLayer({
                     }).addTo(group);
                 });
 
+                const areaCOPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                 const label = m.computed_value != null
-                    ? `${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                    : m.name;
+                    ? `${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                    : `${areaCOPrefix}${m.name}`;
                 polygon.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                 polygon.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);

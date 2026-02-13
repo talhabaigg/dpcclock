@@ -546,6 +546,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Variation Pricing Items (JSON API)
+    Route::get('/variations/{variation}/pricing-items', [VariationController::class, 'indexPricingItems'])->name('variations.pricing-items.index')
+        ->middleware('permission:variations.view');
     Route::middleware('permission:variations.edit')->group(function () {
         Route::post('/variations/{variation}/pricing-items', [VariationController::class, 'storePricingItem'])->name('variations.pricing-items.store');
         Route::put('/variations/{variation}/pricing-items/{item}', [VariationController::class, 'updatePricingItem'])->name('variations.pricing-items.update');
