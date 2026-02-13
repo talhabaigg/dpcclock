@@ -20,10 +20,12 @@ type ProductionPanelProps = {
     onSelectLcc: (lccId: number | null) => void;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getPercentColor(_percent: number): string {
     return '#3b82f6'; // blue-500 — will add green/red when hours comparison is introduced
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getPercentBg(_percent: number): string {
     return 'bg-blue-500/10';
 }

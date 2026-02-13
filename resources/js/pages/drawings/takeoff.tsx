@@ -1607,60 +1607,13 @@ export default function DrawingTakeoff() {
 
                             {/* + Variation footer */}
                             <div className="border-t">
-                                {showNewVariationForm ? (
-                                    <div className="space-y-1 p-1.5">
-                                        <Input
-                                            value={newVarCoNumber}
-                                            onChange={(e) => setNewVarCoNumber(e.target.value)}
-                                            placeholder="CO number"
-                                            className="h-5 text-[10px]"
-                                        />
-                                        <Input
-                                            value={newVarDescription}
-                                            onChange={(e) => setNewVarDescription(e.target.value)}
-                                            placeholder="Description"
-                                            className="h-5 text-[10px]"
-                                        />
-                                        <div className="flex gap-1">
-                                            <select
-                                                value={newVarType}
-                                                onChange={(e) => setNewVarType(e.target.value as 'extra' | 'credit')}
-                                                className="h-5 flex-1 rounded border bg-background px-1 text-[10px]"
-                                            >
-                                                <option value="extra">Extra</option>
-                                                <option value="credit">Credit</option>
-                                            </select>
-                                            <Button
-                                                size="sm"
-                                                className="h-5 px-2 text-[10px]"
-                                                onClick={handleCreateVariation}
-                                                disabled={creatingVariation}
-                                            >
-                                                {creatingVariation ? '...' : 'Create'}
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-5 px-1 text-[10px]"
-                                                onClick={() => {
-                                                    setShowNewVariationForm(false);
-                                                    setNewVarCoNumber('');
-                                                    setNewVarDescription('');
-                                                }}
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button
-                                        className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                                        onClick={() => setShowNewVariationForm(true)}
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                        Variation
-                                    </button>
-                                )}
+                                <button
+                                    className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                    onClick={() => setShowNewVariationForm(true)}
+                                >
+                                    <Plus className="h-3 w-3" />
+                                    Variation
+                                </button>
                             </div>
                         </div>
                     )}
@@ -2392,6 +2345,65 @@ export default function DrawingTakeoff() {
                 bidAreas={bidAreas}
                 onBidAreasChange={setBidAreas}
             />
+
+            {/* New Variation Dialog */}
+            <Dialog
+                open={showNewVariationForm}
+                onOpenChange={(open) => {
+                    setShowNewVariationForm(open);
+                    if (!open) {
+                        setNewVarCoNumber('');
+                        setNewVarDescription('');
+                        setNewVarType('extra');
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>New Variation</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="var-co">CO Number</Label>
+                            <Input
+                                id="var-co"
+                                value={newVarCoNumber}
+                                onChange={(e) => setNewVarCoNumber(e.target.value)}
+                                placeholder="e.g. CO-001"
+                            />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="var-desc">Description</Label>
+                            <Input
+                                id="var-desc"
+                                value={newVarDescription}
+                                onChange={(e) => setNewVarDescription(e.target.value)}
+                                placeholder="Brief description of the variation"
+                            />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="var-type">Type</Label>
+                            <Select value={newVarType} onValueChange={(v) => setNewVarType(v as 'extra' | 'credit')}>
+                                <SelectTrigger id="var-type">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="extra">Extra</SelectItem>
+                                    <SelectItem value="credit">Credit</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowNewVariationForm(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreateVariation} disabled={creatingVariation}>
+                            {creatingVariation ? 'Creating...' : 'Create'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </DrawingWorkspaceLayout>
     );
 }

@@ -567,6 +567,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
         Route::get('/drawings/{drawing}/production', [DrawingController::class, 'production'])->name('drawings.production');
+        Route::get('/drawings/{drawing}/budget', [DrawingController::class, 'budget'])->name('drawings.budget');
+        Route::get('/locations/{location}/budget-hours', [DrawingController::class, 'getUsedHours'])->name('budget-hours.index');
+        Route::post('/locations/{location}/budget-hours', [DrawingController::class, 'storeUsedHours'])->name('budget-hours.store');
+        Route::get('/locations/{location}/budget-hours-history', [DrawingController::class, 'getUsedHoursHistory'])->name('budget-hours.history');
         Route::get('/drawings/{drawing}/qa', [DrawingController::class, 'qa'])->name('drawings.qa');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');

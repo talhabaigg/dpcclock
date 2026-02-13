@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessDrawingJob;
+use App\Models\BidArea;
+use App\Models\BudgetHoursEntry;
 use App\Models\Drawing;
 use App\Models\DrawingAlignment;
 use App\Models\DrawingMeasurement;
 use App\Models\DrawingObservation;
 use App\Models\Location;
 use App\Models\MeasurementStatus;
+use App\Models\Variation;
 use App\Services\DrawingComparisonService;
 use App\Services\DrawingMetadataService;
 use App\Services\DrawingProcessingService;
@@ -423,6 +426,220 @@ class DrawingController extends Controller
         }
 
         return $summary;
+    }
+
+    /**
+     * Budget workspace — budget hours, earned hours, percent complete by area and LCC.
+     */
+    public function budget(Request $request, Drawing $drawing): Response
+    {
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+
+        $workDate = $request->query('work_date', now()->toDateString());
+
+        // Load ALL measurements (both scopes) with conditions, LCCs, statuses, bid area
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses', 'variation:id,co_number'])
+            ->orderBy('created_at')
+            ->get();
+
+        // Build statuses lookup
+        $statuses = [];
+        foreach ($measurements as $m) {
+            foreach ($m->statuses as $s) {
+                $statuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
+            }
+        }
+
+        $budgetRows = $this->buildBudgetRows($measurements, $statuses);
+
+        // Load bid areas for this project
+        $bidAreas = BidArea::where('location_id', $drawing->project_id)
+            ->orderBy('sort_order')->orderBy('name')
+            ->get(['id', 'name', 'parent_id', 'sort_order']);
+
+        // Load project variations
+        $variations = Variation::where('location_id', $drawing->project_id)
+            ->select(['id', 'co_number', 'description', 'status'])
+            ->orderBy('co_number')->get();
+
+        // Load used hours for the work date
+        $usedHoursMap = BudgetHoursEntry::where('location_id', $drawing->project_id)
+            ->where('work_date', $workDate)
+            ->get()
+            ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->used_hours])
+            ->toArray();
+
+        return Inertia::render('drawings/budget', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'budget',
+            'projectDrawings' => $projectDrawings,
+            'budgetRows' => $budgetRows,
+            'bidAreas' => $bidAreas,
+            'variations' => $variations,
+            'usedHoursMap' => (object) $usedHoursMap,
+            'workDate' => $workDate,
+        ]);
+    }
+
+    /**
+     * Get used hours for a project on a specific work date.
+     */
+    public function getUsedHours(Request $request, Location $location): JsonResponse
+    {
+        $workDate = $request->query('work_date', now()->toDateString());
+
+        $entries = BudgetHoursEntry::where('location_id', $location->id)
+            ->where('work_date', $workDate)
+            ->get()
+            ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->used_hours])
+            ->toArray();
+
+        return response()->json(['usedHoursMap' => $entries]);
+    }
+
+    /**
+     * Store/update used hours for an area+LCC combo on a work date.
+     */
+    public function storeUsedHours(Request $request, Location $location): JsonResponse
+    {
+        $validated = $request->validate([
+            'bid_area_id' => 'nullable|integer|exists:bid_areas,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'work_date' => 'required|date',
+            'used_hours' => 'required|numeric|min:0',
+        ]);
+
+        $entry = BudgetHoursEntry::updateOrCreate(
+            [
+                'location_id' => $location->id,
+                'bid_area_id' => $validated['bid_area_id'],
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                'work_date' => $validated['work_date'],
+            ],
+            [
+                'used_hours' => $validated['used_hours'],
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        return response()->json(['success' => true, 'entry' => $entry]);
+    }
+
+    /**
+     * Get used hours history for a specific area+LCC across all work dates.
+     */
+    public function getUsedHoursHistory(Request $request, Location $location): JsonResponse
+    {
+        $bidAreaId = $request->query('bid_area_id');
+        $lccId = $request->query('labour_cost_code_id');
+
+        if ($lccId) {
+            // Specific LCC drill-down
+            $query = BudgetHoursEntry::where('location_id', $location->id)
+                ->where('labour_cost_code_id', $lccId)
+                ->orderBy('work_date');
+
+            if ($bidAreaId && $bidAreaId !== '0') {
+                $query->where('bid_area_id', $bidAreaId);
+            } else {
+                $query->whereNull('bid_area_id');
+            }
+
+            $entries = $query->get()->map(fn ($e) => [
+                'work_date' => $e->work_date->toDateString(),
+                'used_hours' => (float) $e->used_hours,
+            ]);
+        } else {
+            // Project-level: aggregate all entries by date
+            $entries = BudgetHoursEntry::where('location_id', $location->id)
+                ->selectRaw('work_date, SUM(used_hours) as total_used')
+                ->groupBy('work_date')
+                ->orderBy('work_date')
+                ->get()
+                ->map(fn ($e) => [
+                    'work_date' => \Carbon\Carbon::parse($e->work_date)->toDateString(),
+                    'used_hours' => (float) $e->total_used,
+                ]);
+        }
+
+        return response()->json(['history' => $entries]);
+    }
+
+    /**
+     * Build flat budget rows aggregated by bid_area + LCC + scope + variation.
+     *
+     * Each row = unique combination of (bid_area_id, lcc_id, scope, variation_id).
+     * Frontend groups/filters client-side.
+     */
+    private function buildBudgetRows($measurements, array $statuses): array
+    {
+        $rows = [];
+
+        foreach ($measurements as $measurement) {
+            if (! $measurement->condition || ! $measurement->condition->conditionLabourCodes) {
+                continue;
+            }
+
+            $qty = (float) ($measurement->computed_value ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $bidAreaId = $measurement->bid_area_id;
+            $scope = $measurement->scope ?? 'takeoff';
+            $variationId = $measurement->variation_id;
+            $variationCoNumber = $measurement->variation?->co_number;
+
+            foreach ($measurement->condition->conditionLabourCodes as $clc) {
+                $lcc = $clc->labourCostCode;
+                if (! $lcc) {
+                    continue;
+                }
+
+                $key = ($bidAreaId ?? 0).'-'.$lcc->id.'-'.$scope.'-'.($variationId ?? 0);
+
+                if (! isset($rows[$key])) {
+                    $rows[$key] = [
+                        'bid_area_id' => $bidAreaId,
+                        'labour_cost_code_id' => $lcc->id,
+                        'lcc_code' => $lcc->code,
+                        'lcc_name' => $lcc->name,
+                        'lcc_unit' => $lcc->unit,
+                        'scope' => $scope,
+                        'variation_id' => $variationId,
+                        'variation_co_number' => $variationCoNumber,
+                        'qty' => 0,
+                        'budget_hours' => 0,
+                        'weighted_qty_percent' => 0,
+                        'measurement_count' => 0,
+                    ];
+                }
+
+                $percent = $statuses[$measurement->id.'-'.$lcc->id] ?? 0;
+                $productionRate = (float) ($clc->production_rate ?? $lcc->default_production_rate ?? 0);
+                $budgetHours = $productionRate > 0 ? $qty / $productionRate : 0;
+
+                $rows[$key]['qty'] += $qty;
+                $rows[$key]['budget_hours'] += $budgetHours;
+                $rows[$key]['weighted_qty_percent'] += $qty * $percent;
+                $rows[$key]['measurement_count']++;
+            }
+        }
+
+        // Calculate final weighted percent and earned hours
+        foreach ($rows as &$row) {
+            $row['percent_complete'] = $row['qty'] > 0
+                ? round($row['weighted_qty_percent'] / $row['qty'], 1)
+                : 0;
+            $row['earned_hours'] = round($row['budget_hours'] * ($row['percent_complete'] / 100), 2);
+            $row['budget_hours'] = round($row['budget_hours'], 2);
+            unset($row['weighted_qty_percent']);
+        }
+
+        return array_values($rows);
     }
 
     /**

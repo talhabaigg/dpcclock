@@ -8,12 +8,13 @@ import { type MapControls } from '@/components/leaflet-drawing-viewer';
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, History, Maximize, Minus, Plus, RotateCcw, Ruler } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
 
-export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'qa';
+export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'budget' | 'qa';
 
 const TABS: { key: DrawingTab; label: string }[] = [
     { key: 'takeoff', label: 'Takeoff' },
     { key: 'variations', label: 'Variations' },
     { key: 'production', label: 'Production' },
+    { key: 'budget', label: 'Budget' },
     { key: 'qa', label: 'QA' },
 ];
 

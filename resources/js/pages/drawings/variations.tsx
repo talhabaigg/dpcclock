@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
-import { DollarSign, FileText, Hand, Hash, Loader2, Maximize2, Pencil, Ruler, Trash2 } from 'lucide-react';
+import { FileText, Hand, Hash, Loader2, Maximize2, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
