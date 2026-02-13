@@ -13,12 +13,14 @@ class BudgetHoursEntry extends Model
         'labour_cost_code_id',
         'work_date',
         'used_hours',
+        'percent_complete',
         'updated_by',
     ];
 
     protected $casts = [
         'work_date' => 'date',
         'used_hours' => 'float',
+        'percent_complete' => 'float',
     ];
 
     public function location(): BelongsTo

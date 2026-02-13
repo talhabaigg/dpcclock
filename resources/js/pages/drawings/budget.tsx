@@ -152,11 +152,12 @@ function fmtPct(v: number | null): string {
 
 /**
  * Build chart data from actual used hours entries only (no date-filling).
- * Filters entries to the given date range.
+ * When budgetHrs is provided and entries have percent_complete, computes date-specific earned hours.
  */
 function buildChartFromEntries(
-    history: Array<{ work_date: string; used_hours: number }>,
-    earnedHrs: number,
+    history: Array<{ work_date: string; used_hours: number; percent_complete?: number | null }>,
+    defaultEarnedHrs: number,
+    budgetHrs: number | null,
     startDate: string | null,
 ): ChartDataPoint[] {
     if (history.length === 0) return [];
@@ -165,15 +166,20 @@ function buildChartFromEntries(
         ? history.filter((h) => h.work_date >= startDate)
         : history;
 
-    return filtered.map((h) => ({
-        date: h.work_date,
-        variance: Math.round((earnedHrs - h.used_hours) * 10) / 10,
-    }));
+    return filtered.map((h) => {
+        const earned = (h.percent_complete != null && budgetHrs != null)
+            ? budgetHrs * (h.percent_complete / 100)
+            : defaultEarnedHrs;
+        return {
+            date: h.work_date,
+            variance: Math.round((earned - h.used_hours) * 10) / 10,
+        };
+    });
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function DrawingBudget() {
-    const { drawing, revisions, project, activeTab, budgetRows, bidAreas, variations, usedHoursMap: initialUsedHoursMap, workDate: initialWorkDate } = usePage<{
+    const { drawing, revisions, project, activeTab, budgetRows, bidAreas, variations, usedHoursMap: initialUsedHoursMap, percentCompleteMap: initialPercentCompleteMap, workDate: initialWorkDate } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: Project;
@@ -182,6 +188,7 @@ export default function DrawingBudget() {
         bidAreas: BidAreaItem[];
         variations: VariationSummary[];
         usedHoursMap: Record<string, number>;
+        percentCompleteMap: Record<string, number>;
         workDate: string;
     }>().props;
 
@@ -196,10 +203,11 @@ export default function DrawingBudget() {
     const [groupMode, setGroupMode] = useState<GroupMode>('area-lcc');
     const [workDate, setWorkDate] = useState(initialWorkDate);
     const [usedHoursMap, setUsedHoursMap] = useState<Record<string, number>>(initialUsedHoursMap || {});
+    const [percentCompleteMap, setPercentCompleteMap] = useState<Record<string, number>>(initialPercentCompleteMap || {});
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
     const [showChart, setShowChart] = useState(true);
     const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
-    const [lccHistory, setLccHistory] = useState<Array<{ work_date: string; used_hours: number }>>([]);
+    const [lccHistory, setLccHistory] = useState<Array<{ work_date: string; used_hours: number; percent_complete?: number | null }>>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [projectHistory, setProjectHistory] = useState<Array<{ work_date: string; used_hours: number }>>([]);
     const [chartRange, setChartRange] = useState<ChartRange>('all');
@@ -238,10 +246,18 @@ export default function DrawingBudget() {
             const first = rows[0];
             const totalQty = rows.reduce((s, r) => s + r.qty, 0);
             const estHrs = rows.reduce((s, r) => s + r.budget_hours, 0);
-            const earnedHrs = rows.reduce((s, r) => s + r.earned_hours, 0);
-            const pctComplete = totalQty > 0
+
+            // Measurement-derived percent complete (default/fallback)
+            const measurementPct = totalQty > 0
                 ? rows.reduce((s, r) => s + r.qty * r.percent_complete, 0) / totalQty
                 : 0;
+
+            // Date-specific override from percentCompleteMap (if present)
+            const pctComplete = key in percentCompleteMap
+                ? percentCompleteMap[key]
+                : measurementPct;
+
+            const earnedHrs = estHrs * (pctComplete / 100);
             const installedQty = totalQty * (pctComplete / 100);
             const usedHrs = usedHoursMap[key] || 0;
             const projected = computeProjected(estHrs, earnedHrs, usedHrs);
@@ -267,7 +283,7 @@ export default function DrawingBudget() {
                 usedHoursKey: key,
             };
         });
-    }, [filteredRows, usedHoursMap, bidAreaMap]);
+    }, [filteredRows, usedHoursMap, percentCompleteMap, bidAreaMap]);
 
     // 3. Group gridRows
     const groupedData = useMemo((): GroupData[] => {
@@ -303,16 +319,29 @@ export default function DrawingBudget() {
     // Grand totals
     const grandTotals = useMemo(() => aggregateGridRows(gridRows), [gridRows]);
 
-    // ─── Used hours update ──────────────────────────────────────────────────
-    const saveUsedHours = useCallback((key: string, bidAreaId: number | null, lccId: number, hours: number) => {
-        // Clear existing timer for this key
-        if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    // ─── Budget entry save (used hours + percent complete) ─────────────────
+    const saveBudgetEntry = useCallback((key: string, bidAreaId: number | null, lccId: number, payload: { used_hours?: number; percent_complete?: number | null }) => {
+        const timerKey = `entry-${key}`;
+        if (saveTimers.current[timerKey]) clearTimeout(saveTimers.current[timerKey]);
 
-        // Optimistic update
-        setUsedHoursMap((prev) => ({ ...prev, [key]: hours }));
+        // Optimistic updates
+        if (payload.used_hours !== undefined) {
+            setUsedHoursMap((prev) => ({ ...prev, [key]: payload.used_hours! }));
+        }
+        if (payload.percent_complete !== undefined) {
+            if (payload.percent_complete !== null) {
+                setPercentCompleteMap((prev) => ({ ...prev, [key]: payload.percent_complete! }));
+            } else {
+                setPercentCompleteMap((prev) => {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                });
+            }
+        }
 
         // Debounce save
-        saveTimers.current[key] = setTimeout(async () => {
+        saveTimers.current[timerKey] = setTimeout(async () => {
             try {
                 await fetch(`/locations/${projectId}/budget-hours`, {
                     method: 'POST',
@@ -327,14 +356,17 @@ export default function DrawingBudget() {
                         bid_area_id: bidAreaId,
                         labour_cost_code_id: lccId,
                         work_date: workDate,
-                        used_hours: hours,
+                        used_hours: payload.used_hours ?? usedHoursMap[key] ?? 0,
+                        percent_complete: payload.percent_complete !== undefined
+                            ? payload.percent_complete
+                            : (percentCompleteMap[key] ?? null),
                     }),
                 });
             } catch {
-                toast.error('Failed to save used hours');
+                toast.error('Failed to save budget entry');
             }
         }, 600);
-    }, [projectId, workDate]);
+    }, [projectId, workDate, usedHoursMap, percentCompleteMap]);
 
     // ─── Work date change ───────────────────────────────────────────────────
     const handleWorkDateChange = useCallback(async (newDate: string) => {
@@ -346,6 +378,7 @@ export default function DrawingBudget() {
             });
             const data = await res.json();
             setUsedHoursMap(data.usedHoursMap || {});
+            setPercentCompleteMap(data.percentCompleteMap || {});
         } catch {
             toast.error('Failed to load hours for date');
         }
@@ -416,13 +449,13 @@ export default function DrawingBudget() {
     // Chart data — overview: project variance over time (entries only)
     const overviewChartData = useMemo(() => {
         if (projectHistory.length === 0) return [];
-        return buildChartFromEntries(projectHistory, grandTotals.earned_hours, chartStartDate);
+        return buildChartFromEntries(projectHistory, grandTotals.earned_hours, null, chartStartDate);
     }, [projectHistory, grandTotals.earned_hours, chartStartDate]);
 
-    // Chart data — drill-down: variance over time for selected LCC (entries only)
+    // Chart data — drill-down: variance over time for selected LCC (date-specific earned hrs)
     const drillDownChartData = useMemo(() => {
         if (!selectedGridRow || lccHistory.length === 0) return [];
-        return buildChartFromEntries(lccHistory, selectedGridRow.earned_hours, chartStartDate);
+        return buildChartFromEntries(lccHistory, selectedGridRow.earned_hours, selectedGridRow.est_hours, chartStartDate);
     }, [selectedGridRow, lccHistory, chartStartDate]);
 
     // ─── Render ─────────────────────────────────────────────────────────────
@@ -632,7 +665,7 @@ export default function DrawingBudget() {
                                             onToggle={() => toggleGroup(group.key)}
                                             groupMode={groupMode}
                                             usedHoursMap={usedHoursMap}
-                                            onUsedHoursChange={saveUsedHours}
+                                            onBudgetEntryChange={saveBudgetEntry}
                                             selectedRowKey={selectedRowKey}
                                             onRowSelect={handleRowSelect}
                                         />
@@ -684,7 +717,7 @@ function GroupRows({
     onToggle,
     groupMode,
     usedHoursMap,
-    onUsedHoursChange,
+    onBudgetEntryChange,
     selectedRowKey,
     onRowSelect,
 }: {
@@ -693,7 +726,7 @@ function GroupRows({
     onToggle: () => void;
     groupMode: GroupMode;
     usedHoursMap: Record<string, number>;
-    onUsedHoursChange: (key: string, bidAreaId: number | null, lccId: number, hours: number) => void;
+    onBudgetEntryChange: (key: string, bidAreaId: number | null, lccId: number, payload: { used_hours?: number; percent_complete?: number | null }) => void;
     selectedRowKey: string | null;
     onRowSelect: (key: string) => void;
 }) {
@@ -745,7 +778,10 @@ function GroupRows({
                     groupMode={groupMode}
                     usedHours={usedHoursMap[row.usedHoursKey] || 0}
                     onUsedHoursChange={(hours) =>
-                        onUsedHoursChange(row.usedHoursKey, row.bid_area_id, row.labour_cost_code_id, hours)
+                        onBudgetEntryChange(row.usedHoursKey, row.bid_area_id, row.labour_cost_code_id, { used_hours: hours })
+                    }
+                    onPercentCompleteChange={(pct) =>
+                        onBudgetEntryChange(row.usedHoursKey, row.bid_area_id, row.labour_cost_code_id, { percent_complete: pct })
                     }
                     isSelected={selectedRowKey === row.usedHoursKey}
                     onSelect={() => onRowSelect(row.usedHoursKey)}
@@ -760,6 +796,7 @@ function DataRow({
     groupMode,
     usedHours,
     onUsedHoursChange,
+    onPercentCompleteChange,
     isSelected,
     onSelect,
 }: {
@@ -767,6 +804,7 @@ function DataRow({
     groupMode: GroupMode;
     usedHours: number;
     onUsedHoursChange: (hours: number) => void;
+    onPercentCompleteChange: (pct: number | null) => void;
     isSelected: boolean;
     onSelect: () => void;
 }) {
@@ -788,7 +826,21 @@ function DataRow({
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.total_qty)}</td>
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.installed_qty)}</td>
             <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums">{fmtVal(row.est_hours)}</td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">{Math.round(row.percent_complete)}%</td>
+            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-blue-500 [&:focus-within]:ring-inset">
+                <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={row.percent_complete || ''}
+                    onChange={(e) => {
+                        const val = e.target.value === '' ? null : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                        onPercentCompleteChange(val);
+                    }}
+                    className="h-full w-full bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            </td>
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.earned_hours)}</td>
             <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-blue-500 [&:focus-within]:ring-inset">
                 <input
@@ -859,10 +911,27 @@ function VarianceChart({
     const isDrillDown = selectedRow && drillDownData.length > 0;
     const chartData = isDrillDown ? drillDownData : overviewData;
 
+    // Detect month boundaries for labels (must be before early return to respect hooks rules)
+    const monthLabels = useMemo(() => {
+        const labels: Array<{ date: string; label: string }> = [];
+        let lastMonth = -1;
+        for (const d of chartData) {
+            const dt = new Date(d.date + 'T00:00:00');
+            const m = dt.getMonth();
+            if (m !== lastMonth) {
+                labels.push({
+                    date: d.date,
+                    label: dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                });
+                lastMonth = m;
+            }
+        }
+        return labels;
+    }, [chartData]);
+
     if (chartData.length === 0 && !loading) {
         return (
             <div className="relative flex h-[120px] items-center justify-center text-[11px] text-muted-foreground">
-                {/* Range selector even on empty state */}
                 <div className="absolute right-3 top-1 flex items-center rounded-sm border border-border bg-background text-[9px]">
                     {CHART_RANGES.map((r) => (
                         <button
@@ -885,24 +954,6 @@ function VarianceChart({
             </div>
         );
     }
-
-    // Detect month boundaries for labels
-    const monthLabels = useMemo(() => {
-        const labels: Array<{ date: string; label: string }> = [];
-        let lastMonth = -1;
-        for (const d of chartData) {
-            const dt = new Date(d.date + 'T00:00:00');
-            const m = dt.getMonth();
-            if (m !== lastMonth) {
-                labels.push({
-                    date: d.date,
-                    label: dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                });
-                lastMonth = m;
-            }
-        }
-        return labels;
-    }, [chartData]);
 
     return (
         <div className="relative">

@@ -437,8 +437,9 @@ class DrawingController extends Controller
 
         $workDate = $request->query('work_date', now()->toDateString());
 
-        // Load ALL measurements (both scopes) with conditions, LCCs, statuses, bid area
-        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+        // Load ALL measurements across the project (all drawings) with conditions, LCCs, statuses
+        $projectDrawingIds = Drawing::where('project_id', $drawing->project_id)->pluck('id');
+        $measurements = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
             ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses', 'variation:id,co_number'])
             ->orderBy('created_at')
             ->get();
@@ -463,11 +464,18 @@ class DrawingController extends Controller
             ->select(['id', 'co_number', 'description', 'status'])
             ->orderBy('co_number')->get();
 
-        // Load used hours for the work date
-        $usedHoursMap = BudgetHoursEntry::where('location_id', $drawing->project_id)
+        // Load budget entries for the work date (used hours + date-specific percent complete)
+        $budgetEntries = BudgetHoursEntry::where('location_id', $drawing->project_id)
             ->where('work_date', $workDate)
-            ->get()
+            ->get();
+
+        $usedHoursMap = $budgetEntries
             ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->used_hours])
+            ->toArray();
+
+        $percentCompleteMap = $budgetEntries
+            ->filter(fn ($e) => $e->percent_complete !== null)
+            ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->percent_complete])
             ->toArray();
 
         return Inertia::render('drawings/budget', [
@@ -480,6 +488,7 @@ class DrawingController extends Controller
             'bidAreas' => $bidAreas,
             'variations' => $variations,
             'usedHoursMap' => (object) $usedHoursMap,
+            'percentCompleteMap' => (object) $percentCompleteMap,
             'workDate' => $workDate,
         ]);
     }
@@ -491,13 +500,23 @@ class DrawingController extends Controller
     {
         $workDate = $request->query('work_date', now()->toDateString());
 
-        $entries = BudgetHoursEntry::where('location_id', $location->id)
+        $budgetEntries = BudgetHoursEntry::where('location_id', $location->id)
             ->where('work_date', $workDate)
-            ->get()
+            ->get();
+
+        $usedHoursMap = $budgetEntries
             ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->used_hours])
             ->toArray();
 
-        return response()->json(['usedHoursMap' => $entries]);
+        $percentCompleteMap = $budgetEntries
+            ->filter(fn ($e) => $e->percent_complete !== null)
+            ->mapWithKeys(fn ($e) => [($e->bid_area_id ?? 0).'-'.$e->labour_cost_code_id => $e->percent_complete])
+            ->toArray();
+
+        return response()->json([
+            'usedHoursMap' => $usedHoursMap,
+            'percentCompleteMap' => $percentCompleteMap,
+        ]);
     }
 
     /**
@@ -510,6 +529,7 @@ class DrawingController extends Controller
             'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
             'work_date' => 'required|date',
             'used_hours' => 'required|numeric|min:0',
+            'percent_complete' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $entry = BudgetHoursEntry::updateOrCreate(
@@ -521,6 +541,7 @@ class DrawingController extends Controller
             ],
             [
                 'used_hours' => $validated['used_hours'],
+                'percent_complete' => $validated['percent_complete'] ?? null,
                 'updated_by' => auth()->id(),
             ]
         );
@@ -551,6 +572,7 @@ class DrawingController extends Controller
             $entries = $query->get()->map(fn ($e) => [
                 'work_date' => $e->work_date->toDateString(),
                 'used_hours' => (float) $e->used_hours,
+                'percent_complete' => $e->percent_complete,
             ]);
         } else {
             // Project-level: aggregate all entries by date
