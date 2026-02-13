@@ -38,7 +38,7 @@ export type MeasurementData = {
     created_at?: string;
 };
 
-export type ViewMode = 'pan' | 'select' | 'calibrate' | 'measure_line' | 'measure_area' | 'measure_count';
+export type ViewMode = 'pan' | 'select' | 'calibrate' | 'measure_line' | 'measure_area' | 'measure_rectangle' | 'measure_count';
 
 type MeasurementLayerProps = {
     viewMode: ViewMode;
@@ -130,7 +130,7 @@ export function MeasurementLayer({
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
     const currentPointsRef = useRef<Point[]>([]);
     currentPointsRef.current = currentPoints;
-    const isMeasuring = viewMode === 'calibrate' || viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_count';
+    const isMeasuring = viewMode === 'calibrate' || viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_rectangle' || viewMode === 'measure_count';
 
     // Refs for Leaflet layers
     const savedLayersRef = useRef<L.LayerGroup>(L.layerGroup());
@@ -467,6 +467,36 @@ export function MeasurementLayer({
                     weight: 2.5,
                 }).addTo(group);
             });
+        } else if (viewMode === 'measure_rectangle') {
+            const corner1 = points[0];
+            const corner2 = cursorPoint || (points.length >= 2 ? points[1] : null);
+
+            if (corner1 && corner2) {
+                const rectPoints = [
+                    normalizedToLatLng(corner1, imageWidth, imageHeight),
+                    normalizedToLatLng({ x: corner2.x, y: corner1.y }, imageWidth, imageHeight),
+                    normalizedToLatLng(corner2, imageWidth, imageHeight),
+                    normalizedToLatLng({ x: corner1.x, y: corner2.y }, imageWidth, imageHeight),
+                ];
+                L.polygon(rectPoints, {
+                    color: '#0ea5e9',
+                    weight: 4,
+                    opacity: 0.9,
+                    fillColor: '#0ea5e9',
+                    fillOpacity: 0.15,
+                }).addTo(group);
+            }
+
+            // Vertex marker for first corner
+            if (latlngs.length >= 1) {
+                L.circleMarker(latlngs[0], {
+                    radius: 6,
+                    color: '#0ea5e9',
+                    fillColor: '#fff',
+                    fillOpacity: 1,
+                    weight: 2.5,
+                }).addTo(group);
+            }
         } else if (viewMode === 'measure_count') {
             // Render placed count markers
             latlngs.forEach((ll) => {
@@ -512,6 +542,20 @@ export function MeasurementLayer({
                 const allPoints = [...currentPoints, cursorPoint];
                 const areaPixels = computePolygonAreaPixels(allPoints, pixelWidth, pixelHeight);
                 const perimPixels = computePolylineLength([...allPoints, allPoints[0]], pixelWidth, pixelHeight);
+                const areaStr = formatValue(areaPixels, calibration.pixels_per_unit, calibration.unit, 'area');
+                const perimStr = formatValue(perimPixels, calibration.pixels_per_unit, calibration.unit, 'linear');
+                tooltipContent = `${areaStr}\nPerimeter: ${perimStr}`;
+            } else if (viewMode === 'measure_rectangle' && calibration && currentPoints.length >= 1) {
+                const corner1 = currentPoints[0];
+                const corner2 = cursorPoint;
+                const rectPoints = [
+                    corner1,
+                    { x: corner2.x, y: corner1.y },
+                    corner2,
+                    { x: corner1.x, y: corner2.y },
+                ];
+                const areaPixels = computePolygonAreaPixels(rectPoints, pixelWidth, pixelHeight);
+                const perimPixels = computePolylineLength([...rectPoints, rectPoints[0]], pixelWidth, pixelHeight);
                 const areaStr = formatValue(areaPixels, calibration.pixels_per_unit, calibration.unit, 'area');
                 const perimStr = formatValue(perimPixels, calibration.pixels_per_unit, calibration.unit, 'linear');
                 tooltipContent = `${areaStr}\nPerimeter: ${perimStr}`;
@@ -563,6 +607,12 @@ export function MeasurementLayer({
                     onMeasurementComplete?.(currentPoints, 'area');
                     setCurrentPoints([]);
                     drawingLayersRef.current.clearLayers();
+                } else if (viewMode === 'measure_rectangle' && currentPoints.length >= 2) {
+                    const c1 = currentPoints[0], c2 = currentPoints[1];
+                    const rectPoints = [c1, { x: c2.x, y: c1.y }, c2, { x: c1.x, y: c2.y }];
+                    onMeasurementComplete?.(rectPoints, 'area');
+                    setCurrentPoints([]);
+                    drawingLayersRef.current.clearLayers();
                 } else if (viewMode === 'measure_count' && currentPoints.length >= 1) {
                     onMeasurementComplete?.(currentPoints, 'count');
                     setCurrentPoints([]);
@@ -602,6 +652,18 @@ export function MeasurementLayer({
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
                     onCalibrationComplete?.(pts[0], point);
+                    setCurrentPoints([]);
+                    drawingLayersRef.current.clearLayers();
+                }
+            } else if (viewMode === 'measure_rectangle') {
+                // Rectangle: 2 clicks for opposite corners, auto-complete
+                const pts = currentPointsRef.current;
+                if (pts.length === 0) {
+                    setCurrentPoints([point]);
+                } else if (pts.length === 1) {
+                    const c1 = pts[0];
+                    const rectPoints: Point[] = [c1, { x: point.x, y: c1.y }, point, { x: c1.x, y: point.y }];
+                    onMeasurementComplete?.(rectPoints, 'area');
                     setCurrentPoints([]);
                     drawingLayersRef.current.clearLayers();
                 }

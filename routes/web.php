@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AllowanceTypeController;
+use App\Http\Controllers\BidAreaController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ChatController;
@@ -631,6 +632,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'indexLabourCostCodes'])->name('labour-cost-codes.index');
         Route::get('/locations/{location}/labour-cost-codes/search', [TakeoffConditionController::class, 'searchLabourCostCodes'])->name('labour-cost-codes.search');
         Route::post('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'storeLabourCostCode'])->name('labour-cost-codes.store');
+
+        // Bid Areas
+        Route::get('/locations/{location}/bid-areas', [BidAreaController::class, 'index'])->name('bid-areas.index');
+        Route::post('/locations/{location}/bid-areas', [BidAreaController::class, 'store'])->name('bid-areas.store');
+        Route::put('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'update'])->name('bid-areas.update');
+        Route::delete('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'destroy'])->name('bid-areas.destroy');
     });
 
     // Drawing Alignment

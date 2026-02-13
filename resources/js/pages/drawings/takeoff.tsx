@@ -1,5 +1,6 @@
+import { BidAreaManager, type BidArea } from '@/components/bid-area-manager';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
-import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer, Observation as LeafletObservation, type MapControls } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { PanoramaViewer } from '@/components/panorama-viewer';
 import { TakeoffPanel } from '@/components/takeoff-panel';
@@ -16,23 +17,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { router, usePage } from '@inertiajs/react';
 import {
-    Box,
     Camera,
     Eye,
+    FolderTree,
     GitCompare,
     Hand,
     Hash,
     Layers,
     Loader2,
-    Maximize2,
+    Minus,
     MousePointer,
     Pencil,
-    PenLine,
+    Pentagon,
     RotateCcw,
     Ruler,
     Save,
     Scale,
     Sparkles,
+    Square,
     Trash2,
     X,
 } from 'lucide-react';
@@ -213,6 +215,9 @@ export default function DrawingTakeoff() {
     // View mode: 'pan' for panning, 'select' for adding observations, measure modes
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
 
+    // Map controls (exposed by viewer)
+    const [mapControls, setMapControls] = useState<MapControls | null>(null);
+
     // Takeoff state
     const [showTakeoffPanel, setShowTakeoffPanel] = useState(false);
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
@@ -244,6 +249,11 @@ export default function DrawingTakeoff() {
     const [showConditionManager, setShowConditionManager] = useState(false);
     const [activeConditionId, setActiveConditionId] = useState<number | null>(null);
 
+    // Bid Areas state
+    const [bidAreas, setBidAreas] = useState<BidArea[]>([]);
+    const [showBidAreaManager, setShowBidAreaManager] = useState(false);
+    const [activeBidAreaId, setActiveBidAreaId] = useState<number | null>(null);
+
     const conditionPatterns = useMemo(() => {
         const map: Record<number, string> = {};
         for (const c of conditions) {
@@ -251,6 +261,19 @@ export default function DrawingTakeoff() {
         }
         return map;
     }, [conditions]);
+
+    // Flatten bid areas tree for selector
+    const flatBidAreas = useMemo(() => {
+        const result: Array<BidArea & { depth: number }> = [];
+        const flatten = (areas: BidArea[], depth: number) => {
+            for (const area of areas) {
+                result.push({ ...area, depth });
+                if (area.children?.length) flatten(area.children, depth + 1);
+            }
+        };
+        flatten(bidAreas, 0);
+        return result;
+    }, [bidAreas]);
 
     const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
     const PAPER_SIZES = ['A0', 'A1', 'A2', 'A3', 'A4'];
@@ -285,6 +308,17 @@ export default function DrawingTakeoff() {
         })
             .then((res) => res.json())
             .then((data) => setConditions(data.conditions || []))
+            .catch(() => {});
+    }, [projectId]);
+
+    // Load bid areas on mount
+    useEffect(() => {
+        fetch(`/locations/${projectId}/bid-areas`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => setBidAreas(data.bidAreas || []))
             .catch(() => {});
     }, [projectId]);
 
@@ -910,6 +944,7 @@ export default function DrawingTakeoff() {
                     category,
                     points,
                     takeoff_condition_id: activeCondition?.id || null,
+                    bid_area_id: activeBidAreaId || null,
                 }),
             });
             if (!response.ok) throw new Error('Failed to save');
@@ -966,6 +1001,7 @@ export default function DrawingTakeoff() {
                         color: measurementColor,
                         category: measurementCategory || null,
                         points: pendingMeasurementData.points,
+                        bid_area_id: activeBidAreaId || null,
                     }),
                 });
                 if (!response.ok) throw new Error('Failed to save');
@@ -1031,10 +1067,14 @@ export default function DrawingTakeoff() {
         : undefined;
 
     return (
-        <DrawingWorkspaceLayout drawing={drawing} revisions={revisions} project={project} activeTab={activeTab}>
-
-                {/* Toolbar - compact industrial strip */}
-                <div className="bg-muted/20 flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 py-1">
+        <DrawingWorkspaceLayout
+            drawing={drawing}
+            revisions={revisions}
+            project={project}
+            activeTab={activeTab}
+            mapControls={mapControls}
+            toolbar={
+                <>
                     {/* View Mode */}
                     <div className="bg-background flex items-center rounded-sm border p-px">
                         <Button
@@ -1094,7 +1134,7 @@ export default function DrawingTakeoff() {
                                 title={!calibration ? 'Set scale first' : 'Measure line'}
                                 disabled={!calibration}
                             >
-                                <Pencil className="h-3 w-3" />
+                                <Minus className="h-3 w-3" />
                             </Button>
                             <Button
                                 type="button"
@@ -1105,7 +1145,18 @@ export default function DrawingTakeoff() {
                                 title={!calibration ? 'Set scale first' : 'Measure area'}
                                 disabled={!calibration}
                             >
-                                <Maximize2 className="h-3 w-3" />
+                                <Pentagon className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
+                                onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
+                                className="h-6 w-6 rounded-sm p-0"
+                                title={!calibration ? 'Set scale first' : 'Measure rectangle'}
+                                disabled={!calibration}
+                            >
+                                <Square className="h-3 w-3" />
                             </Button>
                             <Button
                                 type="button"
@@ -1118,6 +1169,44 @@ export default function DrawingTakeoff() {
                                 <Hash className="h-3 w-3" />
                             </Button>
                         </div>
+                    )}
+
+                    {/* Bid Area Selector */}
+                    {showTakeoffPanel && (
+                        <>
+                            <div className="bg-border h-4 w-px" />
+                            <div className="flex items-center gap-1">
+                                <FolderTree className="h-3 w-3 text-muted-foreground" />
+                                <Select
+                                    value={activeBidAreaId ? String(activeBidAreaId) : 'all'}
+                                    onValueChange={(v) => setActiveBidAreaId(v === 'all' ? null : Number(v))}
+                                >
+                                    <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-[11px] shadow-none">
+                                        <SelectValue placeholder="All Areas" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">
+                                            <span className="text-muted-foreground">All Areas</span>
+                                        </SelectItem>
+                                        {flatBidAreas.map((area) => (
+                                            <SelectItem key={area.id} value={String(area.id)}>
+                                                <span style={{ paddingLeft: area.depth * 12 }}>{area.name}</span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0"
+                                    title="Manage bid areas"
+                                    onClick={() => setShowBidAreaManager(true)}
+                                >
+                                    <Pencil className="h-2.5 w-2.5" />
+                                </Button>
+                            </div>
+                        </>
                     )}
 
                     <div className="bg-border h-4 w-px" />
@@ -1284,8 +1373,9 @@ export default function DrawingTakeoff() {
                             )}
                         </>
                     )}
-                </div>
-
+                </>
+            }
+        >
                 {/* Main Viewer + Takeoff Panel */}
                 <div className="relative flex flex-1 overflow-hidden">
                     <div className="relative flex-1 overflow-hidden">
@@ -1326,6 +1416,7 @@ export default function DrawingTakeoff() {
                             onCalibrationComplete={handleCalibrationComplete}
                             onMeasurementComplete={handleMeasurementComplete}
                             onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                            onMapReady={setMapControls}
                             className="absolute inset-0"
                         />
                     </div>
@@ -1340,7 +1431,6 @@ export default function DrawingTakeoff() {
                                 selectedMeasurementId={selectedMeasurementId}
                                 conditions={conditions}
                                 activeConditionId={activeConditionId}
-                                onSetViewMode={setViewMode}
                                 onOpenCalibrationDialog={handleOpenCalibrationDialog}
                                 onDeleteCalibration={handleDeleteCalibration}
                                 onMeasurementSelect={setSelectedMeasurementId}
@@ -1935,9 +2025,9 @@ export default function DrawingTakeoff() {
                             {editingMeasurement?.type === 'count' ? (
                                 <Hash className="h-4 w-4" />
                             ) : editingMeasurement?.type === 'area' ? (
-                                <Box className="h-4 w-4" />
+                                <Pentagon className="h-4 w-4" />
                             ) : (
-                                <PenLine className="h-4 w-4" />
+                                <Minus className="h-4 w-4" />
                             )}
                             Edit Measurement
                         </DialogTitle>
@@ -2005,6 +2095,15 @@ export default function DrawingTakeoff() {
                 onConditionsChange={(updated) => {
                     setConditions(updated);
                 }}
+            />
+
+            {/* Bid Area Manager Dialog */}
+            <BidAreaManager
+                open={showBidAreaManager}
+                onOpenChange={setShowBidAreaManager}
+                locationId={projectId}
+                bidAreas={bidAreas}
+                onBidAreasChange={setBidAreas}
             />
         </DrawingWorkspaceLayout>
     );

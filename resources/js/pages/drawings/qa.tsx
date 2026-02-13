@@ -1,4 +1,4 @@
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
@@ -55,27 +55,34 @@ export default function DrawingQA() {
     }>().props;
 
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
+    const [mapControls, setMapControls] = useState<MapControls | null>(null);
     const [viewMode] = useState<'pan'>('pan');
 
     return (
-        <DrawingWorkspaceLayout drawing={drawing} revisions={revisions} project={project} activeTab={activeTab}>
-            {/* Toolbar */}
-            <div className="bg-muted/20 flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 py-1">
-                <div className="bg-background flex items-center rounded-sm border p-px">
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-6 w-6 rounded-sm p-0"
-                        title="Pan mode"
-                    >
-                        <Hand className="h-3 w-3" />
-                    </Button>
-                </div>
-                <div className="bg-border h-4 w-px" />
-                <span className="text-muted-foreground text-[11px]">QA workspace - coming soon</span>
-            </div>
-
+        <DrawingWorkspaceLayout
+            drawing={drawing}
+            revisions={revisions}
+            project={project}
+            activeTab={activeTab}
+            mapControls={mapControls}
+            toolbar={
+                <>
+                    <div className="bg-background flex items-center rounded-sm border p-px">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="h-6 w-6 rounded-sm p-0"
+                            title="Pan mode"
+                        >
+                            <Hand className="h-3 w-3" />
+                        </Button>
+                    </div>
+                    <div className="bg-border h-4 w-px" />
+                    <span className="text-muted-foreground text-[11px]">QA workspace - coming soon</span>
+                </>
+            }
+        >
             {/* Main Viewer */}
             <div className="relative flex flex-1 overflow-hidden">
                 <div className="relative flex-1 overflow-hidden">
@@ -94,6 +101,7 @@ export default function DrawingQA() {
                         onCalibrationComplete={() => {}}
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={() => {}}
+                        onMapReady={setMapControls}
                         className="absolute inset-0"
                     />
                 </div>

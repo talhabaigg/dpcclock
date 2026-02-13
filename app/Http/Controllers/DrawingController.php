@@ -195,13 +195,14 @@ class DrawingController extends Controller
      */
     public function takeoff(Drawing $drawing): Response
     {
-        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
 
         return Inertia::render('drawings/takeoff', [
             'drawing' => $drawing,
             'revisions' => $revisions,
             'project' => $drawing->project,
             'activeTab' => 'takeoff',
+            'projectDrawings' => $projectDrawings,
         ]);
     }
 
@@ -210,13 +211,14 @@ class DrawingController extends Controller
      */
     public function variations(Drawing $drawing): Response
     {
-        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
 
         return Inertia::render('drawings/variations', [
             'drawing' => $drawing,
             'revisions' => $revisions,
             'project' => $drawing->project,
             'activeTab' => 'variations',
+            'projectDrawings' => $projectDrawings,
         ]);
     }
 
@@ -225,7 +227,7 @@ class DrawingController extends Controller
      */
     public function production(Drawing $drawing): Response
     {
-        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
 
         // Load takeoff measurements with condition's labour cost codes
         $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
@@ -253,6 +255,7 @@ class DrawingController extends Controller
             'revisions' => $revisions,
             'project' => $drawing->project,
             'activeTab' => 'production',
+            'projectDrawings' => $projectDrawings,
             'measurements' => $measurements,
             'calibration' => $calibration,
             'statuses' => $statuses,
@@ -427,20 +430,21 @@ class DrawingController extends Controller
      */
     public function qa(Drawing $drawing): Response
     {
-        [$drawing, $revisions] = $this->loadDrawingWithRevisions($drawing);
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
 
         return Inertia::render('drawings/qa', [
             'drawing' => $drawing,
             'revisions' => $revisions,
             'project' => $drawing->project,
             'activeTab' => 'qa',
+            'projectDrawings' => $projectDrawings,
         ]);
     }
 
     /**
      * Load a drawing with its project, revisions, and observations.
      *
-     * @return array{0: Drawing, 1: \Illuminate\Support\Collection}
+     * @return array{0: Drawing, 1: \Illuminate\Support\Collection, 2: \Illuminate\Support\Collection}
      */
     private function loadDrawingWithRevisions(Drawing $drawing): array
     {
@@ -464,7 +468,23 @@ class DrawingController extends Controller
                 ->get();
         }
 
-        return [$drawing, $revisions];
+        $projectDrawings = Drawing::where('project_id', $drawing->project_id)
+            ->where('status', Drawing::STATUS_ACTIVE)
+            ->select(['id', 'sheet_number', 'title', 'drawing_number', 'drawing_title'])
+            ->withCount(['measurements as has_takeoff' => function ($q) {
+                $q->where('scope', 'takeoff');
+            }])
+            ->orderBy('sheet_number')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'display_name' => $d->display_name,
+                'sheet_number' => $d->sheet_number,
+                'has_takeoff' => $d->has_takeoff > 0,
+            ]);
+
+        return [$drawing, $revisions, $projectDrawings];
     }
 
     /**

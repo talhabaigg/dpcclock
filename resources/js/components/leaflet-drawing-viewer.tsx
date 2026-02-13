@@ -1,10 +1,9 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Loader2, Maximize, MinusCircle, PlusCircle, RotateCcw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { MeasurementLayer, type CalibrationData, type MeasurementData, type Point, type ViewMode } from './measurement-layer';
-import { Button } from './ui/button';
 
 export type Observation = {
     id: number;
@@ -31,6 +30,12 @@ type TileInfo = {
     tileSize: number;
 };
 
+export type MapControls = {
+    zoomIn: () => void;
+    zoomOut: () => void;
+    fitToScreen: () => void;
+};
+
 type LeafletDrawingViewerProps = {
     tiles?: TileInfo;
     imageUrl?: string;
@@ -53,6 +58,8 @@ type LeafletDrawingViewerProps = {
     onMeasurementClick?: (measurement: MeasurementData) => void;
     // Production labels: measurementId → percent_complete
     productionLabels?: Record<number, number>;
+    // Exposes zoom/fit controls to parent
+    onMapReady?: (controls: MapControls) => void;
 };
 
 // Custom marker icon for observations
@@ -231,63 +238,31 @@ function MapEventHandler({
     return null;
 }
 
-// Controls component (zoom only — view mode is controlled by the parent toolbar)
-function MapControls({
-    onFitToScreen,
-    onZoomIn,
-    onZoomOut,
-}: {
-    onFitToScreen: () => void;
-    onZoomIn: () => void;
-    onZoomOut: () => void;
-}) {
-    return (
-        <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
-            <div className="bg-white rounded-lg shadow-lg p-1 flex flex-col gap-1">
-                <Button variant="ghost" size="icon" onClick={onZoomIn} title="Zoom in">
-                    <PlusCircle className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onZoomOut} title="Zoom out">
-                    <MinusCircle className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onFitToScreen} title="Fit to screen">
-                    <Maximize className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onFitToScreen} title="Reset view">
-                    <RotateCcw className="h-4 w-4" />
-                </Button>
-            </div>
-        </div>
-    );
-}
-
-// Internal component that has access to the map instance
-function MapControlsInternal({
+// Internal component that exposes map controls to the parent via onMapReady callback
+function MapControlsBridge({
     bounds,
+    onMapReady,
 }: {
     bounds: L.LatLngBoundsExpression;
+    onMapReady?: (controls: MapControls) => void;
 }) {
     const map = useMap();
+    const calledRef = useRef(false);
 
-    const handleFitToScreen = useCallback(() => {
-        map.fitBounds(bounds);
-    }, [map, bounds]);
+    const controls = useMemo<MapControls>(() => ({
+        zoomIn: () => map.zoomIn(),
+        zoomOut: () => map.zoomOut(),
+        fitToScreen: () => map.fitBounds(bounds),
+    }), [map, bounds]);
 
-    const handleZoomIn = useCallback(() => {
-        map.zoomIn();
-    }, [map]);
+    useEffect(() => {
+        if (onMapReady && !calledRef.current) {
+            calledRef.current = true;
+            onMapReady(controls);
+        }
+    }, [onMapReady, controls]);
 
-    const handleZoomOut = useCallback(() => {
-        map.zoomOut();
-    }, [map]);
-
-    return (
-        <MapControls
-            onFitToScreen={handleFitToScreen}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-        />
-    );
+    return null;
 }
 
 export function LeafletDrawingViewer({
@@ -309,6 +284,7 @@ export function LeafletDrawingViewer({
     onMeasurementComplete,
     onMeasurementClick,
     productionLabels,
+    onMapReady,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
     const previewPinRef = useRef<HTMLDivElement>(null);
@@ -438,8 +414,9 @@ export function LeafletDrawingViewer({
                     previewRef={previewPinRef}
                 />
 
-                <MapControlsInternal
+                <MapControlsBridge
                     bounds={imageBounds}
+                    onMapReady={onMapReady}
                 />
 
                 <MeasurementLayer

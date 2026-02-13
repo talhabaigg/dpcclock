@@ -1,5 +1,5 @@
 import type { TakeoffCondition } from '@/components/condition-manager';
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
@@ -60,6 +60,7 @@ export default function DrawingVariations() {
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
     const projectId = project?.id || drawing.project_id;
 
+    const [mapControls, setMapControls] = useState<MapControls | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
@@ -173,72 +174,78 @@ export default function DrawingVariations() {
     };
 
     return (
-        <DrawingWorkspaceLayout drawing={drawing} revisions={revisions} project={project} activeTab={activeTab}>
-            {/* Toolbar */}
-            <div className="bg-muted/20 flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 py-1">
-                <div className="bg-background flex items-center rounded-sm border p-px">
+        <DrawingWorkspaceLayout
+            drawing={drawing}
+            revisions={revisions}
+            project={project}
+            activeTab={activeTab}
+            mapControls={mapControls}
+            toolbar={
+                <>
+                    <div className="bg-background flex items-center rounded-sm border p-px">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode('pan')}
+                            className="h-6 w-6 rounded-sm p-0"
+                            title="Pan mode"
+                        >
+                            <Hand className="h-3 w-3" />
+                        </Button>
+                    </div>
+
+                    <div className="bg-border h-4 w-px" />
+
                     <Button
                         type="button"
                         size="sm"
-                        variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
-                        onClick={() => setViewMode('pan')}
-                        className="h-6 w-6 rounded-sm p-0"
-                        title="Pan mode"
+                        variant={showPanel ? 'secondary' : 'ghost'}
+                        onClick={() => setShowPanel(!showPanel)}
+                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                     >
-                        <Hand className="h-3 w-3" />
+                        <Ruler className="h-3 w-3" />
+                        Measurements
                     </Button>
-                </div>
 
-                <div className="bg-border h-4 w-px" />
-
-                <Button
-                    type="button"
-                    size="sm"
-                    variant={showPanel ? 'secondary' : 'ghost'}
-                    onClick={() => setShowPanel(!showPanel)}
-                    className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                >
-                    <Ruler className="h-3 w-3" />
-                    Measurements
-                </Button>
-
-                {/* Measure tools */}
-                <div className="bg-background flex items-center rounded-sm border p-px">
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
-                        onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                        className="h-6 w-6 rounded-sm p-0"
-                        title={!calibration ? 'Set scale first (in Takeoff)' : 'Measure line'}
-                        disabled={!calibration}
-                    >
-                        <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
-                        onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                        className="h-6 w-6 rounded-sm p-0"
-                        title={!calibration ? 'Set scale first (in Takeoff)' : 'Measure area'}
-                        disabled={!calibration}
-                    >
-                        <Maximize2 className="h-3 w-3" />
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
-                        onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                        className="h-6 w-6 rounded-sm p-0"
-                        title="Count items"
-                    >
-                        <Hash className="h-3 w-3" />
-                    </Button>
-                </div>
-            </div>
-
+                    {/* Measure tools */}
+                    <div className="bg-background flex items-center rounded-sm border p-px">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
+                            className="h-6 w-6 rounded-sm p-0"
+                            title={!calibration ? 'Set scale first (in Takeoff)' : 'Measure line'}
+                            disabled={!calibration}
+                        >
+                            <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
+                            className="h-6 w-6 rounded-sm p-0"
+                            title={!calibration ? 'Set scale first (in Takeoff)' : 'Measure area'}
+                            disabled={!calibration}
+                        >
+                            <Maximize2 className="h-3 w-3" />
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
+                            className="h-6 w-6 rounded-sm p-0"
+                            title="Count items"
+                        >
+                            <Hash className="h-3 w-3" />
+                        </Button>
+                    </div>
+                </>
+            }
+        >
             {/* Main Viewer + Side Panel */}
             <div className="relative flex flex-1 overflow-hidden">
                 <div className="relative flex-1 overflow-hidden">
@@ -257,6 +264,7 @@ export default function DrawingVariations() {
                         onCalibrationComplete={handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        onMapReady={setMapControls}
                         className="absolute inset-0"
                     />
                 </div>

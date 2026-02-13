@@ -24,6 +24,7 @@ class DrawingMeasurement extends Model
         'variation_id',
         'source_measurement_id',
         'takeoff_condition_id',
+        'bid_area_id',
         'material_cost',
         'labour_cost',
         'total_cost',

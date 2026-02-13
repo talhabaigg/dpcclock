@@ -128,6 +128,7 @@ class DrawingMeasurementController extends Controller
             'points.*.x' => 'required|numeric|min:0|max:1',
             'points.*.y' => 'required|numeric|min:0|max:1',
             'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
+            'bid_area_id' => 'nullable|integer|exists:bid_areas,id',
         ]);
 
         $computedValue = null;
@@ -166,6 +167,7 @@ class DrawingMeasurementController extends Controller
             'computed_value' => $computedValue,
             'unit' => $unit,
             'takeoff_condition_id' => $validated['takeoff_condition_id'] ?? null,
+            'bid_area_id' => $validated['bid_area_id'] ?? null,
         ]);
 
         // Compute costs if a condition is assigned
@@ -194,6 +196,7 @@ class DrawingMeasurementController extends Controller
             'points.*.x' => 'required_with:points|numeric|min:0|max:1',
             'points.*.y' => 'required_with:points|numeric|min:0|max:1',
             'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
+            'bid_area_id' => 'nullable|integer|exists:bid_areas,id',
         ]);
 
         if (isset($validated['points'])) {

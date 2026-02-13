@@ -20,20 +20,12 @@ type ProductionPanelProps = {
     onSelectLcc: (lccId: number | null) => void;
 };
 
-function getPercentColor(percent: number): string {
-    if (percent === 0) return '#6b7280';
-    if (percent <= 30) return '#ef4444';
-    if (percent <= 60) return '#f59e0b';
-    if (percent < 100) return '#22c55e';
-    return '#10b981';
+function getPercentColor(_percent: number): string {
+    return '#3b82f6'; // blue-500 — will add green/red when hours comparison is introduced
 }
 
-function getPercentBg(percent: number): string {
-    if (percent === 0) return 'bg-gray-500/10';
-    if (percent <= 30) return 'bg-red-500/10';
-    if (percent <= 60) return 'bg-amber-500/10';
-    if (percent < 100) return 'bg-green-500/10';
-    return 'bg-emerald-500/10';
+function getPercentBg(_percent: number): string {
+    return 'bg-blue-500/10';
 }
 
 export function ProductionPanel({
@@ -49,19 +41,19 @@ export function ProductionPanel({
         : 0;
 
     return (
-        <div className="flex h-full w-[320px] flex-col border-l bg-zinc-950 text-zinc-200">
+        <div className="flex h-full w-[320px] flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground">
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
-                <BarChart3 className="h-4 w-4 text-zinc-400" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Labour Cost Codes</span>
-                <span className="ml-auto text-[10px] text-zinc-500">{lccSummary.length} codes</span>
+            <div className="flex shrink-0 items-center gap-2 border-b border-sidebar-border px-3 py-2">
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Labour Cost Codes</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">{lccSummary.length} codes</span>
             </div>
 
             {/* LCC List */}
             <ScrollArea className="flex-1">
                 <div className="space-y-px p-1">
                     {lccSummary.length === 0 && (
-                        <div className="px-3 py-8 text-center text-xs text-zinc-500">
+                        <div className="px-3 py-8 text-center text-xs text-muted-foreground">
                             No labour cost codes found.
                             <br />
                             Add LCCs to conditions in the condition manager.
@@ -79,8 +71,8 @@ export function ProductionPanel({
                                 className={cn(
                                     'group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
                                     isSelected
-                                        ? 'bg-zinc-800 ring-1 ring-zinc-600'
-                                        : 'hover:bg-zinc-900',
+                                        ? 'bg-sidebar-accent ring-1 ring-sidebar-border'
+                                        : 'hover:bg-sidebar-accent/50',
                                 )}
                             >
                                 {/* Status dot */}
@@ -92,15 +84,15 @@ export function ProductionPanel({
                                 {/* Code + name */}
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-baseline gap-1.5">
-                                        <span className="text-[11px] font-mono font-semibold text-zinc-300">
+                                        <span className="text-[11px] font-mono font-semibold text-sidebar-foreground">
                                             {lcc.code}
                                         </span>
-                                        <span className="truncate text-[10px] text-zinc-500">
+                                        <span className="truncate text-[10px] text-muted-foreground">
                                             {lcc.name}
                                         </span>
                                     </div>
                                     {/* Progress bar */}
-                                    <div className="mt-0.5 h-1 w-full rounded-full bg-zinc-800">
+                                    <div className="mt-0.5 h-1 w-full rounded-full bg-sidebar-accent">
                                         <div
                                             className="h-full rounded-full transition-all duration-300"
                                             style={{
@@ -128,8 +120,8 @@ export function ProductionPanel({
             </ScrollArea>
 
             {/* Budget Summary */}
-            <div className="shrink-0 border-t border-zinc-800 px-3 py-2 space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="shrink-0 border-t border-sidebar-border px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                     <span>Budget Summary</span>
                     <span
                         className="rounded px-1.5 py-0.5 text-[11px] font-bold"
@@ -140,7 +132,7 @@ export function ProductionPanel({
                 </div>
 
                 {/* Overall progress bar */}
-                <div className="h-1.5 w-full rounded-full bg-zinc-800">
+                <div className="h-1.5 w-full rounded-full bg-sidebar-accent">
                     <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{
@@ -151,30 +143,30 @@ export function ProductionPanel({
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded bg-zinc-900 px-2 py-1">
-                        <div className="flex items-center gap-1 text-[9px] text-zinc-500">
+                    <div className="rounded bg-sidebar-accent/50 px-2 py-1">
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
                             <Clock className="h-2.5 w-2.5" />
                             Budget
                         </div>
-                        <div className="text-[11px] font-semibold tabular-nums text-zinc-300">
+                        <div className="text-[11px] font-semibold tabular-nums text-sidebar-foreground">
                             {totalBudgetHours.toFixed(1)}h
                         </div>
                     </div>
-                    <div className="rounded bg-zinc-900 px-2 py-1">
-                        <div className="flex items-center gap-1 text-[9px] text-zinc-500">
+                    <div className="rounded bg-sidebar-accent/50 px-2 py-1">
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
                             <TrendingUp className="h-2.5 w-2.5" />
                             Earned
                         </div>
-                        <div className="text-[11px] font-semibold tabular-nums text-zinc-300">
+                        <div className="text-[11px] font-semibold tabular-nums text-sidebar-foreground">
                             {totalEarnedHours.toFixed(1)}h
                         </div>
                     </div>
-                    <div className="rounded bg-zinc-900 px-2 py-1">
-                        <div className="flex items-center gap-1 text-[9px] text-zinc-500">
+                    <div className="rounded bg-sidebar-accent/50 px-2 py-1">
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
                             <Hash className="h-2.5 w-2.5" />
                             Items
                         </div>
-                        <div className="text-[11px] font-semibold tabular-nums text-zinc-300">
+                        <div className="text-[11px] font-semibold tabular-nums text-sidebar-foreground">
                             {lccSummary.reduce((s, c) => s + c.measurement_count, 0)}
                         </div>
                     </div>

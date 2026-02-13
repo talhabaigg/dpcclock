@@ -1,4 +1,4 @@
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData } from '@/components/measurement-layer';
 import { ProductionPanel, getPercentColor, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,7 @@ export default function DrawingProduction() {
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
 
     // State
+    const [mapControls, setMapControls] = useState<MapControls | null>(null);
     const [showPanel, setShowPanel] = useState(true);
     const [selectedLccId, setSelectedLccId] = useState<number | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -201,64 +202,70 @@ export default function DrawingProduction() {
     }, []);
 
     return (
-        <DrawingWorkspaceLayout drawing={drawing} revisions={revisions} project={project} activeTab={activeTab}>
-            {/* Toolbar */}
-            <div className="bg-muted/20 flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 py-1">
-                <div className="bg-background flex items-center rounded-sm border p-px">
+        <DrawingWorkspaceLayout
+            drawing={drawing}
+            revisions={revisions}
+            project={project}
+            activeTab={activeTab}
+            mapControls={mapControls}
+            toolbar={
+                <>
+                    <div className="bg-background flex items-center rounded-sm border p-px">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="h-6 w-6 rounded-sm p-0"
+                            title="Pan mode"
+                        >
+                            <Hand className="h-3 w-3" />
+                        </Button>
+                    </div>
+                    <div className="bg-border h-4 w-px" />
+
+                    {/* Selected LCC indicator */}
+                    {selectedLccId && (
+                        <>
+                            <div className="flex items-center gap-1 rounded bg-accent px-2 py-0.5">
+                                <div
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: getPercentColor(
+                                        lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.weighted_percent ?? 0
+                                    )}}
+                                />
+                                <span className="text-[11px] font-mono font-semibold text-foreground">
+                                    {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.code}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                    {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.name}
+                                </span>
+                            </div>
+                            <span className="text-muted-foreground text-[11px]">Click areas to set % complete</span>
+                        </>
+                    )}
+                    {!selectedLccId && (
+                        <span className="text-muted-foreground text-[11px]">
+                            <ChevronRight className="mr-1 inline h-3 w-3" />
+                            Select a labour cost code from the panel
+                        </span>
+                    )}
+
+                    <div className="bg-border h-4 w-px" />
+
+                    {/* Toggle panel */}
                     <Button
                         type="button"
                         size="sm"
-                        variant="secondary"
-                        className="h-6 w-6 rounded-sm p-0"
-                        title="Pan mode"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setShowPanel(!showPanel)}
+                        title={showPanel ? 'Hide panel' : 'Show panel'}
                     >
-                        <Hand className="h-3 w-3" />
+                        {showPanel ? <PanelRightClose className="h-3 w-3" /> : <PanelRightOpen className="h-3 w-3" />}
                     </Button>
-                </div>
-                <div className="bg-border h-4 w-px" />
-
-                {/* Selected LCC indicator */}
-                {selectedLccId && (
-                    <>
-                        <div className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5">
-                            <div
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: getPercentColor(
-                                    lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.weighted_percent ?? 0
-                                )}}
-                            />
-                            <span className="text-[11px] font-mono font-semibold text-zinc-300">
-                                {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.code}
-                            </span>
-                            <span className="text-[10px] text-zinc-500">
-                                {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.name}
-                            </span>
-                        </div>
-                        <span className="text-muted-foreground text-[11px]">Click areas to set % complete</span>
-                    </>
-                )}
-                {!selectedLccId && (
-                    <span className="text-muted-foreground text-[11px]">
-                        <ChevronRight className="mr-1 inline h-3 w-3" />
-                        Select a labour cost code from the panel to begin statusing
-                    </span>
-                )}
-
-                <div className="flex-1" />
-
-                {/* Toggle panel */}
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0"
-                    onClick={() => setShowPanel(!showPanel)}
-                    title={showPanel ? 'Hide panel' : 'Show panel'}
-                >
-                    {showPanel ? <PanelRightClose className="h-3 w-3" /> : <PanelRightOpen className="h-3 w-3" />}
-                </Button>
-            </div>
-
+                </>
+            }
+        >
             {/* Main content area */}
             <div className="relative flex flex-1 overflow-hidden">
                 {/* Drawing Viewer */}
@@ -279,19 +286,20 @@ export default function DrawingProduction() {
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={handleMeasurementClick}
                         productionLabels={selectedLccId ? productionLabels : undefined}
+                        onMapReady={setMapControls}
                         className="absolute inset-0"
                     />
 
                     {/* Percent Dropdown Overlay */}
                     {percentDropdown && selectedLccId && (
                         <div
-                            className="fixed z-[9999] rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl"
+                            className="fixed z-[9999] rounded-lg border border-border bg-popover py-1 shadow-xl"
                             style={{
                                 left: percentDropdown.x - 40,
                                 top: percentDropdown.y - 120,
                             }}
                         >
-                            <div className="px-3 py-1 text-[10px] text-zinc-500 border-b border-zinc-800 mb-1">
+                            <div className="px-3 py-1 text-[10px] text-muted-foreground border-b border-border mb-1">
                                 Set % Complete
                             </div>
                             {PERCENT_OPTIONS.map((p) => {
@@ -304,8 +312,8 @@ export default function DrawingProduction() {
                                         onClick={() => updateStatus(percentDropdown.measurementId, p)}
                                         className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] transition-colors ${
                                             isActive
-                                                ? 'bg-zinc-700 text-white font-semibold'
-                                                : 'text-zinc-300 hover:bg-zinc-800'
+                                                ? 'bg-accent text-accent-foreground font-semibold'
+                                                : 'text-popover-foreground hover:bg-accent/50'
                                         }`}
                                     >
                                         <div

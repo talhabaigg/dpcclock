@@ -32,7 +32,6 @@ type TakeoffPanelProps = {
     selectedMeasurementId: number | null;
     conditions: TakeoffCondition[];
     activeConditionId: number | null;
-    onSetViewMode: (mode: ViewMode) => void;
     onOpenCalibrationDialog: (method: 'manual' | 'preset') => void;
     onDeleteCalibration: () => void;
     onMeasurementSelect: (id: number | null) => void;
@@ -63,7 +62,6 @@ export function TakeoffPanel({
     selectedMeasurementId,
     conditions,
     activeConditionId,
-    onSetViewMode,
     onOpenCalibrationDialog,
     onDeleteCalibration,
     onMeasurementSelect,
@@ -108,12 +106,18 @@ export function TakeoffPanel({
     const linearUnit = calibration?.unit || '';
     const areaUnit = calibration ? `sq ${calibration.unit}` : '';
 
-    // Group conditions by type
-    const conditionsByType: Record<string, TakeoffCondition[]> = {};
+    // Group conditions by condition type (e.g. Wall, Ceiling, Floor)
+    const conditionsByConditionType: Record<string, TakeoffCondition[]> = {};
     for (const c of conditions) {
-        if (!conditionsByType[c.type]) conditionsByType[c.type] = [];
-        conditionsByType[c.type].push(c);
+        const typeName = c.condition_type?.name || 'Uncategorized';
+        if (!conditionsByConditionType[typeName]) conditionsByConditionType[typeName] = [];
+        conditionsByConditionType[typeName].push(c);
     }
+    const conditionTypeNames = Object.keys(conditionsByConditionType).sort((a, b) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b);
+    });
 
     const isMeasuring = viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_count';
 
@@ -232,44 +236,6 @@ export function TakeoffPanel({
                                     </p>
                                 </div>
                             )}
-
-                            {/* Quick Tools strip */}
-                            <div className="border-b px-2 py-1.5">
-                                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tools</div>
-                                <div className="flex gap-0.5">
-                                    {([
-                                        { mode: 'measure_line' as const, icon: Pencil, label: 'Line', disabled: !hasCalibration },
-                                        { mode: 'measure_area' as const, icon: Maximize2, label: 'Area', disabled: !hasCalibration },
-                                        { mode: 'measure_count' as const, icon: Hash, label: 'Count', disabled: false },
-                                    ] as const).map(({ mode, icon: Icon, label, disabled }) => {
-                                        const isActive = viewMode === mode && !activeConditionId;
-                                        return (
-                                            <Tooltip key={mode}>
-                                                <TooltipTrigger asChild>
-                                                    <button
-                                                        disabled={disabled}
-                                                        onClick={() => {
-                                                            onActivateCondition(null);
-                                                            onSetViewMode(viewMode === mode ? 'pan' : mode);
-                                                        }}
-                                                        className={`flex flex-1 items-center justify-center gap-1 rounded-sm border py-1 text-[10px] font-medium transition-colors ${
-                                                            isActive
-                                                                ? 'border-primary bg-primary text-primary-foreground'
-                                                                : 'border-border bg-background hover:bg-muted'
-                                                        } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
-                                                    >
-                                                        <Icon className="h-3 w-3" />
-                                                        {label}
-                                                    </button>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="bottom" className="text-xs">
-                                                    {disabled ? 'Set scale first' : `Free ${label.toLowerCase()} measure`}
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        );
-                                    })}
-                                </div>
-                            </div>
 
                             {/* Measurements table */}
                             {measurements.length > 0 && (
@@ -442,18 +408,15 @@ export function TakeoffPanel({
                                     <p className="text-[11px] text-muted-foreground">No conditions yet.</p>
                                 </div>
                             ) : (
-                                (['linear', 'area', 'count'] as const).map((type) => {
-                                    const items = conditionsByType[type];
+                                conditionTypeNames.map((typeName) => {
+                                    const items = conditionsByConditionType[typeName];
                                     if (!items?.length) return null;
-                                    const Icon = TYPE_ICONS[type];
-                                    const isDisabled = type !== 'count' && !hasCalibration;
                                     return (
-                                        <div key={type}>
-                                            {/* Type header row */}
+                                        <div key={typeName}>
+                                            {/* Condition type header row */}
                                             <div className="flex items-center gap-1.5 border-b bg-muted/30 px-2 py-1">
-                                                <Icon className="h-2.5 w-2.5 text-muted-foreground" />
                                                 <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                                                    {TYPE_LABELS[type]}
+                                                    {typeName}
                                                 </span>
                                                 <span className="ml-auto rounded-sm bg-muted px-1 py-px text-[9px] text-muted-foreground">
                                                     {items.length}
@@ -463,7 +426,9 @@ export function TakeoffPanel({
                                             {/* Condition items */}
                                             {items.map((c) => {
                                                 const isActive = activeConditionId === c.id;
+                                                const isDisabled = c.type !== 'count' && !hasCalibration;
                                                 const measureCount = measurements.filter(m => m.takeoff_condition_id === c.id).length;
+                                                const Icon = TYPE_ICONS[c.type];
                                                 return (
                                                     <div
                                                         key={c.id}
@@ -489,10 +454,9 @@ export function TakeoffPanel({
                                                                 )}
                                                                 <span className="truncate text-[11px] font-medium">{c.name}</span>
                                                             </div>
-                                                            {c.condition_type && (
-                                                                <span className="block truncate text-[9px] text-muted-foreground">{c.condition_type.name}</span>
-                                                            )}
                                                             <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                                                                <Icon className="h-2 w-2" />
+                                                                <span>{TYPE_LABELS[c.type]}</span>
                                                                 {c.pricing_method === 'unit_rate' && (
                                                                     <span className="rounded-[2px] border px-0.5 text-[8px]">UR</span>
                                                                 )}
