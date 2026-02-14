@@ -303,9 +303,9 @@ class Drawing extends Model
 
         $maxZoom = $this->tiles_max_zoom ?? 5;
         $maxDim = max($this->tiles_width ?? 0, $this->tiles_height ?? 0);
-        // Min useful zoom: level where largest dimension >= 1500px
+        // Min useful zoom: level where largest dimension >= 3000px
         $minNativeZoom = $maxDim > 0
-            ? max(0, $maxZoom - (int) floor(log(max($maxDim, 1) / 1500, 2)))
+            ? max(0, $maxZoom - (int) floor(log(max($maxDim, 1) / 3000, 2)))
             : 0;
 
         return [

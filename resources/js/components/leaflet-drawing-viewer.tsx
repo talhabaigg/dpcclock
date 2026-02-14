@@ -408,16 +408,32 @@ export function LeafletDrawingViewer({
                 style={{ background: '#ffffff' }}
             >
                 {tiles ? (
-                    <TileLayer
-                        url={tileUrl}
-                        tileSize={tiles.tileSize}
-                        noWrap={true}
-                        bounds={tileBounds}
-                        minZoom={minZoom}
-                        maxZoom={maxZoom}
-                        maxNativeZoom={tiles.maxZoom}
-                        minNativeZoom={tiles.minNativeZoom ?? 0}
-                    />
+                    <>
+                        {/* Low-res layer: loads instantly as placeholder */}
+                        <TileLayer
+                            url={tileUrl}
+                            tileSize={tiles.tileSize}
+                            noWrap={true}
+                            bounds={tileBounds}
+                            minZoom={minZoom}
+                            maxZoom={maxZoom}
+                            maxNativeZoom={tiles.maxZoom}
+                            minNativeZoom={tiles.minNativeZoom ?? 0}
+                        />
+                        {/* High-res layer: loads on top for sharp detail */}
+                        <TileLayer
+                            url={tileUrl}
+                            tileSize={tiles.tileSize}
+                            noWrap={true}
+                            bounds={tileBounds}
+                            minZoom={minZoom}
+                            maxZoom={maxZoom}
+                            maxNativeZoom={tiles.maxZoom}
+                            minNativeZoom={Math.min(tiles.maxZoom, (tiles.minNativeZoom ?? 0) + 3)}
+                            keepBuffer={4}
+                            updateWhenZooming={false}
+                        />
+                    </>
                 ) : imageUrl ? (
                     <ImageOverlay url={imageUrl} bounds={imageBounds} />
                 ) : null}
@@ -526,8 +542,8 @@ export function LeafletDrawingViewer({
                     background: transparent !important;
                     border: none !important;
                 }
-                .leaflet-tile {
-                    image-rendering: -webkit-optimize-contrast;
+                .leaflet-tile,
+                .leaflet-image-layer {
                     image-rendering: auto;
                 }
                 .calibration-label {

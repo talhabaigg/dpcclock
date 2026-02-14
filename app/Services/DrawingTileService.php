@@ -167,13 +167,14 @@ class DrawingTileService
 
     /**
      * Calculate the minimum useful zoom level.
-     * Skips levels where the image would be smaller than ~1500px (too blurry for plans).
+     * Skips levels where the image would be smaller than ~3000px (construction plans need
+     * enough resolution for text/dimensions to remain legible when zoomed out).
      */
     protected function calculateMinZoom(int $maxDimension, int $maxZoom): int
     {
         // At zoom z, the image dimension = maxDimension / 2^(maxZoom - z)
-        // We want: maxDimension / 2^(maxZoom - z) >= 1500
-        $minZoom = max(0, $maxZoom - (int) floor(log(max($maxDimension, 1) / 1500, 2)));
+        // We want: maxDimension / 2^(maxZoom - z) >= 3000
+        $minZoom = max(0, $maxZoom - (int) floor(log(max($maxDimension, 1) / 3000, 2)));
 
         return min($minZoom, $maxZoom);
     }
@@ -230,14 +231,13 @@ class DrawingTileService
         $args = $isMagick7
             ? [$magick, 'convert'] : [$magick];
         // Sharpen after downscaling to preserve line/text crispness at lower zoom levels.
-        // -unsharp radiusxsigma+amount+threshold — mild sharpening that helps text readability.
-        // Stronger sharpening for lower zoom levels (more downscaling = more detail loss).
+        // -unsharp radiusxsigma+amount+threshold — stronger values for more downscaled levels.
         $zoomDiff = $maxZoom - $zoomLevel;
         $sharpenAmount = match (true) {
-            $zoomDiff >= 3 => '0x1+1.0+0.01',   // Heavy sharpen for very zoomed-out
-            $zoomDiff >= 2 => '0x0.8+0.8+0.01',  // Medium sharpen
-            $zoomDiff >= 1 => '0x0.6+0.5+0.01',  // Light sharpen
-            default        => '',                  // Max zoom — no sharpening needed
+            $zoomDiff >= 3 => '0x1.2+1.5+0.01',   // Heavy sharpen for very zoomed-out
+            $zoomDiff >= 2 => '0x1.0+1.2+0.01',    // Strong sharpen
+            $zoomDiff >= 1 => '0x0.8+0.8+0.01',    // Medium sharpen
+            default        => '',                    // Max zoom — no sharpening needed
         };
 
         $sharpenArgs = $sharpenAmount !== '' ? ['-unsharp', $sharpenAmount] : [];
