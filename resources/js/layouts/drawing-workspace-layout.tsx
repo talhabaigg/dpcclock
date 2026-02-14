@@ -1,12 +1,21 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Menubar,
+    MenubarContent,
+    MenubarItem,
+    MenubarMenu,
+    MenubarSeparator,
+    MenubarTrigger,
+} from '@/components/ui/menubar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type MapControls } from '@/components/leaflet-drawing-viewer';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, History, Maximize, Minus, Plus, RotateCcw, Ruler } from 'lucide-react';
-import { type ReactNode, useMemo } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, RotateCcw, Ruler, TableProperties } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'budget' | 'qa';
 
@@ -53,6 +62,19 @@ type ProjectDrawing = {
 export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, mapControls, children }: DrawingWorkspaceLayoutProps) {
     const { projectDrawings } = usePage<{ projectDrawings?: ProjectDrawing[] }>().props;
     const drawings = projectDrawings ?? [];
+    const [showHelpDialog, setShowHelpDialog] = useState(false);
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                const tag = (e.target as HTMLElement)?.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+                setShowHelpDialog((v) => !v);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
 
     const displayName = drawing.display_name || drawing.title || drawing.sheet_number || 'Drawing';
     const projectName = project?.name || drawing.project?.name || 'Project';
@@ -80,7 +102,61 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
             <Head title={displayName} />
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
-                {/* Header Bar — single compact industrial strip */}
+                {/* Menubar */}
+                <div className="bg-background flex shrink-0 items-center border-b px-1 py-0">
+                    <Menubar className="h-auto rounded-none border-none bg-transparent p-0 shadow-none">
+                        <MenubarMenu>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">File</MenubarTrigger>
+                            <MenubarContent>
+                                <MenubarItem asChild>
+                                    <a href={`/drawings/${drawing.id}/download`} download className="flex items-center gap-2">
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download Drawing
+                                    </a>
+                                </MenubarItem>
+                                <MenubarSeparator />
+                                <MenubarItem
+                                    onClick={() => (window.location.href = `/projects/${projectId}/takeoff-summary/export`)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                                    Export Takeoff (Excel)
+                                </MenubarItem>
+                                <MenubarSeparator />
+                                <MenubarItem onClick={() => window.print()} className="flex items-center gap-2">
+                                    <Printer className="h-3.5 w-3.5" />
+                                    Print
+                                </MenubarItem>
+                            </MenubarContent>
+                        </MenubarMenu>
+                        <MenubarMenu>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Reports</MenubarTrigger>
+                            <MenubarContent>
+                                <MenubarItem
+                                    onClick={() => router.visit(`/projects/${projectId}/takeoff-summary`)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <TableProperties className="h-3.5 w-3.5" />
+                                    Takeoff Summary
+                                </MenubarItem>
+                            </MenubarContent>
+                        </MenubarMenu>
+                        <MenubarMenu>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Help</MenubarTrigger>
+                            <MenubarContent>
+                                <MenubarItem
+                                    onClick={() => setShowHelpDialog(true)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Keyboard className="h-3.5 w-3.5" />
+                                    Shortcut Keys
+                                </MenubarItem>
+                            </MenubarContent>
+                        </MenubarMenu>
+                    </Menubar>
+                </div>
+
+                {/* Toolbar — compact industrial strip */}
                 <div className="bg-background flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
                     {/* Back */}
                     <Link href={`/projects/${projectId}/drawings`}>
@@ -259,6 +335,83 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                 {/* Page-specific content (toolbar, viewer, panels, dialogs) */}
                 {children}
             </div>
+
+            {/* Help / Controls Dialog */}
+            <Dialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Controls & Shortcuts</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 text-sm">
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Tools</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">P</kbd>
+                                <span>Pan / move around drawing</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">S</kbd>
+                                <span>Calibrate scale</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">L</kbd>
+                                <span>Line measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">A</kbd>
+                                <span>Area measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">R</kbd>
+                                <span>Rectangle measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">C</kbd>
+                                <span>Count measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
+                                <span>Cancel / return to pan</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Conditions</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <span className="flex gap-0.5"><kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">1</kbd>–<kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">5</kbd></span>
+                                <span>Activate condition 1–5</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Undo / Redo</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Z</kbd>
+                                <span>Undo last action</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Shift+Z</kbd>
+                                <span>Redo</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Y</kbd>
+                                <span>Redo (alternative)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">While Measuring</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
+                                <span>Place point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Z / Backspace</kbd>
+                                <span>Undo last point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Right-click</kbd>
+                                <span>Undo last point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Enter</kbd>
+                                <span>Complete measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
+                                <span>Cancel / clear all points</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Shift</kbd>
+                                <span>Hold to snap to 15° angles (square for rectangles)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Vertex Editing</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
+                                <span>Select measurement in pan mode</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Drag</kbd>
+                                <span>Move vertex handle</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Dbl-click</kbd>
+                                <span>Delete vertex</span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Press <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">?</kbd> to toggle this dialog.</p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

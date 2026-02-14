@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { router, usePage } from '@inertiajs/react';
 import {
     Camera,
@@ -26,7 +26,6 @@ import {
     GitCompare,
     Hand,
     Hash,
-    HelpCircle,
     Layers,
     Loader2,
     Minus,
@@ -229,7 +228,6 @@ export default function DrawingTakeoff() {
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [editableVertices, setEditableVertices] = useState(false);
-    const [showHelpDialog, setShowHelpDialog] = useState(false);
     const [deductionParentId, setDeductionParentId] = useState<number | null>(null);
 
     // Flatten measurements + their deductions into a single array for map rendering
@@ -900,8 +898,10 @@ export default function DrawingTakeoff() {
                 );
                 pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
                 toast.success(`Deduction saved on "${parent?.name}"`);
-            } catch {
-                toast.error('Failed to save deduction.');
+            } catch (err) {
+                const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
+                toast.error(`Failed to save deduction. ${msg}`);
+                console.error('Deduction save error:', err);
             }
             setDeductionParentId(null);
             setViewMode('pan');
@@ -949,8 +949,10 @@ export default function DrawingTakeoff() {
                     unit: saved.unit || 'EA',
                 }).catch(() => {});
             }
-        } catch {
-            toast.error('Failed to save measurement.');
+        } catch (err) {
+            const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
+            toast.error(`Failed to save measurement. ${msg}`);
+            console.error('Measurement save error:', err);
         }
     };
 
@@ -986,8 +988,10 @@ export default function DrawingTakeoff() {
             setMeasurementDialogOpen(false);
             setPendingMeasurementData(null);
             setEditingMeasurement(null);
-        } catch {
-            toast.error('Failed to save measurement.');
+        } catch (err) {
+            const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
+            toast.error(`Failed to save measurement. ${msg}`);
+            console.error('Measurement dialog save error:', err);
         } finally {
             setSavingMeasurement(false);
         }
@@ -1125,7 +1129,6 @@ export default function DrawingTakeoff() {
             { key: 'z', ctrl: true, handler: undo },
             { key: 'z', ctrl: true, shift: true, handler: redo },
             { key: 'y', ctrl: true, handler: redo },
-            { key: '?', handler: () => setShowHelpDialog((v) => !v) },
         ],
         [viewMode, showTakeoffPanel, calibration, conditions, activeConditionId, undo, redo],
     );
@@ -1433,17 +1436,6 @@ export default function DrawingTakeoff() {
                         </>
                     )}
 
-                    {/* Help */}
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowHelpDialog(true)}
-                        className="h-6 w-6 rounded-sm p-0"
-                        title="Keyboard shortcuts (?)"
-                    >
-                        <HelpCircle className="h-3 w-3" />
-                    </Button>
 
                     {/* Observations count */}
                     {serverObservations.length > 0 && selectedObservationIds.size === 0 && (
@@ -2373,82 +2365,6 @@ export default function DrawingTakeoff() {
                             {creatingVariation ? 'Creating...' : 'Create'}
                         </Button>
                     </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            {/* Help / Controls Dialog */}
-            <Dialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Controls & Shortcuts</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 text-sm">
-                        <div>
-                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Tools</h4>
-                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">P</kbd>
-                                <span>Pan / move around drawing</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">S</kbd>
-                                <span>Calibrate scale</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">L</kbd>
-                                <span>Line measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">A</kbd>
-                                <span>Area measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">R</kbd>
-                                <span>Rectangle measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">C</kbd>
-                                <span>Count measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
-                                <span>Cancel / return to pan</span>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Conditions</h4>
-                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                                <span className="flex gap-0.5"><kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">1</kbd>–<kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">5</kbd></span>
-                                <span>Activate condition 1–5</span>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Undo / Redo</h4>
-                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Z</kbd>
-                                <span>Undo last action</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Shift+Z</kbd>
-                                <span>Redo</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Y</kbd>
-                                <span>Redo (alternative)</span>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">While Measuring</h4>
-                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
-                                <span>Place point</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Z / Backspace</kbd>
-                                <span>Undo last point</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Right-click</kbd>
-                                <span>Undo last point</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Enter</kbd>
-                                <span>Complete measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
-                                <span>Cancel / clear all points</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Shift</kbd>
-                                <span>Hold to snap to 15° angles (square for rectangles)</span>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Vertex Editing</h4>
-                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
-                                <span>Select measurement in pan mode</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Drag</kbd>
-                                <span>Move vertex handle</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Dbl-click</kbd>
-                                <span>Delete vertex</span>
-                            </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Press <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">?</kbd> to toggle this dialog.</p>
-                    </div>
                 </DialogContent>
             </Dialog>
         </DrawingWorkspaceLayout>

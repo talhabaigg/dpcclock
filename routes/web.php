@@ -38,6 +38,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SupplierCategoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimesheetEventController;
+use App\Http\Controllers\TakeoffExportController;
 use App\Http\Controllers\TitleBlockTemplateController;
 use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
@@ -561,6 +562,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // DRAWINGS
     // ============================================
+    // Takeoff Summary & Export
+    Route::middleware('permission:drawings.view')->group(function () {
+        Route::get('/projects/{project}/takeoff-summary', [TakeoffExportController::class, 'index'])->name('takeoff-summary.index');
+        Route::get('/projects/{project}/takeoff-summary/export', [TakeoffExportController::class, 'export'])->name('takeoff-summary.export');
+    });
+
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
         Route::get('/drawings/{drawing}', fn (\App\Models\Drawing $drawing) => redirect()->route('drawings.takeoff', $drawing))->name('drawings.show');

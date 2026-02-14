@@ -74,6 +74,11 @@ class DrawingMeasurement extends Model
         return $this->belongsTo(TakeoffCondition::class, 'takeoff_condition_id');
     }
 
+    public function bidArea(): BelongsTo
+    {
+        return $this->belongsTo(BidArea::class);
+    }
+
     public function variation(): BelongsTo
     {
         return $this->belongsTo(Variation::class);
