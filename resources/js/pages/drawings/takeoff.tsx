@@ -143,12 +143,15 @@ type PendingPoint = {
 };
 
 export default function DrawingTakeoff() {
-    const { drawing, revisions, project, activeTab } = usePage<{
+    const { drawing, revisions, project, activeTab, auth } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: Project;
         activeTab: DrawingTab;
+        auth?: { permissions?: string[] };
     }>().props;
+
+    const canEditTakeoff = auth?.permissions?.includes('takeoff.edit') ?? false;
 
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
 
@@ -1156,22 +1159,22 @@ export default function DrawingTakeoff() {
             { key: 't', handler: () => setShowTakeoffPanel(v => !v) },
             { key: 'p', handler: () => setViewMode('pan') },
             { key: 'Escape', handler: () => setViewMode('pan') },
-            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: showTakeoffPanel },
-            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: showTakeoffPanel && !!calibration },
-            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: showTakeoffPanel && !!calibration },
-            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: showTakeoffPanel && !!calibration },
-            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: showTakeoffPanel },
+            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canEditTakeoff && showTakeoffPanel },
+            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
+            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
+            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
+            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canEditTakeoff && showTakeoffPanel },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
-                enabled: showTakeoffPanel,
+                enabled: canEditTakeoff && showTakeoffPanel,
             })),
-            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: showTakeoffPanel },
-            { key: 'z', ctrl: true, handler: undo },
-            { key: 'z', ctrl: true, shift: true, handler: redo },
-            { key: 'y', ctrl: true, handler: redo },
+            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: canEditTakeoff && showTakeoffPanel },
+            { key: 'z', ctrl: true, handler: undo, enabled: canEditTakeoff },
+            { key: 'z', ctrl: true, shift: true, handler: redo, enabled: canEditTakeoff },
+            { key: 'y', ctrl: true, handler: redo, enabled: canEditTakeoff },
         ],
-        [viewMode, showTakeoffPanel, calibration, conditions, activeConditionId, undo, redo],
+        [viewMode, showTakeoffPanel, calibration, conditions, activeConditionId, undo, redo, canEditTakeoff],
     );
     useKeyboardShortcuts(shortcuts);
 
@@ -1260,7 +1263,7 @@ export default function DrawingTakeoff() {
                         Takeoff
                     </Button>
 
-                    {showTakeoffPanel && (
+                    {showTakeoffPanel && canEditTakeoff && (
                         <div className="bg-background flex items-center rounded-sm border p-px">
                             <Button
                                 type="button"
@@ -1343,8 +1346,8 @@ export default function DrawingTakeoff() {
                                     ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                                     : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-pointer'
                             }`}
-                            onClick={() => !calibration && setViewMode('calibrate')}
-                            title={calibration ? 'Scale is calibrated' : 'Click to calibrate scale'}
+                            onClick={() => canEditTakeoff && !calibration && setViewMode('calibrate')}
+                            title={calibration ? 'Scale is calibrated' : canEditTakeoff ? 'Click to calibrate scale' : 'Not calibrated (read-only)'}
                         >
                             <div className={`h-1.5 w-1.5 rounded-full ${calibration ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
                             {calibration
@@ -1398,16 +1401,18 @@ export default function DrawingTakeoff() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-5 w-5 p-0"
-                                    title="Manage bid areas"
-                                    onClick={() => setShowBidAreaManager(true)}
-                                >
-                                    <Pencil className="h-2.5 w-2.5" />
-                                </Button>
+                                {canEditTakeoff && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0"
+                                        title="Manage bid areas"
+                                        onClick={() => setShowBidAreaManager(true)}
+                                    >
+                                        <Pencil className="h-2.5 w-2.5" />
+                                    </Button>
+                                )}
                             </div>
                         </>
                     )}
@@ -1805,6 +1810,7 @@ export default function DrawingTakeoff() {
                                     onMeasurementHover={setHoveredMeasurementId}
                                     drawingId={drawing.id}
                                     quantityMultiplier={drawing.quantity_multiplier ?? 1}
+                                    readOnly={!canEditTakeoff}
                                 />
                             </>
                         )}

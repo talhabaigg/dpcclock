@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CostCodeRatioExport;
 use App\Models\CostCode;
 use App\Models\Location;
 use App\Services\PremierAuthenticationService;
 use Http;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class LocationCostcodeController extends Controller
 {
@@ -123,74 +125,52 @@ class LocationCostcodeController extends Controller
 
     public function downloadCostCodeRatios($locationId)
     {
-        // $acceptable_prefixes = ['01', '02', '03', '04', '05', '06', '07', '08'];
-
         $location = Location::findOrFail($locationId);
-        $fileName = 'location_cost_code_ratios_'.$location->name.'_'.now()->format('Ymd_His').'.csv';
-        $filePath = storage_path("app/{$fileName}");
+        $items = $location->costCodes()->orderBy('code')->get();
 
-        $handle = fopen($filePath, 'w');
-        fputcsv($handle, ['job_number', 'cost_code', 'description', 'variation_ratio', 'dayworks_ratio', 'waste_ratio', 'prelim_type']);
-        $items = $location->costCodes()->get();
+        $rows = $items->map(fn ($item) => [
+            $location->external_id,
+            $item->code,
+            $item->description,
+            $item->pivot->variation_ratio,
+            $item->pivot->dayworks_ratio,
+            $item->pivot->waste_ratio,
+            $item->pivot->prelim_type,
+        ])->toArray();
 
-        // $filteredItems = $items->filter(function ($item) use ($acceptable_prefixes) {
-        //     foreach ($acceptable_prefixes as $prefix) {
-        //         if (str_starts_with($item->code, $prefix)) {
-        //             return true;
-        //         }
-        //     }
-        //     return false;
-        // });
+        $fileName = 'cost_code_ratios_'.$location->name.'_'.now()->format('Ymd_His').'.xlsx';
 
-        $filteredItems = $items->sortBy('code');
-
-        foreach ($filteredItems as $item) {
-            fputcsv($handle, [
-                $location->external_id,
-                "'".$item->code, // 👈 prevents Excel auto-conversion
-                $item->description,
-                $item->pivot->variation_ratio,
-                $item->pivot->dayworks_ratio,
-            ]);
-        }
-
-        fclose($handle);
-
-        return response()->download($filePath)->deleteFileAfterSend(true);
+        return Excel::download(new CostCodeRatioExport($rows), $fileName);
     }
 
     public function upload(Request $request, Location $location)
     {
-
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt',
+            'rows' => 'required|array|min:1',
+            'rows.*.cost_code' => 'required|string',
+            'rows.*.variation_ratio' => 'nullable|numeric',
+            'rows.*.dayworks_ratio' => 'nullable|numeric',
+            'rows.*.waste_ratio' => 'nullable|numeric',
+            'rows.*.prelim_type' => 'nullable|string',
         ]);
 
-        $path = $request->file('file')->getRealPath();
-        $rows = array_map('str_getcsv', file($path));
-        $header = array_map('trim', array_shift($rows));
-        $dataToInsert = [];
+        $updated = 0;
 
-        foreach ($rows as $row) {
-            $data = array_combine($header, $row);
-            $dataToInsert[] = $data;
-        }
-        // dd($dataToInsert);
-
-        foreach ($dataToInsert as $data) {
+        foreach ($request->input('rows') as $data) {
             $costCode = CostCode::where('code', ltrim($data['cost_code'], "'"))->first();
             if ($costCode) {
                 $location->costCodes()->syncWithoutDetaching([
                     $costCode->id => [
-                        'variation_ratio' => floatval($data['variation_ratio']) ?? null,
-                        'dayworks_ratio' => floatval($data['dayworks_ratio']) ?? null,
-                        'waste_ratio' => floatval($data['waste_ratio']) ?? null,
+                        'variation_ratio' => floatval($data['variation_ratio'] ?? 0),
+                        'dayworks_ratio' => floatval($data['dayworks_ratio'] ?? 0),
+                        'waste_ratio' => floatval($data['waste_ratio'] ?? 0),
                         'prelim_type' => $data['prelim_type'] ?? null,
                     ],
                 ]);
+                $updated++;
             }
         }
 
-        return back()->with('success', 'Uploaded cost code ratios successfully.');
+        return back()->with('success', "Updated {$updated} cost code ratios successfully.");
     }
 }

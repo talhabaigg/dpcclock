@@ -20,12 +20,12 @@ import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
 export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'budget' | 'qa';
 
-const TABS: { key: DrawingTab; label: string }[] = [
-    { key: 'takeoff', label: 'Takeoff' },
-    { key: 'variations', label: 'Variations' },
-    { key: 'production', label: 'Production' },
-    { key: 'budget', label: 'Budget' },
-    { key: 'qa', label: 'QA' },
+const TABS: { key: DrawingTab; label: string; permission: string }[] = [
+    { key: 'takeoff', label: 'Takeoff', permission: 'takeoff.view' },
+    { key: 'variations', label: 'Variations', permission: 'variations.view' },
+    { key: 'production', label: 'Production', permission: 'production.view' },
+    { key: 'budget', label: 'Budget', permission: 'budget.view' },
+    { key: 'qa', label: 'QA', permission: 'qa.view' },
 ];
 
 interface DrawingWorkspaceLayoutProps {
@@ -62,8 +62,10 @@ type ProjectDrawing = {
 };
 
 export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, mapControls, children, statusBar }: DrawingWorkspaceLayoutProps) {
-    const { projectDrawings } = usePage<{ projectDrawings?: ProjectDrawing[] }>().props;
+    const { projectDrawings, auth } = usePage<{ projectDrawings?: ProjectDrawing[]; auth?: { permissions?: string[] } }>().props;
     const drawings = projectDrawings ?? [];
+    const permissions = auth?.permissions ?? [];
+    const visibleTabs = useMemo(() => TABS.filter((tab) => permissions.includes(tab.permission)), [permissions]);
     const [showHelpDialog, setShowHelpDialog] = useState(false);
     const [showReplicateDialog, setShowReplicateDialog] = useState(false);
 
@@ -271,7 +273,7 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
 
                     {/* Tab Bar */}
                     <div className="bg-muted flex items-center rounded-md p-0.5">
-                        {TABS.map((tab) => (
+                        {visibleTabs.map((tab) => (
                             <Link
                                 key={tab.key}
                                 href={`/drawings/${drawing.id}/${tab.key}`}

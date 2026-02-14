@@ -118,4 +118,25 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('api.site-walk-photos.destroy');
     Route::get('site-walk-photos/{photo}/file', [SiteWalkController::class, 'photoFile'])
         ->name('api.site-walk-photos.file');
+
+    // Production
+    Route::get('drawings/{drawing}/production', [DrawingController::class, 'production'])
+        ->name('api.drawings.production');
+    Route::get('drawings/{drawing}/production-statuses', [DrawingController::class, 'productionStatuses'])
+        ->name('api.drawings.production-statuses');
+    Route::post('drawings/{drawing}/measurement-status', [DrawingController::class, 'updateMeasurementStatus'])
+        ->name('api.drawings.measurement-status.update');
+    Route::post('drawings/{drawing}/measurement-status-bulk', [DrawingController::class, 'bulkUpdateMeasurementStatus'])
+        ->name('api.drawings.measurement-status.bulk');
+    Route::post('drawings/{drawing}/segment-status', [DrawingController::class, 'updateSegmentStatus'])
+        ->name('api.drawings.segment-status.update');
+    Route::post('drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])
+        ->name('api.drawings.segment-status.bulk');
+
+    // Drawing tiles & preview (for mobile viewer)
+    Route::get('drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'tile'])
+        ->name('api.drawings.tile')
+        ->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
+    Route::get('drawings/{drawing}/preview', [DrawingController::class, 'preview'])
+        ->name('api.drawings.preview');
 });

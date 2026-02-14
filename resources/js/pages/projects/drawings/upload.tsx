@@ -137,31 +137,27 @@ export default function DrawingsUpload() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Upload Drawings - ${project.name}`} />
 
-            <div className="mx-auto max-w-5xl space-y-4 p-4">
-                {/* Header */}
+            <div className="min-w-full space-y-4 p-2 sm:p-4">
                 <div className="flex items-center gap-2">
                     <Link href={`/projects/${project.id}/drawings`}>
-                        <Button variant="outline" size="sm">
-                            <ArrowLeft className="mr-1 h-4 w-4" />
-                            Back
+                        <Button variant="ghost" size="icon">
+                            <ArrowLeft className="h-4 w-4" />
                         </Button>
                     </Link>
-                    <h1 className="text-lg font-semibold">Upload Drawings</h1>
-                    <span className="text-muted-foreground text-sm">{project.name}</span>
                 </div>
 
                 {/* Drop Zone */}
                 <Card>
-                    <CardContent className="p-6">
+                    <CardContent className="p-3 sm:p-6">
                         <div
                             {...getRootProps()}
-                            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
+                            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 sm:p-8 transition-colors ${
                                 isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
                             }`}
                         >
                             <input {...getInputProps()} />
-                            <Upload className="text-muted-foreground mb-3 h-10 w-10" />
-                            <p className="text-sm font-medium">{isDragActive ? 'Drop files here' : 'Drag & drop drawing files, or click to select'}</p>
+                            <Upload className="text-muted-foreground mb-3 h-8 w-8 sm:h-10 sm:w-10" />
+                            <p className="text-center text-sm font-medium">{isDragActive ? 'Drop files here' : 'Drag & drop drawing files, or click to select'}</p>
                             <p className="text-muted-foreground mt-1 text-xs">PDF, PNG, JPG, TIFF - up to 50MB each</p>
                         </div>
 
@@ -184,11 +180,11 @@ export default function DrawingsUpload() {
                                                 upload.status === 'error' ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30' : 'bg-muted/50'
                                             }`}
                                         >
-                                            {upload.status === 'uploading' && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
-                                            {upload.status === 'success' && <CheckCircle className="h-3.5 w-3.5 text-green-500" />}
-                                            {upload.status === 'error' && <XCircle className="h-3.5 w-3.5 text-red-500" />}
-                                            {upload.status === 'pending' && <Clock className="h-3.5 w-3.5 text-gray-400" />}
-                                            <span className="max-w-[200px] truncate">{upload.file.name}</span>
+                                            {upload.status === 'uploading' && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />}
+                                            {upload.status === 'success' && <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />}
+                                            {upload.status === 'error' && <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
+                                            {upload.status === 'pending' && <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400" />}
+                                            <span className="max-w-[120px] truncate sm:max-w-[200px]">{upload.file.name}</span>
                                             {(upload.status === 'success' || upload.status === 'error') && (
                                                 <button onClick={() => removeUpload(index)} className="ml-1">
                                                     <X className="h-3 w-3 text-gray-400 hover:text-gray-600" />
@@ -219,60 +215,65 @@ export default function DrawingsUpload() {
                                 <p className="text-sm">No drawings uploaded yet</p>
                             </div>
                         ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>File</TableHead>
-                                        <TableHead>Title</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Size</TableHead>
-                                        <TableHead>Uploaded</TableHead>
-                                        <TableHead />
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {drawings.map((drawing) => {
-                                        const sConfig = statusConfig[drawing.status] || statusConfig.draft;
-                                        const StatusIcon = sConfig.icon;
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>File</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Title</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="hidden md:table-cell">Size</TableHead>
+                                            <TableHead className="hidden lg:table-cell">Uploaded</TableHead>
+                                            <TableHead />
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {drawings.map((drawing) => {
+                                            const sConfig = statusConfig[drawing.status] || statusConfig.draft;
+                                            const StatusIcon = sConfig.icon;
 
-                                        return (
-                                            <TableRow key={drawing.id}>
-                                                <TableCell className="max-w-[200px]">
-                                                    <p className="truncate text-sm font-medium" title={drawing.original_name || undefined}>
-                                                        {drawing.original_name || '-'}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {drawing.title || drawing.drawing_title || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant={sConfig.variant} className="gap-1 text-xs">
-                                                        <StatusIcon
-                                                            className={`h-3 w-3 ${drawing.status === 'processing' ? 'animate-spin' : ''}`}
-                                                        />
-                                                        {sConfig.label}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">
-                                                    {formatFileSize(drawing.file_size)}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">
-                                                    {formatDistanceToNow(new Date(drawing.created_at), { addSuffix: true })}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Link href={`/drawings/${drawing.id}`}>
-                                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
+                                            return (
+                                                <TableRow key={drawing.id}>
+                                                    <TableCell className="max-w-[150px] sm:max-w-[200px]">
+                                                        <p className="truncate text-sm font-medium" title={drawing.original_name || undefined}>
+                                                            {drawing.original_name || '-'}
+                                                        </p>
+                                                        <p className="text-muted-foreground truncate text-xs sm:hidden">
+                                                            {drawing.title || drawing.drawing_title || '-'}
+                                                        </p>
+                                                    </TableCell>
+                                                    <TableCell className="hidden sm:table-cell">
+                                                        <span className="text-muted-foreground text-xs">
+                                                            {drawing.title || drawing.drawing_title || '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={sConfig.variant} className="gap-1 text-xs">
+                                                            <StatusIcon
+                                                                className={`h-3 w-3 ${drawing.status === 'processing' ? 'animate-spin' : ''}`}
+                                                            />
+                                                            {sConfig.label}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground hidden text-xs md:table-cell">
+                                                        {formatFileSize(drawing.file_size)}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
+                                                        {formatDistanceToNow(new Date(drawing.created_at), { addSuffix: true })}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Link href={`/drawings/${drawing.id}`}>
+                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>

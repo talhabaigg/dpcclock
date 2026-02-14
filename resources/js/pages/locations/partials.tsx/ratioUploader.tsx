@@ -1,27 +1,55 @@
-import CsvImporterDialog from '@/components/csv-importer';
+import { ImporterWizardTrigger } from '@/components/importer-wizard';
+import type { ImporterColumnDef } from '@/components/importer-wizard';
 import { router } from '@inertiajs/react';
-import { useState } from 'react';
+
+const columns: ImporterColumnDef[] = [
+    { key: 'cost_code', label: 'Cost Code', required: true, aliases: ['code', 'costcode', 'cost code'] },
+    {
+        key: 'variation_ratio',
+        label: 'Variation Ratio',
+        type: 'number',
+        aliases: ['variation', 'variation %', 'variation_pct'],
+        validate: (v) => (v && Number(v) < 0 ? 'Must be >= 0' : null),
+    },
+    {
+        key: 'dayworks_ratio',
+        label: 'Dayworks Ratio',
+        type: 'number',
+        aliases: ['dayworks', 'dayworks %', 'dayworks_pct'],
+        validate: (v) => (v && Number(v) < 0 ? 'Must be >= 0' : null),
+    },
+    {
+        key: 'waste_ratio',
+        label: 'Waste Ratio',
+        type: 'number',
+        aliases: ['waste', 'waste %', 'waste_pct'],
+        validate: (v) => (v && Number(v) < 0 ? 'Must be >= 0' : null),
+    },
+    { key: 'prelim_type', label: 'Prelim Type', aliases: ['type', 'prelim', 'mat/lab'] },
+];
 
 const RatioUploader = ({ locationId }: { locationId: number }) => {
-    const [favImportHeaders] = useState<string[]>(['job_number', 'cost_code', 'variation_ratio', 'dayworks_ratio', 'waste_ratio', 'prelim_type']);
-
-    const handleCsvSubmit = (mappedData: any[]) => {
-        // Build rows in header order
-        const rows = mappedData.map((row) => favImportHeaders.map((h) => row[h] ?? '').join(','));
-
-        const csvContent = `${favImportHeaders.join(',')}\n${rows.join('\n')}`;
-        const file = new File([csvContent], 'exported_data.csv', { type: 'text/csv' });
-
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('location_id', locationId.toString());
-
-        router.post(`/location/${locationId}/cost-code-ratios/upload`, formData, {
-            forceFormData: true,
+    const handleSubmit = async (rows: Record<string, string>[]) => {
+        return new Promise<void>((resolve, reject) => {
+            router.post(
+                `/location/${locationId}/cost-code-ratios/upload`,
+                { rows },
+                {
+                    onSuccess: () => resolve(),
+                    onError: () => reject(new Error('Upload failed')),
+                },
+            );
         });
     };
 
-    return <CsvImporterDialog requiredColumns={favImportHeaders} onSubmit={handleCsvSubmit} />;
+    return (
+        <ImporterWizardTrigger
+            title="Import Cost Code Ratios"
+            description="Upload a CSV or Excel file with cost code ratios."
+            columns={columns}
+            onSubmit={handleSubmit}
+        />
+    );
 };
 
 export default RatioUploader;

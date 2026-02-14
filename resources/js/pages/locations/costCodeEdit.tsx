@@ -1,19 +1,16 @@
-// ✅ Imports
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card'; // (Assumes CardAction is custom; see note below)
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // <-- use shadcn
-import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { BreadcrumbItem } from '@/types';
-import { useForm } from '@inertiajs/react';
-import { CheckCircle } from 'lucide-react';
-import RatioUploader from './partials.tsx/ratioUploader'; // <-- fixed path
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft, Download } from 'lucide-react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import RatioUploader from './partials.tsx/ratioUploader';
 
-// Types for form state
 type CostCodeFormRow = {
     id: number;
     variation_ratio: number;
@@ -63,7 +60,16 @@ export default function CostCodeEdit({
         { title: 'Edit Ratios', href: `/locations/${location.id}/cost-codes/edit` },
     ];
 
-    // ✅ Numeric ratio updates (typed keys)
+    useEffect(() => {
+        if (flash.success) toast.success(flash.success);
+    }, [flash.success]);
+
+    useEffect(() => {
+        if (Object.keys(errors).length > 0) {
+            toast.error('There were errors with your submission');
+        }
+    }, [errors]);
+
     const handleRatioChange = (id: number, value: string, key: 'variation_ratio' | 'dayworks_ratio' | 'waste_ratio') => {
         const num = Number.parseFloat(value);
         const sanitized = Number.isFinite(num) ? num : 0;
@@ -73,7 +79,6 @@ export default function CostCodeEdit({
         );
     };
 
-    // ✅ Prelim type updates (string)
     const handlePrelimTypeChange = (id: number, value: string) => {
         setData(
             'costCodes',
@@ -83,145 +88,122 @@ export default function CostCodeEdit({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/location/${location.id}/cost-codes/update`); // <-- plural for consistency
+        put(`/location/${location.id}/cost-codes/update`);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="p-2">
-                <div className="flex flex-col justify-end gap-2 sm:m-2 sm:flex-row">
+            <Head title={`Edit Ratios - ${location.name}`} />
+
+            <div className="flex flex-col gap-4 p-2 sm:gap-6 sm:p-4 md:p-6">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <Link href={`/locations/${location.id}`}>
+                        <Button variant="ghost" size="icon">
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                    </Link>
+                    <div className="flex-1" />
                     <RatioUploader locationId={location.id} />
-                    <Button
-                        className="w-32"
-                        type="button"
-                        onClick={() => window.open(`/location/${location.id}/cost-code-ratios/download-csv`, '_blank')}
-                    >
-                        Download CSV
-                    </Button>
+                    <a href={`/location/${location.id}/cost-code-ratios/download-csv`}>
+                        <Button variant="outline" size="sm" className="gap-2">
+                            <Download className="h-4 w-4" />
+                            <span className="hidden sm:inline">Download Excel</span>
+                        </Button>
+                    </a>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     <Card>
-                        {flash.success && (
-                            <Alert className="mx-2 max-w-96 sm:max-w-[50%]">
-                                {' '}
-                                {/* <-- fixed */}
-                                <CheckCircle />
-                                <AlertTitle>Success</AlertTitle>
-                                <AlertDescription>{flash.success}</AlertDescription>
-                            </Alert>
-                        )}
-
-                        {Object.keys(errors).length > 0 && (
-                            <Alert variant="destructive" className="mx-2 max-w-96 sm:max-w-[50%]">
-                                {' '}
-                                {/* <-- fixed */}
-                                <AlertTitle>There were some errors with your submission:</AlertTitle>
-                                <AlertDescription>
-                                    <ul className="list-disc pl-4">
-                                        {Object.entries(errors).map(([field, message]) => (
-                                            <li key={field}>{message as string}</li>
-                                        ))}
-                                    </ul>
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
-                        <CardHeader className="flex items-center justify-between">
-                            <div>Edit Ratios for Cost Codes {location.name}</div>
-                        </CardHeader>
-
-                        <CardContent>
-                            <div className="flex justify-between">
-                                <Label>Cost Item</Label>
-                                <div className="flex space-x-2">
-                                    <Label className="min-w-32 p-1">Variation Ratio</Label>
-                                    <Label className="min-w-32 p-1">Dayworks Ratio</Label>
-                                    <Label className="min-w-32 p-1">Waste Ratio</Label>
-                                    <Label className="min-w-32 p-1">Prelim Type</Label>
-                                </div>
-                            </div>
-
-                            {data.costCodes.length > 0 &&
-                                costCodes.map((code) => {
-                                    const row = data.costCodes.find((c) => c.id === code.id);
-                                    return (
-                                        <div key={code.id}>
-                                            <div className="flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Badge>{code.code}</Badge>
-                                                    <span>{code.description}</span>
-                                                </div>
-
-                                                <div className="flex flex-row space-x-2">
-                                                    {/* Variation */}
-                                                    <div className="relative">
-                                                        <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-gray-500">
-                                                            %
-                                                        </span>
-                                                        <Input
-                                                            type="number"
-                                                            step="any"
-                                                            value={row?.variation_ratio ?? 0}
-                                                            onChange={(e) => handleRatioChange(code.id, e.target.value, 'variation_ratio')}
-                                                            className="w-32 pl-6"
-                                                        />
-                                                    </div>
-
-                                                    {/* Dayworks */}
-                                                    <div className="relative">
-                                                        <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-gray-500">
-                                                            %
-                                                        </span>
-                                                        <Input
-                                                            type="number"
-                                                            step="any"
-                                                            value={row?.dayworks_ratio ?? 0}
-                                                            onChange={(e) => handleRatioChange(code.id, e.target.value, 'dayworks_ratio')}
-                                                            className="w-32 pl-6"
-                                                        />
-                                                    </div>
-
-                                                    {/* Waste */}
-                                                    <div className="relative">
-                                                        <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-gray-500">
-                                                            %
-                                                        </span>
-                                                        <Input
-                                                            type="number"
-                                                            step="any"
-                                                            value={row?.waste_ratio ?? 0}
-                                                            onChange={(e) => handleRatioChange(code.id, e.target.value, 'waste_ratio')}
-                                                            className="w-32 pl-6"
-                                                        />
-                                                    </div>
-
-                                                    {/* Prelim Type */}
-                                                    <Select
-                                                        onValueChange={(val) => handlePrelimTypeChange(code.id, val)}
-                                                        value={row?.prelim_type ?? ''}
-                                                    >
-                                                        <SelectTrigger className="w-32">
-                                                            <SelectValue placeholder="Select Prelim Type" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="MAT">MAT</SelectItem>
-                                                            <SelectItem value="LAB">LAB</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            </div>
-                                            <Separator className="my-2" />
-                                        </div>
-                                    );
-                                })}
-
-                            {/* If CardAction is a custom abstraction, keep it. If you're on stock shadcn, use CardFooter instead. */}
-                            <div className="flex justify-end">
-                                <Button type="submit" disabled={processing}>
+                        <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base">Cost Code Ratios</CardTitle>
+                                <Button type="submit" size="sm" disabled={processing}>
                                     {processing ? 'Saving...' : 'Save Changes'}
                                 </Button>
                             </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {costCodes.length === 0 ? (
+                                <div className="text-muted-foreground py-12 text-center text-sm">
+                                    No cost codes found. Sync from Premier first.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="pl-3 sm:pl-6">Code</TableHead>
+                                                <TableHead className="hidden sm:table-cell">Description</TableHead>
+                                                <TableHead className="text-right">Variation %</TableHead>
+                                                <TableHead className="text-right">Dayworks %</TableHead>
+                                                <TableHead className="hidden text-right md:table-cell">Waste %</TableHead>
+                                                <TableHead className="pr-3 sm:pr-6">Type</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {costCodes.map((code) => {
+                                                const row = data.costCodes.find((c) => c.id === code.id);
+                                                return (
+                                                    <TableRow key={code.id}>
+                                                        <TableCell className="pl-3 sm:pl-6">
+                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
+                                                                {code.code}
+                                                            </code>
+                                                            <p className="text-muted-foreground mt-0.5 text-xs sm:hidden">
+                                                                {code.description}
+                                                            </p>
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground hidden max-w-xs truncate sm:table-cell">
+                                                            {code.description}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Input
+                                                                type="number"
+                                                                step="any"
+                                                                value={row?.variation_ratio ?? 0}
+                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'variation_ratio')}
+                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Input
+                                                                type="number"
+                                                                step="any"
+                                                                value={row?.dayworks_ratio ?? 0}
+                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'dayworks_ratio')}
+                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="hidden text-right md:table-cell">
+                                                            <Input
+                                                                type="number"
+                                                                step="any"
+                                                                value={row?.waste_ratio ?? 0}
+                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'waste_ratio')}
+                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="pr-3 sm:pr-6">
+                                                            <Select
+                                                                onValueChange={(val) => handlePrelimTypeChange(code.id, val)}
+                                                                value={row?.prelim_type ?? ''}
+                                                            >
+                                                                <SelectTrigger className="h-8 w-20 sm:w-24">
+                                                                    <SelectValue placeholder="-" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="MAT">MAT</SelectItem>
+                                                                    <SelectItem value="LAB">LAB</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </form>

@@ -2,7 +2,7 @@ import CsvImporterDialog from '@/components/csv-importer';
 import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,6 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
-    Building2,
     ChartColumnIncreasing,
     CirclePlus,
     Code2,
@@ -30,7 +29,6 @@ import {
     Heart,
     Layers,
     Lock,
-    MapPin,
     Package,
     RefreshCcw,
     RotateCcw,
@@ -39,7 +37,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ChartLineLabel } from './monthlySpendingChart';
 import AttachMaterialsDialog from './partials.tsx/AttachMaterialsDialog';
 import EditPriceDialog from './partials.tsx/EditPriceDialog';
 import FavouriteMaterialUploader from './partials.tsx/favMaterialUploader';
@@ -92,16 +89,10 @@ type Location = {
     }>;
 };
 
-interface MonthlySpend {
-    month: string;
-    total: number;
-}
-
 export default function LocationShow() {
-    const { location, flash, monthlySpending } = usePage<{
+    const { location, flash } = usePage<{
         location: Location;
         flash: { success?: string };
-        monthlySpending: MonthlySpend[];
     }>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -228,48 +219,32 @@ export default function LocationShow() {
             <Head title={`${location.name} - Location`} />
             <LoadingDialog open={open || isUploading} setOpen={setOpen} message={isUploading ? 'Uploading price list...' : 'Loading...'} />
 
-            <div className="flex flex-col gap-6 p-4 md:p-6">
-                {/* Page Header */}
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg">
-                                <MapPin className="text-primary h-5 w-5" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-semibold tracking-tight">{location.name}</h1>
-                                <p className="text-muted-foreground text-sm">
-                                    Location ID: <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{location.eh_location_id}</code>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-4 p-2 sm:gap-6 sm:p-4 md:p-6">
+                {/* Quick Actions */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <Link href={`/location/${location.id}/job-data`} method="get">
-                            <Button variant="outline" className="hover:border-primary/50 gap-2 transition-all">
+                            <Button variant="outline" size="sm" className="gap-2">
                                 <RotateCcw className="h-4 w-4" />
-                                Load Job Cost
+                                <span className="hidden sm:inline">Load Job Cost</span>
                             </Button>
                         </Link>
                         <Link href={`/location/${location.id}/job-forecast`} method="get">
-                            <Button className="gap-2">
+                            <Button size="sm" className="gap-2">
                                 <ChartColumnIncreasing className="h-4 w-4" />
-                                Job Forecast
+                                <span className="hidden sm:inline">Job Forecast</span>
                             </Button>
                         </Link>
                         <Link href={`/projects/${location.id}/drawings`}>
-                            <Button variant="outline" className="gap-2">
+                            <Button variant="outline" size="sm" className="gap-2">
                                 <FileImage className="h-4 w-4" />
-                                Drawings
+                                <span className="hidden sm:inline">Drawings</span>
                             </Button>
                         </Link>
                         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                             <DialogTrigger asChild>
-                                <Button variant="secondary" className="gap-2">
+                                <Button variant="secondary" size="sm" className="gap-2">
                                     <CirclePlus className="h-4 w-4" />
-                                    Create Sub-location
+                                    <span className="hidden sm:inline">Create Sub-location</span>
                                 </Button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-md">
@@ -310,29 +285,25 @@ export default function LocationShow() {
                                 </form>
                             </DialogContent>
                         </Dialog>
-                    </div>
                 </div>
 
                 {/* Overview Section */}
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid gap-6">
                     {/* Location Details Card */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="bg-muted/30 border-b pb-4">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Building2 className="text-muted-foreground h-4 w-4" />
-                                Location Details
-                            </CardTitle>
+                    <Card>
+                        <CardHeader className="pb-4">
+                            <CardTitle className="text-base">Location Details</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="divide-y">
-                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
                                     <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <Hash className="h-4 w-4" />
                                         Location ID
                                     </div>
                                     <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_location_id}</code>
                                 </div>
-                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
                                     <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <ExternalLink className="h-4 w-4" />
                                         External ID
@@ -343,14 +314,14 @@ export default function LocationShow() {
                                         <span className="text-muted-foreground text-sm italic">Not set</span>
                                     )}
                                 </div>
-                                <div className="hover:bg-muted/30 flex items-center justify-between px-6 py-3 transition-colors">
+                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
                                     <div className="text-muted-foreground flex items-center gap-2 text-sm">
                                         <Layers className="h-4 w-4" />
                                         Parent ID
                                     </div>
                                     <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_parent_id}</code>
                                 </div>
-                                <div className="hover:bg-muted/30 px-6 py-3 transition-colors">
+                                <div className="px-3 py-2.5 sm:px-6 sm:py-3">
                                     <div className="text-muted-foreground mb-2 flex items-center gap-2 text-sm">
                                         <Star className="h-4 w-4" />
                                         Shift Conditions
@@ -393,44 +364,32 @@ export default function LocationShow() {
                             </div>
                         </CardContent>
                     </Card>
-
-                    {/* Monthly Spending Chart */}
-                    <ChartLineLabel
-                        chartData={monthlySpending.map((month) => ({
-                            month: month.month,
-                            value: Number(month.total),
-                        }))}
-                    />
                 </div>
 
                 {/* Tabs Section */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                    <TabsList className="h-auto flex-wrap">
-                        <TabsTrigger value="sublocations" className="gap-2">
+                    <TabsList className="h-auto w-full justify-start">
+                        <TabsTrigger value="sublocations" className="gap-1.5 px-2 sm:gap-2 sm:px-3">
                             <FolderTree className="h-4 w-4" />
                             <span className="hidden sm:inline">Sub-locations</span>
-                            <span className="sm:hidden">Subs</span>
-                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">
+                            <span className="text-muted-foreground text-xs tabular-nums">
                                 {tabCounts.sublocations}
                             </span>
                         </TabsTrigger>
-                        <TabsTrigger value="costCodes" className="gap-2">
+                        <TabsTrigger value="costCodes" className="gap-1.5 px-2 sm:gap-2 sm:px-3">
                             <Code2 className="h-4 w-4" />
                             <span className="hidden sm:inline">Cost Codes</span>
-                            <span className="sm:hidden">Codes</span>
-                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">{tabCounts.costCodes}</span>
+                            <span className="text-muted-foreground text-xs tabular-nums">{tabCounts.costCodes}</span>
                         </TabsTrigger>
-                        <TabsTrigger value="pricelist" className="gap-2">
+                        <TabsTrigger value="pricelist" className="gap-1.5 px-2 sm:gap-2 sm:px-3">
                             <DollarSign className="h-4 w-4" />
                             <span className="hidden sm:inline">Price List</span>
-                            <span className="sm:hidden">Prices</span>
-                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">{tabCounts.pricelist}</span>
+                            <span className="text-muted-foreground text-xs tabular-nums">{tabCounts.pricelist}</span>
                         </TabsTrigger>
-                        <TabsTrigger value="fav_materials" className="gap-2">
+                        <TabsTrigger value="fav_materials" className="gap-1.5 px-2 sm:gap-2 sm:px-3">
                             <Heart className="h-4 w-4" />
                             <span className="hidden sm:inline">Favorites</span>
-                            <span className="sm:hidden">Favs</span>
-                            <span className="bg-muted-foreground/20 ml-1.5 rounded-full px-2 py-0.5 text-xs tabular-nums">
+                            <span className="text-muted-foreground text-xs tabular-nums">
                                 {tabCounts.fav_materials}
                             </span>
                         </TabsTrigger>
@@ -438,28 +397,20 @@ export default function LocationShow() {
 
                     {/* Sub-locations Tab */}
                     <TabsContent value="sublocations" className="mt-4">
-                        <Card className="overflow-hidden">
-                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <FolderTree className="text-muted-foreground h-4 w-4" />
-                                            Sub-locations
-                                        </CardTitle>
-                                        <CardDescription>{tabCounts.sublocations} sub-location(s) configured</CardDescription>
-                                    </div>
-                                </div>
+                        <Card>
+                            <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
+                                <CardTitle className="text-base">Sub-locations</CardTitle>
                             </CardHeader>
                             <CardContent className="p-0">
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                <TableHead className="pl-6">ID</TableHead>
+                                            <TableRow>
+                                                <TableHead className="pl-3 sm:pl-6">ID</TableHead>
                                                 <TableHead>Name</TableHead>
-                                                <TableHead>External ID</TableHead>
-                                                <TableHead>Level</TableHead>
-                                                <TableHead className="pr-6">Activity</TableHead>
+                                                <TableHead className="hidden md:table-cell">External ID</TableHead>
+                                                <TableHead className="hidden sm:table-cell">Level</TableHead>
+                                                <TableHead className="hidden sm:table-cell pr-3 sm:pr-6">Activity</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -478,12 +429,12 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.subLocations.map((subLocation) => (
-                                                    <TableRow key={subLocation.id} className="group hover:bg-muted/50 transition-colors">
-                                                        <TableCell className="text-muted-foreground pl-6 font-mono text-xs">
+                                                    <TableRow key={subLocation.id}>
+                                                        <TableCell className="text-muted-foreground pl-3 font-mono text-xs sm:pl-6">
                                                             {subLocation.eh_location_id}
                                                         </TableCell>
                                                         <TableCell className="font-medium">{subLocation.name}</TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="hidden md:table-cell">
                                                             {subLocation.external_id ? (
                                                                 <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                                                                     {subLocation.external_id}
@@ -492,12 +443,12 @@ export default function LocationShow() {
                                                                 <span className="text-muted-foreground text-sm italic">Not set</span>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="hidden sm:table-cell">
                                                             <Badge variant="outline" className="font-mono text-xs">
                                                                 {splitExternalId(subLocation.external_id).level}
                                                             </Badge>
                                                         </TableCell>
-                                                        <TableCell className="pr-6">
+                                                        <TableCell className="hidden pr-3 sm:table-cell sm:pr-6">
                                                             <Badge variant="secondary" className="font-mono text-xs">
                                                                 {splitExternalId(subLocation.external_id).activity}
                                                             </Badge>
@@ -514,27 +465,21 @@ export default function LocationShow() {
 
                     {/* Cost Codes Tab */}
                     <TabsContent value="costCodes" className="mt-4">
-                        <Card className="overflow-hidden">
-                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
+                        <Card>
+                            <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <Code2 className="text-muted-foreground h-4 w-4" />
-                                            Cost Codes
-                                        </CardTitle>
-                                        <CardDescription>{tabCounts.costCodes} cost code(s) configured</CardDescription>
-                                    </div>
+                                    <CardTitle className="text-base">Cost Codes</CardTitle>
                                     <div className="flex flex-wrap gap-2">
                                         <Link href={`/location/${location.id}/cost-codes/sync`} method="get">
                                             <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
                                                 <RefreshCcw className="h-4 w-4" />
-                                                Sync from Premier
+                                                <span className="hidden sm:inline">Sync from Premier</span>
                                             </Button>
                                         </Link>
                                         <Link href={`/location/${location.id}/cost-codes/edit`}>
                                             <Button variant="outline" size="sm" className="gap-2">
                                                 <Edit className="h-4 w-4" />
-                                                Edit Ratios
+                                                <span className="hidden sm:inline">Edit Ratios</span>
                                             </Button>
                                         </Link>
                                     </div>
@@ -544,10 +489,10 @@ export default function LocationShow() {
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                <TableHead className="pl-6">Code</TableHead>
+                                            <TableRow>
+                                                <TableHead className="pl-3 sm:pl-6">Code</TableHead>
                                                 <TableHead>Description</TableHead>
-                                                <TableHead className="w-20 pr-6 text-right">Action</TableHead>
+                                                <TableHead className="w-20 pr-3 text-right sm:pr-6">Action</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -568,14 +513,14 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.cost_codes.map((costCode) => (
-                                                    <TableRow key={costCode.id} className="group hover:bg-muted/50 transition-colors">
-                                                        <TableCell className="pl-6">
+                                                    <TableRow key={costCode.id} className="group">
+                                                        <TableCell className="pl-3 sm:pl-6">
                                                             <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                 {costCode.code}
                                                             </code>
                                                         </TableCell>
                                                         <TableCell className="text-muted-foreground">{costCode.description}</TableCell>
-                                                        <TableCell className="pr-6 text-right">
+                                                        <TableCell className="pr-3 text-right sm:pr-6">
                                                             <Link href={`/locations/${location.id}/cost-codes/${costCode.id}/delete`}>
                                                                 <Button
                                                                     size="icon"
@@ -598,22 +543,16 @@ export default function LocationShow() {
 
                     {/* Price List Tab */}
                     <TabsContent value="pricelist" className="mt-4">
-                        <Card className="overflow-hidden">
-                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
+                        <Card>
+                            <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <DollarSign className="text-muted-foreground h-4 w-4" />
-                                            Price List
-                                        </CardTitle>
-                                        <CardDescription>{tabCounts.pricelist} item(s) in price list</CardDescription>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <div className="mr-2 flex items-center gap-2">
+                                    <CardTitle className="text-base">Price List</CardTitle>
+                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                        <div className="mr-1 flex items-center gap-2 sm:mr-2">
                                             <Switch id="show-locked" checked={showLockedOnly} onCheckedChange={setShowLockedOnly} />
                                             <Label htmlFor="show-locked" className="flex cursor-pointer items-center gap-1 text-sm">
                                                 <Lock className="h-3.5 w-3.5" />
-                                                Locked Only
+                                                <span className="hidden sm:inline">Locked Only</span>
                                             </Label>
                                         </div>
                                         <AttachMaterialsDialog
@@ -625,13 +564,13 @@ export default function LocationShow() {
                                         <a href={`/material-items/location/${location.id}/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
                                                 <FileSpreadsheet className="h-4 w-4" />
-                                                CSV
+                                                <span className="hidden sm:inline">CSV</span>
                                             </Button>
                                         </a>
                                         <a href={`/material-items/location/${location.id}/download-excel`}>
                                             <Button variant="outline" size="sm" className="gap-2">
                                                 <Download className="h-4 w-4" />
-                                                Excel
+                                                <span className="hidden sm:inline">Excel</span>
                                             </Button>
                                         </a>
                                     </div>
@@ -641,13 +580,13 @@ export default function LocationShow() {
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                <TableHead className="pl-6">Code</TableHead>
-                                                <TableHead>Supplier</TableHead>
-                                                <TableHead>Description</TableHead>
+                                            <TableRow>
+                                                <TableHead className="pl-3 sm:pl-6">Code</TableHead>
+                                                <TableHead className="hidden lg:table-cell">Supplier</TableHead>
+                                                <TableHead className="hidden sm:table-cell">Description</TableHead>
                                                 <TableHead className="text-right">Unit Cost</TableHead>
-                                                <TableHead>Updated By</TableHead>
-                                                <TableHead className="w-28 pr-6">Actions</TableHead>
+                                                <TableHead className="hidden md:table-cell">Updated By</TableHead>
+                                                <TableHead className="w-20 pr-3 sm:w-28 sm:pr-6">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -668,13 +607,11 @@ export default function LocationShow() {
                                                     <TableRow
                                                         key={item.id}
                                                         className={cn(
-                                                            'group transition-colors',
-                                                            item.pivot?.is_locked
-                                                                ? 'bg-amber-50/50 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
-                                                                : 'hover:bg-muted/50',
+                                                            'group',
+                                                            item.pivot?.is_locked && 'bg-amber-50/50 dark:bg-amber-950/20',
                                                         )}
                                                     >
-                                                        <TableCell className="pl-6">
+                                                        <TableCell className="pl-3 sm:pl-6">
                                                             <div className="flex items-center gap-2">
                                                                 <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                     {item.code}
@@ -693,7 +630,7 @@ export default function LocationShow() {
                                                                 ) : null}
                                                             </div>
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="hidden lg:table-cell">
                                                             {item.supplier?.code ? (
                                                                 <Badge variant="outline" className="text-xs">
                                                                     {item.supplier.code}
@@ -702,7 +639,7 @@ export default function LocationShow() {
                                                                 <span className="text-muted-foreground text-sm italic">-</span>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell className="text-muted-foreground max-w-md truncate">{item.description}</TableCell>
+                                                        <TableCell className="text-muted-foreground hidden max-w-md truncate sm:table-cell">{item.description}</TableCell>
                                                         <TableCell className="text-right">
                                                             <span className="font-medium text-emerald-600 dark:text-emerald-400">
                                                                 $
@@ -714,7 +651,7 @@ export default function LocationShow() {
                                                                 })()}
                                                             </span>
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="hidden md:table-cell">
                                                             {item.pivot?.updated_by_name ? (
                                                                 <div className="flex flex-col">
                                                                     <span className="text-sm font-medium">{item.pivot.updated_by_name}</span>
@@ -728,7 +665,7 @@ export default function LocationShow() {
                                                                 <span className="text-muted-foreground text-sm italic">-</span>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell className="pr-6">
+                                                        <TableCell className="pr-3 sm:pr-6">
                                                             <div className="flex items-center gap-1">
                                                                 {!item.pivot?.is_locked && (
                                                                     <EditPriceDialog
@@ -768,22 +705,16 @@ export default function LocationShow() {
 
                     {/* Favorite Materials Tab */}
                     <TabsContent value="fav_materials" className="mt-4">
-                        <Card className="overflow-hidden">
-                            <CardHeader className="bg-muted/30 border-b px-6 py-4">
+                        <Card>
+                            <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <Heart className="text-muted-foreground h-4 w-4" />
-                                            Favorite Materials
-                                        </CardTitle>
-                                        <CardDescription>{tabCounts.fav_materials} favorite material(s)</CardDescription>
-                                    </div>
+                                    <CardTitle className="text-base">Favorite Materials</CardTitle>
                                     <div className="flex flex-wrap gap-2">
                                         <FavouriteMaterialUploader locationId={location.id} />
                                         <a href={`/location/${location.id}/favourite-materials/download-csv`}>
                                             <Button variant="outline" size="sm" className="gap-2">
                                                 <Download className="h-4 w-4" />
-                                                Download CSV
+                                                <span className="hidden sm:inline">Download CSV</span>
                                             </Button>
                                         </a>
                                     </div>
@@ -793,9 +724,9 @@ export default function LocationShow() {
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                <TableHead className="pl-6">Code</TableHead>
-                                                <TableHead className="pr-6">Description</TableHead>
+                                            <TableRow>
+                                                <TableHead className="pl-3 sm:pl-6">Code</TableHead>
+                                                <TableHead className="pr-3 sm:pr-6">Description</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -811,13 +742,13 @@ export default function LocationShow() {
                                                 </TableRow>
                                             ) : (
                                                 location.favourite_materials.map((item) => (
-                                                    <TableRow key={item.id} className="group hover:bg-muted/50 transition-colors">
-                                                        <TableCell className="pl-6">
+                                                    <TableRow key={item.id}>
+                                                        <TableCell className="pl-3 sm:pl-6">
                                                             <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                                 {item.code}
                                                             </code>
                                                         </TableCell>
-                                                        <TableCell className="text-muted-foreground pr-6">{item.description}</TableCell>
+                                                        <TableCell className="text-muted-foreground pr-3 sm:pr-6">{item.description}</TableCell>
                                                     </TableRow>
                                                 ))
                                             )}

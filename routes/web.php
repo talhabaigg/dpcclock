@@ -562,23 +562,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // DRAWINGS
     // ============================================
-    // Takeoff Summary & Export
-    Route::middleware('permission:drawings.view')->group(function () {
-        Route::get('/projects/{project}/takeoff-summary', [TakeoffExportController::class, 'index'])->name('takeoff-summary.index');
-        Route::get('/projects/{project}/takeoff-summary/export', [TakeoffExportController::class, 'export'])->name('takeoff-summary.export');
-    });
 
+    // Core drawing access (index, file serving, tiles, revisions)
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
-        Route::get('/drawings/{drawing}', fn (\App\Models\Drawing $drawing) => redirect()->route('drawings.takeoff', $drawing))->name('drawings.show');
-        Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
+        Route::get('/drawings/{drawing}', function (\App\Models\Drawing $drawing) {
+            $user = auth()->user();
+            if ($user && $user->can('takeoff.view')) {
+                return redirect()->route('drawings.takeoff', $drawing);
+            }
+            if ($user && $user->can('production.view')) {
+                return redirect()->route('drawings.production', $drawing);
+            }
+            if ($user && $user->can('budget.view')) {
+                return redirect()->route('drawings.budget', $drawing);
+            }
+            if ($user && $user->can('qa.view')) {
+                return redirect()->route('drawings.qa', $drawing);
+            }
+            return redirect()->route('drawings.takeoff', $drawing);
+        })->name('drawings.show');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
-        Route::get('/drawings/{drawing}/production', [DrawingController::class, 'production'])->name('drawings.production');
-        Route::get('/drawings/{drawing}/budget', [DrawingController::class, 'budget'])->name('drawings.budget');
-        Route::get('/locations/{location}/budget-hours', [DrawingController::class, 'getUsedHours'])->name('budget-hours.index');
-        Route::post('/locations/{location}/budget-hours', [DrawingController::class, 'storeUsedHours'])->name('budget-hours.store');
-        Route::get('/locations/{location}/budget-hours-history', [DrawingController::class, 'getUsedHoursHistory'])->name('budget-hours.history');
-        Route::get('/drawings/{drawing}/qa', [DrawingController::class, 'qa'])->name('drawings.qa');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');
         Route::get('/drawings/{drawing}/thumbnail', [DrawingController::class, 'serveThumbnail'])->name('drawings.thumbnail');
@@ -593,79 +597,100 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
         Route::post('/drawings/{drawing}/replicate-floors', [DrawingController::class, 'replicateToFloors'])->name('drawings.replicate-floors');
         Route::post('/drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])->name('drawings.extract-metadata');
-        // AI Drawing Comparison
-        Route::post('/drawings/compare', [DrawingController::class, 'compareRevisions'])->name('drawings.compare');
-        Route::post('/drawings/compare/save-observations', [DrawingController::class, 'saveComparisonAsObservations'])->name('drawings.compare.save-observations');
     });
     Route::delete('/drawings/{drawing}', [DrawingController::class, 'destroy'])->name('drawings.destroy')
         ->middleware('permission:drawings.delete');
 
-    // Drawing Observations
-    Route::middleware('permission:drawings.view')->group(function () {
+    // --------------------------------------------
+    // TAKEOFF (view: read measurements; edit: create/modify measurements, conditions, bid areas)
+    // --------------------------------------------
+    Route::middleware('permission:takeoff.view')->group(function () {
+        Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
+        Route::get('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'index'])->name('drawings.measurements.index');
+        Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
+        // Takeoff conditions (read)
+        Route::get('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'index'])->name('takeoff-conditions.index');
+        Route::get('/locations/{location}/material-items/search', [TakeoffConditionController::class, 'searchMaterials'])->name('takeoff-conditions.search-materials');
+        Route::get('/locations/{location}/cost-codes/search', [TakeoffConditionController::class, 'searchCostCodes'])->name('takeoff-conditions.search-cost-codes');
+        Route::get('/locations/{location}/condition-types', [TakeoffConditionController::class, 'indexTypes'])->name('condition-types.index');
+        Route::get('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'indexLabourCostCodes'])->name('labour-cost-codes.index');
+        Route::get('/locations/{location}/labour-cost-codes/search', [TakeoffConditionController::class, 'searchLabourCostCodes'])->name('labour-cost-codes.search');
+        Route::get('/locations/{location}/bid-areas', [BidAreaController::class, 'index'])->name('bid-areas.index');
+        // Takeoff summary & export
+        Route::get('/projects/{project}/takeoff-summary', [TakeoffExportController::class, 'index'])->name('takeoff-summary.index');
+        Route::get('/projects/{project}/takeoff-summary/export', [TakeoffExportController::class, 'export'])->name('takeoff-summary.export');
+    });
+    Route::middleware('permission:takeoff.edit')->group(function () {
+        // Measurements (write)
+        Route::post('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'store'])->name('drawings.measurements.store');
+        Route::put('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'update'])->name('drawings.measurements.update');
+        Route::delete('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'destroy'])->name('drawings.measurements.destroy');
+        Route::post('/drawings/{drawing}/measurements/{measurement}/restore', [DrawingMeasurementController::class, 'restore'])->name('drawings.measurements.restore');
+        Route::post('/drawings/{drawing}/measurements/recalculate-costs', [DrawingMeasurementController::class, 'recalculateCosts'])->name('drawings.measurements.recalculate-costs');
+        // Calibration (write)
+        Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
+        Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
+        // Takeoff conditions (write)
+        Route::post('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'store'])->name('takeoff-conditions.store');
+        Route::put('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'update'])->name('takeoff-conditions.update');
+        Route::delete('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'destroy'])->name('takeoff-conditions.destroy');
+        Route::post('/locations/{location}/condition-types', [TakeoffConditionController::class, 'storeType'])->name('condition-types.store');
+        Route::delete('/locations/{location}/condition-types/{conditionType}', [TakeoffConditionController::class, 'destroyType'])->name('condition-types.destroy');
+        Route::post('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'storeLabourCostCode'])->name('labour-cost-codes.store');
+        // Bid areas (write)
+        Route::post('/locations/{location}/bid-areas', [BidAreaController::class, 'store'])->name('bid-areas.store');
+        Route::put('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'update'])->name('bid-areas.update');
+        Route::delete('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'destroy'])->name('bid-areas.destroy');
+    });
+
+    // --------------------------------------------
+    // PRODUCTION CONTROL (view: see statuses; edit: update statuses)
+    // --------------------------------------------
+    Route::middleware('permission:production.view')->group(function () {
+        Route::get('/drawings/{drawing}/production', [DrawingController::class, 'production'])->name('drawings.production');
+        Route::get('/drawings/{drawing}/production-statuses', [DrawingController::class, 'getProductionStatuses'])->name('drawings.production-statuses');
+    });
+    Route::middleware('permission:production.edit')->group(function () {
+        Route::post('/drawings/{drawing}/measurement-status', [DrawingController::class, 'updateMeasurementStatus'])->name('drawings.measurement-status.update');
+        Route::post('/drawings/{drawing}/measurement-status-bulk', [DrawingController::class, 'bulkUpdateMeasurementStatus'])->name('drawings.measurement-status.bulk');
+        Route::post('/drawings/{drawing}/segment-status', [DrawingController::class, 'updateSegmentStatus'])->name('drawings.segment-status.update');
+        Route::post('/drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])->name('drawings.segment-status.bulk');
+    });
+
+    // --------------------------------------------
+    // BUDGET (view: see budget; edit: store hours)
+    // --------------------------------------------
+    Route::middleware('permission:budget.view')->group(function () {
+        Route::get('/drawings/{drawing}/budget', [DrawingController::class, 'budget'])->name('drawings.budget');
+        Route::get('/locations/{location}/budget-hours', [DrawingController::class, 'getUsedHours'])->name('budget-hours.index');
+        Route::get('/locations/{location}/budget-hours-history', [DrawingController::class, 'getUsedHoursHistory'])->name('budget-hours.history');
+    });
+    Route::middleware('permission:budget.edit')->group(function () {
+        Route::post('/locations/{location}/budget-hours', [DrawingController::class, 'storeUsedHours'])->name('budget-hours.store');
+    });
+
+    // --------------------------------------------
+    // QA (observations, alignment, comparisons)
+    // --------------------------------------------
+    Route::middleware('permission:qa.view')->group(function () {
+        Route::get('/drawings/{drawing}/qa', [DrawingController::class, 'qa'])->name('drawings.qa');
+        // Drawing Observations
         Route::post('/drawings/{drawing}/observations', [DrawingObservationController::class, 'store'])->name('drawings.observations.store');
         Route::post('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'update'])->name('drawings.observations.update');
         Route::post('/drawings/{drawing}/observations/{observation}/confirm', [DrawingObservationController::class, 'confirm'])->name('drawings.observations.confirm');
         Route::delete('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'destroy'])->name('drawings.observations.destroy');
         Route::post('/drawings/{drawing}/observations/{observation}/describe', [DrawingObservationController::class, 'describe'])->name('drawings.observations.describe');
         Route::get('/drawing-observations/{observation}/photo', [DrawingObservationController::class, 'photo'])->name('drawings.observations.photo');
-    });
-
-    // Drawing Measurements & Takeoff
-    Route::middleware('permission:drawings.view')->group(function () {
-        Route::get('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'index'])->name('drawings.measurements.index');
-        Route::post('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'store'])->name('drawings.measurements.store');
-        Route::put('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'update'])->name('drawings.measurements.update');
-        Route::delete('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'destroy'])->name('drawings.measurements.destroy');
-        Route::post('/drawings/{drawing}/measurements/{measurement}/restore', [DrawingMeasurementController::class, 'restore'])->name('drawings.measurements.restore');
-        Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
-        Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
-        Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
-        Route::post('/drawings/{drawing}/measurements/recalculate-costs', [DrawingMeasurementController::class, 'recalculateCosts'])->name('drawings.measurements.recalculate-costs');
-    });
-
-    // Production Control (statusing)
-    Route::middleware('permission:drawings.view')->group(function () {
-        Route::post('/drawings/{drawing}/measurement-status', [DrawingController::class, 'updateMeasurementStatus'])->name('drawings.measurement-status.update');
-        Route::post('/drawings/{drawing}/measurement-status-bulk', [DrawingController::class, 'bulkUpdateMeasurementStatus'])->name('drawings.measurement-status.bulk');
-        Route::post('/drawings/{drawing}/segment-status', [DrawingController::class, 'updateSegmentStatus'])->name('drawings.segment-status.update');
-        Route::post('/drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])->name('drawings.segment-status.bulk');
-        Route::get('/drawings/{drawing}/production-statuses', [DrawingController::class, 'getProductionStatuses'])->name('drawings.production-statuses');
-    });
-
-    // Takeoff Conditions (scoped to Location/project)
-    Route::middleware('permission:drawings.view')->group(function () {
-        Route::get('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'index'])->name('takeoff-conditions.index');
-        Route::post('/locations/{location}/takeoff-conditions', [TakeoffConditionController::class, 'store'])->name('takeoff-conditions.store');
-        Route::put('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'update'])->name('takeoff-conditions.update');
-        Route::delete('/locations/{location}/takeoff-conditions/{condition}', [TakeoffConditionController::class, 'destroy'])->name('takeoff-conditions.destroy');
-        Route::get('/locations/{location}/material-items/search', [TakeoffConditionController::class, 'searchMaterials'])->name('takeoff-conditions.search-materials');
-        Route::get('/locations/{location}/cost-codes/search', [TakeoffConditionController::class, 'searchCostCodes'])->name('takeoff-conditions.search-cost-codes');
-
-        // Condition Types
-        Route::get('/locations/{location}/condition-types', [TakeoffConditionController::class, 'indexTypes'])->name('condition-types.index');
-        Route::post('/locations/{location}/condition-types', [TakeoffConditionController::class, 'storeType'])->name('condition-types.store');
-        Route::delete('/locations/{location}/condition-types/{conditionType}', [TakeoffConditionController::class, 'destroyType'])->name('condition-types.destroy');
-
-        // Labour Cost Codes
-        Route::get('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'indexLabourCostCodes'])->name('labour-cost-codes.index');
-        Route::get('/locations/{location}/labour-cost-codes/search', [TakeoffConditionController::class, 'searchLabourCostCodes'])->name('labour-cost-codes.search');
-        Route::post('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'storeLabourCostCode'])->name('labour-cost-codes.store');
-
-        // Bid Areas
-        Route::get('/locations/{location}/bid-areas', [BidAreaController::class, 'index'])->name('bid-areas.index');
-        Route::post('/locations/{location}/bid-areas', [BidAreaController::class, 'store'])->name('bid-areas.store');
-        Route::put('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'update'])->name('bid-areas.update');
-        Route::delete('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'destroy'])->name('bid-areas.destroy');
-    });
-
-    // Drawing Alignment
-    Route::middleware('permission:drawings.view')->group(function () {
+        // Drawing Alignment
         Route::post('/drawings/{drawing}/alignment', [DrawingController::class, 'saveAlignment'])->name('drawings.alignment.save');
         Route::get('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'getAlignment'])->name('drawings.alignment.get');
         Route::delete('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'deleteAlignment'])->name('drawings.alignment.delete');
+        // AI Drawing Comparison
+        Route::post('/drawings/compare', [DrawingController::class, 'compareRevisions'])->name('drawings.compare');
+        Route::post('/drawings/compare/save-observations', [DrawingController::class, 'saveComparisonAsObservations'])->name('drawings.compare.save-observations');
     });
 
-    // Title Block Templates
+    // Title Block Templates (read requires drawings.view; write requires drawings.create)
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/templates', [TitleBlockTemplateController::class, 'index'])->name('title-block-templates.index');
         Route::post('/templates/{template}/test', [TitleBlockTemplateController::class, 'test'])->name('title-block-templates.test');

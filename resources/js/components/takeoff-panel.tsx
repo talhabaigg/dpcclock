@@ -50,6 +50,7 @@ type TakeoffPanelProps = {
     onMeasurementHover?: (id: number | null) => void;
     drawingId?: number;
     quantityMultiplier?: number;
+    readOnly?: boolean;
 };
 
 /** Format a number with thousands separators and fixed decimals */
@@ -89,6 +90,7 @@ export function TakeoffPanel({
     onMeasurementHover,
     drawingId,
     quantityMultiplier = 1,
+    readOnly = false,
 }: TakeoffPanelProps) {
     const [activeTab, setActiveTab] = useState<TabId>('takeoff');
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -222,7 +224,7 @@ export function TakeoffPanel({
                                     <Scale className="h-3 w-3 shrink-0 text-muted-foreground" />
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Scale</span>
                                     <div className="flex-1" />
-                                    {hasCalibration && (
+                                    {hasCalibration && !readOnly && (
                                         <button
                                             onClick={onDeleteCalibration}
                                             className="text-[10px] text-red-500 hover:text-red-700 hover:underline"
@@ -241,35 +243,43 @@ export function TakeoffPanel({
                                                 <span>Manual: {calibration.real_distance?.toFixed(2)} {calibration.unit}</span>
                                             )}
                                         </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-5 px-1 text-[10px]"
-                                            onClick={() => onOpenCalibrationDialog('manual')}
-                                        >
-                                            <PenLine className="h-2.5 w-2.5" />
-                                        </Button>
+                                        {!readOnly && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-5 px-1 text-[10px]"
+                                                onClick={() => onOpenCalibrationDialog('manual')}
+                                            >
+                                                <PenLine className="h-2.5 w-2.5" />
+                                            </Button>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="mt-1 flex gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 flex-1 rounded-sm text-[10px]"
-                                            onClick={() => onOpenCalibrationDialog('manual')}
-                                        >
-                                            <PenLine className="mr-0.5 h-2.5 w-2.5" />
-                                            Draw
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 flex-1 rounded-sm text-[10px]"
-                                            onClick={() => onOpenCalibrationDialog('preset')}
-                                        >
-                                            <Scale className="mr-0.5 h-2.5 w-2.5" />
-                                            Preset
-                                        </Button>
+                                        {readOnly ? (
+                                            <span className="text-[10px] text-amber-600 dark:text-amber-400">Not calibrated (read-only)</span>
+                                        ) : (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 flex-1 rounded-sm text-[10px]"
+                                                    onClick={() => onOpenCalibrationDialog('manual')}
+                                                >
+                                                    <PenLine className="mr-0.5 h-2.5 w-2.5" />
+                                                    Draw
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 flex-1 rounded-sm text-[10px]"
+                                                    onClick={() => onOpenCalibrationDialog('preset')}
+                                                >
+                                                    <Scale className="mr-0.5 h-2.5 w-2.5" />
+                                                    Preset
+                                                </Button>
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -312,7 +322,7 @@ export function TakeoffPanel({
                                                     : 'Select a condition from the Conditions tab, then click to measure.'}
                                         </p>
                                     </div>
-                                    {!hasCalibration && (
+                                    {!hasCalibration && !readOnly && (
                                         <div className="mt-1 flex gap-1">
                                             <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => onOpenCalibrationDialog('manual')}>
                                                 <PenLine className="mr-1 h-2.5 w-2.5" /> Draw Scale
@@ -420,20 +430,22 @@ export function TakeoffPanel({
                                                                                     </span>
                                                                                 )}
                                                                             </div>
-                                                                            <div className="flex gap-0 opacity-0 group-hover:opacity-100">
-                                                                                <button
-                                                                                    className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                                                                                    onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
-                                                                                >
-                                                                                    <Pencil className="h-2.5 w-2.5" />
-                                                                                </button>
-                                                                                <button
-                                                                                    className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
-                                                                                    onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
-                                                                                >
-                                                                                    <Trash2 className="h-2.5 w-2.5" />
-                                                                                </button>
-                                                                            </div>
+                                                                            {!readOnly && (
+                                                                                <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                                    <button
+                                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+                                                                                    >
+                                                                                        <Pencil className="h-2.5 w-2.5" />
+                                                                                    </button>
+                                                                                    <button
+                                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
+                                                                                    >
+                                                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </ContextMenuTrigger>
                                                                     <ContextMenuContent className="w-40">
@@ -441,21 +453,25 @@ export function TakeoffPanel({
                                                                             <Eye className="h-3.5 w-3.5" />
                                                                             Select
                                                                         </ContextMenuItem>
-                                                                        <ContextMenuItem className="text-xs gap-2" onClick={() => onMeasurementEdit(m)}>
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                            Edit
-                                                                        </ContextMenuItem>
-                                                                        {onAddDeduction && (m.type === 'area' || m.type === 'linear') && !m.parent_measurement_id && (
-                                                                            <ContextMenuItem className="text-xs gap-2" onClick={() => onAddDeduction(m.id)}>
-                                                                                <Minus className="h-3.5 w-3.5" />
-                                                                                Add Deduction
-                                                                            </ContextMenuItem>
+                                                                        {!readOnly && (
+                                                                            <>
+                                                                                <ContextMenuItem className="text-xs gap-2" onClick={() => onMeasurementEdit(m)}>
+                                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                                    Edit
+                                                                                </ContextMenuItem>
+                                                                                {onAddDeduction && (m.type === 'area' || m.type === 'linear') && !m.parent_measurement_id && (
+                                                                                    <ContextMenuItem className="text-xs gap-2" onClick={() => onAddDeduction(m.id)}>
+                                                                                        <Minus className="h-3.5 w-3.5" />
+                                                                                        Add Deduction
+                                                                                    </ContextMenuItem>
+                                                                                )}
+                                                                                <ContextMenuSeparator />
+                                                                                <ContextMenuItem className="text-xs gap-2" variant="destructive" onClick={() => onMeasurementDelete(m)}>
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                    Delete
+                                                                                </ContextMenuItem>
+                                                                            </>
                                                                         )}
-                                                                        <ContextMenuSeparator />
-                                                                        <ContextMenuItem className="text-xs gap-2" variant="destructive" onClick={() => onMeasurementDelete(m)}>
-                                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                                            Delete
-                                                                        </ContextMenuItem>
                                                                     </ContextMenuContent>
                                                                 </ContextMenu>
 
@@ -480,14 +496,16 @@ export function TakeoffPanel({
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="flex gap-0 opacity-0 group-hover:opacity-100">
-                                                                            <button
-                                                                                className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
-                                                                                onClick={(e) => { e.stopPropagation(); onMeasurementDelete(d); }}
-                                                                            >
-                                                                                <Trash2 className="h-2 w-2" />
-                                                                            </button>
-                                                                        </div>
+                                                                        {!readOnly && (
+                                                                            <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                                <button
+                                                                                    className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                                    onClick={(e) => { e.stopPropagation(); onMeasurementDelete(d); }}
+                                                                                >
+                                                                                    <Trash2 className="h-2 w-2" />
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 ))}
 
@@ -509,7 +527,7 @@ export function TakeoffPanel({
                                                                             </span>
                                                                         )}
                                                                         <div className="flex-1" />
-                                                                        {onAddDeduction && (
+                                                                        {onAddDeduction && !readOnly && (
                                                                             <button
                                                                                 className="flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[9px] text-muted-foreground hover:bg-muted hover:text-foreground"
                                                                                 onClick={(e) => { e.stopPropagation(); onAddDeduction(m.id); }}
@@ -574,15 +592,17 @@ export function TakeoffPanel({
                         <div className="space-y-0">
                             {/* Top action bar */}
                             <div className="border-b px-2 py-1.5">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 w-full rounded-sm gap-1 text-[10px]"
-                                    onClick={onOpenConditionManager}
-                                >
-                                    <Plus className="h-2.5 w-2.5" />
-                                    Create / Edit Conditions
-                                </Button>
+                                {!readOnly && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 w-full rounded-sm gap-1 text-[10px]"
+                                        onClick={onOpenConditionManager}
+                                    >
+                                        <Plus className="h-2.5 w-2.5" />
+                                        Create / Edit Conditions
+                                    </Button>
+                                )}
                                 {!hasCalibration && (
                                     <p className="mt-1 text-[9px] text-amber-600 dark:text-amber-400">
                                         Set scale to enable line &amp; area conditions.
@@ -601,9 +621,11 @@ export function TakeoffPanel({
                                             Conditions define what you're measuring (e.g. Walls, Ceilings, Flooring).
                                         </p>
                                     </div>
-                                    <Button variant="outline" size="sm" className="mt-1 h-6 gap-1 text-[10px]" onClick={onOpenConditionManager}>
-                                        <Plus className="h-2.5 w-2.5" /> Create First Condition
-                                    </Button>
+                                    {!readOnly && (
+                                        <Button variant="outline" size="sm" className="mt-1 h-6 gap-1 text-[10px]" onClick={onOpenConditionManager}>
+                                            <Plus className="h-2.5 w-2.5" /> Create First Condition
+                                        </Button>
+                                    )}
                                 </div>
                             ) : (
                                 conditionTypeNames.map((typeName) => {

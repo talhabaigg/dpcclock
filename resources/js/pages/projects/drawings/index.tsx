@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, List, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Eye, FileImage, Grid3X3, History, List, Ruler, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type Project = {
@@ -29,6 +29,8 @@ type Drawing = {
     status: string;
     created_at: string;
     thumbnail_url: string | null;
+    takeoff_count: number;
+    revision_count: number;
 };
 
 type SortConfig = {
@@ -37,10 +39,15 @@ type SortConfig = {
 };
 
 export default function DrawingsIndex() {
-    const { project, drawings } = usePage<{
+    const { project, drawings, auth } = usePage<{
         project: Project;
         drawings: Drawing[];
+        auth?: { permissions?: string[] };
     }>().props;
+
+    const permissions = auth?.permissions ?? [];
+    const canCreate = permissions.includes('drawings.create');
+    const canDelete = permissions.includes('drawings.delete');
 
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -60,7 +67,10 @@ export default function DrawingsIndex() {
     const [searchQuery, setSearchQuery] = useState('');
     const [disciplineFilter, setDisciplineFilter] = useState<string>('all');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sheet_number', order: 'asc' });
-    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+        const saved = localStorage.getItem('drawings-view-mode');
+        return saved === 'grid' ? 'grid' : 'list';
+    });
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
     const handleDelete = (drawing: Drawing) => {
@@ -153,40 +163,25 @@ export default function DrawingsIndex() {
 
             <div className="m-2 flex items-center gap-2">
                 <Link href={`/locations/${project.id}`}>
-                    <Button variant="outline">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Project
+                    <Button variant="ghost" size="icon">
+                        <ArrowLeft className="h-4 w-4" />
                     </Button>
                 </Link>
-                <Link href={`/projects/${project.id}/drawings/upload`}>
-                    <Button>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Drawings
-                    </Button>
-                </Link>
-            </div>
-
-            <div className="mx-2 mb-4">
-                <Card className="p-4">
-                    <div className="flex items-center gap-2">
-                        <FileImage className="h-6 w-6 text-blue-500" />
-                        <div>
-                            <h2 className="text-xl font-bold">Project Drawings</h2>
-                            <p className="text-muted-foreground text-sm">
-                                {project.name} - {drawings.length} drawing{drawings.length !== 1 ? 's' : ''} (active revisions)
-                            </p>
-                        </div>
-                    </div>
-                </Card>
+                <div className="flex-1" />
+                {canCreate && (
+                    <Link href={`/projects/${project.id}/drawings/upload`}>
+                        <Button>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Upload Drawings
+                        </Button>
+                    </Link>
+                )}
             </div>
 
             {/* Search and Filters */}
             <div className="mx-2 mb-4 flex flex-wrap items-end gap-4">
-                <div className="w-full max-w-md">
-                    <Label className="mb-2 block text-sm">Search</Label>
-                    <div className="relative">
-                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="drawing number or title" />
-                    </div>
+                <div className="relative w-full max-w-md">
+                    <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="drawing number or title" />
                 </div>
 
                 {disciplines.length > 0 && (
@@ -224,7 +219,7 @@ export default function DrawingsIndex() {
                             variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                             size="sm"
                             className="h-8 rounded-r-none"
-                            onClick={() => setViewMode('list')}
+                            onClick={() => { setViewMode('list'); localStorage.setItem('drawings-view-mode', 'list'); }}
                         >
                             <List className="h-4 w-4" />
                         </Button>
@@ -232,7 +227,7 @@ export default function DrawingsIndex() {
                             variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                             size="sm"
                             className="h-8 rounded-l-none"
-                            onClick={() => setViewMode('grid')}
+                            onClick={() => { setViewMode('grid'); localStorage.setItem('drawings-view-mode', 'grid'); }}
                         >
                             <Grid3X3 className="h-4 w-4" />
                         </Button>
@@ -266,6 +261,7 @@ export default function DrawingsIndex() {
                                 </TableHead>
                                 <TableHead>Revision</TableHead>
                                 <TableHead>Discipline</TableHead>
+                                <TableHead>Takeoff</TableHead>
                                 <TableHead>
                                     <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
                                         Created
@@ -281,17 +277,35 @@ export default function DrawingsIndex() {
                                     <TableCell className="font-medium">{drawing.sheet_number || drawing.drawing_number || '-'}</TableCell>
                                     <TableCell>{drawing.title || drawing.drawing_title || '-'}</TableCell>
                                     <TableCell>
-                                        {drawing.revision_number ? (
-                                            <Badge variant="outline">Rev {drawing.revision_number}</Badge>
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                            {drawing.revision_number ? (
+                                                <Badge variant="outline">Rev {drawing.revision_number}</Badge>
+                                            ) : (
+                                                <span className="text-muted-foreground">-</span>
+                                            )}
+                                            {drawing.revision_count > 1 && (
+                                                <span className="text-muted-foreground flex items-center gap-0.5 text-xs" title={`${drawing.revision_count} revisions total`}>
+                                                    <History className="h-3 w-3" />
+                                                    {drawing.revision_count}
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         {drawing.discipline ? (
                                             <Badge variant="outline">{drawing.discipline}</Badge>
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {drawing.takeoff_count > 0 ? (
+                                            <Badge variant="secondary" className="gap-1">
+                                                <Ruler className="h-3 w-3" />
+                                                {drawing.takeoff_count}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-muted-foreground text-xs">-</span>
                                         )}
                                     </TableCell>
                                     <TableCell>{format(new Date(drawing.created_at), 'dd MMM yyyy')}</TableCell>
@@ -303,15 +317,17 @@ export default function DrawingsIndex() {
                                                     View
                                                 </Button>
                                             </Link>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                                                onClick={() => handleDelete(drawing)}
-                                                disabled={deletingId === drawing.id}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            {canDelete && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                                    onClick={() => handleDelete(drawing)}
+                                                    disabled={deletingId === drawing.id}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -326,23 +342,32 @@ export default function DrawingsIndex() {
                         <div key={drawing.id} className="group relative">
                             <Link href={`/drawings/${drawing.id}`}>
                                 <Card className="overflow-hidden transition-shadow hover:shadow-lg">
-                                    <div className="relative aspect-[4/3] bg-white">
+                                    <div className="bg-muted relative aspect-[4/3]">
                                         {drawing.thumbnail_url ? (
                                             <img
                                                 src={drawing.thumbnail_url}
                                                 alt={drawing.display_name}
-                                                className="h-full w-full object-contain"
+                                                loading="lazy"
+                                                className="h-full w-full object-contain dark:brightness-90 dark:invert"
                                             />
                                         ) : (
                                             <div className="flex h-full w-full items-center justify-center">
                                                 <FileImage className="text-muted-foreground h-12 w-12" />
                                             </div>
                                         )}
-                                        {drawing.revision_number && (
-                                            <Badge variant="secondary" className="absolute right-1 top-1 text-xs">
-                                                Rev {drawing.revision_number}
-                                            </Badge>
-                                        )}
+                                        <div className="absolute right-1 top-1 flex flex-col gap-1">
+                                            {drawing.revision_number && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                    Rev {drawing.revision_number}
+                                                </Badge>
+                                            )}
+                                            {drawing.takeoff_count > 0 && (
+                                                <Badge variant="secondary" className="gap-0.5 text-xs">
+                                                    <Ruler className="h-2.5 w-2.5" />
+                                                    {drawing.takeoff_count}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="p-2">
                                         <p className="truncate text-sm font-medium">
@@ -354,18 +379,20 @@ export default function DrawingsIndex() {
                                     </div>
                                 </Card>
                             </Link>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="absolute left-1 top-1 h-7 w-7 rounded-full bg-white/80 p-0 text-red-600 opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 dark:bg-black/50 dark:text-red-400 dark:hover:bg-red-950"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    handleDelete(drawing);
-                                }}
-                                disabled={deletingId === drawing.id}
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {canDelete && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="absolute left-1 top-1 h-7 w-7 rounded-full bg-white/80 p-0 text-red-600 opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 dark:bg-black/50 dark:text-red-400 dark:hover:bg-red-950"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        handleDelete(drawing);
+                                    }}
+                                    disabled={deletingId === drawing.id}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            )}
                         </div>
                     ))}
                 </div>

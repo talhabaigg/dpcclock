@@ -3,18 +3,25 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\ProductionStatusTrait;
 use App\Jobs\ExtractSheetMetadataJob;
 use App\Jobs\ProcessDrawingJob;
 use App\Models\Drawing;
+use App\Models\DrawingMeasurement;
 use App\Models\Location;
+use App\Models\MeasurementSegmentStatus;
+use App\Models\MeasurementStatus;
 use App\Services\DrawingMetadataService;
 use App\Services\DrawingProcessingService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class DrawingController extends Controller
 {
+    use ProductionStatusTrait;
+
     public function index(Request $request)
     {
         $query = Drawing::with(['observations.createdBy', 'createdBy', 'updatedBy']);
@@ -412,5 +419,366 @@ class DrawingController extends Controller
             'extracted_at' => $drawing->extracted_at,
             'is_confirmed' => (bool) $drawing->metadata_confirmed,
         ]);
+    }
+
+    // =========================================================================
+    // PRODUCTION
+    // =========================================================================
+
+    /**
+     * Get full production data for a drawing (measurements, statuses, LCC summary).
+     */
+    public function production(Request $request, Drawing $drawing): JsonResponse
+    {
+        $workDate = $request->query('work_date', now()->toDateString());
+
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->orderBy('created_at')
+            ->get();
+
+        $calibration = $drawing->scaleCalibration;
+
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+        $lccSummary = $this->buildLccSummary($measurements, $statuses);
+
+        return response()->json([
+            'drawing' => $drawing->load('project'),
+            'measurements' => $measurements,
+            'calibration' => $calibration,
+            'statuses' => $statuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($lccSummary),
+            'workDate' => $workDate,
+        ]);
+    }
+
+    /**
+     * Get production statuses for a specific work date (lightweight reload on date change).
+     */
+    public function productionStatuses(Request $request, Drawing $drawing): JsonResponse
+    {
+        $workDate = $request->query('work_date', now()->toDateString());
+
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+        $lccSummary = $this->buildLccSummary($measurements, $statuses);
+
+        return response()->json([
+            'statuses' => $statuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($lccSummary),
+        ]);
+    }
+
+    /**
+     * Update percent complete for a single measurement / labour cost code pair.
+     */
+    public function updateMeasurementStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+
+        $measurement = DrawingMeasurement::where('id', $validated['measurement_id'])
+            ->where('drawing_id', $drawing->id)
+            ->firstOrFail();
+
+        $status = MeasurementStatus::updateOrCreate(
+            [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                'work_date' => $workDate,
+            ],
+            [
+                'percent_complete' => $validated['percent_complete'],
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'status' => $status,
+            'lccSummary' => array_values($this->buildLccSummary($measurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Bulk update percent complete for multiple measurements.
+     */
+    public function bulkUpdateMeasurementStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_ids' => 'required|array|min:1',
+            'measurement_ids.*' => 'integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+
+        $measurements = DrawingMeasurement::whereIn('id', $validated['measurement_ids'])
+            ->where('drawing_id', $drawing->id)
+            ->get();
+
+        foreach ($measurements as $measurement) {
+            MeasurementStatus::updateOrCreate(
+                [
+                    'drawing_measurement_id' => $measurement->id,
+                    'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                    'work_date' => $workDate,
+                ],
+                [
+                    'percent_complete' => $validated['percent_complete'],
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
+
+        $allMeasurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($allMeasurements->pluck('id'), $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'updated_count' => $measurements->count(),
+            'lccSummary' => array_values($this->buildLccSummary($allMeasurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Update percent complete for a single segment of a measurement.
+     */
+    public function updateSegmentStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'segment_index' => 'required|integer|min:0',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+
+        $measurement = DrawingMeasurement::where('id', $validated['measurement_id'])
+            ->where('drawing_id', $drawing->id)
+            ->firstOrFail();
+
+        $points = $measurement->points ?? [];
+        $maxIndex = count($points) - 2;
+        if ($validated['segment_index'] > $maxIndex) {
+            return response()->json(['error' => 'Invalid segment index'], 422);
+        }
+
+        MeasurementSegmentStatus::updateOrCreate(
+            [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                'segment_index' => $validated['segment_index'],
+                'work_date' => $workDate,
+            ],
+            [
+                'percent_complete' => $validated['percent_complete'],
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        $this->syncSegmentToMeasurementStatus($measurement, $validated['labour_cost_code_id'], $workDate);
+
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'statuses' => $allStatuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($this->buildLccSummary($measurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Bulk update percent complete for multiple segments/measurements.
+     */
+    public function bulkUpdateSegmentStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'items.*.segment_index' => 'nullable|integer|min:0',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+        $lccId = $validated['labour_cost_code_id'];
+        $percent = $validated['percent_complete'];
+
+        $measurementIds = collect($validated['items'])->pluck('measurement_id')->unique();
+        $measurements = DrawingMeasurement::whereIn('id', $measurementIds)
+            ->where('drawing_id', $drawing->id)
+            ->get()
+            ->keyBy('id');
+
+        $affectedMeasurementIds = [];
+
+        foreach ($validated['items'] as $item) {
+            $measurement = $measurements[$item['measurement_id']] ?? null;
+            if (! $measurement) {
+                continue;
+            }
+
+            if (isset($item['segment_index']) && $item['segment_index'] !== null) {
+                MeasurementSegmentStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $measurement->id,
+                        'labour_cost_code_id' => $lccId,
+                        'segment_index' => $item['segment_index'],
+                        'work_date' => $workDate,
+                    ],
+                    [
+                        'percent_complete' => $percent,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+                $affectedMeasurementIds[$measurement->id] = true;
+            } else {
+                MeasurementStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $measurement->id,
+                        'labour_cost_code_id' => $lccId,
+                        'work_date' => $workDate,
+                    ],
+                    [
+                        'percent_complete' => $percent,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+            }
+        }
+
+        foreach (array_keys($affectedMeasurementIds) as $measId) {
+            $m = $measurements[$measId] ?? null;
+            if ($m) {
+                $this->syncSegmentToMeasurementStatus($m, $lccId, $workDate);
+            }
+        }
+
+        $allMeasurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($allMeasurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($allMeasurements, $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'statuses' => $allStatuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($this->buildLccSummary($allMeasurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Serve a drawing tile for the map viewer.
+     */
+    public function tile(Drawing $drawing, int $z, string $coords)
+    {
+        if (! $drawing->tiles_base_url) {
+            abort(404);
+        }
+
+        $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.png";
+        $disk = config('filesystems.drawings_disk', 'public');
+
+        if ($disk === 's3') {
+            try {
+                $url = Storage::disk('s3')->temporaryUrl($tilePath, now()->addHour());
+
+                return redirect($url, 302, [
+                    'Cache-Control' => 'public, max-age=3600',
+                ]);
+            } catch (\Exception $e) {
+                abort(404);
+            }
+        }
+
+        try {
+            $stream = Storage::disk($disk)->readStream($tilePath);
+            if ($stream) {
+                return response()->stream(
+                    function () use ($stream) {
+                        fpassthru($stream);
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    },
+                    200,
+                    [
+                        'Content-Type' => 'image/png',
+                        'Cache-Control' => 'public, max-age=86400',
+                    ]
+                );
+            }
+        } catch (\Exception $e) {
+            // fall through to 404
+        }
+
+        abort(404);
+    }
+
+    /**
+     * Serve the high-res page preview image.
+     */
+    public function preview(Drawing $drawing)
+    {
+        if (! $drawing->page_preview_s3_key) {
+            abort(404, 'No preview available');
+        }
+
+        $url = Storage::disk('s3')->temporaryUrl(
+            $drawing->page_preview_s3_key,
+            now()->addMinutes(5)
+        );
+
+        return redirect($url);
     }
 }

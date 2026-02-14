@@ -201,6 +201,19 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // DRAWING VIEWER (per-tab granular access)
+        // ============================================
+        'Drawing Viewer' => [
+            'takeoff.view' => 'View takeoff tab and measurements',
+            'takeoff.edit' => 'Create/edit/delete measurements, calibrate, manage conditions & bid areas',
+            'production.view' => 'View production tab',
+            'production.edit' => 'Update measurement & segment production statuses',
+            'budget.view' => 'View budget tab & hours history',
+            'budget.edit' => 'Store/edit budget hours',
+            'qa.view' => 'View QA tab, observations & comparisons',
+        ],
+
+        // ============================================
         // REPORTS
         // ============================================
         'Reports' => [
@@ -327,6 +340,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'drawings.view',
             'drawings.create',
             'drawings.delete',
+            // Drawing Viewer
+            'takeoff.view',
+            'takeoff.edit',
+            'production.view',
+            'production.edit',
+            'budget.view',
+            'budget.edit',
+            'qa.view',
             // Reports
             'reports.view',
             'reports.requisition-lines',
@@ -390,7 +411,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'variations.edit',
             // Drawings
             'drawings.view',
-            'drawings.create',
+            // Drawing Viewer (production only)
+            'production.view',
+            'production.edit',
             // Reports
             'reports.view',
             'reports.missing-sign-out',

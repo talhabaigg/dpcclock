@@ -177,7 +177,7 @@ function lineSegmentsIntersect(
 }
 
 export default function DrawingProduction() {
-    const { drawing, revisions, project, activeTab, measurements: initialMeasurements, calibration: initialCalibration, statuses: initialStatuses, segmentStatuses: initialSegmentStatuses, lccSummary: initialSummary, workDate: initialWorkDate } = usePage<{
+    const { drawing, revisions, project, activeTab, measurements: initialMeasurements, calibration: initialCalibration, statuses: initialStatuses, segmentStatuses: initialSegmentStatuses, lccSummary: initialSummary, workDate: initialWorkDate, auth } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: Project;
@@ -188,7 +188,10 @@ export default function DrawingProduction() {
         segmentStatuses: Record<string, number>;
         lccSummary: LccSummary[];
         workDate: string;
+        auth?: { permissions?: string[] };
     }>().props;
+
+    const canEditProduction = auth?.permissions?.includes('production.edit') ?? false;
 
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
 
@@ -315,6 +318,7 @@ export default function DrawingProduction() {
 
     // Handle measurement click — single click opens dropdown, Ctrl+click toggles selection
     const handleMeasurementClick = useCallback((measurement: MeasurementData, event?: { clientX: number; clientY: number }) => {
+        if (!canEditProduction) return;
         if (!selectedLccId) {
             toast.info('Select a labour cost code first');
             return;
@@ -342,6 +346,7 @@ export default function DrawingProduction() {
 
     // Handle segment click
     const handleSegmentClick = useCallback((measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => {
+        if (!canEditProduction) return;
         if (!selectedLccId) {
             toast.info('Select a labour cost code first');
             return;
@@ -637,7 +642,7 @@ export default function DrawingProduction() {
                         >
                             <Hand className="h-3 w-3" />
                         </Button>
-                        {selectedLccId && (
+                        {selectedLccId && canEditProduction && (
                             <Button
                                 type="button"
                                 size="sm"
@@ -685,7 +690,7 @@ export default function DrawingProduction() {
                                 </span>
                             </div>
                             <span className="text-muted-foreground text-[11px]">
-                                {selectorMode ? 'Drag to select areas' : 'Click areas to set % complete'}
+                                {!canEditProduction ? 'View only' : selectorMode ? 'Drag to select areas' : 'Click areas to set % complete'}
                             </span>
                         </>
                     )}

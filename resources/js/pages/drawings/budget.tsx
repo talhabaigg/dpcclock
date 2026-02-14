@@ -179,7 +179,7 @@ function buildChartFromEntries(
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function DrawingBudget() {
-    const { drawing, revisions, project, activeTab, budgetRows, bidAreas, variations, usedHoursMap: initialUsedHoursMap, percentCompleteMap: initialPercentCompleteMap, workDate: initialWorkDate } = usePage<{
+    const { drawing, revisions, project, activeTab, budgetRows, bidAreas, variations, usedHoursMap: initialUsedHoursMap, percentCompleteMap: initialPercentCompleteMap, workDate: initialWorkDate, auth } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: Project;
@@ -190,7 +190,10 @@ export default function DrawingBudget() {
         usedHoursMap: Record<string, number>;
         percentCompleteMap: Record<string, number>;
         workDate: string;
+        auth?: { permissions?: string[] };
     }>().props;
+
+    const canEditBudget = auth?.permissions?.includes('budget.edit') ?? false;
 
     const projectId = project?.id || drawing.project_id;
 
@@ -321,6 +324,7 @@ export default function DrawingBudget() {
 
     // ─── Budget entry save (used hours + percent complete) ─────────────────
     const saveBudgetEntry = useCallback((key: string, bidAreaId: number | null, lccId: number, payload: { used_hours?: number; percent_complete?: number | null }) => {
+        if (!canEditBudget) return;
         const timerKey = `entry-${key}`;
         if (saveTimers.current[timerKey]) clearTimeout(saveTimers.current[timerKey]);
 
@@ -683,6 +687,7 @@ export default function DrawingBudget() {
                                             onBudgetEntryChange={saveBudgetEntry}
                                             selectedRowKey={selectedRowKey}
                                             onRowSelect={handleRowSelect}
+                                            readOnly={!canEditBudget}
                                         />
                                     );
                                 })}
@@ -735,6 +740,7 @@ function GroupRows({
     onBudgetEntryChange,
     selectedRowKey,
     onRowSelect,
+    readOnly = false,
 }: {
     group: GroupData;
     isCollapsed: boolean;
@@ -744,6 +750,7 @@ function GroupRows({
     onBudgetEntryChange: (key: string, bidAreaId: number | null, lccId: number, payload: { used_hours?: number; percent_complete?: number | null }) => void;
     selectedRowKey: string | null;
     onRowSelect: (key: string) => void;
+    readOnly?: boolean;
 }) {
     return (
         <>
@@ -801,6 +808,7 @@ function GroupRows({
                     isSelected={selectedRowKey === row.usedHoursKey}
                     onSelect={() => onRowSelect(row.usedHoursKey)}
                     isEven={idx % 2 === 0}
+                    readOnly={readOnly}
                 />
             ))}
         </>
@@ -816,6 +824,7 @@ function DataRow({
     isSelected,
     onSelect,
     isEven,
+    readOnly = false,
 }: {
     row: GridRow;
     groupMode: GroupMode;
@@ -825,6 +834,7 @@ function DataRow({
     isSelected: boolean;
     onSelect: () => void;
     isEven?: boolean;
+    readOnly?: boolean;
 }) {
     const label = groupMode === 'area-lcc'
         ? `${row.lcc_code} (${row.lcc_unit})`
@@ -855,6 +865,7 @@ function DataRow({
                         const val = e.target.value === '' ? null : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
                         onPercentCompleteChange(val);
                     }}
+                    readOnly={readOnly}
                     className="h-full w-full bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onClick={(e) => e.stopPropagation()}
                 />
@@ -870,6 +881,7 @@ function DataRow({
                         const val = parseFloat(e.target.value) || 0;
                         onUsedHoursChange(val);
                     }}
+                    readOnly={readOnly}
                     className="h-full w-full bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onClick={(e) => e.stopPropagation()}
                 />

@@ -83,19 +83,22 @@ class LocationController extends Controller
 
     private function getMonthlySpending($location)
     {
+        if (! $location->external_id) {
+            return collect();
+        }
+
         $driver = DB::getDriverName();
         $monthExpression = $driver === 'sqlite'
-            ? "strftime('%Y-%m', requisitions.created_at)"
-            : "DATE_FORMAT(requisitions.created_at, '%Y-%m')";
-        $monthlySpending = DB::table('requisitions')
-            ->join('requisition_line_items', 'requisitions.id', '=', 'requisition_line_items.requisition_id')
-            ->selectRaw("$monthExpression as month, SUM(requisition_line_items.total_cost) as total")
-            ->where('requisitions.project_number', $location->id)
+            ? "strftime('%Y-%m', transaction_date)"
+            : "DATE_FORMAT(transaction_date, '%Y-%m')";
+
+        return DB::table('ap_posted_invoice_lines')
+            ->selectRaw("$monthExpression as month, SUM(amount) as total")
+            ->where('line_job', $location->external_id)
+            ->whereNotNull('transaction_date')
             ->groupBy('month')
             ->orderBy('month')
             ->get();
-
-        return $monthlySpending;
     }
 
     /**
