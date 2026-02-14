@@ -78,6 +78,81 @@ type ProductionMeasurement = MeasurementData & {
 
 const PERCENT_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
+/** Compact percent dropdown positioned near click point */
+function PercentDropdown({
+    dropdown,
+    selectedLccId,
+    statuses,
+    segmentStatuses,
+    onSelect,
+}: {
+    dropdown: { measurementId: number; segmentIndex?: number; x: number; y: number };
+    selectedLccId: number;
+    statuses: Record<string, number>;
+    segmentStatuses: Record<string, number>;
+    onSelect: (percent: number) => void;
+}) {
+    const [customValue, setCustomValue] = useState('');
+    const currentPercent = dropdown.segmentIndex !== undefined
+        ? (segmentStatuses[`${dropdown.measurementId}-${dropdown.segmentIndex}`] ?? 0)
+        : (statuses[`${dropdown.measurementId}-${selectedLccId}`] ?? 0);
+
+    // Clamp position so dropdown stays in viewport
+    const dropdownW = 72;
+    const dropdownH = 320;
+    const left = Math.min(dropdown.x + 20, window.innerWidth - dropdownW - 8);
+    const top = Math.max(8, Math.min(dropdown.y - dropdownH / 3, window.innerHeight - dropdownH - 8));
+
+    const handleCustomSubmit = () => {
+        const val = parseInt(customValue, 10);
+        if (!isNaN(val) && val >= 0 && val <= 100) {
+            onSelect(val);
+            setCustomValue('');
+        }
+    };
+
+    return (
+        <div
+            className="fixed z-[9999] border border-border bg-popover shadow-lg"
+            style={{ left, top }}
+        >
+            <div className="px-2 py-0.5 text-[9px] text-muted-foreground border-b border-border bg-muted/30">
+                %{dropdown.segmentIndex !== undefined ? ` Seg ${dropdown.segmentIndex + 1}` : ''}
+            </div>
+            {PERCENT_OPTIONS.map((p) => (
+                <button
+                    key={p}
+                    type="button"
+                    onClick={() => onSelect(p)}
+                    className={`flex w-full items-center gap-1.5 px-2 py-[3px] text-left text-[11px] transition-colors ${
+                        currentPercent === p
+                            ? 'bg-accent text-accent-foreground font-semibold'
+                            : 'text-popover-foreground hover:bg-accent/50'
+                    }`}
+                >
+                    <div
+                        className="h-1.5 w-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: getSegmentColor(p) }}
+                    />
+                    {p}%
+                </button>
+            ))}
+            <div className="border-t border-border px-1.5 py-1 flex gap-1">
+                <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="Custom"
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
+                    className="h-5 w-full border border-border bg-background px-1 text-[10px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+            </div>
+        </div>
+    );
+}
+
 /** Check if a measurement qualifies for segment-level statusing */
 function isSegmentable(m: MeasurementData): boolean {
     return m.type === 'linear' && Array.isArray(m.points) && m.points.length >= 3;
@@ -238,7 +313,7 @@ export default function DrawingProduction() {
     }, [selectedItems]);
 
     // Handle measurement click — single click opens dropdown, Ctrl+click toggles selection
-    const handleMeasurementClick = useCallback((measurement: MeasurementData) => {
+    const handleMeasurementClick = useCallback((measurement: MeasurementData, event?: { clientX: number; clientY: number }) => {
         if (!selectedLccId) {
             toast.info('Select a labour cost code first');
             return;
@@ -259,13 +334,13 @@ export default function DrawingProduction() {
         setSelectedMeasurementId(measurement.id);
         setPercentDropdown({
             measurementId: measurement.id,
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
+            x: event?.clientX ?? window.innerWidth / 2,
+            y: event?.clientY ?? window.innerHeight / 2,
         });
     }, [selectedLccId, selectedItems.size]);
 
     // Handle segment click
-    const handleSegmentClick = useCallback((measurement: MeasurementData, segmentIndex: number) => {
+    const handleSegmentClick = useCallback((measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => {
         if (!selectedLccId) {
             toast.info('Select a labour cost code first');
             return;
@@ -287,8 +362,8 @@ export default function DrawingProduction() {
         setPercentDropdown({
             measurementId: measurement.id,
             segmentIndex,
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
+            x: event?.clientX ?? window.innerWidth / 2,
+            y: event?.clientY ?? window.innerHeight / 2,
         });
     }, [selectedLccId, selectedItems.size]);
 
@@ -644,41 +719,13 @@ export default function DrawingProduction() {
 
                     {/* Percent Dropdown Overlay */}
                     {percentDropdown && selectedLccId && (
-                        <div
-                            className="fixed z-[9999] rounded-lg border border-border bg-popover py-1 shadow-xl"
-                            style={{
-                                left: percentDropdown.x - 40,
-                                top: percentDropdown.y - 120,
-                            }}
-                        >
-                            <div className="px-3 py-1 text-[10px] text-muted-foreground border-b border-border mb-1">
-                                Set % Complete{percentDropdown.segmentIndex !== undefined ? ` (Seg ${percentDropdown.segmentIndex + 1})` : ''}
-                            </div>
-                            {PERCENT_OPTIONS.map((p) => {
-                                const currentPercent = percentDropdown.segmentIndex !== undefined
-                                    ? (segmentStatuses[`${percentDropdown.measurementId}-${percentDropdown.segmentIndex}`] ?? 0)
-                                    : (statuses[`${percentDropdown.measurementId}-${selectedLccId}`] ?? 0);
-                                const isActive = currentPercent === p;
-                                return (
-                                    <button
-                                        key={p}
-                                        type="button"
-                                        onClick={() => updateStatus(percentDropdown.measurementId, p, percentDropdown.segmentIndex)}
-                                        className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] transition-colors ${
-                                            isActive
-                                                ? 'bg-accent text-accent-foreground font-semibold'
-                                                : 'text-popover-foreground hover:bg-accent/50'
-                                        }`}
-                                    >
-                                        <div
-                                            className="h-2 w-2 rounded-full"
-                                            style={{ backgroundColor: getSegmentColor(p) }}
-                                        />
-                                        {p}%
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <PercentDropdown
+                            dropdown={percentDropdown}
+                            selectedLccId={selectedLccId}
+                            statuses={statuses}
+                            segmentStatuses={segmentStatuses}
+                            onSelect={(p) => updateStatus(percentDropdown.measurementId, p, percentDropdown.segmentIndex)}
+                        />
                     )}
 
                     {/* F2: Floating Action Bar for multi-select */}

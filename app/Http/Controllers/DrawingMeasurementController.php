@@ -254,9 +254,24 @@ class DrawingMeasurementController extends Controller
             abort(404);
         }
 
+        $measurement->load('variation:id,co_number,description');
+        $data = $measurement->toArray();
         $measurement->delete();
 
-        return response()->json(['message' => 'Measurement deleted.']);
+        return response()->json(['message' => 'Measurement deleted.', 'measurement' => $data]);
+    }
+
+    public function restore(Drawing $drawing, int $measurement)
+    {
+        $m = DrawingMeasurement::withTrashed()
+            ->where('drawing_id', $drawing->id)
+            ->where('id', $measurement)
+            ->firstOrFail();
+
+        $m->restore();
+        $m->load('variation:id,co_number,description');
+
+        return response()->json($m);
     }
 
     public function recalculateCosts(Drawing $drawing)

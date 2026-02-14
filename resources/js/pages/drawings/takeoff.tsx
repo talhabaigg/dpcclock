@@ -15,6 +15,9 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { useMeasurementHistory } from '@/hooks/use-measurement-history';
+import { api } from '@/lib/api';
 import { router, usePage } from '@inertiajs/react';
 import {
     Camera,
@@ -23,6 +26,7 @@ import {
     GitCompare,
     Hand,
     Hash,
+    HelpCircle,
     Layers,
     Loader2,
     Minus,
@@ -224,6 +228,8 @@ export default function DrawingTakeoff() {
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
+    const [editableVertices, setEditableVertices] = useState(false);
+    const [showHelpDialog, setShowHelpDialog] = useState(false);
 
     // Calibration dialog state
     const [calibrationDialogOpen, setCalibrationDialogOpen] = useState(false);
@@ -272,6 +278,13 @@ export default function DrawingTakeoff() {
 
     const activeVariation = activeVariationId ? projectVariations.find((v) => v.id === activeVariationId) : null;
 
+    // Undo/redo system
+    const { pushUndo, undo, redo } = useMeasurementHistory({
+        onMeasurementRestored: (m) => setMeasurements((prev) => [...prev, m]),
+        onMeasurementRemoved: (id) => setMeasurements((prev) => prev.filter((m) => m.id !== id)),
+        onMeasurementUpdated: (m) => setMeasurements((prev) => prev.map((old) => (old.id === m.id ? m : old))),
+    });
+
     const conditionPatterns = useMemo(() => {
         const map: Record<number, string> = {};
         for (const c of conditions) {
@@ -306,11 +319,7 @@ export default function DrawingTakeoff() {
 
     // Load measurements and calibration on mount
     useEffect(() => {
-        fetch(`/drawings/${drawing.id}/measurements`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
+        api.get<{ measurements: MeasurementData[]; calibration: CalibrationData | null }>(`/drawings/${drawing.id}/measurements`)
             .then((data) => {
                 setMeasurements(data.measurements || []);
                 setCalibration(data.calibration || null);
@@ -320,33 +329,21 @@ export default function DrawingTakeoff() {
 
     // Load conditions on mount
     useEffect(() => {
-        fetch(`/locations/${projectId}/takeoff-conditions`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
+        api.get<{ conditions: TakeoffCondition[] }>(`/locations/${projectId}/takeoff-conditions`)
             .then((data) => setConditions(data.conditions || []))
             .catch(() => {});
     }, [projectId]);
 
     // Load bid areas on mount
     useEffect(() => {
-        fetch(`/locations/${projectId}/bid-areas`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
+        api.get<{ bidAreas: BidArea[] }>(`/locations/${projectId}/bid-areas`)
             .then((data) => setBidAreas(data.bidAreas || []))
             .catch(() => {});
     }, [projectId]);
 
     // Load project variations for bid view layers
     useEffect(() => {
-        fetch(`/drawings/${drawing.id}/variation-list`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
+        api.get<{ variations: VariationSummary[] }>(`/drawings/${drawing.id}/variation-list`)
             .then((data) => setProjectVariations(data.variations || []))
             .catch(() => {});
     }, [drawing.id]);
@@ -376,24 +373,12 @@ export default function DrawingTakeoff() {
         }
         setCreatingVariation(true);
         try {
-            const response = await fetch('/variations/quick-store', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    location_id: projectId,
-                    co_number: newVarCoNumber.trim(),
-                    description: newVarDescription.trim(),
-                    type: newVarType,
-                }),
+            const data = await api.post<{ variation: VariationSummary }>('/variations/quick-store', {
+                location_id: projectId,
+                co_number: newVarCoNumber.trim(),
+                description: newVarDescription.trim(),
+                type: newVarType,
             });
-            if (!response.ok) throw new Error('Failed to create variation');
-            const data = await response.json();
             const created = data.variation;
             setProjectVariations((prev) => [...prev, created]);
             setBidViewLayers((prev) => ({ ...prev, variations: { ...prev.variations, [created.id]: true } }));
@@ -434,14 +419,6 @@ export default function DrawingTakeoff() {
         img.src = URL.createObjectURL(file);
     };
 
-    const getCsrfToken = () => {
-        return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-    };
-
-    const getXsrfToken = () => {
-        const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
-        return match ? decodeURIComponent(match[1]) : '';
-    };
 
     const handleCreateObservation = async () => {
         if (!pendingPoint) return;
@@ -464,21 +441,7 @@ export default function DrawingTakeoff() {
             }
             formData.append('is_360_photo', is360Photo ? '1' : '0');
 
-            const response = await fetch(`/drawings/${drawing.id}/observations`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                },
-                credentials: 'same-origin',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                throw new Error('Request failed');
-            }
-
-            const saved = (await response.json()) as Observation;
+            const saved = await api.post<Observation>(`/drawings/${drawing.id}/observations`, formData);
             setServerObservations((prev) => [...prev, saved]);
             toast.success('Observation saved.');
             setDialogOpen(false);
@@ -511,21 +474,7 @@ export default function DrawingTakeoff() {
             }
             formData.append('is_360_photo', is360Photo ? '1' : '0');
 
-            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                },
-                credentials: 'same-origin',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                throw new Error('Request failed');
-            }
-
-            const saved = (await response.json()) as Observation;
+            const saved = await api.post<Observation>(`/drawings/${drawing.id}/observations/${editingObservation.id}`, formData);
             setServerObservations((prev) => prev.map((obs) => (obs.id === saved.id ? saved : obs)));
             toast.success('Observation updated.');
             setDialogOpen(false);
@@ -543,22 +492,7 @@ export default function DrawingTakeoff() {
         setConfirming(true);
 
         try {
-            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}/confirm`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) {
-                throw new Error('Request failed');
-            }
-
-            const confirmed = (await response.json()) as Observation;
+            const confirmed = await api.post<Observation>(`/drawings/${drawing.id}/observations/${editingObservation.id}/confirm`);
             setServerObservations((prev) => prev.map((obs) => (obs.id === confirmed.id ? confirmed : obs)));
             setEditingObservation(confirmed);
             toast.success('AI observation confirmed.');
@@ -579,21 +513,7 @@ export default function DrawingTakeoff() {
         setDeleting(true);
 
         try {
-            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) {
-                throw new Error('Request failed');
-            }
-
+            await api.delete(`/drawings/${drawing.id}/observations/${editingObservation.id}`);
             setServerObservations((prev) => prev.filter((obs) => obs.id !== editingObservation.id));
             setDialogOpen(false);
             resetDialog();
@@ -611,20 +531,11 @@ export default function DrawingTakeoff() {
         setDescribing(true);
 
         try {
-            const response = await fetch(`/drawings/${drawing.id}/observations/${editingObservation.id}/describe`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
+            const data = await api.post<{ success: boolean; observation: Observation; message?: string }>(
+                `/drawings/${drawing.id}/observations/${editingObservation.id}/describe`,
+            );
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
+            if (!data.success) {
                 throw new Error(data.message || 'Request failed');
             }
 
@@ -654,27 +565,15 @@ export default function DrawingTakeoff() {
 
         try {
             const deletePromises = aiObservations.map((obs) =>
-                fetch(`/drawings/${drawing.id}/observations/${obs.id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                }),
+                api.delete(`/drawings/${drawing.id}/observations/${obs.id}`).then(() => obs.id),
             );
 
             const results = await Promise.allSettled(deletePromises);
-            const successCount = results.filter((r) => r.status === 'fulfilled' && (r.value as Response).ok).length;
-            const failCount = aiObservations.length - successCount;
-
             const deletedIds = new Set(
-                aiObservations
-                    .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
-                    .map((obs) => obs.id),
+                results.filter((r): r is PromiseFulfilledResult<number> => r.status === 'fulfilled').map((r) => r.value),
             );
+            const successCount = deletedIds.size;
+            const failCount = aiObservations.length - successCount;
             setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
 
             if (failCount === 0) {
@@ -716,35 +615,15 @@ export default function DrawingTakeoff() {
             }
 
             const deletePromises = selectedObs.map((obs) =>
-                fetch(`/drawings/${drawing.id}/observations/${obs.id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                }),
+                api.delete(`/drawings/${drawing.id}/observations/${obs.id}`).then(() => obs.id),
             );
 
             const results = await Promise.allSettled(deletePromises);
-            const successCount = results.filter((r) => r.status === 'fulfilled' && (r.value as Response).ok).length;
-            const failCount = selectedObs.length - successCount;
-
-            results.forEach((result, i) => {
-                if (result.status === 'rejected') {
-                    console.error(`Failed to delete observation ${selectedObs[i].id}:`, result.reason);
-                } else if (!result.value.ok) {
-                    console.error(`Failed to delete observation ${selectedObs[i].id}: HTTP ${result.value.status}`);
-                }
-            });
-
             const deletedIds = new Set(
-                selectedObs
-                    .filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<Response>).value.ok)
-                    .map((obs) => obs.id),
+                results.filter((r): r is PromiseFulfilledResult<number> => r.status === 'fulfilled').map((r) => r.value),
             );
+            const successCount = deletedIds.size;
+            const failCount = selectedObs.length - successCount;
             setServerObservations((prev) => prev.filter((obs) => !deletedIds.has(obs.id)));
             setSelectedObservationIds(new Set());
 
@@ -777,40 +656,23 @@ export default function DrawingTakeoff() {
         setSelectedChanges(new Set());
 
         try {
-            const response = await fetch('/drawings/compare', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    drawing_a_id: parseInt(aiCompareDrawingA),
-                    drawing_b_id: parseInt(aiCompareDrawingB),
-                    context: 'walls and ceilings construction drawings',
-                    additional_prompt: additionalPrompt || undefined,
-                }),
+            const data = await api.post<{ success: boolean; comparison: { summary: string; changes: Array<{ type: string; description: string; location: string; impact: string; potential_change_order: boolean; reason?: string; page_number?: number; coordinates?: { page?: number; x: number; y: number; width?: number; height?: number; reference?: string } }>; confidence?: string; notes?: string }; message?: string; error?: string }>('/drawings/compare', {
+                drawing_a_id: parseInt(aiCompareDrawingA),
+                drawing_b_id: parseInt(aiCompareDrawingB),
+                context: 'walls and ceilings construction drawings',
+                additional_prompt: additionalPrompt || undefined,
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || errorData.error || `Request failed with status ${response.status}`);
-            }
-
-            const data = await response.json();
 
             if (!data.success) {
                 throw new Error(data.message || data.error || 'Comparison failed');
             }
 
-            const comparison = data.comparison || {};
+            const comparison = data.comparison;
             setAIComparisonResult({
-                summary: comparison.summary,
-                changes: comparison.changes || [],
-                confidence: comparison.confidence,
-                notes: comparison.notes,
+                summary: comparison?.summary ?? null,
+                changes: comparison?.changes || [],
+                confidence: comparison?.confidence,
+                notes: comparison?.notes,
             });
 
             toast.success('AI comparison complete!');
@@ -855,29 +717,12 @@ export default function DrawingTakeoff() {
         try {
             const changesToSave = aiComparisonResult.changes.filter((_, index) => selectedChanges.has(index));
 
-            const response = await fetch('/drawings/compare/save-observations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    target_drawing_id: drawing.id,
-                    drawing_a_id: parseInt(aiCompareDrawingA),
-                    drawing_b_id: parseInt(aiCompareDrawingB),
-                    changes: changesToSave,
-                }),
+            const data = await api.post<{ success: boolean; observations?: Observation[]; message?: string }>('/drawings/compare/save-observations', {
+                target_drawing_id: drawing.id,
+                drawing_a_id: parseInt(aiCompareDrawingA),
+                drawing_b_id: parseInt(aiCompareDrawingB),
+                changes: changesToSave,
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || errorData.error || `Request failed with status ${response.status}`);
-            }
-
-            const data = await response.json();
 
             if (data.success) {
                 const created = Array.isArray(data.observations) ? data.observations.length : 0;
@@ -937,21 +782,7 @@ export default function DrawingTakeoff() {
                 };
             }
 
-            const response = await fetch(`/drawings/${drawing.id}/calibration`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify(body),
-            });
-
-            if (!response.ok) throw new Error('Failed to save calibration');
-
-            const data = await response.json();
+            const data = await api.post<{ calibration: CalibrationData; measurements: MeasurementData[] }>(`/drawings/${drawing.id}/calibration`, body);
             setCalibration(data.calibration);
             setMeasurements(data.measurements || []);
             setCalibrationDialogOpen(false);
@@ -967,16 +798,7 @@ export default function DrawingTakeoff() {
     const handleDeleteCalibration = async () => {
         if (!confirm('Delete scale calibration? Measurement values will be cleared.')) return;
         try {
-            await fetch(`/drawings/${drawing.id}/calibration`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
+            await api.delete(`/drawings/${drawing.id}/calibration`);
             setCalibration(null);
             setMeasurements((prev) => prev.map((m) => ({ ...m, computed_value: null, unit: null })));
             toast.success('Calibration deleted.');
@@ -1016,49 +838,28 @@ export default function DrawingTakeoff() {
         const category = activeCondition?.name || null;
 
         try {
-            const response = await fetch(`/drawings/${drawing.id}/measurements`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    name,
-                    type,
-                    color,
-                    category,
-                    points,
-                    takeoff_condition_id: activeCondition?.id || null,
-                    bid_area_id: activeBidAreaId || null,
-                    scope: activeVariationId ? 'variation' : 'takeoff',
-                    variation_id: activeVariationId || null,
-                }),
+            const saved = await api.post<MeasurementData>(`/drawings/${drawing.id}/measurements`, {
+                name,
+                type,
+                color,
+                category,
+                points,
+                takeoff_condition_id: activeCondition?.id || null,
+                bid_area_id: activeBidAreaId || null,
+                scope: activeVariationId ? 'variation' : 'takeoff',
+                variation_id: activeVariationId || null,
             });
-            if (!response.ok) throw new Error('Failed to save');
-            const saved = await response.json();
             setMeasurements((prev) => [...prev, saved]);
+            pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
             toast.success(`Saved: ${name}`);
 
             // Auto-create pricing item when variation + condition
             if (activeVariationId && activeCondition?.id && saved.computed_value) {
-                fetch(`/variations/${activeVariationId}/pricing-items`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        takeoff_condition_id: activeCondition.id,
-                        description: name,
-                        qty: saved.computed_value,
-                        unit: saved.unit || 'EA',
-                    }),
+                api.post(`/variations/${activeVariationId}/pricing-items`, {
+                    takeoff_condition_id: activeCondition.id,
+                    description: name,
+                    qty: saved.computed_value,
+                    unit: saved.unit || 'EA',
                 }).catch(() => {});
             }
         } catch {
@@ -1076,47 +877,23 @@ export default function DrawingTakeoff() {
         setSavingMeasurement(true);
         try {
             if (editingMeasurement) {
-                const response = await fetch(`/drawings/${drawing.id}/measurements/${editingMeasurement.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        name,
-                        category: measurementCategory || null,
-                        color: measurementColor,
-                    }),
-                });
-                if (!response.ok) throw new Error('Failed to update');
-                const updated = await response.json();
+                const before = { name: editingMeasurement.name, category: editingMeasurement.category, color: editingMeasurement.color };
+                const after = { name, category: measurementCategory || null, color: measurementColor };
+                const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${editingMeasurement.id}`, after);
                 setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+                pushUndo({ type: 'update', measurementId: editingMeasurement.id, drawingId: drawing.id, before, after });
                 toast.success('Measurement updated.');
             } else if (pendingMeasurementData) {
-                const response = await fetch(`/drawings/${drawing.id}/measurements`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        name,
-                        type: pendingMeasurementData.type,
-                        color: measurementColor,
-                        category: measurementCategory || null,
-                        points: pendingMeasurementData.points,
-                        bid_area_id: activeBidAreaId || null,
-                    }),
+                const saved = await api.post<MeasurementData>(`/drawings/${drawing.id}/measurements`, {
+                    name,
+                    type: pendingMeasurementData.type,
+                    color: measurementColor,
+                    category: measurementCategory || null,
+                    points: pendingMeasurementData.points,
+                    bid_area_id: activeBidAreaId || null,
                 });
-                if (!response.ok) throw new Error('Failed to save');
-                const saved = await response.json();
                 setMeasurements((prev) => [...prev, saved]);
+                pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
                 toast.success('Measurement saved.');
             }
             setMeasurementDialogOpen(false);
@@ -1132,18 +909,10 @@ export default function DrawingTakeoff() {
     const handleDeleteMeasurement = async (measurement: MeasurementData) => {
         if (!confirm(`Delete "${measurement.name}"?`)) return;
         try {
-            await fetch(`/drawings/${drawing.id}/measurements/${measurement.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
+            const data = await api.delete<{ message: string; measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${measurement.id}`);
             setMeasurements((prev) => prev.filter((m) => m.id !== measurement.id));
             if (selectedMeasurementId === measurement.id) setSelectedMeasurementId(null);
+            pushUndo({ type: 'delete', measurement: data.measurement, drawingId: drawing.id });
             toast.success('Measurement deleted.');
         } catch {
             toast.error('Failed to delete measurement.');
@@ -1157,6 +926,43 @@ export default function DrawingTakeoff() {
         setMeasurementCategory(measurement.category || '');
         setMeasurementColor(measurement.color);
         setMeasurementDialogOpen(true);
+    };
+
+    // Vertex editing: enable when a measurement is selected in pan mode with takeoff panel open
+    useEffect(() => {
+        setEditableVertices(viewMode === 'pan' && showTakeoffPanel && selectedMeasurementId !== null);
+    }, [viewMode, showTakeoffPanel, selectedMeasurementId]);
+
+    const handleVertexDragEnd = async (measurementId: number, pointIndex: number, newPoint: Point) => {
+        const measurement = measurements.find((m) => m.id === measurementId);
+        if (!measurement) return;
+
+        const before = { points: measurement.points };
+        const newPoints = measurement.points.map((p, i) => (i === pointIndex ? newPoint : p));
+
+        try {
+            const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${measurementId}`, { points: newPoints });
+            setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            pushUndo({ type: 'update', measurementId, drawingId: drawing.id, before, after: { points: newPoints } });
+        } catch {
+            toast.error('Failed to update vertex.');
+        }
+    };
+
+    const handleVertexDelete = async (measurementId: number, pointIndex: number) => {
+        const measurement = measurements.find((m) => m.id === measurementId);
+        if (!measurement) return;
+
+        const before = { points: measurement.points };
+        const newPoints = measurement.points.filter((_, i) => i !== pointIndex);
+
+        try {
+            const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${measurementId}`, { points: newPoints });
+            setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            pushUndo({ type: 'update', measurementId, drawingId: drawing.id, before, after: { points: newPoints } });
+        } catch {
+            toast.error('Failed to delete vertex.');
+        }
     };
 
     const handleOpenCalibrationDialog = (method: 'manual' | 'preset') => {
@@ -1176,6 +982,30 @@ export default function DrawingTakeoff() {
             : candidateImageUrl || undefined)
         : undefined;
 
+    // Keyboard shortcuts
+    const shortcuts = useMemo(
+        () => [
+            { key: 'p', handler: () => setViewMode('pan') },
+            { key: 'Escape', handler: () => setViewMode('pan') },
+            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: showTakeoffPanel },
+            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: showTakeoffPanel && !!calibration },
+            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: showTakeoffPanel && !!calibration },
+            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: showTakeoffPanel && !!calibration },
+            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: showTakeoffPanel },
+            ...conditions.slice(0, 5).map((condition, i) => ({
+                key: String(i + 1),
+                handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
+                enabled: showTakeoffPanel,
+            })),
+            { key: 'z', ctrl: true, handler: undo },
+            { key: 'z', ctrl: true, shift: true, handler: redo },
+            { key: 'y', ctrl: true, handler: redo },
+            { key: '?', handler: () => setShowHelpDialog((v) => !v) },
+        ],
+        [viewMode, showTakeoffPanel, calibration, conditions, activeConditionId, undo, redo],
+    );
+    useKeyboardShortcuts(shortcuts);
+
     return (
         <DrawingWorkspaceLayout
             drawing={drawing}
@@ -1193,7 +1023,7 @@ export default function DrawingTakeoff() {
                             variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('pan')}
                             className="h-6 w-6 rounded-sm p-0"
-                            title="Pan mode"
+                            title="Pan mode (P)"
                         >
                             <Hand className="h-3 w-3" />
                         </Button>
@@ -1231,7 +1061,7 @@ export default function DrawingTakeoff() {
                                 variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
                                 className="h-6 w-6 rounded-sm p-0"
-                                title="Calibrate scale"
+                                title="Calibrate scale (S)"
                             >
                                 <Scale className="h-3 w-3" />
                             </Button>
@@ -1241,7 +1071,7 @@ export default function DrawingTakeoff() {
                                 variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
                                 className="h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure line'}
+                                title={!calibration ? 'Set scale first' : 'Measure line (L)'}
                                 disabled={!calibration}
                             >
                                 <Minus className="h-3 w-3" />
@@ -1252,7 +1082,7 @@ export default function DrawingTakeoff() {
                                 variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
                                 className="h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure area'}
+                                title={!calibration ? 'Set scale first' : 'Measure area (A)'}
                                 disabled={!calibration}
                             >
                                 <Pentagon className="h-3 w-3" />
@@ -1263,7 +1093,7 @@ export default function DrawingTakeoff() {
                                 variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
                                 className="h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure rectangle'}
+                                title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
                                 disabled={!calibration}
                             >
                                 <Square className="h-3 w-3" />
@@ -1274,7 +1104,7 @@ export default function DrawingTakeoff() {
                                 variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
                                 className="h-6 w-6 rounded-sm p-0"
-                                title="Count items"
+                                title="Count items (C)"
                             >
                                 <Hash className="h-3 w-3" />
                             </Button>
@@ -1478,6 +1308,18 @@ export default function DrawingTakeoff() {
                         </>
                     )}
 
+                    {/* Help */}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowHelpDialog(true)}
+                        className="h-6 w-6 rounded-sm p-0"
+                        title="Keyboard shortcuts (?)"
+                    >
+                        <HelpCircle className="h-3 w-3" />
+                    </Button>
+
                     {/* Observations count */}
                     {serverObservations.length > 0 && selectedObservationIds.size === 0 && (
                         <>
@@ -1656,6 +1498,9 @@ export default function DrawingTakeoff() {
                             onCalibrationComplete={handleCalibrationComplete}
                             onMeasurementComplete={handleMeasurementComplete}
                             onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                            editableVertices={editableVertices}
+                            onVertexDragEnd={handleVertexDragEnd}
+                            onVertexDelete={handleVertexDelete}
                             onMapReady={setMapControls}
                             className="absolute inset-0"
                         />
@@ -2402,6 +2247,80 @@ export default function DrawingTakeoff() {
                             {creatingVariation ? 'Creating...' : 'Create'}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Help / Controls Dialog */}
+            <Dialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Controls & Shortcuts</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 text-sm">
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Tools</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">P</kbd>
+                                <span>Pan / move around drawing</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">S</kbd>
+                                <span>Calibrate scale</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">L</kbd>
+                                <span>Line measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">A</kbd>
+                                <span>Area measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">R</kbd>
+                                <span>Rectangle measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">C</kbd>
+                                <span>Count measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
+                                <span>Cancel / return to pan</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Conditions</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <span className="flex gap-0.5"><kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">1</kbd>–<kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">5</kbd></span>
+                                <span>Activate condition 1–5</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Undo / Redo</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Z</kbd>
+                                <span>Undo last action</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Shift+Z</kbd>
+                                <span>Redo</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Ctrl+Y</kbd>
+                                <span>Redo (alternative)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">While Measuring</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
+                                <span>Place point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Z</kbd>
+                                <span>Undo last point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Enter</kbd>
+                                <span>Complete measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Right-click</kbd>
+                                <span>Remove last point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
+                                <span>Cancel measurement</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="mb-1.5 font-semibold text-xs uppercase text-muted-foreground tracking-wide">Vertex Editing</h4>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
+                                <span>Select measurement in pan mode</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Drag</kbd>
+                                <span>Move vertex handle</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Dbl-click</kbd>
+                                <span>Delete vertex</span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Press <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">?</kbd> to toggle this dialog.</p>
+                    </div>
                 </DialogContent>
             </Dialog>
         </DrawingWorkspaceLayout>

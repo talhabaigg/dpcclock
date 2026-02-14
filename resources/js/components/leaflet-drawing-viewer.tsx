@@ -55,17 +55,21 @@ type LeafletDrawingViewerProps = {
     conditionPatterns?: Record<number, string>;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area') => void;
-    onMeasurementClick?: (measurement: MeasurementData) => void;
+    onMeasurementClick?: (measurement: MeasurementData, event?: { clientX: number; clientY: number }) => void;
     // Production labels: measurementId → percent_complete
     productionLabels?: Record<number, number>;
     // Segment statusing
     segmentStatuses?: Record<string, number>;
-    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number) => void;
+    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => void;
     selectedSegments?: Set<string>;
     selectedMeasurementIds?: Set<number>;
     // Box-select mode
     boxSelectMode?: boolean;
     onBoxSelectComplete?: (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => void;
+    // Vertex editing
+    editableVertices?: boolean;
+    onVertexDragEnd?: (measurementId: number, pointIndex: number, newPoint: Point) => void;
+    onVertexDelete?: (measurementId: number, pointIndex: number) => void;
     // Exposes zoom/fit controls to parent
     onMapReady?: (controls: MapControls) => void;
 };
@@ -298,6 +302,9 @@ export function LeafletDrawingViewer({
     selectedMeasurementIds,
     boxSelectMode,
     onBoxSelectComplete,
+    editableVertices,
+    onVertexDragEnd,
+    onVertexDelete,
     onMapReady,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -453,6 +460,9 @@ export function LeafletDrawingViewer({
                     selectedMeasurementIds={selectedMeasurementIds}
                     boxSelectMode={boxSelectMode}
                     onBoxSelectComplete={onBoxSelectComplete}
+                    editableVertices={editableVertices}
+                    onVertexDragEnd={onVertexDragEnd}
+                    onVertexDelete={onVertexDelete}
                 />
             </MapContainer>
 

@@ -59,18 +59,22 @@ type MeasurementLayerProps = {
     conditionPatterns?: Record<number, string>;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
-    onMeasurementClick?: (measurement: MeasurementData) => void;
+    onMeasurementClick?: (measurement: MeasurementData, event?: { clientX: number; clientY: number }) => void;
     // Production labels: measurementId → percent_complete
     productionLabels?: Record<number, number>;
     // Segment statusing: "measId-segIdx" → percent_complete
     segmentStatuses?: Record<string, number>;
-    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number) => void;
+    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => void;
     // Selection highlighting
     selectedSegments?: Set<string>;
     selectedMeasurementIds?: Set<number>;
     // Box-select mode: drag a rectangle to select items
     boxSelectMode?: boolean;
     onBoxSelectComplete?: (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => void;
+    // Vertex editing
+    editableVertices?: boolean;
+    onVertexDragEnd?: (measurementId: number, pointIndex: number, newPoint: Point) => void;
+    onVertexDelete?: (measurementId: number, pointIndex: number) => void;
 };
 
 const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
@@ -156,6 +160,9 @@ export function MeasurementLayer({
     selectedMeasurementIds,
     boxSelectMode,
     onBoxSelectComplete,
+    editableVertices,
+    onVertexDragEnd,
+    onVertexDelete,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -168,6 +175,7 @@ export function MeasurementLayer({
     const drawingLayersRef = useRef<L.LayerGroup>(L.layerGroup());
     const calibrationLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const boxSelectLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+    const vertexLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const tooltipRef = useRef<L.Tooltip | null>(null);
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
@@ -179,15 +187,18 @@ export function MeasurementLayer({
         const drawing = drawingLayersRef.current;
         const calib = calibrationLayerRef.current;
         const boxSel = boxSelectLayerRef.current;
+        const vertex = vertexLayerRef.current;
         saved.addTo(map);
         drawing.addTo(map);
         calib.addTo(map);
         boxSel.addTo(map);
+        vertex.addTo(map);
         return () => {
             saved.remove();
             drawing.remove();
             calib.remove();
             boxSel.remove();
+            vertex.remove();
         };
     }, [map]);
 
@@ -256,7 +267,7 @@ export function MeasurementLayer({
                     marker.bindTooltip(`${m.name} #${idx + 1}`, { permanent: false, className: 'measurement-tooltip' });
                     marker.on('click', (e) => {
                         L.DomEvent.stopPropagation(e);
-                        onMeasurementClick?.(m);
+                        onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                     });
                     marker.addTo(group);
                 });
@@ -308,7 +319,7 @@ export function MeasurementLayer({
                         });
                         segLine.on('click', (e) => {
                             L.DomEvent.stopPropagation(e);
-                            onSegmentClick?.(m, si);
+                            onSegmentClick?.(m, si, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                         });
                         segLine.addTo(group);
 
@@ -383,7 +394,7 @@ export function MeasurementLayer({
                     line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                     line.on('click', (e) => {
                         L.DomEvent.stopPropagation(e);
-                        onMeasurementClick?.(m);
+                        onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                     });
                     line.addTo(group);
                 }
@@ -436,7 +447,7 @@ export function MeasurementLayer({
                 polygon.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                 polygon.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
-                    onMeasurementClick?.(m);
+                    onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                 });
                 polygon.addTo(group);
             }
@@ -935,6 +946,51 @@ export function MeasurementLayer({
             boxSelectLayerRef.current.clearLayers();
         };
     }, [map, boxSelectMode, imageWidth, imageHeight, onBoxSelectComplete]);
+
+    // Vertex editing: render draggable handles on selected measurement
+    useEffect(() => {
+        vertexLayerRef.current.clearLayers();
+        if (!editableVertices || !selectedMeasurementId) return;
+
+        const measurement = measurements.find((m) => m.id === selectedMeasurementId);
+        if (!measurement) return;
+
+        const minPoints = measurement.type === 'linear' ? 2 : measurement.type === 'area' ? 3 : 1;
+
+        measurement.points.forEach((pt, idx) => {
+            const latlng = normalizedToLatLng(pt, imageWidth, imageHeight);
+            const marker = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div style="width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid ${measurement.color};cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6],
+                }),
+                zIndexOffset: 1000,
+            });
+
+            marker.on('dragstart', () => {
+                map.dragging.disable();
+            });
+
+            marker.on('dragend', () => {
+                map.dragging.enable();
+                const newLatLng = marker.getLatLng();
+                const newPoint = latLngToNormalized(newLatLng, imageWidth, imageHeight);
+                onVertexDragEnd?.(measurement.id, idx, newPoint);
+            });
+
+            marker.on('dblclick', (e) => {
+                L.DomEvent.stopPropagation(e as L.LeafletEvent);
+                if (measurement.points.length > minPoints) {
+                    onVertexDelete?.(measurement.id, idx);
+                }
+            });
+
+            marker.addTo(vertexLayerRef.current);
+        });
+    }, [editableVertices, selectedMeasurementId, measurements, imageWidth, imageHeight, map, onVertexDragEnd, onVertexDelete]);
 
     return null;
 }

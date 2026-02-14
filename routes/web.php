@@ -608,6 +608,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'store'])->name('drawings.measurements.store');
         Route::put('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'update'])->name('drawings.measurements.update');
         Route::delete('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'destroy'])->name('drawings.measurements.destroy');
+        Route::post('/drawings/{drawing}/measurements/{measurement}/restore', [DrawingMeasurementController::class, 'restore'])->name('drawings.measurements.restore');
         Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
         Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
         Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
