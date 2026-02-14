@@ -12,6 +12,7 @@ import {
     DollarSign,
     Hash,
     Maximize2,
+    Minus,
     Pencil,
     PenLine,
     Play,
@@ -39,6 +40,7 @@ type TakeoffPanelProps = {
     onMeasurementDelete: (measurement: MeasurementData) => void;
     onOpenConditionManager: () => void;
     onActivateCondition: (conditionId: number | null) => void;
+    onAddDeduction?: (parentId: number) => void;
 };
 
 const TYPE_ICONS = {
@@ -69,6 +71,7 @@ export function TakeoffPanel({
     onMeasurementDelete,
     onOpenConditionManager,
     onActivateCondition,
+    onAddDeduction,
 }: TakeoffPanelProps) {
     const [activeTab, setActiveTab] = useState<TabId>('takeoff');
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -89,13 +92,16 @@ export function TakeoffPanel({
         return a.localeCompare(b);
     });
 
-    // Compute totals
+    // Compute totals (use net values for areas with deductions)
     const totalLinear = measurements
         .filter(m => m.type === 'linear' && m.computed_value != null)
         .reduce((sum, m) => sum + (m.computed_value || 0), 0);
     const totalArea = measurements
         .filter(m => m.type === 'area' && m.computed_value != null)
-        .reduce((sum, m) => sum + (m.computed_value || 0), 0);
+        .reduce((sum, m) => {
+            const deductionSum = (m.deductions || []).reduce((s, d) => s + (d.computed_value || 0), 0);
+            return sum + (m.computed_value || 0) - deductionSum;
+        }, 0);
     const totalCount = measurements
         .filter(m => m.type === 'count' && m.computed_value != null)
         .reduce((sum, m) => sum + (m.computed_value || 0), 0);
@@ -287,51 +293,108 @@ export function TakeoffPanel({
                                                 <CollapsibleContent>
                                                     {items.map(m => {
                                                         const isSelected = selectedMeasurementId === m.id;
+                                                        const deductions = m.deductions || [];
+                                                        const deductionSum = deductions.reduce((s, d) => s + (d.computed_value || 0), 0);
+                                                        const hasDeductions = deductions.length > 0;
+                                                        const netValue = hasDeductions && m.computed_value != null ? m.computed_value - deductionSum : null;
+
                                                         return (
-                                                            <div
-                                                                key={m.id}
-                                                                onClick={() => onMeasurementSelect(isSelected ? null : m.id)}
-                                                                className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/50 px-2 py-[3px] transition-colors ${
-                                                                    isSelected ? 'bg-primary/8' : 'hover:bg-muted/30'
-                                                                }`}
-                                                            >
+                                                            <div key={m.id}>
+                                                                {/* Parent measurement row */}
                                                                 <div
-                                                                    className="h-2.5 w-2.5 rounded-[2px]"
-                                                                    style={{ backgroundColor: m.color }}
-                                                                />
-                                                                <div className="flex min-w-0 items-center gap-1">
-                                                                    {m.type === 'linear' ? (
-                                                                        <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                    ) : m.type === 'count' ? (
-                                                                        <Hash className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                    ) : (
-                                                                        <Box className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                    )}
-                                                                    <span className="truncate text-[11px]">{m.name}</span>
+                                                                    onClick={() => onMeasurementSelect(isSelected ? null : m.id)}
+                                                                    className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/50 px-2 py-[3px] transition-colors ${
+                                                                        isSelected ? 'bg-primary/8' : 'hover:bg-muted/30'
+                                                                    }`}
+                                                                >
+                                                                    <div
+                                                                        className="h-2.5 w-2.5 rounded-[2px]"
+                                                                        style={{ backgroundColor: m.color }}
+                                                                    />
+                                                                    <div className="flex min-w-0 items-center gap-1">
+                                                                        {m.type === 'linear' ? (
+                                                                            <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                        ) : m.type === 'count' ? (
+                                                                            <Hash className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                        ) : (
+                                                                            <Box className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                        )}
+                                                                        <span className="truncate text-[11px]">{m.name}</span>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        {m.computed_value != null && (
+                                                                            <span className="font-mono text-[10px] tabular-nums">
+                                                                                {m.type === 'count'
+                                                                                    ? `${Math.round(m.computed_value)} ea`
+                                                                                    : `${m.computed_value.toFixed(2)}`}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                        <button
+                                                                            className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                                                                            onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+                                                                        >
+                                                                            <Pencil className="h-2.5 w-2.5" />
+                                                                        </button>
+                                                                        <button
+                                                                            className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                            onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
+                                                                        >
+                                                                            <Trash2 className="h-2.5 w-2.5" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-right">
-                                                                    {m.computed_value != null && (
-                                                                        <span className="font-mono text-[10px] tabular-nums">
-                                                                            {m.type === 'count'
-                                                                                ? `${Math.round(m.computed_value)} ea`
-                                                                                : `${m.computed_value.toFixed(2)}`}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex gap-0 opacity-0 group-hover:opacity-100">
-                                                                    <button
-                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+
+                                                                {/* Deductions under this area measurement */}
+                                                                {deductions.map(d => (
+                                                                    <div
+                                                                        key={d.id}
+                                                                        onClick={() => onMeasurementSelect(selectedMeasurementId === d.id ? null : d.id)}
+                                                                        className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/30 py-[2px] pl-6 pr-2 transition-colors ${
+                                                                            selectedMeasurementId === d.id ? 'bg-red-500/5' : 'hover:bg-muted/20'
+                                                                        }`}
                                                                     >
-                                                                        <Pencil className="h-2.5 w-2.5" />
-                                                                    </button>
-                                                                    <button
-                                                                        className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
-                                                                        onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
-                                                                    >
-                                                                        <Trash2 className="h-2.5 w-2.5" />
-                                                                    </button>
-                                                                </div>
+                                                                        <Minus className="h-2 w-2 text-red-500" />
+                                                                        <span className="truncate text-[10px] text-muted-foreground">{d.name}</span>
+                                                                        <div className="text-right">
+                                                                            {d.computed_value != null && (
+                                                                                <span className="font-mono text-[9px] tabular-nums text-red-500">
+                                                                                    -{d.computed_value.toFixed(2)}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                            <button
+                                                                                className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                                onClick={(e) => { e.stopPropagation(); onMeasurementDelete(d); }}
+                                                                            >
+                                                                                <Trash2 className="h-2 w-2" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+
+                                                                {/* Net value row + Add Deduction button for area measurements */}
+                                                                {isSelected && m.type === 'area' && !m.parent_measurement_id && (
+                                                                    <div className="flex items-center gap-1 border-b border-border/30 py-1 pl-6 pr-2">
+                                                                        {netValue != null && (
+                                                                            <span className="font-mono text-[9px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                                                Net: {netValue.toFixed(2)} {m.unit}
+                                                                            </span>
+                                                                        )}
+                                                                        <div className="flex-1" />
+                                                                        {onAddDeduction && (
+                                                                            <button
+                                                                                className="flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[9px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                                                onClick={(e) => { e.stopPropagation(); onAddDeduction(m.id); }}
+                                                                            >
+                                                                                <Minus className="h-2.5 w-2.5" />
+                                                                                Deduction
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}

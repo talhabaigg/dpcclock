@@ -1432,7 +1432,6 @@ export default function DrawingShow() {
                                 selectedMeasurementId={selectedMeasurementId}
                                 conditions={conditions}
                                 activeConditionId={activeConditionId}
-                                onSetViewMode={setViewMode}
                                 onOpenCalibrationDialog={handleOpenCalibrationDialog}
                                 onDeleteCalibration={handleDeleteCalibration}
                                 onMeasurementSelect={setSelectedMeasurementId}

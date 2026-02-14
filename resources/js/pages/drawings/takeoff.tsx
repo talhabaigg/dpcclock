@@ -230,6 +230,21 @@ export default function DrawingTakeoff() {
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [editableVertices, setEditableVertices] = useState(false);
     const [showHelpDialog, setShowHelpDialog] = useState(false);
+    const [deductionParentId, setDeductionParentId] = useState<number | null>(null);
+
+    // Flatten measurements + their deductions into a single array for map rendering
+    const allMeasurements = useMemo(() => {
+        const flat: MeasurementData[] = [];
+        for (const m of measurements) {
+            flat.push(m);
+            if (m.deductions) {
+                for (const d of m.deductions) {
+                    flat.push(d);
+                }
+            }
+        }
+        return flat;
+    }, [measurements]);
 
     // Calibration dialog state
     const [calibrationDialogOpen, setCalibrationDialogOpen] = useState(false);
@@ -278,11 +293,49 @@ export default function DrawingTakeoff() {
 
     const activeVariation = activeVariationId ? projectVariations.find((v) => v.id === activeVariationId) : null;
 
-    // Undo/redo system
+    // Undo/redo system — callbacks handle both top-level and nested deductions
     const { pushUndo, undo, redo } = useMeasurementHistory({
-        onMeasurementRestored: (m) => setMeasurements((prev) => [...prev, m]),
-        onMeasurementRemoved: (id) => setMeasurements((prev) => prev.filter((m) => m.id !== id)),
-        onMeasurementUpdated: (m) => setMeasurements((prev) => prev.map((old) => (old.id === m.id ? m : old))),
+        onMeasurementRestored: (m) => {
+            if (m.parent_measurement_id) {
+                // Restored deduction: nest under parent
+                setMeasurements((prev) =>
+                    prev.map((p) =>
+                        p.id === m.parent_measurement_id
+                            ? { ...p, deductions: [...(p.deductions || []), m] }
+                            : p,
+                    ),
+                );
+            } else {
+                setMeasurements((prev) => [...prev, m]);
+            }
+        },
+        onMeasurementRemoved: (id) => {
+            setMeasurements((prev) => {
+                // Try removing from top-level first
+                if (prev.some((m) => m.id === id)) {
+                    return prev.filter((m) => m.id !== id);
+                }
+                // Otherwise remove from nested deductions
+                return prev.map((m) => ({
+                    ...m,
+                    deductions: m.deductions?.filter((d) => d.id !== id),
+                }));
+            });
+        },
+        onMeasurementUpdated: (m) => {
+            if (m.parent_measurement_id) {
+                // Updated deduction: update inside parent
+                setMeasurements((prev) =>
+                    prev.map((p) =>
+                        p.id === m.parent_measurement_id
+                            ? { ...p, deductions: (p.deductions || []).map((d) => (d.id === m.id ? m : d)) }
+                            : p,
+                    ),
+                );
+            } else {
+                setMeasurements((prev) => prev.map((old) => (old.id === m.id ? m : old)));
+            }
+        },
     });
 
     const conditionPatterns = useMemo(() => {
@@ -350,12 +403,12 @@ export default function DrawingTakeoff() {
 
     // Filter measurements based on bid view layer visibility
     const visibleMeasurements = useMemo(() => {
-        // If no variation layers are toggled on and base bid is on, show all takeoff measurements (default behavior)
+        // Use allMeasurements (flattened with deductions) for map rendering
         const anyVariationOn = Object.values(bidViewLayers.variations).some(Boolean);
         if (bidViewLayers.baseBid && !anyVariationOn) {
-            return measurements.filter((m) => !m.scope || m.scope === 'takeoff');
+            return allMeasurements.filter((m) => !m.scope || m.scope === 'takeoff');
         }
-        return measurements.filter((m) => {
+        return allMeasurements.filter((m) => {
             if (!m.scope || m.scope === 'takeoff') {
                 return bidViewLayers.baseBid;
             }
@@ -364,7 +417,7 @@ export default function DrawingTakeoff() {
             }
             return bidViewLayers.baseBid;
         });
-    }, [measurements, bidViewLayers]);
+    }, [allMeasurements, bidViewLayers]);
 
     const handleCreateVariation = async () => {
         if (!newVarCoNumber.trim() || !newVarDescription.trim()) {
@@ -821,7 +874,41 @@ export default function DrawingTakeoff() {
     };
 
     const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
-        // Auto-save: generate name automatically
+        // Deduction flow: save as child of the parent measurement
+        if (deductionParentId) {
+            const parent = measurements.find((m) => m.id === deductionParentId);
+            const deductionCount = (parent?.deductions?.length ?? 0) + 1;
+            const name = `Deduction #${deductionCount}`;
+
+            try {
+                const saved = await api.post<MeasurementData>(`/drawings/${drawing.id}/measurements`, {
+                    name,
+                    type: 'area',
+                    color: parent?.color || '#ef4444',
+                    category: parent?.category || null,
+                    points,
+                    parent_measurement_id: deductionParentId,
+                    bid_area_id: activeBidAreaId || null,
+                });
+                // Nest the deduction under its parent in state
+                setMeasurements((prev) =>
+                    prev.map((m) =>
+                        m.id === deductionParentId
+                            ? { ...m, deductions: [...(m.deductions || []), saved] }
+                            : m,
+                    ),
+                );
+                pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
+                toast.success(`Deduction saved on "${parent?.name}"`);
+            } catch {
+                toast.error('Failed to save deduction.');
+            }
+            setDeductionParentId(null);
+            setViewMode('pan');
+            return;
+        }
+
+        // Normal measurement flow
         const activeCondition = activeConditionId ? conditions.find((c) => c.id === activeConditionId) : null;
 
         const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
@@ -910,7 +997,18 @@ export default function DrawingTakeoff() {
         if (!confirm(`Delete "${measurement.name}"?`)) return;
         try {
             const data = await api.delete<{ message: string; measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${measurement.id}`);
-            setMeasurements((prev) => prev.filter((m) => m.id !== measurement.id));
+            if (measurement.parent_measurement_id) {
+                // Remove deduction from parent's deductions array
+                setMeasurements((prev) =>
+                    prev.map((m) =>
+                        m.id === measurement.parent_measurement_id
+                            ? { ...m, deductions: (m.deductions || []).filter((d) => d.id !== measurement.id) }
+                            : m,
+                    ),
+                );
+            } else {
+                setMeasurements((prev) => prev.filter((m) => m.id !== measurement.id));
+            }
             if (selectedMeasurementId === measurement.id) setSelectedMeasurementId(null);
             pushUndo({ type: 'delete', measurement: data.measurement, drawingId: drawing.id });
             toast.success('Measurement deleted.');
@@ -934,7 +1032,7 @@ export default function DrawingTakeoff() {
     }, [viewMode, showTakeoffPanel, selectedMeasurementId]);
 
     const handleVertexDragEnd = async (measurementId: number, pointIndex: number, newPoint: Point) => {
-        const measurement = measurements.find((m) => m.id === measurementId);
+        const measurement = allMeasurements.find((m) => m.id === measurementId);
         if (!measurement) return;
 
         const before = { points: measurement.points };
@@ -942,7 +1040,17 @@ export default function DrawingTakeoff() {
 
         try {
             const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${measurementId}`, { points: newPoints });
-            setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            if (measurement.parent_measurement_id) {
+                setMeasurements((prev) =>
+                    prev.map((m) =>
+                        m.id === measurement.parent_measurement_id
+                            ? { ...m, deductions: (m.deductions || []).map((d) => (d.id === updated.id ? updated : d)) }
+                            : m,
+                    ),
+                );
+            } else {
+                setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            }
             pushUndo({ type: 'update', measurementId, drawingId: drawing.id, before, after: { points: newPoints } });
         } catch {
             toast.error('Failed to update vertex.');
@@ -950,7 +1058,7 @@ export default function DrawingTakeoff() {
     };
 
     const handleVertexDelete = async (measurementId: number, pointIndex: number) => {
-        const measurement = measurements.find((m) => m.id === measurementId);
+        const measurement = allMeasurements.find((m) => m.id === measurementId);
         if (!measurement) return;
 
         const before = { points: measurement.points };
@@ -958,11 +1066,28 @@ export default function DrawingTakeoff() {
 
         try {
             const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${measurementId}`, { points: newPoints });
-            setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            if (measurement.parent_measurement_id) {
+                setMeasurements((prev) =>
+                    prev.map((m) =>
+                        m.id === measurement.parent_measurement_id
+                            ? { ...m, deductions: (m.deductions || []).map((d) => (d.id === updated.id ? updated : d)) }
+                            : m,
+                    ),
+                );
+            } else {
+                setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+            }
             pushUndo({ type: 'update', measurementId, drawingId: drawing.id, before, after: { points: newPoints } });
         } catch {
             toast.error('Failed to delete vertex.');
         }
+    };
+
+    const handleAddDeduction = (parentId: number) => {
+        setDeductionParentId(parentId);
+        setSelectedMeasurementId(null);
+        setViewMode('measure_area');
+        toast.info('Draw the area to deduct, then double-click to finish.');
     };
 
     const handleOpenCalibrationDialog = (method: 'manual' | 'preset') => {
@@ -1512,7 +1637,7 @@ export default function DrawingTakeoff() {
                             <TakeoffPanel
                                 viewMode={viewMode}
                                 calibration={calibration}
-                                measurements={visibleMeasurements}
+                                measurements={measurements}
                                 selectedMeasurementId={selectedMeasurementId}
                                 conditions={conditions}
                                 activeConditionId={activeConditionId}
@@ -1523,6 +1648,7 @@ export default function DrawingTakeoff() {
                                 onMeasurementDelete={handleDeleteMeasurement}
                                 onOpenConditionManager={() => setShowConditionManager(true)}
                                 onActivateCondition={handleActivateCondition}
+                                onAddDeduction={handleAddDeduction}
                             />
                         </div>
                     )}
@@ -2298,14 +2424,16 @@ export default function DrawingTakeoff() {
                             <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Click</kbd>
                                 <span>Place point</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Z</kbd>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Z / Backspace</kbd>
+                                <span>Undo last point</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Right-click</kbd>
                                 <span>Undo last point</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Enter</kbd>
                                 <span>Complete measurement</span>
-                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Right-click</kbd>
-                                <span>Remove last point</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
-                                <span>Cancel measurement</span>
+                                <span>Cancel / clear all points</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Shift</kbd>
+                                <span>Hold to snap to 15° angles (square for rectangles)</span>
                             </div>
                         </div>
                         <div>

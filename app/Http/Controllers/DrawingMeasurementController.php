@@ -97,7 +97,11 @@ class DrawingMeasurementController extends Controller
 
         return response()->json([
             'calibration' => $calibration->fresh(),
-            'measurements' => $drawing->measurements()->orderBy('created_at')->get(),
+            'measurements' => $drawing->measurements()
+                ->with('deductions')
+                ->whereNull('parent_measurement_id')
+                ->orderBy('created_at')
+                ->get(),
         ]);
     }
 
@@ -113,7 +117,8 @@ class DrawingMeasurementController extends Controller
     {
         return response()->json([
             'measurements' => $drawing->measurements()
-                ->with('variation:id,co_number,description')
+                ->with(['variation:id,co_number,description', 'deductions'])
+                ->whereNull('parent_measurement_id')
                 ->orderBy('created_at')
                 ->get(),
             'calibration' => $drawing->scaleCalibration,
@@ -132,9 +137,19 @@ class DrawingMeasurementController extends Controller
             'points.*.y' => 'required|numeric|min:0|max:1',
             'takeoff_condition_id' => 'nullable|integer|exists:takeoff_conditions,id',
             'bid_area_id' => 'nullable|integer|exists:bid_areas,id',
+            'parent_measurement_id' => 'nullable|integer|exists:drawing_measurements,id',
             'scope' => 'nullable|string|in:takeoff,variation',
             'variation_id' => 'nullable|integer|exists:variations,id',
         ]);
+
+        // Validate parent is area type and belongs to same drawing
+        if (!empty($validated['parent_measurement_id'])) {
+            $parent = DrawingMeasurement::where('id', $validated['parent_measurement_id'])
+                ->where('drawing_id', $drawing->id)
+                ->where('type', 'area')
+                ->whereNull('parent_measurement_id')
+                ->firstOrFail();
+        }
 
         $computedValue = null;
         $unit = null;
@@ -173,6 +188,7 @@ class DrawingMeasurementController extends Controller
             'unit' => $unit,
             'takeoff_condition_id' => $validated['takeoff_condition_id'] ?? null,
             'bid_area_id' => $validated['bid_area_id'] ?? null,
+            'parent_measurement_id' => $validated['parent_measurement_id'] ?? null,
             'scope' => $validated['scope'] ?? 'takeoff',
             'variation_id' => $validated['variation_id'] ?? null,
         ]);
@@ -185,7 +201,7 @@ class DrawingMeasurementController extends Controller
             $measurement->refresh();
         }
 
-        $measurement->load('variation:id,co_number,description');
+        $measurement->load(['variation:id,co_number,description', 'deductions']);
 
         return response()->json($measurement);
     }
@@ -245,7 +261,7 @@ class DrawingMeasurementController extends Controller
             $measurement->update(['material_cost' => null, 'labour_cost' => null, 'total_cost' => null]);
         }
 
-        return response()->json($measurement->fresh());
+        return response()->json($measurement->fresh()->load('deductions'));
     }
 
     public function destroy(Drawing $drawing, DrawingMeasurement $measurement)
@@ -269,7 +285,7 @@ class DrawingMeasurementController extends Controller
             ->firstOrFail();
 
         $m->restore();
-        $m->load('variation:id,co_number,description');
+        $m->load(['variation:id,co_number,description', 'deductions']);
 
         return response()->json($m);
     }
@@ -289,7 +305,11 @@ class DrawingMeasurementController extends Controller
             });
 
         return response()->json([
-            'measurements' => $drawing->measurements()->orderBy('created_at')->get(),
+            'measurements' => $drawing->measurements()
+                ->with('deductions')
+                ->whereNull('parent_measurement_id')
+                ->orderBy('created_at')
+                ->get(),
         ]);
     }
 

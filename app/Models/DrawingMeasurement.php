@@ -25,6 +25,7 @@ class DrawingMeasurement extends Model
         'source_measurement_id',
         'takeoff_condition_id',
         'bid_area_id',
+        'parent_measurement_id',
         'material_cost',
         'labour_cost',
         'total_cost',
@@ -81,6 +82,16 @@ class DrawingMeasurement extends Model
     public function sourceMeasurement(): BelongsTo
     {
         return $this->belongsTo(self::class, 'source_measurement_id');
+    }
+
+    public function parentMeasurement(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_measurement_id');
+    }
+
+    public function deductions(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_measurement_id');
     }
 
     public function statuses(): HasMany

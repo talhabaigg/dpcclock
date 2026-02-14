@@ -42,6 +42,8 @@ export type MeasurementData = {
         co_number: string;
         description: string;
     } | null;
+    parent_measurement_id?: number | null;
+    deductions?: MeasurementData[];
     created_at?: string;
 };
 
@@ -128,6 +130,26 @@ export function getSegmentColor(percent: number): string {
 // Box-select mode colors
 const BOX_SELECT_BASE = '#93c5fd';     // blue-300 (unselected)
 const BOX_SELECT_ACTIVE = '#1d4ed8';   // blue-700 (selected)
+
+/**
+ * Snap a cursor point to the nearest angle increment relative to an anchor.
+ * Works in pixel space to handle non-square images correctly.
+ */
+function snapToAngle(anchor: Point, cursor: Point, imgW: number, imgH: number, incrementDeg: number = 15): Point {
+    const dx = (cursor.x - anchor.x) * imgW;
+    const dy = (cursor.y - anchor.y) * imgH;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return cursor;
+
+    const angle = Math.atan2(dy, dx);
+    const incRad = (incrementDeg * Math.PI) / 180;
+    const snapped = Math.round(angle / incRad) * incRad;
+
+    return {
+        x: Math.max(0, Math.min(1, anchor.x + (dist * Math.cos(snapped)) / imgW)),
+        y: Math.max(0, Math.min(1, anchor.y + (dist * Math.sin(snapped)) / imgH)),
+    };
+}
 
 function normalizedToLatLng(point: Point, imgW: number, imgH: number): L.LatLng {
     return L.latLng(-point.y * imgH, point.x * imgW);
@@ -266,6 +288,7 @@ export function MeasurementLayer({
                     });
                     marker.bindTooltip(`${m.name} #${idx + 1}`, { permanent: false, className: 'measurement-tooltip' });
                     marker.on('click', (e) => {
+                        if (isMeasuring) return;
                         L.DomEvent.stopPropagation(e);
                         onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                     });
@@ -318,6 +341,7 @@ export function MeasurementLayer({
                             opacity,
                         });
                         segLine.on('click', (e) => {
+                            if (isMeasuring) return;
                             L.DomEvent.stopPropagation(e);
                             onSegmentClick?.(m, si, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                         });
@@ -393,6 +417,7 @@ export function MeasurementLayer({
                         : `${coPrefix}${m.name}`;
                     line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                     line.on('click', (e) => {
+                        if (isMeasuring) return;
                         L.DomEvent.stopPropagation(e);
                         onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                     });
@@ -400,15 +425,18 @@ export function MeasurementLayer({
                 }
             } else {
                 const isMeasSelected = selectedMeasurementIds?.has(m.id) ?? false;
-                const areaPattern = m.scope === 'variation'
+                const isDeduction = !!m.parent_measurement_id;
+                const areaPattern = isDeduction
                     ? 'dashed'
-                    : m.takeoff_condition_id && conditionPatterns
-                        ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                        : 'solid';
+                    : m.scope === 'variation'
+                        ? 'dashed'
+                        : m.takeoff_condition_id && conditionPatterns
+                            ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                            : 'solid';
 
                 const displayColor = boxSelectMode
                     ? (isMeasSelected ? BOX_SELECT_ACTIVE : BOX_SELECT_BASE)
-                    : m.color;
+                    : isDeduction ? '#ef4444' : m.color;
 
                 // Selection glow (non-box-select mode only)
                 if (!boxSelectMode && isMeasSelected) {
@@ -423,9 +451,9 @@ export function MeasurementLayer({
                 const polygon = L.polygon(latlngs, {
                     color: displayColor,
                     weight: isMeasSelected ? weight + 2 : weight,
-                    opacity,
-                    fillColor: displayColor,
-                    fillOpacity: isSelected ? 0.75 : 0.7,
+                    opacity: isDeduction ? 0.7 : opacity,
+                    fillColor: isDeduction ? '#ef4444' : displayColor,
+                    fillOpacity: isDeduction ? 0.3 : (isSelected ? 0.75 : 0.7),
                     dashArray: PATTERN_DASH_ARRAYS[areaPattern],
                 });
 
@@ -440,12 +468,14 @@ export function MeasurementLayer({
                     }).addTo(group);
                 });
 
+                const deductionPrefix = isDeduction ? '(−) ' : '';
                 const areaCOPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                 const label = m.computed_value != null
-                    ? `${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                    : `${areaCOPrefix}${m.name}`;
+                    ? `${deductionPrefix}${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                    : `${deductionPrefix}${areaCOPrefix}${m.name}`;
                 polygon.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                 polygon.on('click', (e) => {
+                    if (isMeasuring) return;
                     L.DomEvent.stopPropagation(e);
                     onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                 });
@@ -477,7 +507,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring]);
 
     // Render calibration line
     useEffect(() => {
@@ -666,15 +696,33 @@ export function MeasurementLayer({
         if (!isMeasuring) return;
 
         const onMouseMove = (e: L.LeafletMouseEvent) => {
-            const cursorPoint = latLngToNormalized(e.latlng, imageWidth, imageHeight);
+            let cursorPoint = latLngToNormalized(e.latlng, imageWidth, imageHeight);
 
             if (currentPoints.length === 0) {
-                // Remove any stale tooltip
                 if (tooltipRef.current) {
                     map.closeTooltip(tooltipRef.current);
                     tooltipRef.current = null;
                 }
                 return;
+            }
+
+            // Shift-lock: snap to angle increments
+            const shift = e.originalEvent.shiftKey;
+            if (shift && viewMode !== 'measure_count') {
+                if (viewMode === 'measure_rectangle') {
+                    // Constrain to square preview
+                    const c1 = currentPoints[0];
+                    const dx = (cursorPoint.x - c1.x) * imageWidth;
+                    const dy = (cursorPoint.y - c1.y) * imageHeight;
+                    const side = Math.max(Math.abs(dx), Math.abs(dy));
+                    cursorPoint = {
+                        x: c1.x + (Math.sign(dx) * side) / imageWidth,
+                        y: c1.y + (Math.sign(dy) * side) / imageHeight,
+                    };
+                } else {
+                    const anchor = currentPoints[currentPoints.length - 1];
+                    cursorPoint = snapToAngle(anchor, cursorPoint, imageWidth, imageHeight);
+                }
             }
 
             renderDrawing(currentPoints, cursorPoint);
@@ -748,6 +796,13 @@ export function MeasurementLayer({
             if (e.key === 'Escape') {
                 setCurrentPoints([]);
                 drawingLayersRef.current.clearLayers();
+            } else if (e.key === 'Backspace' || e.key === 'z' || e.key === 'Z') {
+                // Undo last placed point (Z, Backspace while drawing)
+                if (currentPoints.length > 0) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    setCurrentPoints(prev => prev.slice(0, -1));
+                }
             } else if (e.key === 'Enter') {
                 if (viewMode === 'measure_line' && currentPoints.length >= 2) {
                     onMeasurementComplete?.(currentPoints, 'linear');
@@ -793,11 +848,14 @@ export function MeasurementLayer({
         click: (e) => {
             if (!isMeasuring) return;
 
-            const point = latLngToNormalized(e.latlng, imageWidth, imageHeight);
+            let point = latLngToNormalized(e.latlng, imageWidth, imageHeight);
+            const shift = e.originalEvent.shiftKey;
 
             if (viewMode === 'calibrate') {
-                // Calibration doesn't need double-click, handle immediately
                 const pts = currentPointsRef.current;
+                if (shift && pts.length === 1) {
+                    point = snapToAngle(pts[0], point, imageWidth, imageHeight);
+                }
                 if (pts.length === 0) {
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
@@ -806,25 +864,40 @@ export function MeasurementLayer({
                     drawingLayersRef.current.clearLayers();
                 }
             } else if (viewMode === 'measure_rectangle') {
-                // Rectangle: 2 clicks for opposite corners, auto-complete
                 const pts = currentPointsRef.current;
                 if (pts.length === 0) {
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
                     const c1 = pts[0];
-                    const rectPoints: Point[] = [c1, { x: point.x, y: c1.y }, point, { x: c1.x, y: point.y }];
+                    let c2 = point;
+                    if (shift) {
+                        // Constrain to square
+                        const dx = (c2.x - c1.x) * imageWidth;
+                        const dy = (c2.y - c1.y) * imageHeight;
+                        const side = Math.max(Math.abs(dx), Math.abs(dy));
+                        c2 = {
+                            x: c1.x + (Math.sign(dx) * side) / imageWidth,
+                            y: c1.y + (Math.sign(dy) * side) / imageHeight,
+                        };
+                    }
+                    const rectPoints: Point[] = [c1, { x: c2.x, y: c1.y }, c2, { x: c1.x, y: c2.y }];
                     onMeasurementComplete?.(rectPoints, 'area');
                     setCurrentPoints([]);
                     drawingLayersRef.current.clearLayers();
                 }
             } else {
+                const pts = currentPointsRef.current;
+                if (shift && pts.length > 0 && viewMode !== 'measure_count') {
+                    point = snapToAngle(pts[pts.length - 1], point, imageWidth, imageHeight);
+                }
                 // Delay adding the point so dblclick can cancel it
                 if (clickTimerRef.current) {
                     clearTimeout(clickTimerRef.current);
                 }
+                const snappedPoint = point;
                 clickTimerRef.current = setTimeout(() => {
                     clickTimerRef.current = null;
-                    setCurrentPoints(prev => [...prev, point]);
+                    setCurrentPoints(prev => [...prev, snappedPoint]);
                 }, 250);
             }
         },

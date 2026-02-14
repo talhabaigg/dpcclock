@@ -17,11 +17,8 @@ return new class extends Migration
         // The unique index is used by the FK on drawing_measurement_id.
         // Add a plain index on drawing_measurement_id first so MySQL has an index for the FK,
         // then drop the old unique and add the new one.
-        $oldIndexExists = collect(\DB::select(
-            "SELECT INDEX_NAME FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'measurement_statuses'
-             AND INDEX_NAME = 'measurement_lcc_status_unique'"
-        ))->isNotEmpty();
+        $oldIndexExists = collect(Schema::getIndexes('measurement_statuses'))
+            ->contains('name', 'measurement_lcc_status_unique');
 
         if ($oldIndexExists) {
             // Add a plain index for the FK before dropping the unique
@@ -49,11 +46,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        $newIndexExists = collect(\DB::select(
-            "SELECT INDEX_NAME FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'measurement_statuses'
-             AND INDEX_NAME = 'measurement_lcc_date_unique'"
-        ))->isNotEmpty();
+        $newIndexExists = collect(Schema::getIndexes('measurement_statuses'))
+            ->contains('name', 'measurement_lcc_date_unique');
 
         if ($newIndexExists) {
             Schema::table('measurement_statuses', function (Blueprint $table) {
