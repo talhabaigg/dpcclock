@@ -24,13 +24,17 @@ type ProductionPanelProps = {
     onToggleHideComplete?: () => void;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getPercentColor(_percent: number): string {
-    return '#3b82f6'; // blue-500 — will add green/red when hours comparison is introduced
+function getPercentColor(percent: number): string {
+    if (percent >= 100) return '#16a34a'; // green-600 — complete
+    if (percent >= 90) return '#22c55e';  // green-500 — nearly done
+    if (percent >= 50) return '#f59e0b';  // amber-500 — in progress
+    return '#3b82f6';                     // blue-500 — early stage
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getPercentBg(_percent: number): string {
+function getPercentBg(percent: number): string {
+    if (percent >= 100) return 'bg-green-500/10';
+    if (percent >= 90) return 'bg-green-500/10';
+    if (percent >= 50) return 'bg-amber-500/10';
     return 'bg-blue-500/10';
 }
 

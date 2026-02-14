@@ -43,7 +43,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 type Project = {
@@ -233,6 +233,35 @@ export default function DrawingTakeoff() {
     const [editableVertices, setEditableVertices] = useState(false);
     const [deductionParentId, setDeductionParentId] = useState<number | null>(null);
     const [snapEnabled, setSnapEnabled] = useState(true);
+    const [hoveredMeasurementId, setHoveredMeasurementId] = useState<number | null>(null);
+
+    // Resizable panel
+    const [panelWidth, setPanelWidth] = useState(256); // default w-64 = 256px
+    const panelResizing = useRef(false);
+    const panelStartX = useRef(0);
+    const panelStartW = useRef(256);
+
+    useEffect(() => {
+        const onMouseMove = (e: MouseEvent) => {
+            if (!panelResizing.current) return;
+            const delta = panelStartX.current - e.clientX;
+            const newWidth = Math.min(480, Math.max(200, panelStartW.current + delta));
+            setPanelWidth(newWidth);
+        };
+        const onMouseUp = () => {
+            if (panelResizing.current) {
+                panelResizing.current = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, []);
 
     // Flatten measurements + their deductions into a single array for map rendering
     const allMeasurements = useMemo(() => {
@@ -1124,6 +1153,7 @@ export default function DrawingTakeoff() {
     // Keyboard shortcuts
     const shortcuts = useMemo(
         () => [
+            { key: 't', handler: () => setShowTakeoffPanel(v => !v) },
             { key: 'p', handler: () => setViewMode('pan') },
             { key: 'Escape', handler: () => setViewMode('pan') },
             { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: showTakeoffPanel },
@@ -1152,6 +1182,43 @@ export default function DrawingTakeoff() {
             project={project}
             activeTab={activeTab}
             mapControls={mapControls}
+            statusBar={
+                <>
+                    <span className="font-medium">
+                        {viewMode === 'pan' ? 'Pan' : viewMode === 'select' ? 'Select' : viewMode === 'calibrate' ? 'Calibrate' : viewMode === 'measure_line' ? 'Line' : viewMode === 'measure_area' ? 'Area' : viewMode === 'measure_rectangle' ? 'Rectangle' : viewMode === 'measure_count' ? 'Count' : 'Pan'}
+                    </span>
+                    <div className="bg-border h-3 w-px" />
+                    {calibration ? (
+                        <span>
+                            Scale: {calibration.drawing_scale || `${calibration.real_distance?.toFixed(1)} ${calibration.unit}`} ({calibration.unit})
+                        </span>
+                    ) : (
+                        <span className="text-amber-500">No calibration</span>
+                    )}
+                    <div className="bg-border h-3 w-px" />
+                    <span>{measurements.length} measurement{measurements.length !== 1 ? 's' : ''}</span>
+                    {(() => {
+                        const cond = conditions.find(c => c.id === activeConditionId);
+                        if (!cond) return null;
+                        return (
+                            <>
+                                <div className="bg-border h-3 w-px" />
+                                <span className="flex items-center gap-1">
+                                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cond.color }} />
+                                    {cond.name}
+                                </span>
+                            </>
+                        );
+                    })()}
+                    <div className="flex-1" />
+                    <span>
+                        {drawing.floor_label && <span className="mr-2">{drawing.floor_label}</span>}
+                        {drawing.quantity_multiplier && drawing.quantity_multiplier > 1 && (
+                            <span className="text-blue-500">{drawing.quantity_multiplier}x</span>
+                        )}
+                    </span>
+                </>
+            }
             toolbar={
                 <>
                     {/* View Mode */}
@@ -1161,10 +1228,11 @@ export default function DrawingTakeoff() {
                             size="sm"
                             variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('pan')}
-                            className="h-6 w-6 rounded-sm p-0"
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
                             title="Pan mode (P)"
                         >
                             <Hand className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">P</kbd>
                         </Button>
                         <Button
                             type="button"
@@ -1199,53 +1267,58 @@ export default function DrawingTakeoff() {
                                 size="sm"
                                 variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title="Calibrate scale (S)"
                             >
                                 <Scale className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">S</kbd>
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title={!calibration ? 'Set scale first' : 'Measure line (L)'}
                                 disabled={!calibration}
                             >
                                 <Minus className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">L</kbd>
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title={!calibration ? 'Set scale first' : 'Measure area (A)'}
                                 disabled={!calibration}
                             >
                                 <Pentagon className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">A</kbd>
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
                                 disabled={!calibration}
                             >
                                 <Square className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">R</kbd>
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
                                 onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title="Count items (C)"
                             >
                                 <Hash className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">C</kbd>
                             </Button>
                             <div className="bg-border mx-px h-4 w-px" />
                             <Button
@@ -1253,13 +1326,53 @@ export default function DrawingTakeoff() {
                                 size="sm"
                                 variant={snapEnabled ? 'secondary' : 'ghost'}
                                 onClick={() => setSnapEnabled(prev => !prev)}
-                                className="h-6 w-6 rounded-sm p-0"
+                                className="group/btn relative h-6 w-6 rounded-sm p-0"
                                 title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
                             >
                                 <Magnet className="h-3 w-3" />
+                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">N</kbd>
                             </Button>
                         </div>
                     )}
+
+                    {/* Calibration Badge */}
+                    {showTakeoffPanel && (
+                        <div
+                            className={`flex h-5 items-center gap-1 rounded-sm px-1.5 text-[10px] font-medium ${
+                                calibration
+                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-pointer'
+                            }`}
+                            onClick={() => !calibration && setViewMode('calibrate')}
+                            title={calibration ? 'Scale is calibrated' : 'Click to calibrate scale'}
+                        >
+                            <div className={`h-1.5 w-1.5 rounded-full ${calibration ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                            {calibration
+                                ? (calibration.drawing_scale || `${calibration.real_distance?.toFixed(1)} ${calibration.unit}`)
+                                : 'Not Calibrated'}
+                        </div>
+                    )}
+
+                    {/* Active Condition Indicator */}
+                    {showTakeoffPanel && activeConditionId && (() => {
+                        const cond = conditions.find(c => c.id === activeConditionId);
+                        if (!cond) return null;
+                        return (
+                            <>
+                                <div className="bg-border h-4 w-px" />
+                                <div
+                                    className="flex items-center gap-1.5 rounded-sm px-1.5 py-0.5"
+                                    style={{ backgroundColor: cond.color + '18', borderLeft: `2px solid ${cond.color}` }}
+                                >
+                                    <div className="h-2 w-2 shrink-0 rounded-full animate-pulse" style={{ backgroundColor: cond.color }} />
+                                    <span className="text-[10px] font-semibold max-w-[100px] truncate">{cond.name}</span>
+                                    <span className="rounded-[2px] bg-muted px-1 py-px text-[8px] text-muted-foreground">
+                                        {cond.type === 'linear' ? 'Line' : cond.type === 'area' ? 'Area' : 'Count'}
+                                    </span>
+                                </div>
+                            </>
+                        );
+                    })()}
 
                     {/* Bid Area Selector */}
                     {showTakeoffPanel && (
@@ -1641,34 +1754,61 @@ export default function DrawingTakeoff() {
                             onVertexDragEnd={handleVertexDragEnd}
                             onVertexDelete={handleVertexDelete}
                             snapEnabled={snapEnabled}
+                            hoveredMeasurementId={hoveredMeasurementId}
                             onMapReady={setMapControls}
                             className="absolute inset-0"
                         />
                     </div>
 
-                    {/* Takeoff Side Panel */}
-                    {showTakeoffPanel && (
-                        <div className="w-64 shrink-0 overflow-hidden border-l bg-background">
-                            <TakeoffPanel
-                                viewMode={viewMode}
-                                calibration={calibration}
-                                measurements={measurements}
-                                selectedMeasurementId={selectedMeasurementId}
-                                conditions={conditions}
-                                activeConditionId={activeConditionId}
-                                onOpenCalibrationDialog={handleOpenCalibrationDialog}
-                                onDeleteCalibration={handleDeleteCalibration}
-                                onMeasurementSelect={setSelectedMeasurementId}
-                                onMeasurementEdit={handleEditMeasurement}
-                                onMeasurementDelete={handleDeleteMeasurement}
-                                onOpenConditionManager={() => setShowConditionManager(true)}
-                                onActivateCondition={handleActivateCondition}
-                                onAddDeduction={handleAddDeduction}
-                                drawingId={drawing.id}
-                                quantityMultiplier={drawing.quantity_multiplier ?? 1}
-                            />
-                        </div>
-                    )}
+                    {/* Takeoff Side Panel — animated */}
+                    <div
+                        className="relative shrink-0 overflow-hidden bg-background transition-[width,border-width] duration-200 ease-in-out"
+                        style={{ width: showTakeoffPanel ? panelWidth : 0, borderLeftWidth: showTakeoffPanel ? 1 : 0 }}
+                    >
+                        {showTakeoffPanel && (
+                            <>
+                                {/* Drag handle with grip indicator */}
+                                <div
+                                    className="absolute inset-y-0 left-0 z-10 flex w-2 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        panelResizing.current = true;
+                                        panelStartX.current = e.clientX;
+                                        panelStartW.current = panelWidth;
+                                        document.body.style.cursor = 'col-resize';
+                                        document.body.style.userSelect = 'none';
+                                    }}
+                                >
+                                    <div className="flex flex-col gap-0.5 opacity-0 group-hover/handle:opacity-60 transition-opacity">
+                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                    </div>
+                                </div>
+                                <TakeoffPanel
+                                    viewMode={viewMode}
+                                    calibration={calibration}
+                                    measurements={measurements}
+                                    selectedMeasurementId={selectedMeasurementId}
+                                    conditions={conditions}
+                                    activeConditionId={activeConditionId}
+                                    onOpenCalibrationDialog={handleOpenCalibrationDialog}
+                                    onDeleteCalibration={handleDeleteCalibration}
+                                    onMeasurementSelect={setSelectedMeasurementId}
+                                    onMeasurementEdit={handleEditMeasurement}
+                                    onMeasurementDelete={handleDeleteMeasurement}
+                                    onOpenConditionManager={() => setShowConditionManager(true)}
+                                    onActivateCondition={handleActivateCondition}
+                                    onAddDeduction={handleAddDeduction}
+                                    onMeasurementHover={setHoveredMeasurementId}
+                                    drawingId={drawing.id}
+                                    quantityMultiplier={drawing.quantity_multiplier ?? 1}
+                                />
+                            </>
+                        )}
+                    </div>
                 </div>
 
             {/* Observation Dialog */}

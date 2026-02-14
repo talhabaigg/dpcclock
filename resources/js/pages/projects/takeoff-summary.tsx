@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Ruler } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 
 type SummaryRow = {
@@ -215,8 +215,19 @@ export default function TakeoffSummary() {
                 </div>
 
                 {summaries.length === 0 ? (
-                    <div className="text-muted-foreground rounded-lg border p-12 text-center">
-                        No takeoff data found. Create measurements on your drawings to see the summary here.
+                    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-16 text-center">
+                        <div className="rounded-full bg-muted p-3">
+                            <Ruler className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold">No takeoff data yet</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Create measurements on your drawings to see quantities, costs, and export options here.
+                            </p>
+                        </div>
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={`/projects/${project.id}/drawings`}>Go to Drawings</a>
+                        </Button>
                     </div>
                 ) : (
                     <div className="rounded-lg border">

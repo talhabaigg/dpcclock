@@ -2,7 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ImageOverlay, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { ImageOverlay, MapContainer, Rectangle, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { MeasurementLayer, type CalibrationData, type MeasurementData, type Point, type ViewMode } from './measurement-layer';
 
 export type Observation = {
@@ -72,6 +72,8 @@ type LeafletDrawingViewerProps = {
     onVertexDelete?: (measurementId: number, pointIndex: number) => void;
     // Snap to endpoint
     snapEnabled?: boolean;
+    // Hover highlight from panel
+    hoveredMeasurementId?: number | null;
     // Exposes zoom/fit controls to parent
     onMapReady?: (controls: MapControls) => void;
 };
@@ -308,6 +310,7 @@ export function LeafletDrawingViewer({
     onVertexDragEnd,
     onVertexDelete,
     snapEnabled,
+    hoveredMeasurementId,
     onMapReady,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -427,6 +430,12 @@ export function LeafletDrawingViewer({
                     />
                 )}
 
+                {/* Border around drawing image */}
+                <Rectangle
+                    bounds={imageBounds}
+                    pathOptions={{ color: '#6b7280', weight: 1, fill: false, opacity: 0.4 }}
+                />
+
                 <MapEventHandler
                     observations={observations}
                     selectedObservationIds={selectedObservationIds}
@@ -467,6 +476,7 @@ export function LeafletDrawingViewer({
                     onVertexDragEnd={onVertexDragEnd}
                     onVertexDelete={onVertexDelete}
                     snapEnabled={snapEnabled}
+                    hoveredMeasurementId={hoveredMeasurementId}
                 />
             </MapContainer>
 
@@ -496,6 +506,16 @@ export function LeafletDrawingViewer({
 
             {/* Cursor style based on view mode */}
             <style>{`
+                /* Invert drawing tiles/images in dark mode (measurement overlays unaffected) */
+                .dark .leaflet-tile-pane,
+                .dark .leaflet-image-pane {
+                    filter: invert(1) hue-rotate(180deg);
+                }
+                /* Match container bg to inverted tile edges (white inverts to #000) */
+                .dark .leaflet-container {
+                    background: #000000 !important;
+                }
+
                 .leaflet-container {
                     cursor: ${viewMode === 'pan' ? 'grab' : 'crosshair'};
                 }
@@ -518,7 +538,7 @@ export function LeafletDrawingViewer({
                 .measurement-tooltip {
                     background: rgba(0,0,0,0.8) !important;
                     color: #fff !important;
-                    border: none !important;
+                    border: 1px solid rgba(255,255,255,0.15) !important;
                     border-radius: 4px !important;
                     padding: 4px 8px !important;
                     font-size: 12px !important;
@@ -526,7 +546,7 @@ export function LeafletDrawingViewer({
                 .measurement-live-tooltip {
                     background: rgba(0,0,0,0.85) !important;
                     color: #fff !important;
-                    border: none !important;
+                    border: 1px solid rgba(255,255,255,0.15) !important;
                     border-radius: 4px !important;
                     padding: 4px 8px !important;
                     font-size: 12px !important;

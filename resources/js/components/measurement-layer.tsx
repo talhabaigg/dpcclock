@@ -85,6 +85,8 @@ type MeasurementLayerProps = {
     onVertexDelete?: (measurementId: number, pointIndex: number) => void;
     // Snap to endpoint
     snapEnabled?: boolean;
+    // Hover highlight from panel
+    hoveredMeasurementId?: number | null;
 };
 
 const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
@@ -194,6 +196,7 @@ export function MeasurementLayer({
     onVertexDragEnd,
     onVertexDelete,
     snapEnabled = true,
+    hoveredMeasurementId,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -212,6 +215,43 @@ export function MeasurementLayer({
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
     const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Auto-pan map to selected measurement (smooth pan to center, no zoom change)
+    useEffect(() => {
+        if (!selectedMeasurementId || !map) return;
+        const m = measurements.find(ms => ms.id === selectedMeasurementId);
+        if (!m || m.points.length === 0) return;
+
+        try {
+            const toLatLng = (p: Point) => L.latLng(-p.y * imageHeight, p.x * imageWidth);
+
+            // Compute center of the measurement
+            let center: L.LatLng;
+            if (m.points.length === 1) {
+                center = toLatLng(m.points[0]);
+            } else {
+                const latlngs = m.points.map(toLatLng);
+                center = L.latLngBounds(latlngs).getCenter();
+            }
+
+            // Only pan if center is outside the inner 60% of the viewport (avoids tiny pans)
+            const mapBounds = map.getBounds();
+            const sw = mapBounds.getSouthWest();
+            const ne = mapBounds.getNorthEast();
+            const padLat = (ne.lat - sw.lat) * 0.2;
+            const padLng = (ne.lng - sw.lng) * 0.2;
+            const innerBounds = L.latLngBounds(
+                [sw.lat + padLat, sw.lng + padLng],
+                [ne.lat - padLat, ne.lng - padLng],
+            );
+
+            if (!innerBounds.contains(center)) {
+                map.panTo(center, { animate: true, duration: 0.5, easeLinearity: 0.15 });
+            }
+        } catch {
+            // Silently ignore if map isn't ready or bounds are invalid
+        }
+    }, [selectedMeasurementId, map, measurements, imageWidth, imageHeight]);
 
     // Build snap candidates from all saved measurements (endpoints + midpoints)
     const snapCandidates = useMemo<SnapCandidate[]>(() => {
@@ -347,8 +387,9 @@ export function MeasurementLayer({
         measurements.forEach((m) => {
             const latlngs = m.points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
             const isSelected = m.id === selectedMeasurementId;
-            const weight = isSelected ? 6 : 4;
-            const opacity = isSelected ? 1 : 0.85;
+            const isHovered = m.id === hoveredMeasurementId && !isSelected;
+            const weight = isSelected ? 6 : isHovered ? 5 : 4;
+            const opacity = isSelected ? 1 : isHovered ? 1 : 0.85;
 
             if (m.type === 'count') {
                 // Render count markers as numbered circle markers
@@ -481,6 +522,16 @@ export function MeasurementLayer({
                         }).addTo(group);
                     }
 
+                    // Hover glow from panel
+                    if (isHovered && !boxSelectMode && !isMeasSelected) {
+                        L.polyline(latlngs, {
+                            color: m.color,
+                            weight: weight + 4,
+                            opacity: 0.35,
+                            lineCap: 'round',
+                        }).addTo(group);
+                    }
+
                     const line = L.polyline(latlngs, {
                         color: displayColor,
                         weight: isMeasSelected ? weight + 2 : weight,
@@ -552,12 +603,22 @@ export function MeasurementLayer({
                     }).addTo(group);
                 }
 
+                // Hover glow from panel
+                if (isHovered && !boxSelectMode && !isMeasSelected) {
+                    L.polygon(latlngs, {
+                        color: m.color,
+                        weight: weight + 4,
+                        opacity: 0.35,
+                        fill: false,
+                    }).addTo(group);
+                }
+
                 const polygon = L.polygon(latlngs, {
                     color: displayColor,
                     weight: isMeasSelected ? weight + 2 : weight,
                     opacity: isDeduction ? 0.7 : opacity,
                     fillColor: isDeduction ? '#ef4444' : displayColor,
-                    fillOpacity: isDeduction ? 0.3 : (isSelected ? 0.75 : 0.7),
+                    fillOpacity: isDeduction ? 0.3 : (isHovered ? 0.8 : (isSelected ? 0.75 : 0.7)),
                     dashArray: PATTERN_DASH_ARRAYS[areaPattern],
                 });
 
@@ -615,7 +676,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight, hoveredMeasurementId]);
 
     // Render calibration line
     useEffect(() => {

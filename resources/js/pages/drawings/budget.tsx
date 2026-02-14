@@ -465,6 +465,21 @@ export default function DrawingBudget() {
             revisions={revisions}
             project={project}
             activeTab={activeTab}
+            statusBar={
+                <>
+                    <span>Est: <span className="font-mono font-medium tabular-nums">{grandTotals.est_hours.toFixed(1)}h</span></span>
+                    <div className="bg-border h-3 w-px" />
+                    <span>Earned: <span className="font-mono font-medium tabular-nums">{grandTotals.earned_hours.toFixed(1)}h</span></span>
+                    <div className="bg-border h-3 w-px" />
+                    <span>Used: <span className="font-mono font-medium tabular-nums">{grandTotals.used_hours.toFixed(1)}h</span></span>
+                    <div className="bg-border h-3 w-px" />
+                    <span className={grandTotals.variance < 0 ? 'text-red-500 font-medium' : grandTotals.variance > 0 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}>
+                        Variance: <span className="font-mono tabular-nums">{grandTotals.variance >= 0 ? '+' : ''}{grandTotals.variance.toFixed(1)}h</span>
+                    </span>
+                    <div className="flex-1" />
+                    <span>{gridRows.length} cost code{gridRows.length !== 1 ? 's' : ''}</span>
+                </>
+            }
             toolbar={
                 <>
                     <Button
@@ -771,7 +786,7 @@ function GroupRows({
             </tr>
 
             {/* Detail rows */}
-            {!isCollapsed && group.rows.map((row) => (
+            {!isCollapsed && group.rows.map((row, idx) => (
                 <DataRow
                     key={row.usedHoursKey}
                     row={row}
@@ -785,6 +800,7 @@ function GroupRows({
                     }
                     isSelected={selectedRowKey === row.usedHoursKey}
                     onSelect={() => onRowSelect(row.usedHoursKey)}
+                    isEven={idx % 2 === 0}
                 />
             ))}
         </>
@@ -799,6 +815,7 @@ function DataRow({
     onPercentCompleteChange,
     isSelected,
     onSelect,
+    isEven,
 }: {
     row: GridRow;
     groupMode: GroupMode;
@@ -807,6 +824,7 @@ function DataRow({
     onPercentCompleteChange: (pct: number | null) => void;
     isSelected: boolean;
     onSelect: () => void;
+    isEven?: boolean;
 }) {
     const label = groupMode === 'area-lcc'
         ? `${row.lcc_code} (${row.lcc_unit})`
@@ -814,7 +832,7 @@ function DataRow({
 
     return (
         <tr
-            className={cn('border-b cursor-pointer', isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-accent/30')}
+            className={cn('border-b cursor-pointer', isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : isEven ? 'bg-muted/15 hover:bg-accent/30' : 'hover:bg-accent/30')}
             onClick={onSelect}
         >
             <td className="border border-border py-0.5 pl-7 pr-2">

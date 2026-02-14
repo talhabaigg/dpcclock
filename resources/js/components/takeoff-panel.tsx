@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,7 +10,9 @@ import {
     Calculator,
     ChevronDown,
     ChevronRight,
+    Copy,
     DollarSign,
+    Eye,
     Hash,
     Maximize2,
     Minus,
@@ -23,12 +26,11 @@ import {
     Square,
     Trash2,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CalibrationData, MeasurementData, ViewMode } from './measurement-layer';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
-import { Copy } from 'lucide-react';
 
 type TakeoffPanelProps = {
     viewMode: ViewMode;
@@ -45,9 +47,15 @@ type TakeoffPanelProps = {
     onOpenConditionManager: () => void;
     onActivateCondition: (conditionId: number | null) => void;
     onAddDeduction?: (parentId: number) => void;
+    onMeasurementHover?: (id: number | null) => void;
     drawingId?: number;
     quantityMultiplier?: number;
 };
+
+/** Format a number with thousands separators and fixed decimals */
+function fmtNum(val: number, decimals = 2): string {
+    return val.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
 
 const TYPE_ICONS = {
     linear: Pencil,
@@ -78,6 +86,7 @@ export function TakeoffPanel({
     onOpenConditionManager,
     onActivateCondition,
     onAddDeduction,
+    onMeasurementHover,
     drawingId,
     quantityMultiplier = 1,
 }: TakeoffPanelProps) {
@@ -86,6 +95,16 @@ export function TakeoffPanel({
     const [multiplier, setMultiplier] = useState(quantityMultiplier);
     const hasCalibration = !!calibration;
     const activeCondition = conditions.find((c) => c.id === activeConditionId) || null;
+    const takeoffScrollRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to selected measurement in the takeoff panel
+    useEffect(() => {
+        if (!selectedMeasurementId || !takeoffScrollRef.current) return;
+        const el = takeoffScrollRef.current.querySelector(`[data-measurement-id="${selectedMeasurementId}"]`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }, [selectedMeasurementId]);
 
     const saveMultiplier = useCallback(async () => {
         if (!drawingId || multiplier === quantityMultiplier) return;
@@ -145,6 +164,10 @@ export function TakeoffPanel({
         return a.localeCompare(b);
     });
 
+    // Map condition ID → keyboard shortcut (1-5) for first 5 conditions
+    const conditionShortcuts = new Map<number, number>();
+    conditions.slice(0, 5).forEach((c, i) => conditionShortcuts.set(c.id, i + 1));
+
     const isMeasuring = viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_count';
 
     return (
@@ -162,6 +185,11 @@ export function TakeoffPanel({
                     >
                         <Ruler className="h-3 w-3" />
                         Takeoff
+                        {measurements.length > 0 && (
+                            <span className="ml-0.5 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-muted-foreground/15 px-1 text-[9px] font-semibold tabular-nums">
+                                {measurements.length}
+                            </span>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger
                         value="conditions"
@@ -169,6 +197,11 @@ export function TakeoffPanel({
                     >
                         <Settings className="h-3 w-3" />
                         Conditions
+                        {conditions.length > 0 && (
+                            <span className="ml-0.5 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-muted-foreground/15 px-1 text-[9px] font-semibold tabular-nums">
+                                {conditions.length}
+                            </span>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger
                         value="budget"
@@ -182,7 +215,7 @@ export function TakeoffPanel({
                 {/* ===== TAKEOFF TAB ===== */}
                 <TabsContent value="takeoff" className="mt-0 flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
                     <ScrollArea className="flex-1">
-                        <div className="space-y-0">
+                        <div ref={takeoffScrollRef} className="space-y-0">
                             {/* Scale - compact inline bar */}
                             <div className="border-b px-2 py-1.5">
                                 <div className="flex items-center gap-1.5">
@@ -263,6 +296,35 @@ export function TakeoffPanel({
                                 </div>
                             )}
 
+                            {/* Empty state when no measurements */}
+                            {measurements.length === 0 && (
+                                <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+                                        <Ruler className="h-5 w-5 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-medium text-muted-foreground">No measurements yet</p>
+                                        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                            {!hasCalibration
+                                                ? 'Set the scale first, then select a condition to start measuring.'
+                                                : activeCondition
+                                                    ? 'Click on the drawing to start placing points.'
+                                                    : 'Select a condition from the Conditions tab, then click to measure.'}
+                                        </p>
+                                    </div>
+                                    {!hasCalibration && (
+                                        <div className="mt-1 flex gap-1">
+                                            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => onOpenCalibrationDialog('manual')}>
+                                                <PenLine className="mr-1 h-2.5 w-2.5" /> Draw Scale
+                                            </Button>
+                                            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => onOpenCalibrationDialog('preset')}>
+                                                <Scale className="mr-1 h-2.5 w-2.5" /> Preset
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Measurements table */}
                             {measurements.length > 0 && (
                                 <div className="border-b">
@@ -305,7 +367,7 @@ export function TakeoffPanel({
                                                     <span className="text-[9px] text-muted-foreground">{catCount}</span>
                                                     {catCost > 0 && (
                                                         <span className="ml-1 text-[9px] font-medium text-emerald-600 dark:text-emerald-400">
-                                                            ${catCost.toFixed(0)}
+                                                            ${fmtNum(catCost, 0)}
                                                         </span>
                                                     )}
                                                 </CollapsibleTrigger>
@@ -320,57 +382,91 @@ export function TakeoffPanel({
 
                                                         return (
                                                             <div key={m.id}>
-                                                                {/* Parent measurement row */}
-                                                                <div
-                                                                    onClick={() => onMeasurementSelect(isSelected ? null : m.id)}
-                                                                    className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/50 px-2 py-[3px] transition-colors ${
-                                                                        isSelected ? 'bg-primary/8' : 'hover:bg-muted/30'
-                                                                    }`}
-                                                                >
-                                                                    <div
-                                                                        className="h-2.5 w-2.5 rounded-[2px]"
-                                                                        style={{ backgroundColor: m.color }}
-                                                                    />
-                                                                    <div className="flex min-w-0 items-center gap-1">
-                                                                        {m.type === 'linear' ? (
-                                                                            <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                        ) : m.type === 'count' ? (
-                                                                            <Hash className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                        ) : (
-                                                                            <Box className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                                                        )}
-                                                                        <span className="truncate text-[11px]">{m.name}</span>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        {m.computed_value != null && (
-                                                                            <span className="font-mono text-[10px] tabular-nums">
-                                                                                {m.type === 'count'
-                                                                                    ? `${Math.round(m.computed_value)} ea`
-                                                                                    : `${m.computed_value.toFixed(2)}`}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex gap-0 opacity-0 group-hover:opacity-100">
-                                                                        <button
-                                                                            className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                                                                            onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+                                                                {/* Parent measurement row with context menu */}
+                                                                <ContextMenu>
+                                                                    <ContextMenuTrigger asChild>
+                                                                        <div
+                                                                            data-measurement-id={m.id}
+                                                                            onClick={() => onMeasurementSelect(isSelected ? null : m.id)}
+                                                                            onMouseEnter={() => onMeasurementHover?.(m.id)}
+                                                                            onMouseLeave={() => onMeasurementHover?.(null)}
+                                                                            className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/50 px-2 py-[3px] transition-colors ${
+                                                                                isSelected ? 'bg-primary/8' : 'hover:bg-muted/30'
+                                                                            }`}
                                                                         >
-                                                                            <Pencil className="h-2.5 w-2.5" />
-                                                                        </button>
-                                                                        <button
-                                                                            className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
-                                                                            onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
-                                                                        >
-                                                                            <Trash2 className="h-2.5 w-2.5" />
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
+                                                                            <div
+                                                                                className="h-2.5 w-2.5 rounded-[2px]"
+                                                                                style={{ backgroundColor: m.color }}
+                                                                            />
+                                                                            <div className="flex min-w-0 items-center gap-1">
+                                                                                {m.type === 'linear' ? (
+                                                                                    <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                                ) : m.type === 'count' ? (
+                                                                                    <Hash className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                                ) : (
+                                                                                    <Box className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                                                                )}
+                                                                                <span className="truncate text-[11px]">{m.name}</span>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                {m.computed_value != null && (
+                                                                                    <span className="font-mono text-[10px] tabular-nums">
+                                                                                        {m.type === 'count'
+                                                                                            ? `${fmtNum(m.computed_value, 0)} ea`
+                                                                                            : fmtNum(m.computed_value)}
+                                                                                        {m.type !== 'count' && m.unit && (
+                                                                                            <span className="ml-0.5 text-[9px] text-muted-foreground">{m.unit}</span>
+                                                                                        )}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex gap-0 opacity-0 group-hover:opacity-100">
+                                                                                <button
+                                                                                    className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                                                                                    onClick={(e) => { e.stopPropagation(); onMeasurementEdit(m); }}
+                                                                                >
+                                                                                    <Pencil className="h-2.5 w-2.5" />
+                                                                                </button>
+                                                                                <button
+                                                                                    className="rounded-sm p-0.5 text-muted-foreground hover:text-red-600"
+                                                                                    onClick={(e) => { e.stopPropagation(); onMeasurementDelete(m); }}
+                                                                                >
+                                                                                    <Trash2 className="h-2.5 w-2.5" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </ContextMenuTrigger>
+                                                                    <ContextMenuContent className="w-40">
+                                                                        <ContextMenuItem className="text-xs gap-2" onClick={() => onMeasurementSelect(m.id)}>
+                                                                            <Eye className="h-3.5 w-3.5" />
+                                                                            Select
+                                                                        </ContextMenuItem>
+                                                                        <ContextMenuItem className="text-xs gap-2" onClick={() => onMeasurementEdit(m)}>
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                            Edit
+                                                                        </ContextMenuItem>
+                                                                        {onAddDeduction && (m.type === 'area' || m.type === 'linear') && !m.parent_measurement_id && (
+                                                                            <ContextMenuItem className="text-xs gap-2" onClick={() => onAddDeduction(m.id)}>
+                                                                                <Minus className="h-3.5 w-3.5" />
+                                                                                Add Deduction
+                                                                            </ContextMenuItem>
+                                                                        )}
+                                                                        <ContextMenuSeparator />
+                                                                        <ContextMenuItem className="text-xs gap-2" variant="destructive" onClick={() => onMeasurementDelete(m)}>
+                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                            Delete
+                                                                        </ContextMenuItem>
+                                                                    </ContextMenuContent>
+                                                                </ContextMenu>
 
                                                                 {/* Deductions under this area measurement */}
                                                                 {deductions.map(d => (
                                                                     <div
                                                                         key={d.id}
+                                                                        data-measurement-id={d.id}
                                                                         onClick={() => onMeasurementSelect(selectedMeasurementId === d.id ? null : d.id)}
+                                                                        onMouseEnter={() => onMeasurementHover?.(d.id)}
+                                                                        onMouseLeave={() => onMeasurementHover?.(null)}
                                                                         className={`group grid cursor-pointer grid-cols-[14px_1fr_70px_24px] items-center gap-1 border-b border-border/30 py-[2px] pl-6 pr-2 transition-colors ${
                                                                             selectedMeasurementId === d.id ? 'bg-red-500/5' : 'hover:bg-muted/20'
                                                                         }`}
@@ -380,7 +476,7 @@ export function TakeoffPanel({
                                                                         <div className="text-right">
                                                                             {d.computed_value != null && (
                                                                                 <span className="font-mono text-[9px] tabular-nums text-red-500">
-                                                                                    -{d.computed_value.toFixed(2)}
+                                                                                    -{fmtNum(d.computed_value)}
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -399,7 +495,7 @@ export function TakeoffPanel({
                                                                 {isSelected && m.type === 'area' && m.perimeter_value != null && !m.parent_measurement_id && (
                                                                     <div className="flex items-center gap-1 border-b border-border/30 py-0.5 pl-6 pr-2">
                                                                         <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
-                                                                            Perimeter: {m.perimeter_value.toFixed(2)} {m.unit?.replace('sq ', '') || ''}
+                                                                            Perimeter: {fmtNum(m.perimeter_value)} {m.unit?.replace('sq ', '') || ''}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -409,7 +505,7 @@ export function TakeoffPanel({
                                                                     <div className="flex items-center gap-1 border-b border-border/30 py-1 pl-6 pr-2">
                                                                         {netValue != null && (
                                                                             <span className="font-mono text-[9px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                                                Net: {netValue.toFixed(2)} {m.unit}
+                                                                                Net: {fmtNum(netValue)} {m.unit}
                                                                             </span>
                                                                         )}
                                                                         <div className="flex-1" />
@@ -443,28 +539,28 @@ export function TakeoffPanel({
                                 {totalLinear > 0 && (
                                     <span className="text-[10px]">
                                         <Pencil className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
-                                        <span className="font-mono font-semibold tabular-nums">{totalLinear.toFixed(2)}</span>
+                                        <span className="font-mono font-semibold tabular-nums">{fmtNum(totalLinear)}</span>
                                         <span className="ml-0.5 text-muted-foreground">{linearUnit}</span>
                                     </span>
                                 )}
                                 {totalArea > 0 && (
                                     <span className="text-[10px]">
                                         <Box className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
-                                        <span className="font-mono font-semibold tabular-nums">{totalArea.toFixed(2)}</span>
+                                        <span className="font-mono font-semibold tabular-nums">{fmtNum(totalArea)}</span>
                                         <span className="ml-0.5 text-muted-foreground">{areaUnit}</span>
                                     </span>
                                 )}
                                 {totalCount > 0 && (
                                     <span className="text-[10px]">
                                         <Hash className="mr-0.5 inline h-2.5 w-2.5 text-muted-foreground" />
-                                        <span className="font-mono font-semibold tabular-nums">{Math.round(totalCount)}</span>
+                                        <span className="font-mono font-semibold tabular-nums">{fmtNum(totalCount, 0)}</span>
                                         <span className="ml-0.5 text-muted-foreground">ea</span>
                                     </span>
                                 )}
                                 {totalCost > 0 && (
                                     <span className="ml-auto text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                                         <DollarSign className="mr-0.5 inline h-2.5 w-2.5" />
-                                        <span className="font-mono tabular-nums">{totalCost.toFixed(2)}</span>
+                                        <span className="font-mono tabular-nums">{fmtNum(totalCost)}</span>
                                     </span>
                                 )}
                             </div>
@@ -495,9 +591,19 @@ export function TakeoffPanel({
                             </div>
 
                             {conditions.length === 0 ? (
-                                <div className="px-2 py-6 text-center">
-                                    <Settings className="mx-auto mb-1 h-5 w-5 text-muted-foreground/30" />
-                                    <p className="text-[11px] text-muted-foreground">No conditions yet.</p>
+                                <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+                                        <Settings className="h-5 w-5 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-medium text-muted-foreground">No conditions defined</p>
+                                        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                            Conditions define what you're measuring (e.g. Walls, Ceilings, Flooring).
+                                        </p>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="mt-1 h-6 gap-1 text-[10px]" onClick={onOpenConditionManager}>
+                                        <Plus className="h-2.5 w-2.5" /> Create First Condition
+                                    </Button>
                                 </div>
                             ) : (
                                 conditionTypeNames.map((typeName) => {
@@ -555,6 +661,11 @@ export function TakeoffPanel({
                                                                 {measureCount > 0 && <span>{measureCount} meas.</span>}
                                                             </div>
                                                         </div>
+                                                        {conditionShortcuts.has(c.id) && (
+                                                            <kbd className="shrink-0 rounded-[2px] border bg-muted px-1 py-px font-mono text-[9px] text-muted-foreground">
+                                                                {conditionShortcuts.get(c.id)}
+                                                            </kbd>
+                                                        )}
                                                         {isActive ? (
                                                             <span className="shrink-0 rounded-[2px] bg-primary px-1 py-px text-[9px] font-bold text-primary-foreground">
                                                                 ACTIVE
@@ -578,9 +689,16 @@ export function TakeoffPanel({
                     <ScrollArea className="flex-1">
                         <div className="space-y-0">
                             {conditions.length === 0 ? (
-                                <div className="px-2 py-6 text-center">
-                                    <Calculator className="mx-auto mb-1 h-5 w-5 text-muted-foreground/30" />
-                                    <p className="text-[11px] text-muted-foreground">No conditions yet.</p>
+                                <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+                                        <Calculator className="h-5 w-5 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-medium text-muted-foreground">No budget data</p>
+                                        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                            Create conditions with materials and labour rates to see cost breakdowns.
+                                        </p>
+                                    </div>
                                 </div>
                             ) : (
                                 conditions.map((c) => {
@@ -635,15 +753,15 @@ export function TakeoffPanel({
                                             <div className="grid grid-cols-3 gap-px bg-border px-0">
                                                 <div className="bg-background px-2 py-1 text-center">
                                                     <div className="text-[8px] font-medium uppercase text-muted-foreground">Mat</div>
-                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${materialRatePerUnit.toFixed(2)}</div>
+                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${fmtNum(materialRatePerUnit)}</div>
                                                 </div>
                                                 <div className="bg-background px-2 py-1 text-center">
                                                     <div className="text-[8px] font-medium uppercase text-muted-foreground">Lab</div>
-                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${labourRatePerUnit.toFixed(2)}</div>
+                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${fmtNum(labourRatePerUnit)}</div>
                                                 </div>
                                                 <div className="bg-primary/5 px-2 py-1 text-center">
                                                     <div className="text-[8px] font-medium uppercase text-muted-foreground">Rate</div>
-                                                    <div className="font-mono text-[10px] font-bold tabular-nums">${totalRatePerUnit.toFixed(2)}</div>
+                                                    <div className="font-mono text-[10px] font-bold tabular-nums">${fmtNum(totalRatePerUnit)}</div>
                                                 </div>
                                             </div>
 
@@ -662,16 +780,16 @@ export function TakeoffPanel({
                                                 </div>
                                                 <div className="flex items-center justify-between py-px">
                                                     <span className="text-[10px] text-muted-foreground">Mat. Cost</span>
-                                                    <span className="font-mono text-[10px] tabular-nums">${totalMaterialCost.toFixed(2)}</span>
+                                                    <span className="font-mono text-[10px] tabular-nums">${fmtNum(totalMaterialCost)}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between py-px">
                                                     <span className="text-[10px] text-muted-foreground">Lab. Cost</span>
-                                                    <span className="font-mono text-[10px] tabular-nums">${totalLabourCost.toFixed(2)}</span>
+                                                    <span className="font-mono text-[10px] tabular-nums">${fmtNum(totalLabourCost)}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between border-t py-px">
                                                     <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Total</span>
                                                     <span className="font-mono text-[10px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                        ${totalCondCost.toFixed(2)}
+                                                        ${fmtNum(totalCondCost)}
                                                     </span>
                                                 </div>
                                             </div>

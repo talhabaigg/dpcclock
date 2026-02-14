@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type MapControls } from '@/components/leaflet-drawing-viewer';
-import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, RotateCcw, Ruler, TableProperties } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, Ruler, TableProperties } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
@@ -51,6 +51,7 @@ interface DrawingWorkspaceLayoutProps {
     toolbar?: ReactNode;
     mapControls?: MapControls | null;
     children: ReactNode;
+    statusBar?: ReactNode;
 }
 
 type ProjectDrawing = {
@@ -60,7 +61,7 @@ type ProjectDrawing = {
     has_takeoff: boolean;
 };
 
-export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, mapControls, children }: DrawingWorkspaceLayoutProps) {
+export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, mapControls, children, statusBar }: DrawingWorkspaceLayoutProps) {
     const { projectDrawings } = usePage<{ projectDrawings?: ProjectDrawing[] }>().props;
     const drawings = projectDrawings ?? [];
     const [showHelpDialog, setShowHelpDialog] = useState(false);
@@ -104,8 +105,8 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
             <Head title={displayName} />
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
-                {/* Menubar */}
-                <div className="bg-background flex shrink-0 items-center border-b px-1 py-0">
+                {/* Unified Toolbar */}
+                <div className="bg-background flex shrink-0 items-center gap-1 border-b px-1 py-0.5">
                     <Menubar className="h-auto rounded-none border-none bg-transparent p-0 shadow-none">
                         <MenubarMenu>
                             <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">File</MenubarTrigger>
@@ -168,10 +169,7 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                             </MenubarContent>
                         </MenubarMenu>
                     </Menubar>
-                </div>
-
-                {/* Toolbar — compact industrial strip */}
-                <div className="bg-background flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
+                    <div className="bg-border h-4 w-px" />
                     {/* Back */}
                     <Link href={`/projects/${projectId}/drawings`}>
                         <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0">
@@ -260,15 +258,6 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                 >
                                     <Maximize className="h-3 w-3" />
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 rounded-sm p-0"
-                                    onClick={mapControls.fitToScreen}
-                                    title="Reset view"
-                                >
-                                    <RotateCcw className="h-3 w-3" />
-                                </Button>
                             </div>
                             <div className="bg-border h-4 w-px" />
                         </>
@@ -348,6 +337,13 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
 
                 {/* Page-specific content (toolbar, viewer, panels, dialogs) */}
                 {children}
+
+                {/* Status Bar */}
+                {statusBar && (
+                    <div className="flex h-[22px] shrink-0 items-center gap-4 border-t bg-muted/30 px-3 text-[10px] text-muted-foreground">
+                        {statusBar}
+                    </div>
+                )}
             </div>
 
             {/* Help / Controls Dialog */}
@@ -372,6 +368,8 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                 <span>Rectangle measurement</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">C</kbd>
                                 <span>Count measurement</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">T</kbd>
+                                <span>Toggle takeoff panel</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Esc</kbd>
                                 <span>Cancel / return to pan</span>
                             </div>

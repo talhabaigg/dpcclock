@@ -3,9 +3,10 @@ import type { CalibrationData, MeasurementData } from '@/components/measurement-
 import { getSegmentColor } from '@/components/measurement-layer';
 import { ProductionPanel, getPercentColor, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { Calendar, ChevronRight, Hand, MousePointer2, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -138,7 +139,7 @@ function PercentDropdown({
                 </button>
             ))}
             <div className="border-t border-border px-1.5 py-1 flex gap-1">
-                <input
+                <Input
                     type="number"
                     min={0}
                     max={100}
@@ -146,7 +147,7 @@ function PercentDropdown({
                     value={customValue}
                     onChange={(e) => setCustomValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
-                    className="h-5 w-full border border-border bg-background px-1 text-[10px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="h-5 px-1 text-[10px]"
                 />
             </div>
         </div>
@@ -379,16 +380,16 @@ export default function DrawingProduction() {
             setSegmentStatuses(prev => ({ ...prev, [segKey]: percent }));
 
             try {
-                const response = await axios.post(`/drawings/${drawing.id}/segment-status`, {
+                const data = await api.post<{ statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }>(`/drawings/${drawing.id}/segment-status`, {
                     measurement_id: measurementId,
                     labour_cost_code_id: selectedLccId,
                     segment_index: segmentIndex,
                     percent_complete: percent,
                     work_date: workDate,
                 });
-                if (response.data.statuses) setStatuses(response.data.statuses);
-                if (response.data.segmentStatuses) setSegmentStatuses(response.data.segmentStatuses);
-                if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+                if (data.statuses) setStatuses(data.statuses);
+                if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
+                if (data.lccSummary) setLccSummary(data.lccSummary);
             } catch {
                 setSegmentStatuses(prev => {
                     const next = { ...prev };
@@ -403,13 +404,13 @@ export default function DrawingProduction() {
             setStatuses(prev => ({ ...prev, [key]: percent }));
 
             try {
-                const response = await axios.post(`/drawings/${drawing.id}/measurement-status`, {
+                const data = await api.post<{ lccSummary?: LccSummary[] }>(`/drawings/${drawing.id}/measurement-status`, {
                     measurement_id: measurementId,
                     labour_cost_code_id: selectedLccId,
                     percent_complete: percent,
                     work_date: workDate,
                 });
-                if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+                if (data.lccSummary) setLccSummary(data.lccSummary);
             } catch {
                 setStatuses(prev => {
                     const next = { ...prev };
@@ -458,15 +459,15 @@ export default function DrawingProduction() {
         setSelectedItems(new Set());
 
         try {
-            const response = await axios.post(`/drawings/${drawing.id}/segment-status-bulk`, {
+            const data = await api.post<{ statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }>(`/drawings/${drawing.id}/segment-status-bulk`, {
                 items,
                 labour_cost_code_id: selectedLccId,
                 percent_complete: percent,
                 work_date: workDate,
             });
-            if (response.data.statuses) setStatuses(response.data.statuses);
-            if (response.data.segmentStatuses) setSegmentStatuses(response.data.segmentStatuses);
-            if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+            if (data.statuses) setStatuses(data.statuses);
+            if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
+            if (data.lccSummary) setLccSummary(data.lccSummary);
         } catch {
             toast.error('Failed to update statuses');
         }
@@ -558,12 +559,12 @@ export default function DrawingProduction() {
         setWorkDate(newDate);
         setLoadingDate(true);
         try {
-            const response = await axios.get(`/drawings/${drawing.id}/production-statuses`, {
-                params: { work_date: newDate },
-            });
-            setStatuses(response.data.statuses || {});
-            setSegmentStatuses(response.data.segmentStatuses || {});
-            setLccSummary(response.data.lccSummary || []);
+            const data = await api.get<{ statuses: Record<string, number>; segmentStatuses: Record<string, number>; lccSummary: LccSummary[] }>(
+                `/drawings/${drawing.id}/production-statuses?work_date=${encodeURIComponent(newDate)}`,
+            );
+            setStatuses(data.statuses || {});
+            setSegmentStatuses(data.segmentStatuses || {});
+            setLccSummary(data.lccSummary || []);
         } catch {
             toast.error('Failed to load statuses for date');
         } finally {
@@ -598,6 +599,30 @@ export default function DrawingProduction() {
             project={project}
             activeTab={activeTab}
             mapControls={mapControls}
+            statusBar={(() => {
+                const totalBudget = lccSummary.reduce((s, c) => s + c.budget_hours, 0);
+                const totalEarned = lccSummary.reduce((s, c) => s + c.earned_hours, 0);
+                const totalQty = lccSummary.reduce((s, c) => s + c.total_qty, 0);
+                const overallPct = totalQty > 0
+                    ? lccSummary.reduce((s, c) => s + c.total_qty * c.weighted_percent, 0) / totalQty
+                    : 0;
+                const itemCount = lccSummary.reduce((s, c) => s + c.measurement_count, 0);
+                return (
+                    <>
+                        <span>Work Date: <span className="font-mono font-medium tabular-nums">{workDate}</span></span>
+                        <div className="bg-border h-3 w-px" />
+                        <span>Budget: <span className="font-mono font-medium tabular-nums">{totalBudget.toFixed(1)}h</span></span>
+                        <div className="bg-border h-3 w-px" />
+                        <span>Earned: <span className="font-mono font-medium tabular-nums">{totalEarned.toFixed(1)}h</span></span>
+                        <div className="bg-border h-3 w-px" />
+                        <span className={overallPct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}>
+                            Overall: <span className="font-mono tabular-nums">{Math.round(overallPct)}%</span>
+                        </span>
+                        <div className="flex-1" />
+                        <span>{itemCount} item{itemCount !== 1 ? 's' : ''} across {lccSummary.length} LCC{lccSummary.length !== 1 ? 's' : ''}</span>
+                    </>
+                );
+            })()}
             toolbar={
                 <>
                     {/* Pan / Selector mode toggle */}
@@ -630,11 +655,11 @@ export default function DrawingProduction() {
                     {/* Work Date Selector */}
                     <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <input
+                        <Input
                             type="date"
                             value={workDate}
                             onChange={(e) => handleWorkDateChange(e.target.value)}
-                            className="h-6 w-[130px] rounded-sm border border-border bg-background px-1.5 text-[11px]"
+                            className="h-6 w-[130px] px-1.5 text-[11px]"
                         />
                         {loadingDate && (
                             <div className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
