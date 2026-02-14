@@ -10,6 +10,7 @@ use App\Models\DrawingAlignment;
 use App\Models\DrawingMeasurement;
 use App\Models\DrawingObservation;
 use App\Models\Location;
+use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
 use App\Models\Variation;
 use App\Services\DrawingComparisonService;
@@ -228,27 +229,27 @@ class DrawingController extends Controller
     /**
      * Production control workspace — track progress on a drawing.
      */
-    public function production(Drawing $drawing): Response
+    public function production(Request $request, Drawing $drawing): Response
     {
         [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+
+        $workDate = $request->query('work_date', now()->toDateString());
 
         // Load takeoff measurements with condition's labour cost codes
         $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
             ->where('scope', 'takeoff')
-            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
             ->orderBy('created_at')
             ->get();
 
         // Load calibration
         $calibration = $drawing->scaleCalibration;
 
-        // Build statuses lookup: "measId-lccId" => percent
-        $statuses = [];
-        foreach ($measurements as $m) {
-            foreach ($m->statuses as $s) {
-                $statuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
-            }
-        }
+        // Build statuses lookup with carry-forward for the selected work date
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+
+        // Build segment statuses for segmented measurements (linear with 3+ points)
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
 
         // Build LCC summary from conditions used on this drawing
         $lccSummary = $this->buildLccSummary($measurements, $statuses);
@@ -262,7 +263,9 @@ class DrawingController extends Controller
             'measurements' => $measurements,
             'calibration' => $calibration,
             'statuses' => $statuses,
+            'segmentStatuses' => $segmentStatuses,
             'lccSummary' => array_values($lccSummary),
+            'workDate' => $workDate,
         ]);
     }
 
@@ -275,7 +278,10 @@ class DrawingController extends Controller
             'measurement_id' => 'required|integer|exists:drawing_measurements,id',
             'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
             'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
         ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
 
         // Verify measurement belongs to this drawing
         $measurement = DrawingMeasurement::where('id', $validated['measurement_id'])
@@ -286,6 +292,7 @@ class DrawingController extends Controller
             [
                 'drawing_measurement_id' => $measurement->id,
                 'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                'work_date' => $workDate,
             ],
             [
                 'percent_complete' => $validated['percent_complete'],
@@ -293,18 +300,16 @@ class DrawingController extends Controller
             ]
         );
 
-        // Rebuild summary for response
+        // Rebuild summary for response using date-scoped statuses
         $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
             ->where('scope', 'takeoff')
-            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
             ->get();
 
-        $allStatuses = [];
-        foreach ($measurements as $m) {
-            foreach ($m->statuses as $s) {
-                $allStatuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
-            }
-        }
+        $allStatuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+
+        // Sync aggregated percent_complete to budget_hours_entries
+        $this->syncProductionToBudget($drawing, $workDate);
 
         return response()->json([
             'success' => true,
@@ -323,7 +328,10 @@ class DrawingController extends Controller
             'measurement_ids.*' => 'integer|exists:drawing_measurements,id',
             'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
             'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
         ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
 
         // Verify all measurements belong to this drawing
         $measurements = DrawingMeasurement::whereIn('id', $validated['measurement_ids'])
@@ -335,6 +343,7 @@ class DrawingController extends Controller
                 [
                     'drawing_measurement_id' => $measurement->id,
                     'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                    'work_date' => $workDate,
                 ],
                 [
                     'percent_complete' => $validated['percent_complete'],
@@ -343,23 +352,44 @@ class DrawingController extends Controller
             );
         }
 
-        // Rebuild summary
+        // Rebuild summary using date-scoped statuses
         $allMeasurements = DrawingMeasurement::where('drawing_id', $drawing->id)
             ->where('scope', 'takeoff')
-            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses'])
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
             ->get();
 
-        $allStatuses = [];
-        foreach ($allMeasurements as $m) {
-            foreach ($m->statuses as $s) {
-                $allStatuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
-            }
-        }
+        $allStatuses = $this->buildStatusesForDate($allMeasurements->pluck('id'), $workDate);
+
+        // Sync aggregated percent_complete to budget_hours_entries
+        $this->syncProductionToBudget($drawing, $workDate);
 
         return response()->json([
             'success' => true,
             'updated_count' => $measurements->count(),
             'lccSummary' => array_values($this->buildLccSummary($allMeasurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Get production statuses for a specific work date (AJAX date-change).
+     */
+    public function getProductionStatuses(Request $request, Drawing $drawing): JsonResponse
+    {
+        $workDate = $request->query('work_date', now()->toDateString());
+
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+        $lccSummary = $this->buildLccSummary($measurements, $statuses);
+
+        return response()->json([
+            'statuses' => $statuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($lccSummary),
         ]);
     }
 
@@ -429,6 +459,384 @@ class DrawingController extends Controller
     }
 
     /**
+     * Build statuses map for a set of measurements as of a specific work date.
+     * Uses carry-forward: for each (measurement, LCC), picks the most recent record where work_date <= $workDate.
+     * Falls back to undated (NULL work_date) records from before the migration.
+     *
+     * @return array<string, int> "measurementId-lccId" => percent_complete
+     */
+    private function buildStatusesForDate($measurementIds, string $workDate): array
+    {
+        if ($measurementIds->isEmpty()) {
+            return [];
+        }
+
+        $allRecords = MeasurementStatus::whereIn('drawing_measurement_id', $measurementIds)
+            ->where(function ($q) use ($workDate) {
+                $q->whereNull('work_date')
+                  ->orWhere('work_date', '<=', $workDate);
+            })
+            ->get();
+
+        $statuses = [];
+        foreach ($allRecords as $record) {
+            $key = $record->drawing_measurement_id.'-'.$record->labour_cost_code_id;
+            $recordDate = $record->work_date?->toDateString();
+
+            if (! isset($statuses[$key])) {
+                $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+            } else {
+                $existingDate = $statuses[$key]['date'];
+                // Prefer dated records over NULL; among dated, prefer the most recent
+                if ($existingDate === null && $recordDate !== null) {
+                    $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+                } elseif ($recordDate !== null && $existingDate !== null && $recordDate > $existingDate) {
+                    $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+                }
+            }
+        }
+
+        return array_map(fn ($s) => $s['percent'], $statuses);
+    }
+
+    /**
+     * Build segment statuses for all segmented measurements (linear with 3+ points) as of a work date.
+     * Uses carry-forward: picks most recent record where work_date <= $workDate.
+     *
+     * @return array<string, int> "measurementId-segmentIndex" => percent_complete
+     */
+    private function buildAllSegmentStatusesForDate($measurements, string $workDate): array
+    {
+        // Find measurements that qualify for segment statusing (linear, 3+ points = 2+ segments)
+        $segmentedIds = $measurements->filter(function ($m) {
+            return $m->type === 'linear' && is_array($m->points) && count($m->points) >= 3;
+        })->pluck('id');
+
+        if ($segmentedIds->isEmpty()) {
+            return [];
+        }
+
+        $allRecords = MeasurementSegmentStatus::whereIn('drawing_measurement_id', $segmentedIds)
+            ->where(function ($q) use ($workDate) {
+                $q->whereNull('work_date')
+                  ->orWhere('work_date', '<=', $workDate);
+            })
+            ->get();
+
+        $statuses = [];
+        foreach ($allRecords as $record) {
+            $key = $record->drawing_measurement_id.'-'.$record->segment_index;
+            $recordDate = $record->work_date?->toDateString();
+
+            if (! isset($statuses[$key])) {
+                $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+            } else {
+                $existingDate = $statuses[$key]['date'];
+                if ($existingDate === null && $recordDate !== null) {
+                    $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+                } elseif ($recordDate !== null && $existingDate !== null && $recordDate > $existingDate) {
+                    $statuses[$key] = ['percent' => $record->percent_complete, 'date' => $recordDate];
+                }
+            }
+        }
+
+        return array_map(fn ($s) => $s['percent'], $statuses);
+    }
+
+    /**
+     * Update percent complete for a single segment of a measurement.
+     */
+    public function updateSegmentStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'segment_index' => 'required|integer|min:0',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+
+        $measurement = DrawingMeasurement::where('id', $validated['measurement_id'])
+            ->where('drawing_id', $drawing->id)
+            ->firstOrFail();
+
+        // Validate segment index is within bounds
+        $points = $measurement->points ?? [];
+        $maxIndex = count($points) - 2; // N points = N-1 segments (0-indexed)
+        if ($validated['segment_index'] > $maxIndex) {
+            return response()->json(['error' => 'Invalid segment index'], 422);
+        }
+
+        MeasurementSegmentStatus::updateOrCreate(
+            [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
+                'segment_index' => $validated['segment_index'],
+                'work_date' => $workDate,
+            ],
+            [
+                'percent_complete' => $validated['percent_complete'],
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        // Sync segment statuses to measurement-level status (weighted average)
+        $this->syncSegmentToMeasurementStatus($measurement, $validated['labour_cost_code_id'], $workDate);
+
+        // Rebuild everything for response
+        $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'statuses' => $allStatuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($this->buildLccSummary($measurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Bulk update percent complete for multiple segments/measurements.
+     */
+    public function bulkUpdateSegmentStatus(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.measurement_id' => 'required|integer|exists:drawing_measurements,id',
+            'items.*.segment_index' => 'nullable|integer|min:0',
+            'labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'percent_complete' => 'required|integer|min:0|max:100',
+            'work_date' => 'nullable|date',
+        ]);
+
+        $workDate = $validated['work_date'] ?? now()->toDateString();
+        $lccId = $validated['labour_cost_code_id'];
+        $percent = $validated['percent_complete'];
+
+        // Verify all measurements belong to this drawing
+        $measurementIds = collect($validated['items'])->pluck('measurement_id')->unique();
+        $measurements = DrawingMeasurement::whereIn('id', $measurementIds)
+            ->where('drawing_id', $drawing->id)
+            ->get()
+            ->keyBy('id');
+
+        $affectedMeasurementIds = [];
+
+        foreach ($validated['items'] as $item) {
+            $measurement = $measurements[$item['measurement_id']] ?? null;
+            if (! $measurement) {
+                continue;
+            }
+
+            if (isset($item['segment_index']) && $item['segment_index'] !== null) {
+                // Segment-level update
+                MeasurementSegmentStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $measurement->id,
+                        'labour_cost_code_id' => $lccId,
+                        'segment_index' => $item['segment_index'],
+                        'work_date' => $workDate,
+                    ],
+                    [
+                        'percent_complete' => $percent,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+                $affectedMeasurementIds[$measurement->id] = true;
+            } else {
+                // Measurement-level update
+                MeasurementStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $measurement->id,
+                        'labour_cost_code_id' => $lccId,
+                        'work_date' => $workDate,
+                    ],
+                    [
+                        'percent_complete' => $percent,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+            }
+        }
+
+        // Sync segment → measurement-level for affected segmented measurements
+        foreach (array_keys($affectedMeasurementIds) as $measId) {
+            $m = $measurements[$measId] ?? null;
+            if ($m) {
+                $this->syncSegmentToMeasurementStatus($m, $lccId, $workDate);
+            }
+        }
+
+        // Rebuild everything for response
+        $allMeasurements = DrawingMeasurement::where('drawing_id', $drawing->id)
+            ->where('scope', 'takeoff')
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $allStatuses = $this->buildStatusesForDate($allMeasurements->pluck('id'), $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($allMeasurements, $workDate);
+
+        $this->syncProductionToBudget($drawing, $workDate);
+
+        return response()->json([
+            'success' => true,
+            'statuses' => $allStatuses,
+            'segmentStatuses' => $segmentStatuses,
+            'lccSummary' => array_values($this->buildLccSummary($allMeasurements, $allStatuses)),
+        ]);
+    }
+
+    /**
+     * Sync segment-level statuses to measurement-level status via weighted average.
+     * Segment lengths are computed from normalized points (ratio-based, no calibration needed).
+     */
+    private function syncSegmentToMeasurementStatus(DrawingMeasurement $measurement, int $lccId, string $workDate): void
+    {
+        $points = $measurement->points ?? [];
+        $numSegments = count($points) - 1;
+        if ($numSegments < 2) {
+            return; // Not segmented, nothing to sync
+        }
+
+        // Compute segment lengths from normalized points
+        $segmentLengths = [];
+        $totalLength = 0;
+        for ($i = 0; $i < $numSegments; $i++) {
+            $dx = ($points[$i + 1]['x'] ?? 0) - ($points[$i]['x'] ?? 0);
+            $dy = ($points[$i + 1]['y'] ?? 0) - ($points[$i]['y'] ?? 0);
+            $len = sqrt($dx * $dx + $dy * $dy);
+            $segmentLengths[$i] = $len;
+            $totalLength += $len;
+        }
+
+        if ($totalLength <= 0) {
+            return;
+        }
+
+        // Build segment statuses for this measurement+LCC with carry-forward
+        $segRecords = MeasurementSegmentStatus::where('drawing_measurement_id', $measurement->id)
+            ->where('labour_cost_code_id', $lccId)
+            ->where(function ($q) use ($workDate) {
+                $q->whereNull('work_date')
+                  ->orWhere('work_date', '<=', $workDate);
+            })
+            ->get();
+
+        $segStatuses = [];
+        foreach ($segRecords as $rec) {
+            $idx = $rec->segment_index;
+            $date = $rec->work_date?->toDateString();
+            if (! isset($segStatuses[$idx])) {
+                $segStatuses[$idx] = ['percent' => $rec->percent_complete, 'date' => $date];
+            } else {
+                $existing = $segStatuses[$idx]['date'];
+                if ($existing === null && $date !== null) {
+                    $segStatuses[$idx] = ['percent' => $rec->percent_complete, 'date' => $date];
+                } elseif ($date !== null && $existing !== null && $date > $existing) {
+                    $segStatuses[$idx] = ['percent' => $rec->percent_complete, 'date' => $date];
+                }
+            }
+        }
+
+        // Compute weighted average
+        $weightedSum = 0;
+        for ($i = 0; $i < $numSegments; $i++) {
+            $percent = $segStatuses[$i]['percent'] ?? 0;
+            $weightedSum += $percent * $segmentLengths[$i];
+        }
+        $avgPercent = (int) round($weightedSum / $totalLength);
+
+        // Write to measurement_statuses
+        MeasurementStatus::updateOrCreate(
+            [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $lccId,
+                'work_date' => $workDate,
+            ],
+            [
+                'percent_complete' => $avgPercent,
+                'updated_by' => auth()->id(),
+            ]
+        );
+    }
+
+    /**
+     * Sync aggregated production percent_complete to budget_hours_entries for a work date.
+     * Computes weighted avg percent per (bid_area, LCC) from all project measurements and writes to budget table.
+     */
+    private function syncProductionToBudget(Drawing $drawing, string $workDate): void
+    {
+        $projectDrawingIds = Drawing::where('project_id', $drawing->project_id)->pluck('id');
+
+        $measurements = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
+            ->with(['condition.conditionLabourCodes.labourCostCode'])
+            ->get();
+
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
+
+        // Aggregate percent_complete per (bid_area_id, lcc_id)
+        $agg = [];
+        foreach ($measurements as $measurement) {
+            if (! $measurement->condition || ! $measurement->condition->conditionLabourCodes) {
+                continue;
+            }
+
+            $qty = (float) ($measurement->computed_value ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $bidAreaId = $measurement->bid_area_id ?? 0;
+
+            foreach ($measurement->condition->conditionLabourCodes as $clc) {
+                $lcc = $clc->labourCostCode;
+                if (! $lcc) {
+                    continue;
+                }
+
+                $key = $bidAreaId.'-'.$lcc->id;
+                $percent = $statuses[$measurement->id.'-'.$lcc->id] ?? 0;
+
+                if (! isset($agg[$key])) {
+                    $agg[$key] = ['bid_area_id' => $bidAreaId ?: null, 'lcc_id' => $lcc->id, 'total_qty' => 0, 'weighted' => 0];
+                }
+
+                $agg[$key]['total_qty'] += $qty;
+                $agg[$key]['weighted'] += $qty * $percent;
+            }
+        }
+
+        // Write aggregated percent_complete to budget_hours_entries
+        foreach ($agg as $item) {
+            $percentComplete = $item['total_qty'] > 0
+                ? round($item['weighted'] / $item['total_qty'], 1)
+                : 0;
+
+            BudgetHoursEntry::updateOrCreate(
+                [
+                    'location_id' => $drawing->project_id,
+                    'bid_area_id' => $item['bid_area_id'],
+                    'labour_cost_code_id' => $item['lcc_id'],
+                    'work_date' => $workDate,
+                ],
+                [
+                    'percent_complete' => $percentComplete,
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
+    }
+
+    /**
      * Budget workspace — budget hours, earned hours, percent complete by area and LCC.
      */
     public function budget(Request $request, Drawing $drawing): Response
@@ -437,20 +845,15 @@ class DrawingController extends Controller
 
         $workDate = $request->query('work_date', now()->toDateString());
 
-        // Load ALL measurements across the project (all drawings) with conditions, LCCs, statuses
+        // Load ALL measurements across the project (all drawings) with conditions, LCCs
         $projectDrawingIds = Drawing::where('project_id', $drawing->project_id)->pluck('id');
         $measurements = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
-            ->with(['condition.conditionLabourCodes.labourCostCode', 'statuses', 'variation:id,co_number'])
+            ->with(['condition.conditionLabourCodes.labourCostCode', 'variation:id,co_number'])
             ->orderBy('created_at')
             ->get();
 
-        // Build statuses lookup
-        $statuses = [];
-        foreach ($measurements as $m) {
-            foreach ($m->statuses as $s) {
-                $statuses[$m->id.'-'.$s->labour_cost_code_id] = $s->percent_complete;
-            }
-        }
+        // Build statuses lookup using carry-forward for the work date
+        $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
 
         $budgetRows = $this->buildBudgetRows($measurements, $statuses);
 

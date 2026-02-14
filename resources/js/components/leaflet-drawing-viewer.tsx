@@ -58,6 +58,14 @@ type LeafletDrawingViewerProps = {
     onMeasurementClick?: (measurement: MeasurementData) => void;
     // Production labels: measurementId → percent_complete
     productionLabels?: Record<number, number>;
+    // Segment statusing
+    segmentStatuses?: Record<string, number>;
+    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number) => void;
+    selectedSegments?: Set<string>;
+    selectedMeasurementIds?: Set<number>;
+    // Box-select mode
+    boxSelectMode?: boolean;
+    onBoxSelectComplete?: (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => void;
     // Exposes zoom/fit controls to parent
     onMapReady?: (controls: MapControls) => void;
 };
@@ -284,6 +292,12 @@ export function LeafletDrawingViewer({
     onMeasurementComplete,
     onMeasurementClick,
     productionLabels,
+    segmentStatuses,
+    onSegmentClick,
+    selectedSegments,
+    selectedMeasurementIds,
+    boxSelectMode,
+    onBoxSelectComplete,
     onMapReady,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -433,6 +447,12 @@ export function LeafletDrawingViewer({
                     onMeasurementComplete={onMeasurementComplete}
                     onMeasurementClick={onMeasurementClick}
                     productionLabels={productionLabels}
+                    segmentStatuses={segmentStatuses}
+                    onSegmentClick={onSegmentClick}
+                    selectedSegments={selectedSegments}
+                    selectedMeasurementIds={selectedMeasurementIds}
+                    boxSelectMode={boxSelectMode}
+                    onBoxSelectComplete={onBoxSelectComplete}
                 />
             </MapContainer>
 

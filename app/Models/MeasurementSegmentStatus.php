@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class MeasurementStatus extends Model
+class MeasurementSegmentStatus extends Model
 {
     protected $fillable = [
         'drawing_measurement_id',
         'labour_cost_code_id',
+        'segment_index',
         'percent_complete',
         'work_date',
         'updated_by',
@@ -17,6 +18,7 @@ class MeasurementStatus extends Model
 
     protected $casts = [
         'percent_complete' => 'integer',
+        'segment_index' => 'integer',
         'work_date' => 'date',
     ];
 

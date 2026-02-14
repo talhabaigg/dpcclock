@@ -618,6 +618,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:drawings.view')->group(function () {
         Route::post('/drawings/{drawing}/measurement-status', [DrawingController::class, 'updateMeasurementStatus'])->name('drawings.measurement-status.update');
         Route::post('/drawings/{drawing}/measurement-status-bulk', [DrawingController::class, 'bulkUpdateMeasurementStatus'])->name('drawings.measurement-status.bulk');
+        Route::post('/drawings/{drawing}/segment-status', [DrawingController::class, 'updateSegmentStatus'])->name('drawings.segment-status.update');
+        Route::post('/drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])->name('drawings.segment-status.bulk');
+        Route::get('/drawings/{drawing}/production-statuses', [DrawingController::class, 'getProductionStatuses'])->name('drawings.production-statuses');
     });
 
     // Takeoff Conditions (scoped to Location/project)

@@ -87,4 +87,9 @@ class DrawingMeasurement extends Model
     {
         return $this->hasMany(MeasurementStatus::class, 'drawing_measurement_id');
     }
+
+    public function segmentStatuses(): HasMany
+    {
+        return $this->hasMany(MeasurementSegmentStatus::class, 'drawing_measurement_id');
+    }
 }

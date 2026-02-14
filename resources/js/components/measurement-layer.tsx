@@ -62,6 +62,15 @@ type MeasurementLayerProps = {
     onMeasurementClick?: (measurement: MeasurementData) => void;
     // Production labels: measurementId → percent_complete
     productionLabels?: Record<number, number>;
+    // Segment statusing: "measId-segIdx" → percent_complete
+    segmentStatuses?: Record<string, number>;
+    onSegmentClick?: (measurement: MeasurementData, segmentIndex: number) => void;
+    // Selection highlighting
+    selectedSegments?: Set<string>;
+    selectedMeasurementIds?: Set<number>;
+    // Box-select mode: drag a rectangle to select items
+    boxSelectMode?: boolean;
+    onBoxSelectComplete?: (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => void;
 };
 
 const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
@@ -107,6 +116,15 @@ function formatValue(pixelValue: number, ppu: number, unit: string, type: 'linea
     }
 }
 
+export function getSegmentColor(percent: number): string {
+    if (percent >= 100) return '#22c55e'; // green-500
+    return '#3b82f6';                      // blue-500
+}
+
+// Box-select mode colors
+const BOX_SELECT_BASE = '#93c5fd';     // blue-300 (unselected)
+const BOX_SELECT_ACTIVE = '#1d4ed8';   // blue-700 (selected)
+
 function normalizedToLatLng(point: Point, imgW: number, imgH: number): L.LatLng {
     return L.latLng(-point.y * imgH, point.x * imgW);
 }
@@ -132,6 +150,12 @@ export function MeasurementLayer({
     onMeasurementComplete,
     onMeasurementClick,
     productionLabels,
+    segmentStatuses,
+    onSegmentClick,
+    selectedSegments,
+    selectedMeasurementIds,
+    boxSelectMode,
+    onBoxSelectComplete,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -143,6 +167,7 @@ export function MeasurementLayer({
     const savedLayersRef = useRef<L.LayerGroup>(L.layerGroup());
     const drawingLayersRef = useRef<L.LayerGroup>(L.layerGroup());
     const calibrationLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+    const boxSelectLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const tooltipRef = useRef<L.Tooltip | null>(null);
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
@@ -153,13 +178,16 @@ export function MeasurementLayer({
         const saved = savedLayersRef.current;
         const drawing = drawingLayersRef.current;
         const calib = calibrationLayerRef.current;
+        const boxSel = boxSelectLayerRef.current;
         saved.addTo(map);
         drawing.addTo(map);
         calib.addTo(map);
+        boxSel.addTo(map);
         return () => {
             saved.remove();
             drawing.remove();
             calib.remove();
+            boxSel.remove();
         };
     }, [map]);
 
@@ -246,59 +274,155 @@ export function MeasurementLayer({
                     summaryMarker.addTo(group);
                 }
             } else if (m.type === 'linear') {
-                const pattern = m.scope === 'variation'
-                    ? 'dashed'
-                    : m.takeoff_condition_id && conditionPatterns
-                        ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                        : 'solid';
-                const line = L.polyline(latlngs, {
-                    color: m.color,
-                    weight,
-                    opacity,
-                    dashArray: PATTERN_DASH_ARRAYS[pattern],
-                });
+                const isSegmented = segmentStatuses && m.points.length >= 3;
+                const isMeasSelected = selectedMeasurementIds?.has(m.id) ?? false;
 
-                // Add vertex circles
-                latlngs.forEach(ll => {
-                    L.circleMarker(ll, {
-                        radius: 5,
-                        color: m.color,
-                        fillColor: '#fff',
-                        fillOpacity: 1,
-                        weight: 2.5,
-                    }).addTo(group);
-                });
+                if (isSegmented) {
+                    // Render each segment as a separate polyline for individual statusing
+                    for (let si = 0; si < m.points.length - 1; si++) {
+                        const segKey = `${m.id}-${si}`;
+                        const segPercent = segmentStatuses[segKey] ?? 0;
+                        const segColor = getSegmentColor(segPercent);
+                        const segSelected = selectedSegments?.has(segKey) ?? false;
+                        const segLatLngs = [latlngs[si], latlngs[si + 1]];
 
-                const coPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
-                const label = m.computed_value != null
-                    ? `${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                    : `${coPrefix}${m.name}`;
-                line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
-                line.on('click', (e) => {
-                    L.DomEvent.stopPropagation(e);
-                    onMeasurementClick?.(m);
-                });
-                line.addTo(group);
+                        // Determine display color
+                        const displayColor = boxSelectMode
+                            ? ((segSelected || isMeasSelected) ? BOX_SELECT_ACTIVE : BOX_SELECT_BASE)
+                            : segColor;
+
+                        // Selection glow outline (non-box-select mode only)
+                        if (!boxSelectMode && (segSelected || isMeasSelected)) {
+                            L.polyline(segLatLngs, {
+                                color: '#3b82f6',
+                                weight: weight + 6,
+                                opacity: 0.7,
+                                lineCap: 'round',
+                            }).addTo(group);
+                        }
+
+                        const segLine = L.polyline(segLatLngs, {
+                            color: displayColor,
+                            weight: (segSelected || isMeasSelected) ? weight + 2 : weight,
+                            opacity,
+                        });
+                        segLine.on('click', (e) => {
+                            L.DomEvent.stopPropagation(e);
+                            onSegmentClick?.(m, si);
+                        });
+                        segLine.addTo(group);
+
+                        // Percent badge at segment midpoint
+                        const midLat = (segLatLngs[0].lat + segLatLngs[1].lat) / 2;
+                        const midLng = (segLatLngs[0].lng + segLatLngs[1].lng) / 2;
+                        const badge = L.marker(L.latLng(midLat, midLng), {
+                            icon: L.divIcon({
+                                className: 'production-percent-label',
+                                html: `<div style="background:${segColor};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid rgba(255,255,255,0.3);text-align:center;min-width:28px;">${segPercent}%</div>`,
+                                iconAnchor: [14, 10],
+                            }),
+                            interactive: false,
+                        });
+                        badge.addTo(group);
+                    }
+
+                    // Add vertex circles at all points
+                    latlngs.forEach(ll => {
+                        L.circleMarker(ll, {
+                            radius: 1,
+                            color: '#475569',
+                            fillColor: '#fff',
+                            fillOpacity: 1,
+                            weight: 2.5,
+                        }).addTo(group);
+                    });
+                } else {
+                    // Standard single polyline rendering
+                    const pattern = m.scope === 'variation'
+                        ? 'dashed'
+                        : m.takeoff_condition_id && conditionPatterns
+                            ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                            : 'solid';
+
+                    const displayColor = boxSelectMode
+                        ? (isMeasSelected ? BOX_SELECT_ACTIVE : BOX_SELECT_BASE)
+                        : m.color;
+
+                    // Selection glow (non-box-select mode only)
+                    if (!boxSelectMode && isMeasSelected) {
+                        L.polyline(latlngs, {
+                            color: '#3b82f6',
+                            weight: weight + 6,
+                            opacity: 0.7,
+                            lineCap: 'round',
+                        }).addTo(group);
+                    }
+
+                    const line = L.polyline(latlngs, {
+                        color: displayColor,
+                        weight: isMeasSelected ? weight + 2 : weight,
+                        opacity,
+                        dashArray: PATTERN_DASH_ARRAYS[pattern],
+                    });
+
+                    // Add vertex circles
+                    latlngs.forEach(ll => {
+                        L.circleMarker(ll, {
+                            radius: 1,
+                            color: displayColor,
+                            fillColor: '#fff',
+                            fillOpacity: 1,
+                            weight: 2.5,
+                        }).addTo(group);
+                    });
+
+                    const coPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
+                    const label = m.computed_value != null
+                        ? `${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                        : `${coPrefix}${m.name}`;
+                    line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                    line.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        onMeasurementClick?.(m);
+                    });
+                    line.addTo(group);
+                }
             } else {
+                const isMeasSelected = selectedMeasurementIds?.has(m.id) ?? false;
                 const areaPattern = m.scope === 'variation'
                     ? 'dashed'
                     : m.takeoff_condition_id && conditionPatterns
                         ? conditionPatterns[m.takeoff_condition_id] || 'solid'
                         : 'solid';
+
+                const displayColor = boxSelectMode
+                    ? (isMeasSelected ? BOX_SELECT_ACTIVE : BOX_SELECT_BASE)
+                    : m.color;
+
+                // Selection glow (non-box-select mode only)
+                if (!boxSelectMode && isMeasSelected) {
+                    L.polygon(latlngs, {
+                        color: '#3b82f6',
+                        weight: weight + 6,
+                        opacity: 0.7,
+                        fill: false,
+                    }).addTo(group);
+                }
+
                 const polygon = L.polygon(latlngs, {
-                    color: m.color,
-                    weight,
+                    color: displayColor,
+                    weight: isMeasSelected ? weight + 2 : weight,
                     opacity,
-                    fillColor: m.color,
-                    fillOpacity: isSelected ? 0.25 : 0.15,
+                    fillColor: displayColor,
+                    fillOpacity: isSelected ? 0.75 : 0.7,
                     dashArray: PATTERN_DASH_ARRAYS[areaPattern],
                 });
 
                 // Add vertex circles
                 latlngs.forEach(ll => {
                     L.circleMarker(ll, {
-                        radius: 5,
-                        color: m.color,
+                        radius: 1,
+                        color: displayColor,
                         fillColor: '#fff',
                         fillOpacity: 1,
                         weight: 2.5,
@@ -317,8 +441,9 @@ export function MeasurementLayer({
                 polygon.addTo(group);
             }
 
-            // Production % label badge
-            if (productionLabels && productionLabels[m.id] !== undefined) {
+            // Production % label badge (skip segmented measurements — they have per-segment badges)
+            const isSegmented = segmentStatuses && m.type === 'linear' && m.points.length >= 3;
+            if (productionLabels && productionLabels[m.id] !== undefined && !isSegmented) {
                 const percent = productionLabels[m.id];
                 // Compute centroid for label placement
                 let centroidLat = 0;
@@ -341,7 +466,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode]);
 
     // Render calibration line
     useEffect(() => {
@@ -727,6 +852,89 @@ export function MeasurementLayer({
             renderDrawing(currentPoints);
         }
     }, [currentPoints, renderDrawing]);
+
+    // Box-select mode: drag a rectangle to select items
+    useEffect(() => {
+        if (!boxSelectMode) {
+            boxSelectLayerRef.current.clearLayers();
+            return;
+        }
+
+        // Disable map dragging so mousedown+drag draws a box instead of panning
+        map.dragging.disable();
+
+        const container = map.getContainer();
+        container.style.cursor = 'crosshair';
+        let startLatLng: L.LatLng | null = null;
+        let rect: L.Rectangle | null = null;
+
+        const onMouseDown = (e: MouseEvent) => {
+            // Only left click
+            if (e.button !== 0) return;
+            const pt = map.containerPointToLatLng(L.point(e.clientX - container.getBoundingClientRect().left, e.clientY - container.getBoundingClientRect().top));
+            startLatLng = pt;
+            boxSelectLayerRef.current.clearLayers();
+        };
+
+        const onMouseMove = (e: MouseEvent) => {
+            if (!startLatLng) return;
+            const pt = map.containerPointToLatLng(L.point(e.clientX - container.getBoundingClientRect().left, e.clientY - container.getBoundingClientRect().top));
+            const bounds = L.latLngBounds(startLatLng, pt);
+
+            if (rect) {
+                rect.setBounds(bounds);
+            } else {
+                rect = L.rectangle(bounds, {
+                    color: '#3b82f6',
+                    weight: 2,
+                    dashArray: '6, 4',
+                    fillColor: '#3b82f6',
+                    fillOpacity: 0.08,
+                });
+                rect.addTo(boxSelectLayerRef.current);
+            }
+        };
+
+        const onMouseUp = (e: MouseEvent) => {
+            if (!startLatLng) return;
+            const pt = map.containerPointToLatLng(L.point(e.clientX - container.getBoundingClientRect().left, e.clientY - container.getBoundingClientRect().top));
+
+            // Convert to normalized coordinates
+            const p1 = latLngToNormalized(startLatLng, imageWidth, imageHeight);
+            const p2 = latLngToNormalized(pt, imageWidth, imageHeight);
+
+            const bounds = {
+                minX: Math.min(p1.x, p2.x),
+                maxX: Math.max(p1.x, p2.x),
+                minY: Math.min(p1.y, p2.y),
+                maxY: Math.max(p1.y, p2.y),
+            };
+
+            // Only fire if the box has some area (not just a click)
+            const dx = Math.abs(p2.x - p1.x);
+            const dy = Math.abs(p2.y - p1.y);
+            if (dx > 0.005 || dy > 0.005) {
+                onBoxSelectComplete?.(bounds);
+            }
+
+            startLatLng = null;
+            rect = null;
+            boxSelectLayerRef.current.clearLayers();
+        };
+
+        container.addEventListener('mousedown', onMouseDown);
+        container.addEventListener('mousemove', onMouseMove);
+        container.addEventListener('mouseup', onMouseUp);
+
+        return () => {
+            container.removeEventListener('mousedown', onMouseDown);
+            container.removeEventListener('mousemove', onMouseMove);
+            container.removeEventListener('mouseup', onMouseUp);
+            container.style.cursor = '';
+            map.dragging.enable();
+            boxSelectLayerRef.current.clearLayers();
+        };
+    }, [map, boxSelectMode, imageWidth, imageHeight, onBoxSelectComplete]);
 
     return null;
 }

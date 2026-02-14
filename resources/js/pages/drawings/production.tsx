@@ -1,12 +1,13 @@
 import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData } from '@/components/measurement-layer';
+import { getSegmentColor } from '@/components/measurement-layer';
 import { ProductionPanel, getPercentColor, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { ChevronRight, Hand, PanelRightClose, PanelRightOpen } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { Calendar, ChevronRight, Hand, MousePointer2, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type Project = {
@@ -77,8 +78,30 @@ type ProductionMeasurement = MeasurementData & {
 
 const PERCENT_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
+/** Check if a measurement qualifies for segment-level statusing */
+function isSegmentable(m: MeasurementData): boolean {
+    return m.type === 'linear' && Array.isArray(m.points) && m.points.length >= 3;
+}
+
+/** Check if two line segments (a→b) and (c→d) intersect using cross-product method */
+function lineSegmentsIntersect(
+    ax: number, ay: number, bx: number, by: number,
+    cx: number, cy: number, dx: number, dy: number,
+): boolean {
+    const cross = (ux: number, uy: number, vx: number, vy: number) => ux * vy - uy * vx;
+    const abx = bx - ax, aby = by - ay;
+    const d1 = cross(abx, aby, cx - ax, cy - ay);
+    const d2 = cross(abx, aby, dx - ax, dy - ay);
+    if (d1 * d2 > 0) return false;
+    const cdx = dx - cx, cdy = dy - cy;
+    const d3 = cross(cdx, cdy, ax - cx, ay - cy);
+    const d4 = cross(cdx, cdy, bx - cx, by - cy);
+    if (d3 * d4 > 0) return false;
+    return true;
+}
+
 export default function DrawingProduction() {
-    const { drawing, revisions, project, activeTab, measurements: initialMeasurements, calibration: initialCalibration, statuses: initialStatuses, lccSummary: initialSummary } = usePage<{
+    const { drawing, revisions, project, activeTab, measurements: initialMeasurements, calibration: initialCalibration, statuses: initialStatuses, segmentStatuses: initialSegmentStatuses, lccSummary: initialSummary, workDate: initialWorkDate } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: Project;
@@ -86,7 +109,9 @@ export default function DrawingProduction() {
         measurements: ProductionMeasurement[];
         calibration: CalibrationData | null;
         statuses: Record<string, number>;
+        segmentStatuses: Record<string, number>;
         lccSummary: LccSummary[];
+        workDate: string;
     }>().props;
 
     const imageUrl = drawing.page_preview_url || drawing.file_url || null;
@@ -97,31 +122,72 @@ export default function DrawingProduction() {
     const [selectedLccId, setSelectedLccId] = useState<number | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [statuses, setStatuses] = useState<Record<string, number>>(initialStatuses || {});
+    const [segmentStatuses, setSegmentStatuses] = useState<Record<string, number>>(initialSegmentStatuses || {});
     const [lccSummary, setLccSummary] = useState<LccSummary[]>(initialSummary || []);
-    const [percentDropdown, setPercentDropdown] = useState<{ measurementId: number; x: number; y: number } | null>(null);
+    const [percentDropdown, setPercentDropdown] = useState<{ measurementId: number; segmentIndex?: number; x: number; y: number } | null>(null);
+    const [workDate, setWorkDate] = useState(initialWorkDate || new Date().toISOString().split('T')[0]);
+    const [loadingDate, setLoadingDate] = useState(false);
 
-    // Filter measurements to those that have the selected LCC
+    // F2: Multi-select state — keys: "m-{id}" for whole measurements, "s-{measId}-{segIdx}" for segments
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+
+    // F3: Hide 100% completed
+    const [hideComplete, setHideComplete] = useState(false);
+
+    // Box-select mode
+    const [selectorMode, setSelectorMode] = useState(false);
+
+    // Clear selection & hideComplete when LCC changes
+    useEffect(() => {
+        setSelectedItems(new Set());
+        setHideComplete(false);
+        setSelectorMode(false);
+        setPercentDropdown(null);
+    }, [selectedLccId]);
+
+    // Filter measurements to those that have the selected LCC, apply hideComplete
     const visibleMeasurements = useMemo(() => {
         if (!initialMeasurements) return [];
 
         return initialMeasurements
             .filter((m) => {
                 if (!selectedLccId) return true;
-                return m.condition?.condition_labour_codes?.some((clc) => clc.labour_cost_code_id === selectedLccId);
+                if (!m.condition?.condition_labour_codes?.some((clc) => clc.labour_cost_code_id === selectedLccId)) return false;
+
+                // F3: Hide 100% completed
+                if (hideComplete && selectedLccId) {
+                    if (isSegmentable(m)) {
+                        // Hide only if ALL segments are 100%
+                        const segCount = m.points.length - 1;
+                        let allComplete = true;
+                        for (let i = 0; i < segCount; i++) {
+                            if ((segmentStatuses[`${m.id}-${i}`] ?? 0) < 100) {
+                                allComplete = false;
+                                break;
+                            }
+                        }
+                        if (allComplete) return false;
+                    } else {
+                        const key = `${m.id}-${selectedLccId}`;
+                        if ((statuses[key] ?? 0) >= 100) return false;
+                    }
+                }
+
+                return true;
             })
             .map((m) => {
-                // Override color based on status for selected LCC
-                if (selectedLccId) {
+                // Override color based on status for selected LCC (non-segmented only)
+                if (selectedLccId && !isSegmentable(m)) {
                     const key = `${m.id}-${selectedLccId}`;
                     const percent = statuses[key] ?? 0;
                     return {
                         ...m,
-                        color: getPercentColor(percent),
+                        color: getSegmentColor(percent),
                     };
                 }
                 return m;
             });
-    }, [initialMeasurements, selectedLccId, statuses]);
+    }, [initialMeasurements, selectedLccId, statuses, segmentStatuses, hideComplete]);
 
     // Condition patterns for the viewer
     const conditionPatterns = useMemo(() => {
@@ -129,18 +195,18 @@ export default function DrawingProduction() {
         if (!initialMeasurements) return map;
         for (const m of initialMeasurements) {
             if (m.takeoff_condition_id && m.condition) {
-                // Use solid pattern in production mode for cleaner look
                 map[m.takeoff_condition_id] = 'solid';
             }
         }
         return map;
     }, [initialMeasurements]);
 
-    // Production status labels for measurements (percent badges)
+    // Production status labels for measurements (percent badges) — only for non-segmented
     const productionLabels = useMemo(() => {
         if (!selectedLccId) return {};
         const labels: Record<number, number> = {};
         for (const m of (initialMeasurements || [])) {
+            if (isSegmentable(m)) continue; // segments have their own badges
             const key = `${m.id}-${selectedLccId}`;
             if (statuses[key] !== undefined) {
                 labels[m.id] = statuses[key];
@@ -149,57 +215,306 @@ export default function DrawingProduction() {
         return labels;
     }, [initialMeasurements, selectedLccId, statuses]);
 
-    // Handle measurement click — show percent dropdown
+    // Convert selectedItems to the formats needed by measurement-layer
+    const selectedSegmentsSet = useMemo(() => {
+        const set = new Set<string>();
+        for (const key of selectedItems) {
+            if (key.startsWith('s-')) {
+                // "s-{measId}-{segIdx}" → "{measId}-{segIdx}"
+                set.add(key.slice(2));
+            }
+        }
+        return set;
+    }, [selectedItems]);
+
+    const selectedMeasurementIdsSet = useMemo(() => {
+        const set = new Set<number>();
+        for (const key of selectedItems) {
+            if (key.startsWith('m-')) {
+                set.add(parseInt(key.slice(2)));
+            }
+        }
+        return set;
+    }, [selectedItems]);
+
+    // Handle measurement click — single click opens dropdown, Ctrl+click toggles selection
     const handleMeasurementClick = useCallback((measurement: MeasurementData) => {
         if (!selectedLccId) {
             toast.info('Select a labour cost code first');
             return;
         }
 
+        // If items are already selected, always toggle
+        if (selectedItems.size > 0) {
+            const key = `m-${measurement.id}`;
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                return next;
+            });
+            return;
+        }
+
         setSelectedMeasurementId(measurement.id);
-        // Position dropdown at center of screen (since we don't have click coords from Leaflet)
         setPercentDropdown({
             measurementId: measurement.id,
             x: window.innerWidth / 2,
             y: window.innerHeight / 2,
         });
-    }, [selectedLccId]);
+    }, [selectedLccId, selectedItems.size]);
 
-    // Update status via API
-    const updateStatus = useCallback(async (measurementId: number, percent: number) => {
-        if (!selectedLccId) return;
+    // Handle segment click
+    const handleSegmentClick = useCallback((measurement: MeasurementData, segmentIndex: number) => {
+        if (!selectedLccId) {
+            toast.info('Select a labour cost code first');
+            return;
+        }
 
-        const key = `${measurementId}-${selectedLccId}`;
-
-        // Optimistic update
-        setStatuses((prev) => ({ ...prev, [key]: percent }));
-        setPercentDropdown(null);
-
-        try {
-            const response = await axios.post(`/drawings/${drawing.id}/measurement-status`, {
-                measurement_id: measurementId,
-                labour_cost_code_id: selectedLccId,
-                percent_complete: percent,
-            });
-
-            if (response.data.lccSummary) {
-                setLccSummary(response.data.lccSummary);
-            }
-        } catch {
-            // Revert optimistic update
-            setStatuses((prev) => {
-                const next = { ...prev };
-                delete next[key];
+        // If items are already selected, toggle selection
+        if (selectedItems.size > 0) {
+            const key = `s-${measurement.id}-${segmentIndex}`;
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
                 return next;
             });
-            toast.error('Failed to update status');
+            return;
         }
-    }, [drawing.id, selectedLccId]);
+
+        setSelectedMeasurementId(measurement.id);
+        setPercentDropdown({
+            measurementId: measurement.id,
+            segmentIndex,
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+        });
+    }, [selectedLccId, selectedItems.size]);
+
+    // Update status for a single measurement or segment
+    const updateStatus = useCallback(async (measurementId: number, percent: number, segmentIndex?: number) => {
+        if (!selectedLccId) return;
+
+        setPercentDropdown(null);
+
+        if (segmentIndex !== undefined) {
+            // Segment-level update
+            const segKey = `${measurementId}-${segmentIndex}`;
+            setSegmentStatuses(prev => ({ ...prev, [segKey]: percent }));
+
+            try {
+                const response = await axios.post(`/drawings/${drawing.id}/segment-status`, {
+                    measurement_id: measurementId,
+                    labour_cost_code_id: selectedLccId,
+                    segment_index: segmentIndex,
+                    percent_complete: percent,
+                    work_date: workDate,
+                });
+                if (response.data.statuses) setStatuses(response.data.statuses);
+                if (response.data.segmentStatuses) setSegmentStatuses(response.data.segmentStatuses);
+                if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+            } catch {
+                setSegmentStatuses(prev => {
+                    const next = { ...prev };
+                    delete next[segKey];
+                    return next;
+                });
+                toast.error('Failed to update status');
+            }
+        } else {
+            // Measurement-level update
+            const key = `${measurementId}-${selectedLccId}`;
+            setStatuses(prev => ({ ...prev, [key]: percent }));
+
+            try {
+                const response = await axios.post(`/drawings/${drawing.id}/measurement-status`, {
+                    measurement_id: measurementId,
+                    labour_cost_code_id: selectedLccId,
+                    percent_complete: percent,
+                    work_date: workDate,
+                });
+                if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+            } catch {
+                setStatuses(prev => {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                });
+                toast.error('Failed to update status');
+            }
+        }
+    }, [drawing.id, selectedLccId, workDate]);
+
+    // F2: Bulk set percent for selected items
+    const bulkSetPercent = useCallback(async (percent: number) => {
+        if (!selectedLccId || selectedItems.size === 0) return;
+
+        const items: Array<{ measurement_id: number; segment_index?: number }> = [];
+        for (const key of selectedItems) {
+            if (key.startsWith('m-')) {
+                items.push({ measurement_id: parseInt(key.slice(2)) });
+            } else if (key.startsWith('s-')) {
+                const parts = key.slice(2).split('-');
+                items.push({ measurement_id: parseInt(parts[0]), segment_index: parseInt(parts[1]) });
+            }
+        }
+
+        // Optimistic update
+        setStatuses(prev => {
+            const next = { ...prev };
+            for (const item of items) {
+                if (item.segment_index === undefined) {
+                    next[`${item.measurement_id}-${selectedLccId}`] = percent;
+                }
+            }
+            return next;
+        });
+        setSegmentStatuses(prev => {
+            const next = { ...prev };
+            for (const item of items) {
+                if (item.segment_index !== undefined) {
+                    next[`${item.measurement_id}-${item.segment_index}`] = percent;
+                }
+            }
+            return next;
+        });
+
+        setSelectedItems(new Set());
+
+        try {
+            const response = await axios.post(`/drawings/${drawing.id}/segment-status-bulk`, {
+                items,
+                labour_cost_code_id: selectedLccId,
+                percent_complete: percent,
+                work_date: workDate,
+            });
+            if (response.data.statuses) setStatuses(response.data.statuses);
+            if (response.data.segmentStatuses) setSegmentStatuses(response.data.segmentStatuses);
+            if (response.data.lccSummary) setLccSummary(response.data.lccSummary);
+        } catch {
+            toast.error('Failed to update statuses');
+        }
+    }, [drawing.id, selectedLccId, selectedItems, workDate]);
+
+    // F2: Select all visible
+    const selectAllVisible = useCallback(() => {
+        if (!selectedLccId) return;
+        const newSet = new Set<string>();
+        for (const m of visibleMeasurements) {
+            if (isSegmentable(m)) {
+                for (let i = 0; i < m.points.length - 1; i++) {
+                    newSet.add(`s-${m.id}-${i}`);
+                }
+            } else {
+                newSet.add(`m-${m.id}`);
+            }
+        }
+        setSelectedItems(newSet);
+    }, [selectedLccId, visibleMeasurements]);
+
+    // Check if a line segment intersects an axis-aligned rectangle
+    const segmentIntersectsRect = useCallback((
+        ax: number, ay: number, bx: number, by: number,
+        rect: { minX: number; maxX: number; minY: number; maxY: number },
+    ): boolean => {
+        // If either endpoint is inside the rect, it intersects
+        if (ax >= rect.minX && ax <= rect.maxX && ay >= rect.minY && ay <= rect.maxY) return true;
+        if (bx >= rect.minX && bx <= rect.maxX && by >= rect.minY && by <= rect.maxY) return true;
+
+        // Check if the segment crosses any of the 4 rectangle edges
+        const edges: [number, number, number, number][] = [
+            [rect.minX, rect.minY, rect.maxX, rect.minY], // top
+            [rect.maxX, rect.minY, rect.maxX, rect.maxY], // right
+            [rect.minX, rect.maxY, rect.maxX, rect.maxY], // bottom
+            [rect.minX, rect.minY, rect.minX, rect.maxY], // left
+        ];
+        for (const [cx, cy, dx, dy] of edges) {
+            if (lineSegmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy)) return true;
+        }
+        return false;
+    }, []);
+
+    // Box-select: find items that intersect the dragged rectangle
+    const handleBoxSelect = useCallback((bounds: { minX: number; maxX: number; minY: number; maxY: number }) => {
+        if (!selectedLccId) return;
+        const newSet = new Set(selectedItems);
+        for (const m of visibleMeasurements) {
+            if (isSegmentable(m)) {
+                for (let i = 0; i < m.points.length - 1; i++) {
+                    if (segmentIntersectsRect(
+                        m.points[i].x, m.points[i].y,
+                        m.points[i + 1].x, m.points[i + 1].y,
+                        bounds,
+                    )) {
+                        newSet.add(`s-${m.id}-${i}`);
+                    }
+                }
+            } else {
+                // Select if any edge of the measurement intersects the box, or any point is inside
+                let hit = false;
+                for (const p of m.points) {
+                    if (p.x >= bounds.minX && p.x <= bounds.maxX && p.y >= bounds.minY && p.y <= bounds.maxY) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit) {
+                    for (let i = 0; i < m.points.length; i++) {
+                        const j = (i + 1) % m.points.length;
+                        if (segmentIntersectsRect(
+                            m.points[i].x, m.points[i].y,
+                            m.points[j].x, m.points[j].y,
+                            bounds,
+                        )) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                if (hit) newSet.add(`m-${m.id}`);
+            }
+        }
+        setSelectedItems(newSet);
+    }, [selectedLccId, visibleMeasurements, selectedItems, segmentIntersectsRect]);
+
+    // Handle work date change — reload statuses for the new date
+    const handleWorkDateChange = useCallback(async (newDate: string) => {
+        setWorkDate(newDate);
+        setLoadingDate(true);
+        try {
+            const response = await axios.get(`/drawings/${drawing.id}/production-statuses`, {
+                params: { work_date: newDate },
+            });
+            setStatuses(response.data.statuses || {});
+            setSegmentStatuses(response.data.segmentStatuses || {});
+            setLccSummary(response.data.lccSummary || []);
+        } catch {
+            toast.error('Failed to load statuses for date');
+        } finally {
+            setLoadingDate(false);
+        }
+    }, [drawing.id]);
 
     // Close dropdown on outside click
     const handleMapClick = useCallback(() => {
         setPercentDropdown(null);
     }, []);
+
+    // Keyboard: Escape clears selection
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (selectedItems.size > 0) {
+                    setSelectedItems(new Set());
+                } else if (percentDropdown) {
+                    setPercentDropdown(null);
+                }
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [selectedItems.size, percentDropdown]);
 
     return (
         <DrawingWorkspaceLayout
@@ -210,16 +525,45 @@ export default function DrawingProduction() {
             mapControls={mapControls}
             toolbar={
                 <>
+                    {/* Pan / Selector mode toggle */}
                     <div className="bg-background flex items-center rounded-sm border p-px">
                         <Button
                             type="button"
                             size="sm"
-                            variant="secondary"
+                            variant={!selectorMode ? 'secondary' : 'ghost'}
                             className="h-6 w-6 rounded-sm p-0"
                             title="Pan mode"
+                            onClick={() => setSelectorMode(false)}
                         >
                             <Hand className="h-3 w-3" />
                         </Button>
+                        {selectedLccId && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={selectorMode ? 'secondary' : 'ghost'}
+                                className="h-6 w-6 rounded-sm p-0"
+                                title="Box select mode — drag to select items"
+                                onClick={() => setSelectorMode(true)}
+                            >
+                                <MousePointer2 className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                    <div className="bg-border h-4 w-px" />
+
+                    {/* Work Date Selector */}
+                    <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        <input
+                            type="date"
+                            value={workDate}
+                            onChange={(e) => handleWorkDateChange(e.target.value)}
+                            className="h-6 w-[130px] rounded-sm border border-border bg-background px-1.5 text-[11px]"
+                        />
+                        {loadingDate && (
+                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+                        )}
                     </div>
                     <div className="bg-border h-4 w-px" />
 
@@ -240,7 +584,9 @@ export default function DrawingProduction() {
                                     {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.name}
                                 </span>
                             </div>
-                            <span className="text-muted-foreground text-[11px]">Click areas to set % complete</span>
+                            <span className="text-muted-foreground text-[11px]">
+                                {selectorMode ? 'Drag to select areas' : 'Click areas to set % complete'}
+                            </span>
                         </>
                     )}
                     {!selectedLccId && (
@@ -286,6 +632,12 @@ export default function DrawingProduction() {
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={handleMeasurementClick}
                         productionLabels={selectedLccId ? productionLabels : undefined}
+                        segmentStatuses={selectedLccId ? segmentStatuses : undefined}
+                        onSegmentClick={handleSegmentClick}
+                        selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
+                        selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
+                        boxSelectMode={selectorMode && !!selectedLccId}
+                        onBoxSelectComplete={handleBoxSelect}
                         onMapReady={setMapControls}
                         className="absolute inset-0"
                     />
@@ -300,16 +652,18 @@ export default function DrawingProduction() {
                             }}
                         >
                             <div className="px-3 py-1 text-[10px] text-muted-foreground border-b border-border mb-1">
-                                Set % Complete
+                                Set % Complete{percentDropdown.segmentIndex !== undefined ? ` (Seg ${percentDropdown.segmentIndex + 1})` : ''}
                             </div>
                             {PERCENT_OPTIONS.map((p) => {
-                                const currentPercent = statuses[`${percentDropdown.measurementId}-${selectedLccId}`] ?? 0;
+                                const currentPercent = percentDropdown.segmentIndex !== undefined
+                                    ? (segmentStatuses[`${percentDropdown.measurementId}-${percentDropdown.segmentIndex}`] ?? 0)
+                                    : (statuses[`${percentDropdown.measurementId}-${selectedLccId}`] ?? 0);
                                 const isActive = currentPercent === p;
                                 return (
                                     <button
                                         key={p}
                                         type="button"
-                                        onClick={() => updateStatus(percentDropdown.measurementId, p)}
+                                        onClick={() => updateStatus(percentDropdown.measurementId, p, percentDropdown.segmentIndex)}
                                         className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] transition-colors ${
                                             isActive
                                                 ? 'bg-accent text-accent-foreground font-semibold'
@@ -318,12 +672,49 @@ export default function DrawingProduction() {
                                     >
                                         <div
                                             className="h-2 w-2 rounded-full"
-                                            style={{ backgroundColor: getPercentColor(p) }}
+                                            style={{ backgroundColor: getSegmentColor(p) }}
                                         />
                                         {p}%
                                     </button>
                                 );
                             })}
+                        </div>
+                    )}
+
+                    {/* F2: Floating Action Bar for multi-select */}
+                    {selectedItems.size > 0 && selectedLccId && (
+                        <div className="fixed bottom-6 left-1/2 z-[9998] -translate-x-1/2 transform">
+                            <div className="flex items-center gap-2 rounded-lg border border-border bg-popover px-3 py-2 shadow-xl">
+                                <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                                    {selectedItems.size} selected
+                                </span>
+                                <div className="bg-border h-5 w-px" />
+                                {PERCENT_OPTIONS.map((p) => (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => bulkSetPercent(p)}
+                                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors hover:bg-accent"
+                                    >
+                                        <div
+                                            className="h-2 w-2 rounded-full"
+                                            style={{ backgroundColor: getSegmentColor(p) }}
+                                        />
+                                        {p}%
+                                    </button>
+                                ))}
+                                <div className="bg-border h-5 w-px" />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() => setSelectedItems(new Set())}
+                                    title="Clear selection"
+                                >
+                                    <X className="h-3 w-3" />
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -334,6 +725,9 @@ export default function DrawingProduction() {
                         lccSummary={lccSummary}
                         selectedLccId={selectedLccId}
                         onSelectLcc={setSelectedLccId}
+                        onSelectAll={selectAllVisible}
+                        hideComplete={hideComplete}
+                        onToggleHideComplete={() => setHideComplete(!hideComplete)}
                     />
                 )}
             </div>

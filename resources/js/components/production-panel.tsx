@@ -1,6 +1,7 @@
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { BarChart3, Clock, Hash, TrendingUp } from 'lucide-react';
+import { BarChart3, CheckSquare, Clock, Eye, EyeOff, Hash, TrendingUp } from 'lucide-react';
 
 export type LccSummary = {
     labour_cost_code_id: number;
@@ -18,6 +19,9 @@ type ProductionPanelProps = {
     lccSummary: LccSummary[];
     selectedLccId: number | null;
     onSelectLcc: (lccId: number | null) => void;
+    onSelectAll?: () => void;
+    hideComplete?: boolean;
+    onToggleHideComplete?: () => void;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -34,6 +38,9 @@ export function ProductionPanel({
     lccSummary,
     selectedLccId,
     onSelectLcc,
+    onSelectAll,
+    hideComplete,
+    onToggleHideComplete,
 }: ProductionPanelProps) {
     const totalBudgetHours = lccSummary.reduce((s, c) => s + c.budget_hours, 0);
     const totalEarnedHours = lccSummary.reduce((s, c) => s + c.earned_hours, 0);
@@ -50,6 +57,34 @@ export function ProductionPanel({
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Labour Cost Codes</span>
                 <span className="ml-auto text-[10px] text-muted-foreground">{lccSummary.length} codes</span>
             </div>
+
+            {/* Production controls — visible when LCC selected */}
+            {selectedLccId && (
+                <div className="flex shrink-0 items-center gap-1 border-b border-sidebar-border px-2 py-1.5">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 gap-1 px-2 text-[10px]"
+                        onClick={onSelectAll}
+                        title="Select all visible measurements"
+                    >
+                        <CheckSquare className="h-3 w-3" />
+                        Select All
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={hideComplete ? 'secondary' : 'ghost'}
+                        className="h-6 gap-1 px-2 text-[10px]"
+                        onClick={onToggleHideComplete}
+                        title={hideComplete ? 'Show completed items' : 'Hide completed items'}
+                    >
+                        {hideComplete ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                        {hideComplete ? 'Show Done' : 'Hide Done'}
+                    </Button>
+                </div>
+            )}
 
             {/* LCC List */}
             <ScrollArea className="flex-1">
