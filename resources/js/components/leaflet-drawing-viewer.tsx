@@ -70,6 +70,8 @@ type LeafletDrawingViewerProps = {
     editableVertices?: boolean;
     onVertexDragEnd?: (measurementId: number, pointIndex: number, newPoint: Point) => void;
     onVertexDelete?: (measurementId: number, pointIndex: number) => void;
+    // Snap to endpoint
+    snapEnabled?: boolean;
     // Exposes zoom/fit controls to parent
     onMapReady?: (controls: MapControls) => void;
 };
@@ -305,6 +307,7 @@ export function LeafletDrawingViewer({
     editableVertices,
     onVertexDragEnd,
     onVertexDelete,
+    snapEnabled,
     onMapReady,
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -463,6 +466,7 @@ export function LeafletDrawingViewer({
                     editableVertices={editableVertices}
                     onVertexDragEnd={onVertexDragEnd}
                     onVertexDelete={onVertexDelete}
+                    snapEnabled={snapEnabled}
                 />
             </MapContainer>
 

@@ -23,8 +23,12 @@ import {
     Square,
     Trash2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { CalibrationData, MeasurementData, ViewMode } from './measurement-layer';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Copy } from 'lucide-react';
 
 type TakeoffPanelProps = {
     viewMode: ViewMode;
@@ -41,6 +45,8 @@ type TakeoffPanelProps = {
     onOpenConditionManager: () => void;
     onActivateCondition: (conditionId: number | null) => void;
     onAddDeduction?: (parentId: number) => void;
+    drawingId?: number;
+    quantityMultiplier?: number;
 };
 
 const TYPE_ICONS = {
@@ -72,11 +78,25 @@ export function TakeoffPanel({
     onOpenConditionManager,
     onActivateCondition,
     onAddDeduction,
+    drawingId,
+    quantityMultiplier = 1,
 }: TakeoffPanelProps) {
     const [activeTab, setActiveTab] = useState<TabId>('takeoff');
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+    const [multiplier, setMultiplier] = useState(quantityMultiplier);
     const hasCalibration = !!calibration;
     const activeCondition = conditions.find((c) => c.id === activeConditionId) || null;
+
+    const saveMultiplier = useCallback(async () => {
+        if (!drawingId || multiplier === quantityMultiplier) return;
+        try {
+            await api.patch(`/drawings/${drawingId}`, { quantity_multiplier: multiplier });
+            toast.success(`Quantity multiplier set to ${multiplier}×`);
+        } catch {
+            toast.error('Failed to save multiplier');
+            setMultiplier(quantityMultiplier);
+        }
+    }, [drawingId, multiplier, quantityMultiplier]);
 
     // Group measurements by category
     const grouped = measurements.reduce<Record<string, MeasurementData[]>>((acc, m) => {
@@ -375,8 +395,17 @@ export function TakeoffPanel({
                                                                     </div>
                                                                 ))}
 
-                                                                {/* Net value row + Add Deduction button for area measurements */}
-                                                                {isSelected && m.type === 'area' && !m.parent_measurement_id && (
+                                                                {/* Perimeter for area measurements */}
+                                                                {isSelected && m.type === 'area' && m.perimeter_value != null && !m.parent_measurement_id && (
+                                                                    <div className="flex items-center gap-1 border-b border-border/30 py-0.5 pl-6 pr-2">
+                                                                        <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
+                                                                            Perimeter: {m.perimeter_value.toFixed(2)} {m.unit?.replace('sq ', '') || ''}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Net value row + Add Deduction button for area/linear measurements */}
+                                                                {isSelected && (m.type === 'area' || m.type === 'linear') && !m.parent_measurement_id && (
                                                                     <div className="flex items-center gap-1 border-b border-border/30 py-1 pl-6 pr-2">
                                                                         {netValue != null && (
                                                                             <span className="font-mono text-[9px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -652,6 +681,26 @@ export function TakeoffPanel({
                             )}
                         </div>
                     </ScrollArea>
+
+                    {/* Quantity Multiplier */}
+                    {drawingId && (
+                        <div className="flex items-center gap-2 border-t px-2 py-1.5">
+                            <Copy className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Qty Multiplier</span>
+                            <Input
+                                type="number"
+                                min={0.01}
+                                max={9999}
+                                step={1}
+                                value={multiplier}
+                                onChange={(e) => setMultiplier(parseFloat(e.target.value) || 1)}
+                                onBlur={saveMultiplier}
+                                onKeyDown={(e) => { if (e.key === 'Enter') saveMultiplier(); }}
+                                className="h-5 w-16 text-[10px] text-right font-mono px-1"
+                            />
+                            <span className="text-[10px] text-muted-foreground">×</span>
+                        </div>
+                    )}
 
                     {/* Budget Grand Total - status bar */}
                     {conditions.length > 0 && (

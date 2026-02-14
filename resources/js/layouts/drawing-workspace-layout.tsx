@@ -14,8 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type MapControls } from '@/components/leaflet-drawing-viewer';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, RotateCcw, Ruler, TableProperties } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, RotateCcw, Ruler, TableProperties } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
 export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'budget' | 'qa';
 
@@ -63,6 +64,7 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
     const { projectDrawings } = usePage<{ projectDrawings?: ProjectDrawing[] }>().props;
     const drawings = projectDrawings ?? [];
     const [showHelpDialog, setShowHelpDialog] = useState(false);
+    const [showReplicateDialog, setShowReplicateDialog] = useState(false);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -138,6 +140,18 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                 >
                                     <TableProperties className="h-3.5 w-3.5" />
                                     Takeoff Summary
+                                </MenubarItem>
+                            </MenubarContent>
+                        </MenubarMenu>
+                        <MenubarMenu>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Drawing</MenubarTrigger>
+                            <MenubarContent>
+                                <MenubarItem
+                                    onClick={() => setShowReplicateDialog(true)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Copy className="h-3.5 w-3.5" />
+                                    Replicate to Floors...
                                 </MenubarItem>
                             </MenubarContent>
                         </MenubarMenu>
@@ -395,6 +409,8 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                 <span>Cancel / clear all points</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Shift</kbd>
                                 <span>Hold to snap to 15° angles (square for rectangles)</span>
+                                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">N</kbd>
+                                <span>Toggle snap to endpoint/midpoint</span>
                             </div>
                         </div>
                         <div>
@@ -412,6 +428,14 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Replicate to Floors Dialog */}
+            <ReplicateFloorsDialog
+                drawingId={drawing.id}
+                drawingTitle={displayName}
+                open={showReplicateDialog}
+                onOpenChange={setShowReplicateDialog}
+            />
         </AppLayout>
     );
 }

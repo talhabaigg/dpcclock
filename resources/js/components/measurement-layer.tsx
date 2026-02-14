@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMap, useMapEvents } from 'react-leaflet';
 
 export type Point = {
@@ -30,6 +30,7 @@ export type MeasurementData = {
     category: string | null;
     points: Point[];
     computed_value: number | null;
+    perimeter_value: number | null;
     unit: string | null;
     takeoff_condition_id: number | null;
     material_cost: number | null;
@@ -48,6 +49,11 @@ export type MeasurementData = {
 };
 
 export type ViewMode = 'pan' | 'select' | 'calibrate' | 'measure_line' | 'measure_area' | 'measure_rectangle' | 'measure_count';
+
+type SnapCandidate = {
+    point: Point;
+    kind: 'endpoint' | 'midpoint';
+};
 
 type MeasurementLayerProps = {
     viewMode: ViewMode;
@@ -77,6 +83,8 @@ type MeasurementLayerProps = {
     editableVertices?: boolean;
     onVertexDragEnd?: (measurementId: number, pointIndex: number, newPoint: Point) => void;
     onVertexDelete?: (measurementId: number, pointIndex: number) => void;
+    // Snap to endpoint
+    snapEnabled?: boolean;
 };
 
 const PATTERN_DASH_ARRAYS: Record<string, string | undefined> = {
@@ -185,6 +193,7 @@ export function MeasurementLayer({
     editableVertices,
     onVertexDragEnd,
     onVertexDelete,
+    snapEnabled = true,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -198,10 +207,77 @@ export function MeasurementLayer({
     const calibrationLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const boxSelectLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const vertexLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+    const snapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const tooltipRef = useRef<L.Tooltip | null>(null);
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
     const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Build snap candidates from all saved measurements (endpoints + midpoints)
+    const snapCandidates = useMemo<SnapCandidate[]>(() => {
+        const candidates: SnapCandidate[] = [];
+        for (const m of measurements) {
+            // Add all vertices as endpoint snap candidates
+            for (const pt of m.points) {
+                candidates.push({ point: pt, kind: 'endpoint' });
+            }
+            // Add midpoints for linear and area measurements with 2+ points
+            if ((m.type === 'linear' || m.type === 'area') && m.points.length >= 2) {
+                const len = m.points.length;
+                const segments = m.type === 'area' ? len : len - 1;
+                for (let i = 0; i < segments; i++) {
+                    const j = (i + 1) % len;
+                    candidates.push({
+                        point: {
+                            x: (m.points[i].x + m.points[j].x) / 2,
+                            y: (m.points[i].y + m.points[j].y) / 2,
+                        },
+                        kind: 'midpoint',
+                    });
+                }
+            }
+        }
+        return candidates;
+    }, [measurements]);
+
+    /**
+     * Find the nearest snap candidate within screen pixel threshold.
+     * Returns the candidate point or null if none within range.
+     */
+    const findSnapPoint = useCallback(
+        (cursor: Point, thresholdPx: number = 10): SnapCandidate | null => {
+            if (!snapEnabled || snapCandidates.length === 0) return null;
+
+            // Convert threshold from screen pixels to Leaflet coordinate distance
+            // Use center of map to get a representative scale
+            const center = map.getCenter();
+            const zoom = map.getZoom();
+            const p1 = map.project(center, zoom);
+            const p2 = L.point(p1.x + thresholdPx, p1.y + thresholdPx);
+            const ll2 = map.unproject(p2, zoom);
+            const thresholdLng = Math.abs(ll2.lng - center.lng);
+            const thresholdLat = Math.abs(ll2.lat - center.lat);
+            // Convert to normalized coords
+            const thresholdNormX = thresholdLng / imageWidth;
+            const thresholdNormY = thresholdLat / imageHeight;
+
+            let bestDist = Infinity;
+            let best: SnapCandidate | null = null;
+
+            for (const candidate of snapCandidates) {
+                const dx = (candidate.point.x - cursor.x) / thresholdNormX;
+                const dy = (candidate.point.y - cursor.y) / thresholdNormY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < bestDist && dist <= 1.0) {
+                    bestDist = dist;
+                    best = candidate;
+                }
+            }
+
+            return best;
+        },
+        [snapEnabled, snapCandidates, map, imageWidth, imageHeight],
+    );
 
     // Add layer groups to map on mount
     useEffect(() => {
@@ -210,17 +286,20 @@ export function MeasurementLayer({
         const calib = calibrationLayerRef.current;
         const boxSel = boxSelectLayerRef.current;
         const vertex = vertexLayerRef.current;
+        const snap = snapLayerRef.current;
         saved.addTo(map);
         drawing.addTo(map);
         calib.addTo(map);
         boxSel.addTo(map);
         vertex.addTo(map);
+        snap.addTo(map);
         return () => {
             saved.remove();
             drawing.remove();
             calib.remove();
             boxSel.remove();
             vertex.remove();
+            snap.remove();
         };
     }, [map]);
 
@@ -340,6 +419,12 @@ export function MeasurementLayer({
                             weight: (segSelected || isMeasSelected) ? weight + 2 : weight,
                             opacity,
                         });
+                        // Segment length tooltip
+                        if (calibration) {
+                            const segPixelDist = computePixelDistance(m.points[si], m.points[si + 1], pixelWidth, pixelHeight);
+                            const segLength = segPixelDist / calibration.pixels_per_unit;
+                            segLine.bindTooltip(`${segLength.toFixed(2)} ${calibration.unit}`, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                        }
                         segLine.on('click', (e) => {
                             if (isMeasuring) return;
                             L.DomEvent.stopPropagation(e);
@@ -373,15 +458,18 @@ export function MeasurementLayer({
                     });
                 } else {
                     // Standard single polyline rendering
-                    const pattern = m.scope === 'variation'
+                    const isLinearDeduction = !!m.parent_measurement_id;
+                    const pattern = isLinearDeduction
                         ? 'dashed'
-                        : m.takeoff_condition_id && conditionPatterns
-                            ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                            : 'solid';
+                        : m.scope === 'variation'
+                            ? 'dashed'
+                            : m.takeoff_condition_id && conditionPatterns
+                                ? conditionPatterns[m.takeoff_condition_id] || 'solid'
+                                : 'solid';
 
                     const displayColor = boxSelectMode
                         ? (isMeasSelected ? BOX_SELECT_ACTIVE : BOX_SELECT_BASE)
-                        : m.color;
+                        : isLinearDeduction ? '#ef4444' : m.color;
 
                     // Selection glow (non-box-select mode only)
                     if (!boxSelectMode && isMeasSelected) {
@@ -411,10 +499,26 @@ export function MeasurementLayer({
                         }).addTo(group);
                     });
 
+                    // Per-segment length tooltips on hover (only when 2+ segments and calibrated)
+                    if (m.points.length >= 3 && calibration) {
+                        for (let si = 0; si < m.points.length - 1; si++) {
+                            const segPixelDist = computePixelDistance(m.points[si], m.points[si + 1], pixelWidth, pixelHeight);
+                            const segLength = segPixelDist / calibration.pixels_per_unit;
+                            const segHit = L.polyline([latlngs[si], latlngs[si + 1]], {
+                                color: 'transparent',
+                                weight: 14,
+                                opacity: 0,
+                            });
+                            segHit.bindTooltip(`${segLength.toFixed(2)} ${calibration.unit}`, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                            segHit.addTo(group);
+                        }
+                    }
+
+                    const linearDeductionPrefix = isLinearDeduction ? '(−) ' : '';
                     const coPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                     const label = m.computed_value != null
-                        ? `${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                        : `${coPrefix}${m.name}`;
+                        ? `${linearDeductionPrefix}${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                        : `${linearDeductionPrefix}${coPrefix}${m.name}`;
                     line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                     line.on('click', (e) => {
                         if (isMeasuring) return;
@@ -470,8 +574,12 @@ export function MeasurementLayer({
 
                 const deductionPrefix = isDeduction ? '(−) ' : '';
                 const areaCOPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
+                const perimeterUnit = m.unit?.replace('sq ', '') || '';
+                const perimeterSuffix = m.perimeter_value != null && !isDeduction
+                    ? `\nPerimeter: ${m.perimeter_value.toFixed(2)} ${perimeterUnit}`
+                    : '';
                 const label = m.computed_value != null
-                    ? `${deductionPrefix}${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
+                    ? `${deductionPrefix}${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}${perimeterSuffix}`
                     : `${deductionPrefix}${areaCOPrefix}${m.name}`;
                 polygon.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
                 polygon.on('click', (e) => {
@@ -507,7 +615,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
 
     // Render calibration line
     useEffect(() => {
@@ -698,7 +806,25 @@ export function MeasurementLayer({
         const onMouseMove = (e: L.LeafletMouseEvent) => {
             let cursorPoint = latLngToNormalized(e.latlng, imageWidth, imageHeight);
 
+            // Clear snap indicator
+            snapLayerRef.current.clearLayers();
+
             if (currentPoints.length === 0) {
+                // Even with no points, show snap indicator when hovering near a snap candidate
+                if (snapEnabled && viewMode !== 'calibrate') {
+                    const snap = findSnapPoint(cursorPoint);
+                    if (snap) {
+                        const snapLatLng = normalizedToLatLng(snap.point, imageWidth, imageHeight);
+                        L.circleMarker(snapLatLng, {
+                            radius: snap.kind === 'endpoint' ? 8 : 6,
+                            color: snap.kind === 'endpoint' ? '#f59e0b' : '#8b5cf6',
+                            fillColor: snap.kind === 'endpoint' ? '#fbbf24' : '#a78bfa',
+                            fillOpacity: 0.4,
+                            weight: 2,
+                            dashArray: snap.kind === 'midpoint' ? '3, 3' : undefined,
+                        }).addTo(snapLayerRef.current);
+                    }
+                }
                 if (tooltipRef.current) {
                     map.closeTooltip(tooltipRef.current);
                     tooltipRef.current = null;
@@ -722,6 +848,24 @@ export function MeasurementLayer({
                 } else {
                     const anchor = currentPoints[currentPoints.length - 1];
                     cursorPoint = snapToAngle(anchor, cursorPoint, imageWidth, imageHeight);
+                }
+            }
+
+            // Snap to nearest endpoint/midpoint (applies after angle snap)
+            if (snapEnabled && viewMode !== 'calibrate') {
+                const snap = findSnapPoint(cursorPoint);
+                if (snap) {
+                    cursorPoint = snap.point;
+                    // Show snap indicator
+                    const snapLatLng = normalizedToLatLng(snap.point, imageWidth, imageHeight);
+                    L.circleMarker(snapLatLng, {
+                        radius: snap.kind === 'endpoint' ? 8 : 6,
+                        color: snap.kind === 'endpoint' ? '#f59e0b' : '#8b5cf6',
+                        fillColor: snap.kind === 'endpoint' ? '#fbbf24' : '#a78bfa',
+                        fillOpacity: 0.4,
+                        weight: 2,
+                        dashArray: snap.kind === 'midpoint' ? '3, 3' : undefined,
+                    }).addTo(snapLayerRef.current);
                 }
             }
 
@@ -781,12 +925,13 @@ export function MeasurementLayer({
         map.on('mousemove', onMouseMove);
         return () => {
             map.off('mousemove', onMouseMove);
+            snapLayerRef.current.clearLayers();
             if (tooltipRef.current) {
                 map.closeTooltip(tooltipRef.current);
                 tooltipRef.current = null;
             }
         };
-    }, [map, isMeasuring, viewMode, currentPoints, imageWidth, imageHeight, pixelWidth, pixelHeight, calibration, renderDrawing]);
+    }, [map, isMeasuring, viewMode, currentPoints, imageWidth, imageHeight, pixelWidth, pixelHeight, calibration, renderDrawing, snapEnabled, findSnapPoint]);
 
     // Handle Escape and right-click
     useEffect(() => {
@@ -865,6 +1010,11 @@ export function MeasurementLayer({
                 }
             } else if (viewMode === 'measure_rectangle') {
                 const pts = currentPointsRef.current;
+                // Apply snap to rectangle corners
+                if (snapEnabled) {
+                    const snap = findSnapPoint(point);
+                    if (snap) point = snap.point;
+                }
                 if (pts.length === 0) {
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
@@ -889,6 +1039,11 @@ export function MeasurementLayer({
                 const pts = currentPointsRef.current;
                 if (shift && pts.length > 0 && viewMode !== 'measure_count') {
                     point = snapToAngle(pts[pts.length - 1], point, imageWidth, imageHeight);
+                }
+                // Apply snap to endpoint/midpoint
+                if (snapEnabled) {
+                    const snap = findSnapPoint(point);
+                    if (snap) point = snap.point;
                 }
                 // Delay adding the point so dblclick can cancel it
                 if (clickTimerRef.current) {

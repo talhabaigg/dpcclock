@@ -60,6 +60,10 @@ class Drawing extends Model
         'tiles_height',
         'tile_size',
         'tiles_status',
+        // Typical area / floor replication
+        'quantity_multiplier',
+        'source_drawing_id',
+        'floor_label',
     ];
 
     protected $casts = [
@@ -79,6 +83,7 @@ class Drawing extends Model
         'tiles_height' => 'integer',
         'tile_size' => 'integer',
         'metadata_confirmed' => 'boolean',
+        'quantity_multiplier' => 'float',
     ];
 
     protected $appends = [
@@ -177,6 +182,16 @@ class Drawing extends Model
     public function updatedBy()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function sourceDrawing()
+    {
+        return $this->belongsTo(self::class, 'source_drawing_id');
+    }
+
+    public function replicatedDrawings()
+    {
+        return $this->hasMany(self::class, 'source_drawing_id');
     }
 
     // Accessors

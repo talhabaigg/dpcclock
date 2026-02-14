@@ -142,16 +142,17 @@ class DrawingMeasurementController extends Controller
             'variation_id' => 'nullable|integer|exists:variations,id',
         ]);
 
-        // Validate parent is area type and belongs to same drawing
+        // Validate parent belongs to same drawing and is top-level (area or linear)
         if (!empty($validated['parent_measurement_id'])) {
             $parent = DrawingMeasurement::where('id', $validated['parent_measurement_id'])
                 ->where('drawing_id', $drawing->id)
-                ->where('type', 'area')
+                ->whereIn('type', ['area', 'linear'])
                 ->whereNull('parent_measurement_id')
                 ->firstOrFail();
         }
 
         $computedValue = null;
+        $perimeterValue = null;
         $unit = null;
 
         if ($validated['type'] === 'count') {
@@ -172,6 +173,9 @@ class DrawingMeasurementController extends Controller
                     $computedValue = $this->computePolygonArea(
                         $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                     );
+                    $perimeterValue = $this->computePolygonPerimeter(
+                        $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
+                    );
                     $unit = 'sq ' . $calibration->unit;
                 }
             }
@@ -185,6 +189,7 @@ class DrawingMeasurementController extends Controller
             'category' => $validated['category'],
             'points' => $validated['points'],
             'computed_value' => $computedValue,
+            'perimeter_value' => $perimeterValue,
             'unit' => $unit,
             'takeoff_condition_id' => $validated['takeoff_condition_id'] ?? null,
             'bid_area_id' => $validated['bid_area_id'] ?? null,
@@ -240,6 +245,9 @@ class DrawingMeasurementController extends Controller
                         $validated['unit'] = $calibration->unit;
                     } else {
                         $validated['computed_value'] = $this->computePolygonArea(
+                            $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
+                        );
+                        $validated['perimeter_value'] = $this->computePolygonPerimeter(
                             $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                         );
                         $validated['unit'] = 'sq ' . $calibration->unit;
@@ -344,18 +352,32 @@ class DrawingMeasurementController extends Controller
         return round($pixelArea / ($ppu * $ppu), 4);
     }
 
+    private function computePolygonPerimeter(array $points, float $ppu, int $imgW, int $imgH): float
+    {
+        $n = count($points);
+        $total = 0;
+        for ($i = 0; $i < $n; $i++) {
+            $j = ($i + 1) % $n;
+            $dx = ($points[$j]['x'] - $points[$i]['x']) * $imgW;
+            $dy = ($points[$j]['y'] - $points[$i]['y']) * $imgH;
+            $total += sqrt($dx * $dx + $dy * $dy);
+        }
+
+        return round($total / $ppu, 4);
+    }
+
     private function recomputeMeasurements(Drawing $drawing, float $ppu, string $baseUnit, int $imgW, int $imgH): void
     {
         $drawing->measurements()->chunk(100, function ($measurements) use ($ppu, $baseUnit, $imgW, $imgH) {
             foreach ($measurements as $m) {
                 if ($m->type === 'count') {
-                    // Count measurements don't depend on calibration
                     continue;
                 } elseif ($m->type === 'linear') {
                     $m->computed_value = $this->computePolylineLength($m->points, $ppu, $imgW, $imgH);
                     $m->unit = $baseUnit;
                 } else {
                     $m->computed_value = $this->computePolygonArea($m->points, $ppu, $imgW, $imgH);
+                    $m->perimeter_value = $this->computePolygonPerimeter($m->points, $ppu, $imgW, $imgH);
                     $m->unit = 'sq ' . $baseUnit;
                 }
                 $m->save();

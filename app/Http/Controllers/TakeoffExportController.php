@@ -47,7 +47,7 @@ class TakeoffExportController extends Controller
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
-            ->with(['bidArea', 'deductions'])
+            ->with(['bidArea', 'deductions', 'drawing:id,quantity_multiplier'])
             ->get();
 
         if ($measurements->isEmpty()) {
@@ -63,12 +63,25 @@ class TakeoffExportController extends Controller
             }
 
             foreach ($condMeasurements->groupBy(fn ($m) => $m->bid_area_id ?? 0) as $areaId => $areaMeasurements) {
-                $deductions = $areaMeasurements->flatMap->deductions;
+                $netQty = 0;
+                $labourCost = 0;
+                $materialCost = 0;
+                $totalCost = 0;
 
-                $netQty = ($areaMeasurements->sum('computed_value') ?? 0) - ($deductions->sum('computed_value') ?? 0);
-                $labourCost = ($areaMeasurements->sum('labour_cost') ?? 0) - ($deductions->sum('labour_cost') ?? 0);
-                $materialCost = ($areaMeasurements->sum('material_cost') ?? 0) - ($deductions->sum('material_cost') ?? 0);
-                $totalCost = ($areaMeasurements->sum('total_cost') ?? 0) - ($deductions->sum('total_cost') ?? 0);
+                foreach ($areaMeasurements as $m) {
+                    $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                    $netQty += ($m->computed_value ?? 0) * $mul;
+                    $labourCost += ($m->labour_cost ?? 0) * $mul;
+                    $materialCost += ($m->material_cost ?? 0) * $mul;
+                    $totalCost += ($m->total_cost ?? 0) * $mul;
+
+                    foreach ($m->deductions as $d) {
+                        $netQty -= ($d->computed_value ?? 0) * $mul;
+                        $labourCost -= ($d->labour_cost ?? 0) * $mul;
+                        $materialCost -= ($d->material_cost ?? 0) * $mul;
+                        $totalCost -= ($d->total_cost ?? 0) * $mul;
+                    }
+                }
 
                 $summaries[] = [
                     'condition_id' => (int) $conditionId,

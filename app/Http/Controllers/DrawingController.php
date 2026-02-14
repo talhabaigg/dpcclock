@@ -1141,6 +1141,7 @@ class DrawingController extends Controller
             'sheet_number' => ['nullable', 'string', 'max:100'],
             'title' => ['nullable', 'string', 'max:500'],
             'discipline' => ['nullable', 'string', 'max:100'],
+            'quantity_multiplier' => ['nullable', 'numeric', 'min:0.01', 'max:9999'],
         ]);
 
         $drawing->update(array_filter($validated, fn ($v) => $v !== null));
@@ -1150,6 +1151,82 @@ class DrawingController extends Controller
             'message' => 'Drawing updated successfully.',
             'drawing' => $drawing->fresh(),
         ]);
+    }
+
+    /**
+     * Replicate a drawing N times for repetitive floor production tracking.
+     * Each copy shares the same file/tiles but gets its own measurements and calibration.
+     */
+    public function replicateToFloors(Request $request, Drawing $drawing): JsonResponse
+    {
+        $validated = $request->validate([
+            'floor_labels' => 'required|array|min:1|max:100',
+            'floor_labels.*' => 'required|string|max:100',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $sourceCalibration = $drawing->scaleCalibration;
+            $sourceMeasurements = $drawing->measurements()
+                ->where('scope', 'takeoff')
+                ->whereNull('parent_measurement_id')
+                ->with('deductions')
+                ->get();
+
+            $created = [];
+
+            foreach ($validated['floor_labels'] as $label) {
+                // Clone drawing record (shares file + tiles)
+                $new = $drawing->replicate(['id', 'created_at', 'updated_at', 'deleted_at']);
+                $new->source_drawing_id = $drawing->id;
+                $new->floor_label = $label;
+                $new->quantity_multiplier = 1.00;
+                $new->title = trim(($drawing->title ?? $drawing->drawing_title ?? '') . ' - ' . $label);
+                $new->status = Drawing::STATUS_ACTIVE;
+                $new->save();
+
+                // Clone scale calibration
+                if ($sourceCalibration) {
+                    $cal = $sourceCalibration->replicate(['id', 'created_at', 'updated_at']);
+                    $cal->drawing_id = $new->id;
+                    $cal->save();
+                }
+
+                // Clone measurements (parents first, then their deductions)
+                foreach ($sourceMeasurements as $m) {
+                    $newM = $m->replicate(['id', 'created_at', 'updated_at', 'deleted_at']);
+                    $newM->drawing_id = $new->id;
+                    $newM->source_measurement_id = $m->id;
+                    $newM->save();
+
+                    foreach ($m->deductions as $d) {
+                        $newD = $d->replicate(['id', 'created_at', 'updated_at', 'deleted_at']);
+                        $newD->drawing_id = $new->id;
+                        $newD->source_measurement_id = $d->id;
+                        $newD->parent_measurement_id = $newM->id;
+                        $newD->save();
+                    }
+                }
+
+                $created[] = ['id' => $new->id, 'title' => $new->title, 'floor_label' => $label];
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($created) . ' floor drawing(s) created.',
+                'drawings' => $created,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Floor replication failed', ['drawing_id' => $drawing->id, 'error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to replicate: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

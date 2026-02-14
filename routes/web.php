@@ -591,6 +591,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
+        Route::post('/drawings/{drawing}/replicate-floors', [DrawingController::class, 'replicateToFloors'])->name('drawings.replicate-floors');
         Route::post('/drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])->name('drawings.extract-metadata');
         // AI Drawing Comparison
         Route::post('/drawings/compare', [DrawingController::class, 'compareRevisions'])->name('drawings.compare');

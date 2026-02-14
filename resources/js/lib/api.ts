@@ -63,6 +63,14 @@ export const api = {
             body: JSON.stringify(body),
         }).then((r) => handleResponse<T>(r)),
 
+    patch: <T = unknown>(url: string, body: unknown): Promise<T> =>
+        fetch(url, {
+            method: 'PATCH',
+            headers: buildHeaders(),
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+        }).then((r) => handleResponse<T>(r)),
+
     delete: <T = unknown>(url: string): Promise<T> =>
         fetch(url, {
             method: 'DELETE',

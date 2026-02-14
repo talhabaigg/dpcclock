@@ -28,6 +28,7 @@ import {
     Hash,
     Layers,
     Loader2,
+    Magnet,
     Minus,
     MousePointer,
     Pencil,
@@ -131,6 +132,8 @@ type Drawing = {
     storage_path?: string | null;
     original_name?: string | null;
     mime_type?: string | null;
+    quantity_multiplier?: number;
+    floor_label?: string | null;
 };
 
 type PendingPoint = {
@@ -229,6 +232,7 @@ export default function DrawingTakeoff() {
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [editableVertices, setEditableVertices] = useState(false);
     const [deductionParentId, setDeductionParentId] = useState<number | null>(null);
+    const [snapEnabled, setSnapEnabled] = useState(true);
 
     // Flatten measurements + their deductions into a single array for map rendering
     const allMeasurements = useMemo(() => {
@@ -881,7 +885,7 @@ export default function DrawingTakeoff() {
             try {
                 const saved = await api.post<MeasurementData>(`/drawings/${drawing.id}/measurements`, {
                     name,
-                    type: 'area',
+                    type: parent?.type || 'area',
                     color: parent?.color || '#ef4444',
                     category: parent?.category || null,
                     points,
@@ -1088,10 +1092,16 @@ export default function DrawingTakeoff() {
     };
 
     const handleAddDeduction = (parentId: number) => {
+        const parent = measurements.find((m) => m.id === parentId);
         setDeductionParentId(parentId);
         setSelectedMeasurementId(null);
-        setViewMode('measure_area');
-        toast.info('Draw the area to deduct, then double-click to finish.');
+        if (parent?.type === 'linear') {
+            setViewMode('measure_line');
+            toast.info('Draw the line to deduct, then double-click to finish.');
+        } else {
+            setViewMode('measure_area');
+            toast.info('Draw the area to deduct, then double-click to finish.');
+        }
     };
 
     const handleOpenCalibrationDialog = (method: 'manual' | 'preset') => {
@@ -1126,6 +1136,7 @@ export default function DrawingTakeoff() {
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
                 enabled: showTakeoffPanel,
             })),
+            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: showTakeoffPanel },
             { key: 'z', ctrl: true, handler: undo },
             { key: 'z', ctrl: true, shift: true, handler: redo },
             { key: 'y', ctrl: true, handler: redo },
@@ -1235,6 +1246,17 @@ export default function DrawingTakeoff() {
                                 title="Count items (C)"
                             >
                                 <Hash className="h-3 w-3" />
+                            </Button>
+                            <div className="bg-border mx-px h-4 w-px" />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={snapEnabled ? 'secondary' : 'ghost'}
+                                onClick={() => setSnapEnabled(prev => !prev)}
+                                className="h-6 w-6 rounded-sm p-0"
+                                title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
+                            >
+                                <Magnet className="h-3 w-3" />
                             </Button>
                         </div>
                     )}
@@ -1618,6 +1640,7 @@ export default function DrawingTakeoff() {
                             editableVertices={editableVertices}
                             onVertexDragEnd={handleVertexDragEnd}
                             onVertexDelete={handleVertexDelete}
+                            snapEnabled={snapEnabled}
                             onMapReady={setMapControls}
                             className="absolute inset-0"
                         />
@@ -1641,6 +1664,8 @@ export default function DrawingTakeoff() {
                                 onOpenConditionManager={() => setShowConditionManager(true)}
                                 onActivateCondition={handleActivateCondition}
                                 onAddDeduction={handleAddDeduction}
+                                drawingId={drawing.id}
+                                quantityMultiplier={drawing.quantity_multiplier ?? 1}
                             />
                         </div>
                     )}

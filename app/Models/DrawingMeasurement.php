@@ -19,6 +19,7 @@ class DrawingMeasurement extends Model
         'category',
         'points',
         'computed_value',
+        'perimeter_value',
         'unit',
         'scope',
         'variation_id',
@@ -36,6 +37,7 @@ class DrawingMeasurement extends Model
     protected $casts = [
         'points' => 'array',
         'computed_value' => 'float',
+        'perimeter_value' => 'float',
         'material_cost' => 'float',
         'labour_cost' => 'float',
         'total_cost' => 'float',
