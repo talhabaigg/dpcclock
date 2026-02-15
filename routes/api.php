@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\DrawingController;
 use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\SiteWalkController;
+use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
 use App\Models\User;
@@ -88,6 +89,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->names('api.drawing-observations');
     Route::get('drawing-observations/{drawingObservation}/photo', [DrawingObservationController::class, 'photo'])
         ->name('api.drawing-observations.photo');
+
+    // WatermelonDB sync endpoints
+    Route::get('sync/pull', [SyncController::class, 'pull'])->name('api.sync.pull');
+    Route::post('sync/push', [SyncController::class, 'push'])->name('api.sync.push');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])

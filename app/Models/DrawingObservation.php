@@ -14,6 +14,7 @@ class DrawingObservation extends Model
     protected $table = 'drawing_observations';
 
     protected $fillable = [
+        'watermelon_id',
         'drawing_id',
         'page_number',
         'x',

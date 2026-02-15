@@ -14,6 +14,7 @@ class Drawing extends Model
     protected $table = 'drawings';
 
     protected $fillable = [
+        'watermelon_id',
         'project_id',
         'sheet_number',
         'title',

@@ -10,6 +10,7 @@ class Location extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'watermelon_id',
         'name',
         'eh_location_id',
         'eh_parent_id',
