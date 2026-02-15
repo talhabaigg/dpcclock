@@ -12,6 +12,7 @@ class DrawingMeasurement extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'watermelon_id',
         'drawing_id',
         'name',
         'type',

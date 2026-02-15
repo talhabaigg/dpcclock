@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ConditionLabourCode;
 use App\Models\Drawing;
+use App\Models\DrawingMeasurement;
 use App\Models\DrawingObservation;
 use App\Models\Location;
+use App\Models\MeasurementSegmentStatus;
+use App\Models\MeasurementStatus;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +54,8 @@ class SyncController extends Controller
             ->pluck('id')
             ->toArray();
 
+        $drawingScope = fn ($q) => $q->whereIn('project_id', $projectIds);
+
         $changes = [
             'projects' => $this->pullTable(
                 Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS),
@@ -62,9 +68,27 @@ class SyncController extends Controller
                 fn ($record) => $this->formatDrawing($record)
             ),
             'observations' => $this->pullTable(
-                DrawingObservation::whereHas('drawing', fn ($q) => $q->whereIn('project_id', $projectIds)),
+                DrawingObservation::whereHas('drawing', $drawingScope),
                 $since,
                 fn ($record) => $this->formatObservation($record)
+            ),
+            'measurements' => $this->pullTable(
+                DrawingMeasurement::whereHas('drawing', $drawingScope)->with('condition'),
+                $since,
+                fn ($record) => $this->formatMeasurement($record)
+            ),
+            'measurement_labour_codes' => $this->pullMeasurementLabourCodes($projectIds, $since),
+            'measurement_statuses' => $this->pullTable(
+                MeasurementStatus::whereHas('measurement.drawing', $drawingScope)->with('measurement'),
+                $since,
+                fn ($record) => $this->formatMeasurementStatus($record),
+                softDeletes: false
+            ),
+            'segment_statuses' => $this->pullTable(
+                MeasurementSegmentStatus::whereHas('measurement.drawing', $drawingScope)->with('measurement'),
+                $since,
+                fn ($record) => $this->formatSegmentStatus($record),
+                softDeletes: false
             ),
         ];
 
@@ -77,8 +101,8 @@ class SyncController extends Controller
     /**
      * Push local changes from WatermelonDB to server.
      *
-     * Only observations are writable from mobile.
-     * Projects and drawings are read-only (managed via web admin).
+     * Writable tables: observations, measurement_statuses, segment_statuses.
+     * Read-only (ignored on push): projects, drawings, measurements, measurement_labour_codes.
      */
     public function push(Request $request)
     {
@@ -93,9 +117,16 @@ class SyncController extends Controller
         DB::beginTransaction();
 
         try {
-            // Only process observation changes (projects + drawings are read-only)
             if (isset($changes['observations'])) {
                 $this->pushObservations($changes['observations'], $lastPulledAt);
+            }
+
+            if (isset($changes['measurement_statuses'])) {
+                $this->pushMeasurementStatuses($changes['measurement_statuses']);
+            }
+
+            if (isset($changes['segment_statuses'])) {
+                $this->pushSegmentStatuses($changes['segment_statuses']);
             }
 
             DB::commit();
@@ -118,7 +149,7 @@ class SyncController extends Controller
 
     // ── Pull helpers ──────────────────────────────────────────
 
-    private function pullTable($query, ?Carbon $since, callable $formatter): array
+    private function pullTable($query, ?Carbon $since, callable $formatter, bool $softDeletes = true): array
     {
         if ($since === null) {
             // Initial sync — return everything as "created"
@@ -142,14 +173,17 @@ class SyncController extends Controller
             ->where('created_at', '<=', $since)
             ->get();
 
-        // Deleted: soft-deleted records since last pull
-        $deleted = (clone $query)
-            ->onlyTrashed()
-            ->where('deleted_at', '>', $since)
-            ->pluck('watermelon_id')
-            ->filter() // Remove nulls (records without watermelon_id)
-            ->values()
-            ->toArray();
+        // Deleted: soft-deleted records since last pull (only for models with SoftDeletes)
+        $deleted = [];
+        if ($softDeletes) {
+            $deleted = (clone $query)
+                ->onlyTrashed()
+                ->where('deleted_at', '>', $since)
+                ->pluck('watermelon_id')
+                ->filter()
+                ->values()
+                ->toArray();
+        }
 
         return [
             'created' => $created->map($formatter)->values()->toArray(),
@@ -157,6 +191,81 @@ class SyncController extends Controller
             'deleted' => $deleted,
         ];
     }
+
+    /**
+     * Pull measurement_labour_codes — derived from condition_labour_codes via each measurement's condition.
+     * Uses deterministic UUIDs since there is no physical measurement_labour_codes table.
+     */
+    private function pullMeasurementLabourCodes(array $projectIds, ?Carbon $since): array
+    {
+        $drawingScope = fn ($q) => $q->whereIn('project_id', $projectIds);
+        $baseQuery = DrawingMeasurement::whereHas('drawing', $drawingScope)
+            ->whereNotNull('takeoff_condition_id')
+            ->with(['condition.conditionLabourCodes.labourCostCode']);
+
+        if ($since === null) {
+            // Initial sync — all pairs as "created"
+            $measurements = $baseQuery->get();
+            $records = [];
+            foreach ($measurements as $m) {
+                foreach ($m->condition->conditionLabourCodes ?? [] as $clc) {
+                    $records[] = $this->formatMeasurementLabourCode($m, $clc);
+                }
+            }
+
+            return [
+                'created' => $records,
+                'updated' => [],
+                'deleted' => [],
+            ];
+        }
+
+        // Delta sync
+        // Created: measurement created after since → all its LCCs are new to the client
+        $newMeasurements = (clone $baseQuery)->where('drawing_measurements.created_at', '>', $since)->get();
+        $created = [];
+        foreach ($newMeasurements as $m) {
+            foreach ($m->condition->conditionLabourCodes ?? [] as $clc) {
+                $created[] = $this->formatMeasurementLabourCode($m, $clc);
+            }
+        }
+
+        // Updated: measurement existed before, but CLC or LCC data changed
+        $existingMeasurements = (clone $baseQuery)->where('drawing_measurements.created_at', '<=', $since)->get();
+        $updated = [];
+        foreach ($existingMeasurements as $m) {
+            foreach ($m->condition->conditionLabourCodes ?? [] as $clc) {
+                $clcChanged = $clc->updated_at?->gt($since);
+                $lccChanged = $clc->labourCostCode?->updated_at?->gt($since);
+                if ($clcChanged || $lccChanged) {
+                    $updated[] = $this->formatMeasurementLabourCode($m, $clc);
+                }
+            }
+        }
+
+        // Deleted: from soft-deleted measurements
+        $deleted = [];
+        $trashedMeasurements = DrawingMeasurement::onlyTrashed()
+            ->whereHas('drawing', $drawingScope)
+            ->whereNotNull('takeoff_condition_id')
+            ->where('deleted_at', '>', $since)
+            ->with(['condition.conditionLabourCodes'])
+            ->get();
+
+        foreach ($trashedMeasurements as $m) {
+            foreach ($m->condition->conditionLabourCodes ?? [] as $clc) {
+                $deleted[] = $this->mlcUuid($m->id, $clc->id);
+            }
+        }
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'deleted' => $deleted,
+        ];
+    }
+
+    // ── Formatters ────────────────────────────────────────────
 
     private function formatProject(Location $location): array
     {
@@ -256,6 +365,90 @@ class SyncController extends Controller
         ];
     }
 
+    private function formatMeasurement(DrawingMeasurement $m): array
+    {
+        if (!$m->watermelon_id) {
+            $m->watermelon_id = (string) Str::uuid();
+            $m->saveQuietly();
+        }
+
+        return [
+            'id' => $m->watermelon_id,
+            'server_id' => $m->id,
+            'drawing_server_id' => $m->drawing_id,
+            'type' => $m->type,
+            'points_json' => json_encode($m->points ?? []),
+            'computed_value' => (float) ($m->computed_value ?? 0),
+            'color' => $m->color,
+            'takeoff_condition_id' => $m->takeoff_condition_id,
+            'condition_name' => $m->condition?->name ?? '',
+            'created_at' => $m->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $m->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
+    private function formatMeasurementLabourCode(DrawingMeasurement $m, ConditionLabourCode $clc): array
+    {
+        $lcc = $clc->labourCostCode;
+
+        return [
+            'id' => $this->mlcUuid($m->id, $clc->id),
+            'server_id' => $clc->id,
+            'measurement_server_id' => $m->id,
+            'labour_cost_code_id' => $clc->labour_cost_code_id,
+            'production_rate' => $clc->effective_production_rate,
+            'hourly_rate' => $clc->effective_hourly_rate,
+            'lcc_code' => $lcc?->code ?? '',
+            'lcc_name' => $lcc?->name ?? '',
+            'lcc_unit' => $lcc?->unit ?? '',
+            'created_at' => $clc->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => max(
+                $clc->updated_at?->getTimestampMs() ?? 0,
+                $lcc?->updated_at?->getTimestampMs() ?? 0
+            ),
+        ];
+    }
+
+    private function formatMeasurementStatus(MeasurementStatus $s): array
+    {
+        if (!$s->watermelon_id) {
+            $s->watermelon_id = (string) Str::uuid();
+            $s->saveQuietly();
+        }
+
+        return [
+            'id' => $s->watermelon_id,
+            'server_id' => $s->id,
+            'drawing_server_id' => $s->measurement?->drawing_id,
+            'measurement_server_id' => $s->drawing_measurement_id,
+            'labour_cost_code_id' => $s->labour_cost_code_id,
+            'percent_complete' => (int) $s->percent_complete,
+            'work_date' => $s->work_date?->toDateString(),
+            'created_at' => $s->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $s->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
+    private function formatSegmentStatus(MeasurementSegmentStatus $s): array
+    {
+        if (!$s->watermelon_id) {
+            $s->watermelon_id = (string) Str::uuid();
+            $s->saveQuietly();
+        }
+
+        return [
+            'id' => $s->watermelon_id,
+            'server_id' => $s->id,
+            'drawing_server_id' => $s->measurement?->drawing_id,
+            'measurement_server_id' => $s->drawing_measurement_id,
+            'segment_index' => (int) $s->segment_index,
+            'percent_complete' => (int) $s->percent_complete,
+            'work_date' => $s->work_date?->toDateString(),
+            'created_at' => $s->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $s->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
     // ── Push helpers ──────────────────────────────────────────
 
     private function pushObservations(array $changes, Carbon $lastPulledAt): void
@@ -320,5 +513,134 @@ class SyncController extends Controller
                 $obs->delete(); // Soft delete
             }
         }
+    }
+
+    /**
+     * Push measurement_statuses from mobile.
+     * Upsert by natural key: (drawing_measurement_id, labour_cost_code_id, work_date).
+     */
+    private function pushMeasurementStatuses(array $changes): void
+    {
+        // Created
+        foreach ($changes['created'] ?? [] as $record) {
+            MeasurementStatus::updateOrCreate(
+                [
+                    'drawing_measurement_id' => $record['measurement_server_id'],
+                    'labour_cost_code_id' => $record['labour_cost_code_id'],
+                    'work_date' => $record['work_date'],
+                ],
+                [
+                    'watermelon_id' => $record['id'],
+                    'percent_complete' => $record['percent_complete'] ?? 0,
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
+
+        // Updated
+        foreach ($changes['updated'] ?? [] as $record) {
+            $status = MeasurementStatus::where('watermelon_id', $record['id'])->first();
+
+            if ($status) {
+                $status->update([
+                    'percent_complete' => $record['percent_complete'] ?? $status->percent_complete,
+                    'updated_by' => auth()->id(),
+                ]);
+            } else {
+                // Fallback: upsert by natural key
+                MeasurementStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $record['measurement_server_id'],
+                        'labour_cost_code_id' => $record['labour_cost_code_id'],
+                        'work_date' => $record['work_date'],
+                    ],
+                    [
+                        'watermelon_id' => $record['id'],
+                        'percent_complete' => $record['percent_complete'] ?? 0,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+            }
+        }
+
+        // Deleted
+        foreach ($changes['deleted'] ?? [] as $watermelonId) {
+            MeasurementStatus::where('watermelon_id', $watermelonId)->delete();
+        }
+    }
+
+    /**
+     * Push segment_statuses from mobile.
+     * Upsert by natural key: (drawing_measurement_id, segment_index, work_date).
+     */
+    private function pushSegmentStatuses(array $changes): void
+    {
+        // Created
+        foreach ($changes['created'] ?? [] as $record) {
+            MeasurementSegmentStatus::updateOrCreate(
+                [
+                    'drawing_measurement_id' => $record['measurement_server_id'],
+                    'segment_index' => $record['segment_index'],
+                    'work_date' => $record['work_date'],
+                ],
+                [
+                    'watermelon_id' => $record['id'],
+                    'percent_complete' => $record['percent_complete'] ?? 0,
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
+
+        // Updated
+        foreach ($changes['updated'] ?? [] as $record) {
+            $status = MeasurementSegmentStatus::where('watermelon_id', $record['id'])->first();
+
+            if ($status) {
+                $status->update([
+                    'percent_complete' => $record['percent_complete'] ?? $status->percent_complete,
+                    'updated_by' => auth()->id(),
+                ]);
+            } else {
+                // Fallback: upsert by natural key
+                MeasurementSegmentStatus::updateOrCreate(
+                    [
+                        'drawing_measurement_id' => $record['measurement_server_id'],
+                        'segment_index' => $record['segment_index'],
+                        'work_date' => $record['work_date'],
+                    ],
+                    [
+                        'watermelon_id' => $record['id'],
+                        'percent_complete' => $record['percent_complete'] ?? 0,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+            }
+        }
+
+        // Deleted
+        foreach ($changes['deleted'] ?? [] as $watermelonId) {
+            MeasurementSegmentStatus::where('watermelon_id', $watermelonId)->delete();
+        }
+    }
+
+    // ── Utilities ─────────────────────────────────────────────
+
+    /**
+     * Generate a deterministic UUID for a measurement_labour_code derived record.
+     * Since there is no physical table, we derive a stable ID from the
+     * measurement ID + condition_labour_code ID combination.
+     */
+    private function mlcUuid(int $measurementId, int $clcId): string
+    {
+        $hash = md5("mlc:{$measurementId}:{$clcId}");
+
+        return sprintf(
+            '%s-%s-4%s-%s-%s',
+            substr($hash, 0, 8),
+            substr($hash, 8, 4),
+            substr($hash, 13, 3),
+            substr($hash, 16, 4),
+            substr($hash, 20, 12)
+        );
     }
 }

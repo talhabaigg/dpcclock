@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MeasurementSegmentStatus extends Model
 {
     protected $fillable = [
+        'watermelon_id',
         'drawing_measurement_id',
         'labour_cost_code_id',
         'segment_index',
