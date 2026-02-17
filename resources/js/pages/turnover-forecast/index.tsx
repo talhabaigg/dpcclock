@@ -1,13 +1,15 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, Filter, HelpCircle, Printer } from 'lucide-react';
+import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TurnoverPrintReport } from './TurnoverPrintReport';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
@@ -66,7 +68,20 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [printReportOpen, setPrintReportOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('revenue-only');
+    const [activeViews, setActiveViews] = useState<Set<ViewMode>>(() => new Set(['revenue-only']));
+    const toggleView = (mode: ViewMode) => {
+        setActiveViews((prev) => {
+            const next = new Set(prev);
+            if (next.has(mode)) {
+                if (next.size > 1) next.delete(mode);
+            } else {
+                next.add(mode);
+            }
+            return next;
+        });
+    };
+    const viewNames: Record<ViewMode, string> = { 'revenue-only': 'Revenue', expanded: 'Cost & Profit', targets: 'Targets' };
+    const viewSummary = (['revenue-only', 'expanded', 'targets'] as ViewMode[]).filter((v) => activeViews.has(v)).map((v) => viewNames[v]).join(', ');
     const [gridHeight, setGridHeight] = useState(() => {
         try {
             const stored = localStorage.getItem(GRID_HEIGHT_KEY);
@@ -77,12 +92,14 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     });
 
     // Financial Year filter
-    const availableFYs = useMemo(() => {
+    const currentFY = useMemo(() => {
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
-        const currentFY = currentMonth >= 7 ? currentYear : currentYear - 1;
+        return currentMonth >= 7 ? currentYear : currentYear - 1;
+    }, []);
 
-        const fys = [{ value: 'all', label: 'All Time' }];
+    const availableFYs = useMemo(() => {
+        const fys: { value: string; label: string }[] = [];
         for (let year = currentFY - 5; year <= currentFY + 5; year++) {
             fys.push({
                 value: year.toString(),
@@ -90,43 +107,68 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
             });
         }
         return fys;
-    }, []);
+    }, [currentFY]);
 
-    const [selectedFY, setSelectedFY] = useState<string>(() => {
+    const [selectedFYs, setSelectedFYs] = useState<string[]>(() => {
         try {
             const stored = localStorage.getItem(SELECTED_FY_KEY);
-            if (stored) return stored;
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) return parsed;
+                // Migrate old single-value format
+                if (typeof parsed === 'string') return parsed === 'all' ? [] : [parsed];
+            }
         } catch {
             // Ignore storage errors
         }
-        const currentYear = new Date().getFullYear();
-        const currentMonth = new Date().getMonth() + 1;
-        return currentMonth >= 7 ? currentYear.toString() : (currentYear - 1).toString();
+        return [currentFY.toString()];
     });
 
-    // Save selected FY to localStorage
+    const isAllTime = selectedFYs.length === 0;
+
+    // Save selected FYs to localStorage
     useEffect(() => {
-        localStorage.setItem(SELECTED_FY_KEY, selectedFY);
-    }, [selectedFY]);
+        localStorage.setItem(SELECTED_FY_KEY, JSON.stringify(selectedFYs));
+    }, [selectedFYs]);
 
-    const goToPreviousFY = () => {
-        if (selectedFY === 'all') return;
-        setSelectedFY((parseInt(selectedFY) - 1).toString());
+    const toggleFY = (fyValue: string) => {
+        setSelectedFYs((prev) => {
+            if (prev.includes(fyValue)) {
+                return prev.filter((v) => v !== fyValue);
+            }
+            return [...prev, fyValue].sort((a, b) => parseInt(a) - parseInt(b));
+        });
     };
 
-    const goToNextFY = () => {
-        if (selectedFY === 'all') return;
-        setSelectedFY((parseInt(selectedFY) + 1).toString());
-    };
+    const selectedFYLabel = useMemo(() => {
+        if (isAllTime) return 'All Time';
+        if (selectedFYs.length === 1) {
+            const fy = availableFYs.find((f) => f.value === selectedFYs[0]);
+            return fy?.label ?? selectedFYs[0];
+        }
+        const labels = selectedFYs
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map((v) => availableFYs.find((f) => f.value === v.toString())?.label ?? `FY${v}-${String(v + 1).slice(2)}`);
+        return labels.join(' & ');
+    }, [selectedFYs, isAllTime, availableFYs]);
 
-    // Filter months based on selected FY
+    // Filter months based on selected FYs
     const filteredMonths = useMemo(() => {
-        if (selectedFY === 'all') return months;
-        const fyYear = parseInt(selectedFY);
-        const fyStart = `${fyYear}-07`;
-        const fyEnd = `${fyYear + 1}-06`;
-        return months.filter((month) => month >= fyStart && month <= fyEnd);
-    }, [months, selectedFY]);
+        if (isAllTime) return months;
+        const monthSet = new Set<string>();
+        for (const fy of selectedFYs) {
+            const fyYear = parseInt(fy);
+            const fyStart = `${fyYear}-07`;
+            const fyEnd = `${fyYear + 1}-06`;
+            for (const month of months) {
+                if (month >= fyStart && month <= fyEnd) {
+                    monthSet.add(month);
+                }
+            }
+        }
+        return months.filter((m) => monthSet.has(m));
+    }, [months, selectedFYs, isAllTime]);
 
     // Save settings to local storage
     useEffect(() => {
@@ -208,9 +250,45 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const remainingTargetToAchieve = Math.max(turnoverTargetFYTotal - totalFY, 0);
     const targetBaseline = turnoverTargetFYTotal > 0 ? turnoverTargetFYTotal : totalFY;
 
+    // Variance: actual YTD vs budget YTD
+    const ytdVariance = completedTurnoverYTD - targetTurnoverYTD;
+    const ytdVariancePercent = targetTurnoverYTD > 0 ? (ytdVariance / targetTurnoverYTD) * 100 : 0;
+    const isAheadOfBudget = ytdVariance >= 0;
+
+    // FY time progress (only shown when a single FY is selected)
+    const fyTimeProgress = useMemo(() => {
+        if (isAllTime || selectedFYs.length !== 1) return null;
+        const fyYear = parseInt(selectedFYs[0]);
+        const now = new Date();
+        const fyStart = new Date(fyYear, 6, 1); // July 1
+        const fyEnd = new Date(fyYear + 1, 5, 30); // June 30
+        if (now < fyStart) return { elapsed: 0, total: 12, percent: 0 };
+        if (now > fyEnd) return { elapsed: 12, total: 12, percent: 100 };
+        const monthsElapsed = (now.getFullYear() - fyStart.getFullYear()) * 12 + (now.getMonth() - fyStart.getMonth());
+        return { elapsed: Math.min(monthsElapsed, 12), total: 12, percent: Math.round((Math.min(monthsElapsed, 12) / 12) * 100) };
+    }, [selectedFYs, isAllTime]);
+
+    // Dynamic widget title based on FY selection
+    const progressTitle = useMemo(() => {
+        if (isAllTime) return 'All Time Turnover Progress';
+        const labels = selectedFYs.map((v) => availableFYs.find((f) => f.value === v)?.label ?? v);
+        if (labels.length === 1) return `${labels[0]} Turnover Progress`;
+        // Check if consecutive — show range
+        const sorted = [...selectedFYs].map(Number).sort((a, b) => a - b);
+        const isConsecutive = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+        if (isConsecutive && sorted.length > 2) {
+            const first = availableFYs.find((f) => f.value === sorted[0].toString())?.label ?? sorted[0];
+            const last = availableFYs.find((f) => f.value === sorted[sorted.length - 1].toString())?.label ?? sorted[sorted.length - 1];
+            return `${first} to ${last} Turnover`;
+        }
+        // 2 FYs or non-consecutive — list them
+        if (labels.length === 2) return `${labels[0]} & ${labels[1]} Turnover`;
+        return `${labels.slice(0, 2).join(', ')} & ${labels.length - 2} more`;
+    }, [selectedFYs, isAllTime, availableFYs]);
+
     // Debug: Log jobs with revenue variance for investigation
     useEffect(() => {
-        if (selectedFY === 'all') {
+        if (isAllTime) {
             const jobsWithVariance = filteredData
                 .filter((row) => Math.abs(safeNumber(row.revenue_variance)) > 1000)
                 .map((row) => ({
@@ -232,7 +310,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 console.groupEnd();
             }
         }
-    }, [filteredData, selectedFY, totals]);
+    }, [filteredData, isAllTime, totals]);
 
     const handleHeightChange = useCallback((newHeight: number) => {
         setGridHeight(newHeight);
@@ -248,7 +326,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                             <p className="text-muted-foreground text-sm">
-                                Combined view of current and potential projects - Financial Year: {selectedFY}
+                                Combined view of current and potential projects - {selectedFYLabel}
                             </p>
                         </div>
                         <Link href="/forecast-projects" className="sm:flex-shrink-0">
@@ -261,69 +339,94 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                     {/* Controls */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-3">
-                            {/* View Mode Toggle */}
-                            <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50/50 p-1 dark:border-slate-700 dark:bg-slate-800/50">
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'revenue-only' ? 'default' : 'ghost'}
-                                    onClick={() => setViewMode('revenue-only')}
-                                    className="h-8"
-                                >
-                                    Revenue
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'expanded' ? 'default' : 'ghost'}
-                                    onClick={() => setViewMode('expanded')}
-                                    className="h-8"
-                                >
-                                    Full View
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'targets' ? 'default' : 'ghost'}
-                                    onClick={() => setViewMode('targets')}
-                                    className="h-8"
-                                >
-                                    Targets
-                                </Button>
-                            </div>
+                            {/* View Layers Selector */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                                        <Layers className="h-3.5 w-3.5" />
+                                        <span className="max-w-[200px] truncate">{viewSummary}</span>
+                                        <ChevronDown className="ml-0.5 h-3.5 w-3.5 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-52 p-1.5" align="start">
+                                    <div className="space-y-0.5">
+                                        {(['revenue-only', 'expanded', 'targets'] as ViewMode[]).map((mode) => {
+                                            const isActive = activeViews.has(mode);
+                                            const isOnly = isActive && activeViews.size === 1;
+                                            return (
+                                                <label
+                                                    key={mode}
+                                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 ${isOnly ? 'opacity-60' : ''}`}
+                                                    onClick={() => toggleView(mode)}
+                                                >
+                                                    {isActive ? (
+                                                        <Check className="h-4 w-4 text-emerald-600" />
+                                                    ) : (
+                                                        <div className="h-4 w-4" />
+                                                    )}
+                                                    {viewNames[mode]}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
 
-                            {/* FY Selector */}
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={goToPreviousFY}
-                                    disabled={selectedFY === 'all'}
-                                    title="Previous FY"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <Select value={selectedFY} onValueChange={setSelectedFY}>
-                                    <SelectTrigger className="h-8 w-[140px]">
-                                        <SelectValue placeholder="Select FY" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableFYs.map((fy) => (
-                                            <SelectItem key={fy.value} value={fy.value}>
-                                                {fy.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={goToNextFY}
-                                    disabled={selectedFY === 'all'}
-                                    title="Next FY"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
+                            {/* FY Multi-Selector */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                                        <Calendar className="h-3.5 w-3.5" />
+                                        <span className="max-w-[200px] truncate">{selectedFYLabel}</span>
+                                        <ChevronDown className="ml-0.5 h-3.5 w-3.5 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2" align="start">
+                                    <div className="space-y-1">
+                                        <label
+                                            className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            onClick={() => setSelectedFYs([])}
+                                        >
+                                            <Checkbox checked={isAllTime} onCheckedChange={() => setSelectedFYs([])} />
+                                            All Time
+                                        </label>
+                                        <div className="bg-border my-1 h-px" />
+                                        <div className="max-h-[240px] overflow-y-auto">
+                                            {availableFYs.map((fy) => {
+                                                const isChecked = selectedFYs.includes(fy.value);
+                                                const isCurrent = fy.value === currentFY.toString();
+                                                return (
+                                                    <label
+                                                        key={fy.value}
+                                                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                    >
+                                                        <Checkbox checked={isChecked} onCheckedChange={() => toggleFY(fy.value)} />
+                                                        <span className="flex-1">{fy.label}</span>
+                                                        {isCurrent && (
+                                                            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                                                Current
+                                                            </Badge>
+                                                        )}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                        {selectedFYs.length > 1 && (
+                                            <>
+                                                <div className="bg-border my-1 h-px" />
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 w-full text-xs"
+                                                    onClick={() => setSelectedFYs([currentFY.toString()])}
+                                                >
+                                                    Reset to Current FY
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         {/* Action Buttons */}
@@ -353,26 +456,32 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 </div>
 
                 {/* Summary Visual */}
-                <div className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 shadow-sm transition-all hover:shadow-md dark:border-blue-800 dark:from-blue-950/30 dark:via-gray-900 dark:to-slate-900">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-1">
+                <Card>
+                    <CardContent className="space-y-4 px-4 pt-4 sm:space-y-5 sm:px-6 sm:pt-6">
+                        {/* Header row */}
+                        <div className="flex items-start justify-between">
                             <HoverCard openDelay={200}>
                                 <HoverCardTrigger asChild>
-                                    <div className="inline-flex cursor-help items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400">
-                                        FY Turnover Progress
-                                        <HelpCircle className="h-3.5 w-3.5 opacity-60" />
-                                    </div>
+                                    <h3 className="text-muted-foreground inline-flex cursor-help items-center gap-1.5 text-sm font-medium">
+                                        {progressTitle}
+                                        <HelpCircle className="h-3.5 w-3.5" />
+                                    </h3>
                                 </HoverCardTrigger>
                                 <HoverCardContent className="w-80" side="right">
                                     <div className="space-y-2">
-                                        <h4 className="font-semibold">FY Turnover Progress</h4>
-                                        <p className="text-muted-foreground text-sm">Sum of all revenue for the selected period, calculated as:</p>
+                                        <h4 className="font-semibold">{progressTitle}</h4>
+                                        <p className="text-muted-foreground text-sm">
+                                            Revenue tracking for the selected {isAllTime ? 'period' : selectedFYs.length > 1 ? 'financial years' : 'financial year'}.
+                                        </p>
                                         <ul className="text-muted-foreground list-disc space-y-1 pl-4 text-sm">
                                             <li>
                                                 <strong>Completed YTD:</strong> Actual revenue claimed (from billing data)
                                             </li>
                                             <li>
                                                 <strong>Work in Hand:</strong> Forecasted revenue for months without actuals
+                                            </li>
+                                            <li>
+                                                <strong>Budget marker:</strong> Cumulative budget target to current month
                                             </li>
                                         </ul>
                                         <p className="text-muted-foreground/80 border-t pt-1 text-xs">
@@ -381,177 +490,205 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                     </div>
                                 </HoverCardContent>
                             </HoverCard>
-                            <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{formatCurrency(totalFY)}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">Completed YTD + Work in Hand {fyLabel}</div>
-                        </div>
-                        <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/50">
-                            <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 15l3-3 3 2 4-5" />
-                            </svg>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 space-y-4">
-                        {/* Progress bar */}
-                        <div className="flex h-3 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
-                            <div
-                                className="bg-blue-600 dark:bg-blue-500"
-                                style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}
-                                title="Completed turnover YTD"
-                            />
-                            <div
-                                className="bg-sky-400 dark:bg-sky-500"
-                                style={{ width: `${formatPercent(workInHandFY, targetBaseline)}%` }}
-                                title="Work in hand FY"
-                            />
-                            <div
-                                className="bg-amber-300 dark:bg-amber-500"
-                                style={{ width: `${formatPercent(remainingTargetToAchieve, targetBaseline)}%` }}
-                                title="Remaining target to achieve"
-                            />
+                            {fyTimeProgress && (
+                                <div className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-3 py-1 text-xs">
+                                    <Calendar className="h-3 w-3" />
+                                    Month {fyTimeProgress.elapsed} of {fyTimeProgress.total}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Legend */}
-                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3 dark:text-slate-400">
-                            <HoverCard openDelay={200}>
-                                <HoverCardTrigger asChild>
-                                    <div className="flex cursor-help items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-500" />
-                                        <div>
-                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
-                                                Completed Turnover YTD
-                                                <HelpCircle className="h-3 w-3 opacity-50" />
-                                            </div>
-                                            <div>{formatCurrency(completedTurnoverYTD)}</div>
+                        {/* 3 key metrics */}
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                            <div className="space-y-0.5">
+                                <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+                                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
+                                    Completed YTD
+                                </div>
+                                <div className="text-xl font-bold tracking-tight sm:text-2xl">
+                                    {formatCurrency(completedTurnoverYTD)}
+                                </div>
+                                <div className="text-muted-foreground text-[11px] sm:text-xs">Actual billed revenue</div>
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+                                    <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 dark:bg-sky-500" />
+                                    Work in Hand
+                                </div>
+                                <div className="text-muted-foreground text-xl font-bold tracking-tight sm:text-2xl">
+                                    {formatCurrency(workInHandFY)}
+                                </div>
+                                <div className="text-muted-foreground text-[11px] sm:text-xs">Forecasted revenue</div>
+                            </div>
+                            <div className="col-span-2 border-t pt-2 sm:col-span-1 sm:border-t-0 sm:pt-0 sm:text-right">
+                                <div className="flex items-baseline justify-between sm:block sm:space-y-0.5">
+                                    <div>
+                                        <div className="text-muted-foreground text-xs font-medium">FY Budget</div>
+                                        <div className="text-xl font-bold tracking-tight sm:text-2xl">
+                                            {formatCurrency(turnoverTargetFYTotal)}
                                         </div>
                                     </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent className="w-72">
-                                    <h4 className="mb-1 font-semibold">Completed Turnover YTD</h4>
-                                    <p className="text-muted-foreground text-sm">
-                                        Actual revenue that has been claimed and billed. This comes from billing data (ArProgressBillingSummary) for
-                                        months where claims have been submitted.
-                                    </p>
-                                </HoverCardContent>
-                            </HoverCard>
-                            <HoverCard openDelay={200}>
-                                <HoverCardTrigger asChild>
-                                    <div className="flex cursor-help items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500" />
-                                        <div>
-                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
-                                                Work in Hand {fyLabel}
-                                                <HelpCircle className="h-3 w-3 opacity-50" />
-                                            </div>
-                                            <div>{formatCurrency(workInHandFY)}</div>
-                                        </div>
+                                    <div className="text-muted-foreground text-right text-[11px] sm:text-xs">
+                                        {turnoverTargetFYTotal > 0 ? (
+                                            <>
+                                                <span>{formatPercent(completedTurnoverYTD, turnoverTargetFYTotal)}% billed</span>
+                                                <span className="mx-1 hidden sm:inline">&middot;</span>
+                                                <br className="sm:hidden" />
+                                                <span>{formatPercent(totalFY, turnoverTargetFYTotal)}% incl. forecast</span>
+                                            </>
+                                        ) : (
+                                            'No targets set'
+                                        )}
                                     </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent className="w-72">
-                                    <h4 className="mb-1 font-semibold">Work in Hand</h4>
-                                    <p className="text-muted-foreground text-sm">
-                                        Forecasted revenue for months that don't yet have actual billing data. These are projections from job
-                                        forecasts that are expected to be claimed in the future.
-                                    </p>
-                                </HoverCardContent>
-                            </HoverCard>
-                            <HoverCard openDelay={200}>
-                                <HoverCardTrigger asChild>
-                                    <div className="flex cursor-help items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-500" />
-                                        <div>
-                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
-                                                Budget Balance to Achieve
-                                                <HelpCircle className="h-3 w-3 opacity-50" />
-                                            </div>
-                                            <div>{formatCurrency(remainingTargetToAchieve)}</div>
-                                        </div>
-                                    </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent className="w-72">
-                                    <h4 className="mb-1 font-semibold">Budget Balance to Achieve</h4>
-                                    <p className="text-muted-foreground text-sm">
-                                        The gap between the budget target and current turnover progress. Calculated as: Budget Target - (Completed +
-                                        Work in Hand). Shows how much more revenue is needed to meet the budget.
-                                    </p>
-                                </HoverCardContent>
-                            </HoverCard>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Target bar */}
-                        <div className="flex h-3 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
+                        {/* Single unified progress bar with budget marker */}
+                        <div className="space-y-2">
+                            <div className="relative">
+                                <div className="flex h-3.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                    <HoverCard openDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                            <div
+                                                className="cursor-help bg-emerald-600 transition-all hover:brightness-110 dark:bg-emerald-500"
+                                                style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}
+                                            />
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-64" side="top">
+                                            <h4 className="mb-1 font-semibold">Completed Turnover YTD</h4>
+                                            <div className="text-lg font-bold">{formatCurrency(completedTurnoverYTD)}</div>
+                                            <p className="text-muted-foreground text-sm">
+                                                {formatPercent(completedTurnoverYTD, targetBaseline)}% of target &middot; Actual billed
+                                            </p>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                    <HoverCard openDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                            <div
+                                                className="cursor-help bg-sky-400 transition-all hover:brightness-110 dark:bg-sky-500"
+                                                style={{ width: `${formatPercent(workInHandFY, targetBaseline)}%` }}
+                                            />
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-64" side="top">
+                                            <h4 className="mb-1 font-semibold">Work in Hand</h4>
+                                            <div className="text-lg font-bold">{formatCurrency(workInHandFY)}</div>
+                                            <p className="text-muted-foreground text-sm">
+                                                {formatPercent(workInHandFY, targetBaseline)}% of target &middot; Forecasted revenue
+                                            </p>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                    {remainingTargetToAchieve > 0 && <div className="flex-1" />}
+                                </div>
+                                {/* Budget YTD marker line overlaid on bar */}
+                                {targetTurnoverYTD > 0 && (
+                                    <HoverCard openDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                            <div
+                                                className="absolute top-0 h-3.5 w-0.5 cursor-help bg-amber-500"
+                                                style={{ left: `${formatPercent(targetTurnoverYTD, targetBaseline)}%` }}
+                                            >
+                                                <div className="absolute -top-1.5 left-1/2 h-0 w-0 -translate-x-1/2 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent border-t-amber-500" />
+                                            </div>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-64" side="top">
+                                            <h4 className="mb-1 font-semibold">Budget YTD</h4>
+                                            <div className="text-lg font-bold">{formatCurrency(targetTurnoverYTD)}</div>
+                                            <p className="text-muted-foreground text-sm">Cumulative monthly targets to date</p>
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                )}
+                            </div>
+                            {/* Compact legend */}
+                            <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] sm:text-xs">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <span className="flex items-center gap-1">
+                                        <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
+                                        Completed
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 dark:bg-sky-500" />
+                                        Forecast
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="h-2 w-2 shrink-0 rounded-sm bg-amber-500" />
+                                        Budget YTD
+                                    </span>
+                                </div>
+                                {remainingTargetToAchieve > 0 && <span>{formatCurrency(remainingTargetToAchieve)} to target</span>}
+                            </div>
+                        </div>
+
+                        {/* Variance callout */}
+                        {targetTurnoverYTD > 0 && (
                             <div
-                                className="bg-amber-600 dark:bg-amber-500"
-                                style={{ width: `${formatPercent(targetTurnoverYTD, targetBaseline)}%` }}
-                                title="Budget turnover YTD"
-                            />
-                            <div
-                                className="bg-amber-300 dark:bg-amber-600"
-                                style={{ width: `${formatPercent(turnoverTargetFYTotal - targetTurnoverYTD, targetBaseline)}%` }}
-                                title="Budget turnover remaining"
+                                className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs font-medium sm:items-center sm:py-2.5 sm:text-sm ${
+                                    isAheadOfBudget
+                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                                }`}
+                            >
+                                {isAheadOfBudget ? (
+                                    <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" />
+                                ) : (
+                                    <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" />
+                                )}
+                                <span>
+                                    <span className="sm:hidden">
+                                        {formatCurrency(Math.abs(ytdVariance))} {isAheadOfBudget ? 'ahead of' : 'below'} target
+                                    </span>
+                                    <span className="hidden sm:inline">
+                                        YTD Actual vs Target: {formatCurrency(Math.abs(ytdVariance))}{' '}
+                                        {isAheadOfBudget ? 'ahead' : 'below'}
+                                    </span>
+                                    <span className="ml-1 opacity-75">
+                                        ({ytdVariancePercent > 0 ? '+' : ''}
+                                        {ytdVariancePercent.toFixed(1)}%)
+                                    </span>
+                                </span>
+                            </div>
+                        )}
+
+                        {/* FY time progress */}
+                        {fyTimeProgress && (
+                            <div className="space-y-1.5">
+                                <div className="text-muted-foreground flex items-center justify-between text-xs">
+                                    <span>Financial Year Progress</span>
+                                    <span>{fyTimeProgress.percent}% elapsed</span>
+                                </div>
+                                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                    <div
+                                        className="h-full rounded-full bg-slate-400 transition-all dark:bg-slate-500"
+                                        style={{ width: `${fyTimeProgress.percent}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Grids — one per active view */}
+                {(['revenue-only', 'expanded', 'targets'] as ViewMode[])
+                    .filter((v) => activeViews.has(v))
+                    .map((mode, _i, arr) => (
+                        <div key={mode} className="space-y-1">
+                            {arr.length > 1 && (
+                                <h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                                    {viewNames[mode]}
+                                </h3>
+                            )}
+                            <UnifiedForecastGrid
+                                data={filteredData}
+                                months={filteredMonths}
+                                lastActualMonth={lastActualMonth}
+                                fyLabel={fyLabel}
+                                monthlyTargets={monthlyTargets}
+                                viewMode={mode}
+                                height={gridHeight}
+                                onHeightChange={handleHeightChange}
                             />
                         </div>
-
-                        <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-2 dark:text-slate-400">
-                            <HoverCard openDelay={200}>
-                                <HoverCardTrigger asChild>
-                                    <div className="flex cursor-help items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-500" />
-                                        <div>
-                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
-                                                Budget Turnover YTD
-                                                <HelpCircle className="h-3 w-3 opacity-50" />
-                                            </div>
-                                            <div>{formatCurrency(targetTurnoverYTD)}</div>
-                                        </div>
-                                    </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent className="w-72">
-                                    <h4 className="mb-1 font-semibold">Budget Turnover YTD</h4>
-                                    <p className="text-muted-foreground text-sm">
-                                        The cumulative monthly revenue targets from the start of the period up to (but not including) the current
-                                        month. This represents what should have been achieved by now according to budget.
-                                    </p>
-                                </HoverCardContent>
-                            </HoverCard>
-                            <HoverCard openDelay={200}>
-                                <HoverCardTrigger asChild>
-                                    <div className="flex cursor-help items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-300 dark:bg-amber-600" />
-                                        <div>
-                                            <div className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
-                                                Budget Turnover {fyLabel}
-                                                <HelpCircle className="h-3 w-3 opacity-50" />
-                                            </div>
-                                            <div>{formatCurrency(turnoverTargetFYTotal)}</div>
-                                        </div>
-                                    </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent className="w-72">
-                                    <h4 className="mb-1 font-semibold">Budget Turnover Total</h4>
-                                    <p className="text-muted-foreground text-sm">
-                                        The total revenue target for the entire selected period. Sum of all monthly revenue targets set in the Company
-                                        Monthly Revenue Targets.
-                                    </p>
-                                </HoverCardContent>
-                            </HoverCard>
-                        </div>
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-400 via-sky-400 to-slate-400" />
-                </div>
-
-                {/* Unified Grid */}
-                <UnifiedForecastGrid
-                    data={filteredData}
-                    months={filteredMonths}
-                    lastActualMonth={lastActualMonth}
-                    fyLabel={fyLabel}
-                    monthlyTargets={monthlyTargets}
-                    viewMode={viewMode}
-                    height={gridHeight}
-                    onHeightChange={handleHeightChange}
-                />
+                    ))}
 
                 {/* Footer info */}
                 <div className="text-muted-foreground text-sm">
@@ -994,10 +1131,10 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 data={filteredData}
                 months={filteredMonths}
                 lastActualMonth={lastActualMonth}
-                fyLabel={fyLabel}
+                fyLabel={selectedFYLabel}
                 monthlyTargets={monthlyTargets}
                 allMonths={months}
-                selectedFY={selectedFY}
+                selectedFYs={selectedFYs}
             />
         </AppLayout>
     );

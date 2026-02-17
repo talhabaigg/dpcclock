@@ -24,6 +24,7 @@
 
 import { Button } from '@/components/ui/button';
 import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { useCallback } from 'react';
@@ -211,7 +212,7 @@ export const ForecastGrid = ({
             )}
 
             {/* AG Grid */}
-            <div className="ag-theme-alpine dark:ag-theme-alpine-dark" style={{ height: 350, width: '100%' }}>
+            <div className="ag-theme-shadcn" style={{ height: 350, width: '100%' }}>
                 <AgGridReact
                     rowData={rowData}
                     columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth, {
@@ -223,6 +224,7 @@ export const ForecastGrid = ({
                         onCollapseAll,
                         isAllExpanded: expandedParents.size > 0,
                     })}
+                    theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
                     onCellValueChanged={onCellValueChanged}
                     onCellClicked={onCellClicked}
                     defaultColDef={{

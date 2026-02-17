@@ -4,10 +4,13 @@
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { ChartOptions } from 'chart.js';
+import { Chart as ChartJS, type ChartOptions } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { FileText, Printer } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Line } from 'react-chartjs-2';
+
+ChartJS.register(ChartDataLabels);
 
 interface RevenueReportDialogProps {
     open: boolean;
@@ -164,23 +167,14 @@ export function RevenueReportDialog({
                 label: 'Revenue',
                 data: cumulativeData.revenueValues,
                 borderColor: COLORS.revenueActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.revenueGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.revenueGradientStart);
-                    gradient.addColorStop(1, COLORS.revenueGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.revenue,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
                 segment: {
                     borderColor: (ctx: any) => (cumulativeData.revenueIsActual[ctx.p1DataIndex] ? COLORS.revenueActual : COLORS.revenueForecast),
                     borderDash: (ctx: any) => {
@@ -193,23 +187,14 @@ export function RevenueReportDialog({
                 label: 'Cost',
                 data: cumulativeData.costValues,
                 borderColor: COLORS.costActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.costGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.costGradientStart);
-                    gradient.addColorStop(1, COLORS.costGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.cost,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
                 segment: {
                     borderColor: (ctx: any) => (cumulativeData.costIsActual[ctx.p1DataIndex] ? COLORS.costActual : COLORS.costForecast),
                     borderDash: (ctx: any) => {
@@ -222,23 +207,14 @@ export function RevenueReportDialog({
                 label: 'Margin',
                 data: cumulativeData.marginValues,
                 borderColor: COLORS.marginActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.marginGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.marginGradientStart);
-                    gradient.addColorStop(1, COLORS.marginGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.margin,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
                 segment: {
                     borderColor: (ctx: any) => {
                         const costIsActual = cumulativeData.costIsActual[ctx.p1DataIndex];
@@ -264,67 +240,40 @@ export function RevenueReportDialog({
                 label: 'Revenue %',
                 data: cumulativeData.revenueValues.map((v) => (totalRevenueBudget > 0 ? (v / totalRevenueBudget) * 100 : 0)),
                 borderColor: COLORS.revenueActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.revenueGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.revenueGradientStart);
-                    gradient.addColorStop(1, COLORS.revenueGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.revenue,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
             },
             {
                 label: 'Cost %',
                 data: cumulativeData.costValues.map((v) => (totalCostBudget > 0 ? (v / totalCostBudget) * 100 : 0)),
                 borderColor: COLORS.costActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.costGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.costGradientStart);
-                    gradient.addColorStop(1, COLORS.costGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.cost,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
             },
             {
                 label: 'Margin %',
                 data: cumulativeData.marginValues.map((v) => (totalRevenueBudget > 0 ? (v / totalRevenueBudget) * 100 : 0)),
                 borderColor: COLORS.marginActual,
-                borderWidth: 3,
+                borderWidth: 2.5,
                 tension: 0.4,
-                fill: true,
-                backgroundColor: (context: any) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    if (!chartArea) return COLORS.marginGradientStart;
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, COLORS.marginGradientStart);
-                    gradient.addColorStop(1, COLORS.marginGradientEnd);
-                    return gradient;
-                },
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
                 pointBackgroundColor: cumulativeData.pointColors.margin,
                 pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                pointBorderWidth: 2.5,
+                pointBorderWidth: 2,
             },
         ],
     };
@@ -384,6 +333,18 @@ export function RevenueReportDialog({
                 callbacks: {
                     label: (ctx) => `${ctx.dataset.label}: $${Number(ctx.parsed.y).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
                 },
+            },
+            datalabels: {
+                display: true,
+                align: 'top' as const,
+                offset: 6,
+                font: {
+                    size: 9,
+                    weight: 600 as const,
+                    family: "'Inter', system-ui, sans-serif",
+                },
+                color: COLORS.mutedText,
+                formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`,
             },
         },
         scales: {
@@ -488,6 +449,18 @@ export function RevenueReportDialog({
                     label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                 },
             },
+            datalabels: {
+                display: true,
+                align: 'top' as const,
+                offset: 6,
+                font: {
+                    size: 9,
+                    weight: 600 as const,
+                    family: "'Inter', system-ui, sans-serif",
+                },
+                color: COLORS.mutedText,
+                formatter: (value: number) => `${value.toFixed(1)}%`,
+            },
         },
         scales: {
             x: {
@@ -539,9 +512,29 @@ export function RevenueReportDialog({
         if (!reportRef.current) return;
 
         try {
-            // Convert charts to images
-            const chartDollarImg = chartRefDollar.current?.toBase64Image();
-            const chartPercentImg = chartRefPercent.current?.toBase64Image();
+            // Re-render charts at landscape page proportions then capture
+            const captureChart = (chartRef: any) => {
+                if (!chartRef?.current) return null;
+                const chart = chartRef.current;
+                const canvas = chart.canvas as HTMLCanvasElement;
+                const container = canvas.parentElement as HTMLElement;
+
+                // Force container to landscape A4 proportions so Chart.js re-renders
+                container.style.setProperty('width', '1600px', 'important');
+                container.style.setProperty('height', '1000px', 'important');
+                chart.resize();
+
+                const img = chart.toBase64Image();
+
+                // Restore by removing inline overrides so CSS classes take over
+                container.style.removeProperty('width');
+                container.style.removeProperty('height');
+                chart.resize();
+
+                return img;
+            };
+            const chartDollarImg = captureChart(chartRefDollar);
+            const chartPercentImg = captureChart(chartRefPercent);
 
             const printWindow = window.open('', '', 'width=1200,height=800');
             if (printWindow) {
@@ -563,29 +556,80 @@ export function RevenueReportDialog({
                                     font-size: 11px;
                                     line-height: 1.4;
                                 }
-                                .report-header {
+                                /* Repeating page header via table thead */
+                                .page-wrapper {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                }
+                                .page-wrapper thead td {
+                                    padding: 0;
+                                }
+                                .page-wrapper tbody td {
+                                    padding: 0;
+                                    vertical-align: top;
+                                }
+                                .page-header {
+                                    display: flex;
+                                    align-items: center;
+                                    padding: 10px 0 8px 0;
+                                    margin-bottom: 12px;
+                                    border-bottom: 2px solid #1a3a5c;
+                                }
+                                .page-header .logo {
+                                    height: 44px;
+                                    flex-shrink: 0;
+                                    margin-right: 20px;
+                                }
+                                .page-header .header-center {
+                                    flex: 1;
                                     text-align: center;
-                                    margin-bottom: 25px;
-                                    padding-bottom: 15px;
-                                    border-bottom: 1px solid #ccc;
                                 }
-                                .logo {
-                                    max-width: 150px;
-                                    margin-bottom: 8px;
+                                .page-header .header-center .company-name {
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                    color: #1a3a5c;
+                                    margin: 0;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.5px;
                                 }
-                                h1 {
-                                    color: #1a1a1a;
-                                    margin: 8px 0 4px 0;
-                                    font-size: 22px;
+                                .page-header .header-center .report-title {
+                                    font-size: 12px;
+                                    font-weight: 500;
+                                    color: #444;
+                                    margin: 2px 0 0 0;
+                                }
+                                .page-header .header-center .report-date {
+                                    font-size: 10px;
+                                    color: #888;
+                                    margin: 2px 0 0 0;
+                                }
+                                .page-header .header-right {
+                                    flex-shrink: 0;
+                                    text-align: right;
+                                    font-size: 10px;
+                                    color: #1a3a5c;
                                     font-weight: 600;
+                                    min-width: 80px;
+                                }
+                                .page-footer {
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                    padding: 6px 0;
+                                    margin-top: 10px;
+                                    border-top: 2px solid #1a3a5c;
+                                    font-size: 8px;
+                                    color: #888;
                                 }
                                 h2 {
-                                    color: #333;
+                                    color: #1a3a5c;
                                     margin: 20px 0 10px 0;
-                                    font-size: 14px;
-                                    font-weight: 600;
-                                    border-bottom: 1px solid #ddd;
-                                    padding-bottom: 5px;
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                    border-bottom: none;
+                                    padding-bottom: 4px;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.3px;
                                 }
                                 .meta {
                                     color: #666;
@@ -603,22 +647,24 @@ export function RevenueReportDialog({
                                     gap: 12px;
                                 }
                                 .summary-item {
-                                    padding: 12px;
-                                    border: 1px solid #ddd;
-                                    border-radius: 4px;
+                                    padding: 12px 14px;
+                                    border: none;
+                                    border-left: 3px solid #1a3a5c;
+                                    background: #f8f9fb;
                                 }
                                 .summary-item label {
-                                    font-size: 9px;
-                                    color: #666;
+                                    font-size: 8px;
+                                    color: #1a3a5c;
                                     text-transform: uppercase;
-                                    letter-spacing: 0.3px;
+                                    letter-spacing: 0.5px;
+                                    font-weight: 600;
                                     display: block;
                                     margin-bottom: 4px;
                                 }
                                 .summary-item .value {
                                     font-size: 16px;
-                                    font-weight: 600;
-                                    color: #1a1a1a;
+                                    font-weight: 700;
+                                    color: #1a3a5c;
                                 }
                                 .summary-item .sub-value {
                                     font-size: 9px;
@@ -626,70 +672,115 @@ export function RevenueReportDialog({
                                     margin-top: 2px;
                                 }
 
-                                /* Table Styles - Clean and minimal */
+                                /* Table Styles - Professional with horizontal rules */
                                 .data-table {
                                     width: 100%;
                                     border-collapse: collapse;
-                                    margin: 15px 0;
+                                    margin: 10px 0;
                                     font-size: 10px;
                                 }
                                 .data-table thead {
-                                    background: #f5f5f5;
+                                    background: none;
                                 }
                                 .data-table th {
-                                    padding: 8px 6px;
+                                    padding: 8px 8px;
                                     text-align: right;
-                                    font-weight: 600;
-                                    border: 1px solid #ddd;
-                                    color: #333;
+                                    font-weight: 700;
+                                    font-size: 9px;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.3px;
+                                    color: #1a3a5c;
+                                    border: none;
+                                    border-bottom: 2px solid #1a3a5c;
                                 }
                                 .data-table th:first-child {
                                     text-align: left;
                                 }
                                 .data-table td {
-                                    padding: 6px;
+                                    padding: 5px 8px;
                                     text-align: right;
-                                    border: 1px solid #ddd;
+                                    border: none;
+                                    border-bottom: 1px solid #e5e7eb;
+                                    color: #333;
                                 }
                                 .data-table td:first-child {
                                     text-align: left;
+                                    font-weight: 500;
+                                    color: #1a1a1a;
                                 }
-                                .data-table tbody tr:nth-child(even) {
-                                    background: #fafafa;
+                                .data-table tbody tr.actual-row td {
+                                    border-left: none;
+                                    color: #1a1a1a;
+                                    font-weight: 500;
                                 }
-                                .data-table tbody tr.actual-row td:first-child::after {
-                                    content: ' (Actual)';
+                                .data-table tbody tr.actual-row td:first-child {
+                                    border-left: 3px solid #22c55e;
+                                    font-weight: 700;
+                                }
+                                .data-table tbody tr.forecast-row td {
+                                    color: #888;
+                                    font-style: italic;
+                                }
+                                .data-table tbody tr.forecast-row td:first-child {
+                                    border-left: 3px solid #e5e7eb;
+                                    font-style: italic;
+                                }
+                                .data-table .section-divider td {
+                                    border-bottom: none;
+                                    padding: 6px 8px 2px 8px;
                                     font-size: 8px;
-                                    color: #666;
+                                    font-weight: 700;
+                                    text-transform: uppercase;
+                                    letter-spacing: 1px;
+                                    color: #1a3a5c;
+                                    text-align: left;
+                                    background: none;
+                                }
+                                .data-table .section-divider td .divider-line {
+                                    display: block;
+                                    border-bottom: 2px solid #1a3a5c;
+                                    margin-top: 3px;
                                 }
                                 .data-table tfoot {
-                                    background: #f0f0f0;
-                                    font-weight: 600;
+                                    background: none;
+                                    font-weight: 700;
                                 }
                                 .data-table tfoot td {
-                                    border-top: 2px solid #999;
+                                    border-top: 2px solid #1a3a5c;
+                                    border-bottom: 2px solid #1a3a5c;
+                                    color: #1a3a5c;
+                                    padding: 8px 8px;
                                 }
 
+                                .chart-tbody td {
+                                    page-break-before: always;
+                                }
                                 .chart-section {
-                                    margin-top: 25px;
-                                    page-break-inside: avoid;
+                                    margin: 0;
+                                    padding: 0;
+                                    text-align: center;
+                                }
+                                .chart-section h2 {
+                                    margin: 0 0 12px 0;
+                                    padding-top: 4px;
+                                    border-bottom: 2px solid #1a3a5c;
+                                    padding-bottom: 6px;
+                                    text-align: left;
                                 }
                                 .chart-section img {
-                                    max-width: 100%;
+                                    width: 80%;
                                     height: auto;
-                                    border: 1px solid #ddd;
+                                    max-height: 80vh;
+                                    object-fit: contain;
                                 }
                                 .legend {
-                                    margin-top: 20px;
-                                    padding: 10px;
-                                    border: 1px solid #ddd;
+                                    margin-top: 12px;
+                                    padding: 8px 12px;
+                                    border: none;
+                                    border-top: 1px solid #e5e7eb;
                                     font-size: 9px;
                                     color: #666;
-                                }
-                                .legend p {
-                                    margin-bottom: 5px;
-                                    font-weight: 600;
-                                    color: #333;
+                                    text-align: left;
                                 }
                                 .legend-items {
                                     display: flex;
@@ -713,6 +804,15 @@ export function RevenueReportDialog({
                                     border-top: 2px dashed #999;
                                     display: inline-block;
                                 }
+                                @page {
+                                    size: landscape;
+                                    margin: 12mm 15mm;
+                                    @bottom-center {
+                                        content: "Page " counter(page) " of " counter(pages);
+                                        font-size: 8px;
+                                        color: #888;
+                                    }
+                                }
                                 @media print {
                                     body {
                                         padding: 15px 25px;
@@ -720,19 +820,26 @@ export function RevenueReportDialog({
                                     .no-print {
                                         display: none !important;
                                     }
-                                    .chart-section {
-                                        page-break-before: always;
-                                    }
                                 }
                             </style>
                         </head>
                         <body>
-                            <div class="report-header">
-                                <img src="/logo.png" alt="Company Logo" class="logo" />
-                                <h1>${jobName}</h1>
-                                <p class="meta">Job Number: ${jobNumber}</p>
-                                <p class="meta">Report Generated: ${new Date().toLocaleDateString()}</p>
-                            </div>
+                            <table class="page-wrapper">
+                                <thead>
+                                    <tr><td>
+                                        <div class="page-header">
+                                            <img src="/logo.png" alt="Logo" class="logo" />
+                                            <div class="header-center">
+                                                <p class="company-name">${jobName}</p>
+                                                <p class="report-title">Revenue Forecast Report</p>
+                                                <p class="report-date">Job #${jobNumber} &nbsp;&bull;&nbsp; As of ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                            </div>
+                                            <div class="header-right">CONFIDENTIAL</div>
+                                        </div>
+                                    </td></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>
 
                             <div class="summary-box">
                                 <h2>Project Summary</h2>
@@ -750,7 +857,7 @@ export function RevenueReportDialog({
 
                                     <div class="summary-item">
                                         <label>Remaining</label>
-                                        <div class="value">$${(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                        <div class="value">$${(totalRevenueBudget - actualsToDate).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                                     </div>
 
                                     <div class="summary-item">
@@ -779,8 +886,13 @@ export function RevenueReportDialog({
                                 <tbody>
                                     ${tableData
                                         .map(
-                                            (row) => `
-                                        <tr class="${row.isActual ? 'actual-row' : ''}">
+                                            (row, idx) => {
+                                                const prevRow = idx > 0 ? tableData[idx - 1] : null;
+                                                const divider = prevRow && prevRow.isActual && !row.isActual
+                                                    ? '<tr class="section-divider"><td colspan="9">Forecast<span class="divider-line"></span></td></tr>'
+                                                    : '';
+                                                return `${divider}
+                                        <tr class="${row.isActual ? 'actual-row' : 'forecast-row'}">
                                             <td>${row.month}</td>
                                             <td>${row.monthlyRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                                             <td>${row.monthlyCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
@@ -790,8 +902,8 @@ export function RevenueReportDialog({
                                             <td>${(row.cumulativeRevenue - row.cumulativeCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                                             <td>${row.percentComplete.toFixed(1)}%</td>
                                             <td>${row.remaining.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                                        </tr>
-                                    `,
+                                        </tr>`;
+                                            },
                                         )
                                         .join('')}
                                 </tbody>
@@ -808,13 +920,40 @@ export function RevenueReportDialog({
                                 </tfoot>
                             </table>
 
+                                    </td></tr>
+                                </tbody>
+
                             ${
                                 chartDollarImg
                                     ? `
-                            <div class="chart-section">
-                                <h2>Accrual Progression ($)</h2>
-                                <img src="${chartDollarImg}" alt="Accrual Chart (Dollars)" />
-                            </div>
+                                <tbody class="chart-tbody">
+                                    <tr><td>
+                                        <div class="chart-section">
+                                            <h2>Accrual Progression ($)</h2>
+                                            <img src="${chartDollarImg}" alt="Accrual Chart (Dollars)" />
+                                            <div class="legend">
+                                                <div class="legend-items">
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #3b82f6;"></span>
+                                                        Cost
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #22c55e;"></span>
+                                                        Revenue
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #8b5cf6;"></span>
+                                                        Margin
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-line"></span>
+                                                        Forecast
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td></tr>
+                                </tbody>
                             `
                                     : ''
                             }
@@ -822,35 +961,47 @@ export function RevenueReportDialog({
                             ${
                                 chartPercentImg
                                     ? `
-                            <div class="chart-section">
-                                <h2>Accrual Progression (%)</h2>
-                                <img src="${chartPercentImg}" alt="Accrual Chart (Percent)" />
-                            </div>
+                                <tbody class="chart-tbody">
+                                    <tr><td>
+                                        <div class="chart-section">
+                                            <h2>Accrual Progression (%)</h2>
+                                            <img src="${chartPercentImg}" alt="Accrual Chart (Percent)" />
+                                            <div class="legend">
+                                                <div class="legend-items">
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #3b82f6;"></span>
+                                                        Cost %
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #22c55e;"></span>
+                                                        Revenue %
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-dot" style="background: #8b5cf6;"></span>
+                                                        Margin %
+                                                    </div>
+                                                    <div class="legend-item">
+                                                        <span class="legend-line"></span>
+                                                        Forecast
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td></tr>
+                                </tbody>
                             `
                                     : ''
                             }
 
-                            <div class="legend">
-                                <p>Chart Legend</p>
-                                <div class="legend-items">
-                                    <div class="legend-item">
-                                        <span class="legend-dot" style="background: #3b82f6;"></span>
-                                        Cost
-                                    </div>
-                                    <div class="legend-item">
-                                        <span class="legend-dot" style="background: #22c55e;"></span>
-                                        Revenue
-                                    </div>
-                                    <div class="legend-item">
-                                        <span class="legend-dot" style="background: #8b5cf6;"></span>
-                                        Margin
-                                    </div>
-                                    <div class="legend-item">
-                                        <span class="legend-line"></span>
-                                        Forecast period
-                                    </div>
-                                </div>
-                            </div>
+                                <tfoot>
+                                    <tr><td>
+                                        <div class="page-footer">
+                                            <span>DPC Clock &bull; Revenue Forecast Report</span>
+                                            <span>${jobName} &bull; Job #${jobNumber}</span>
+                                        </div>
+                                    </td></tr>
+                                </tfoot>
+                            </table>
                         </body>
                     </html>
                 `);
@@ -942,7 +1093,7 @@ export function RevenueReportDialog({
                                     Remaining
                                 </label>
                                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                                    ${(totalRevenueBudget - finalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    ${(totalRevenueBudget - actualsToDate).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             </div>
 
@@ -1060,28 +1211,25 @@ export function RevenueReportDialog({
                         </div>
                     </div>
 
-                    {/* Charts Grid */}
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        {/* Chart Section - Accrual $ */}
-                        <div className="chart-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
-                            <div className="mb-3 flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
-                                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accrual Progression ($)</h2>
-                            </div>
-                            <div className="h-72 rounded-lg bg-slate-50/50 p-3 dark:bg-slate-900/50">
-                                <Line ref={chartRefDollar} data={chartDataDollar} options={chartOptionsDollar} key={`dollar-${isDark}`} />
-                            </div>
+                    {/* Chart Section - Accrual $ */}
+                    <div className="chart-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
+                        <div className="mb-3 flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+                            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accrual Progression ($)</h2>
                         </div>
+                        <div className="h-96 rounded-lg bg-slate-50/50 p-3 dark:bg-slate-900/50">
+                            <Line ref={chartRefDollar} data={chartDataDollar} options={chartOptionsDollar} key={`dollar-${isDark}`} />
+                        </div>
+                    </div>
 
-                        {/* Chart Section - Accrual % */}
-                        <div className="chart-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
-                            <div className="mb-3 flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
-                                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accrual Progression (%)</h2>
-                            </div>
-                            <div className="h-72 rounded-lg bg-slate-50/50 p-3 dark:bg-slate-900/50">
-                                <Line ref={chartRefPercent} data={chartDataPercent} options={chartOptionsPercent} key={`percent-${isDark}`} />
-                            </div>
+                    {/* Chart Section - Accrual % */}
+                    <div className="chart-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
+                        <div className="mb-3 flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+                            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accrual Progression (%)</h2>
+                        </div>
+                        <div className="h-96 rounded-lg bg-slate-50/50 p-3 dark:bg-slate-900/50">
+                            <Line ref={chartRefPercent} data={chartDataPercent} options={chartOptionsPercent} key={`percent-${isDark}`} />
                         </div>
                     </div>
 

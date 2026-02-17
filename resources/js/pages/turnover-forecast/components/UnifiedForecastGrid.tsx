@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { shadcnTheme } from '@/themes/ag-grid-theme';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
@@ -217,6 +217,11 @@ export function UnifiedForecastGrid({
                     pinned: 'left',
                     hide: hiddenColumns.has('projectType'),
                     cellClass: getPinnedCellClass,
+                    valueFormatter: (params) => {
+                        const v = params.value as string;
+                        if (!v) return '';
+                        return v.charAt(0).toUpperCase() + v.slice(1);
+                    },
                 },
                 {
                     headerComponent: () => (
@@ -391,7 +396,7 @@ export function UnifiedForecastGrid({
         const monthlyCols: ColDef[] = months.map((month) => ({
             headerName: formatMonthHeader(month),
             field: `month_${month}`,
-            width: viewMode === 'targets' ? 100 : 110,
+            width: viewMode === 'targets' ? 120 : 140,
             type: 'numericColumn',
             headerClass: getMonthHeaderClass(month, lastActualMonth),
             cellClass: getMonthCellClass(month, lastActualMonth),
@@ -408,7 +413,7 @@ export function UnifiedForecastGrid({
                     return '';
                 }
 
-                return formatCurrency(params.value);
+                return <span style={{ paddingRight: 4 }}>{formatCurrency(params.value)}</span>;
             },
         }));
 
@@ -452,7 +457,7 @@ export function UnifiedForecastGrid({
             try {
                 const stored = localStorage.getItem(COLUMN_STATE_KEY);
                 if (stored) {
-                    const state = JSON.parse(stored) as ColumnState[];
+                    const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => rest);
                     params.api.applyColumnState({ state, applyOrder: true });
                 }
             } catch {
@@ -688,13 +693,14 @@ export function UnifiedForecastGrid({
             </div>
 
             {/* Grid */}
-            <div className="bg-card overflow-hidden rounded-xl border shadow-sm" style={{ height: `${height}px` }}>
+            <div className="ag-theme-shadcn bg-card overflow-hidden rounded-xl border shadow-sm">
                 <AgGridReact
                     ref={gridRef}
                     rowData={rowData}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    theme={shadcnTheme}
+                    domLayout="autoHeight"
+                    theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
                     getRowId={getRowId}
                     getRowHeight={getRowHeight}
                     getRowClass={getRowClass as any}

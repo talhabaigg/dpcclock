@@ -20,7 +20,7 @@ interface TurnoverPrintReportProps {
     fyLabel: string;
     monthlyTargets: Record<string, number>;
     allMonths: string[];
-    selectedFY: string;
+    selectedFYs: string[];
 }
 
 const formatCurrency = (value: number | null | undefined): string => {
@@ -92,7 +92,7 @@ export function TurnoverPrintReport({
     fyLabel,
     monthlyTargets,
     allMonths,
-    selectedFY,
+    selectedFYs,
 }: TurnoverPrintReportProps) {
     // State for configurable overhead
     const [overheadAmount, setOverheadAmount] = useState(200000);
@@ -176,24 +176,12 @@ export function TurnoverPrintReport({
 
         // Labour calculations - monthly breakdown
         const labourRequirementByMonth: Record<string, number> = {};
-        const labourForecastByMonth: Record<string, number> = {};
-        const labourVarianceByMonth: Record<string, number> = {};
 
         months.forEach((month) => {
             // Labour requirement = combined revenue for month / 26000
             const monthRevenue = combinedMonthlyValues[month] || 0;
             const required = Math.ceil(monthRevenue / 26000);
             labourRequirementByMonth[month] = required;
-
-            // Labour forecast = sum of labour_forecast_headcount for all SWCP/GRE jobs
-            let forecast = 0;
-            data.filter((r) => r.company === 'SWCP' || r.company === 'GRE').forEach((row) => {
-                forecast += safeNumber(row.labour_forecast_headcount?.[month]);
-            });
-            labourForecastByMonth[month] = Math.round(forecast * 10) / 10;
-
-            // Variance = forecast - required
-            labourVarianceByMonth[month] = labourForecastByMonth[month] - labourRequirementByMonth[month];
         });
 
         return {
@@ -202,8 +190,6 @@ export function TurnoverPrintReport({
             forecast: { rows: forecastRows, totals: forecastTotals },
             combined: combinedTotals,
             labourRequirementByMonth,
-            labourForecastByMonth,
-            labourVarianceByMonth,
         };
     }, [data, months]);
 
@@ -312,19 +298,21 @@ export function TurnoverPrintReport({
 
     // Calculate summary data for next 2 FYs
     const futureFYSummaries = useMemo(() => {
-        if (selectedFY === 'all') return [];
+        if (selectedFYs.length === 0) return [];
 
-        const currentFYYear = parseInt(selectedFY);
+        // Use the max selected FY as the base for future projections
+        const maxFYYear = Math.max(...selectedFYs.map(Number));
         const summaries: Array<{
             fyYear: number;
             fyLabel: string;
             completedAndWorkInHand: number;
             budgetTurnover: number;
+            hasBudget: boolean;
         }> = [];
 
-        // Calculate for next 2 FYs
+        // Calculate for next 2 FYs after the latest selected
         for (let i = 1; i <= 2; i++) {
-            const fyYear = currentFYYear + i;
+            const fyYear = maxFYYear + i;
             const fyStart = `${fyYear}-07`;
             const fyEnd = `${fyYear + 1}-06`;
             const fyMonths = allMonths.filter((month) => month >= fyStart && month <= fyEnd);
@@ -338,6 +326,7 @@ export function TurnoverPrintReport({
                 });
             });
 
+            const hasBudget = fyMonths.some((month) => safeNumber(monthlyTargets?.[month]) > 0);
             const budgetTurnover = fyMonths.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
 
             summaries.push({
@@ -345,11 +334,12 @@ export function TurnoverPrintReport({
                 fyLabel: `FY${fyYear}-${String(fyYear + 1).slice(2)}`,
                 completedAndWorkInHand: totalRevenue,
                 budgetTurnover,
+                hasBudget,
             });
         }
 
         return summaries;
-    }, [selectedFY, allMonths, data, monthlyTargets]);
+    }, [selectedFYs, allMonths, data, monthlyTargets]);
 
     const handlePrint = () => {
         const printWindow = window.open('', '', 'width=1400,height=900');
@@ -499,24 +489,6 @@ export function TurnoverPrintReport({
                                     <td colspan="5" style="padding: 5px; border: 1px solid #e2e8f0; font-size: 9px;"></td>
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px; color: #334155; font-weight: 600;">${formatNumber(reportData.labourRequirementByMonth[month], 0)}</td>`).join('')}
                                 </tr>
-                                <!-- Labour Forecast Row -->
-                                <tr style="background: #f8fafc;">
-                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Labour Forecast</td>
-                                    <td colspan="5" style="padding: 5px; border: 1px solid #e2e8f0; font-size: 9px;"></td>
-                                    ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px; color: #334155; font-weight: 600;">${formatNumber(reportData.labourForecastByMonth[month], 1)}</td>`).join('')}
-                                </tr>
-                                <!-- Labour Variance Row -->
-                                <tr style="background: #f8fafc;">
-                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Labour Variance</td>
-                                    <td colspan="5" style="padding: 5px; border: 1px solid #e2e8f0; font-size: 9px;"></td>
-                                    ${months
-                                        .map((month) => {
-                                            const variance = reportData.labourVarianceByMonth[month];
-                                            const color = variance < 0 ? '#991b1b' : '#166534';
-                                            return `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px; color: ${color}; font-weight: 700;">${variance > 0 ? '+' : ''}${formatNumber(variance, 1)}</td>`;
-                                        })
-                                        .join('')}
-                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -637,7 +609,7 @@ export function TurnoverPrintReport({
                                             </tr>
                                             <tr style="background: #f8fafc;">
                                                 <td style="padding: 5px 8px; font-size: 9px; font-weight: 500; color: #334155;">Budget Target</td>
-                                                <td style="padding: 5px 8px; font-size: 9px; font-weight: 700; text-align: right; color: #1e293b;">${formatCurrency(fy.budgetTurnover)}</td>
+                                                <td style="padding: 5px 8px; font-size: 9px; font-weight: 700; text-align: right; color: ${fy.hasBudget ? '#1e293b' : '#94a3b8'};">${fy.hasBudget ? formatCurrency(fy.budgetTurnover) : 'Not Set'}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -911,35 +883,6 @@ export function TurnoverPrintReport({
                                             </td>
                                         ))}
                                     </tr>
-                                    {/* Labour Forecast Row */}
-                                    <tr className="bg-violet-50 text-violet-800">
-                                        <td className="border-t px-2 py-2 font-semibold">Labour Forecast</td>
-                                        <td colSpan={5} className="border-t px-2 py-2"></td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px] font-semibold">
-                                                {formatNumber(reportData.labourForecastByMonth[month], 1)}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                    {/* Labour Variance Row */}
-                                    <tr className="bg-violet-50">
-                                        <td className="border-t px-2 py-2 font-semibold text-violet-800">Labour Variance</td>
-                                        <td colSpan={5} className="border-t px-2 py-2"></td>
-                                        {months.map((month) => {
-                                            const variance = reportData.labourVarianceByMonth[month];
-                                            return (
-                                                <td
-                                                    key={month}
-                                                    className={`border-t px-1 py-2 text-right text-[9px] font-bold ${
-                                                        variance < 0 ? 'text-red-600' : 'text-green-600'
-                                                    }`}
-                                                >
-                                                    {variance > 0 ? '+' : ''}
-                                                    {formatNumber(variance, 1)}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1166,8 +1109,8 @@ export function TurnoverPrintReport({
                                                     </tr>
                                                     <tr className="bg-slate-50">
                                                         <td className="px-3 py-2 text-xs font-medium text-slate-600">Budget Target</td>
-                                                        <td className="px-3 py-2 text-right text-sm font-bold">
-                                                            {formatCurrency(fy.budgetTurnover)}
+                                                        <td className={`px-3 py-2 text-right text-sm font-bold ${fy.hasBudget ? '' : 'text-slate-400 italic'}`}>
+                                                            {fy.hasBudget ? formatCurrency(fy.budgetTurnover) : 'Not Set'}
                                                         </td>
                                                     </tr>
                                                 </tbody>

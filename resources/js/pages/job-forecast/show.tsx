@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
-import { shadcnDarkTheme, shadcnTheme } from '@/themes/ag-grid-theme';
+import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -143,7 +143,7 @@ const ShowJobForecastPage = ({
         return () => observer.disconnect();
     }, []);
 
-    const gridTheme = isDarkMode ? shadcnDarkTheme : shadcnTheme;
+    const gridTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
 
     // Revenue Report Dialog State
     const [revenueReportOpen, setRevenueReportOpen] = useState(false);
@@ -2212,7 +2212,7 @@ const ShowJobForecastPage = ({
                                 </TooltipProvider>
                             </div>
                         )}
-                        <div className="ag-theme-quartz flex-1">
+                        <div className="ag-theme-shadcn flex-1">
                             <AgGridReact
                                 theme={gridTheme}
                                 ref={gridOne}
@@ -2295,7 +2295,7 @@ const ShowJobForecastPage = ({
                                 </TooltipProvider>
                             </div>
                         )}
-                        <div className="ag-theme-balham flex-1">
+                        <div className="ag-theme-shadcn flex-1">
                             <AgGridReact
                                 theme={gridTheme}
                                 ref={gridTwo}

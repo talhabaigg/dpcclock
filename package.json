@@ -74,6 +74,7 @@
         "ag-grid-react": "^35.0.0",
         "axios": "^1.8.4",
         "chart.js": "^4.5.1",
+        "chartjs-plugin-datalabels": "^2.2.0",
         "chartjs-plugin-dragdata": "^2.3.1",
         "chartjs-plugin-zoom": "^2.2.0",
         "class-variance-authority": "^0.7.1",

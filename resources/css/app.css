@@ -160,8 +160,8 @@
     }
 }
 
-/* AG Grid Wrapper Styling */
-.ag-root-wrapper {
+/* AG Grid Wrapper Styling (legacy - excluded from shadcn theme) */
+:not(.ag-theme-shadcn) > .ag-root-wrapper {
     box-shadow:
         0 4px 6px -1px rgba(0, 0, 0, 0.1),
         0 2px 4px -2px rgba(0, 0, 0, 0.1);
@@ -170,7 +170,7 @@
     overflow: hidden;
 }
 
-.dark .ag-root-wrapper {
+.dark :not(.ag-theme-shadcn) > .ag-root-wrapper {
     box-shadow:
         0 4px 6px -1px rgba(0, 0, 0, 0.4),
         0 2px 4px -2px rgba(0, 0, 0, 0.3);
@@ -178,39 +178,39 @@
     background-color: #111827;
 }
 
-/* AG Grid Header Styling */
-.ag-header {
+/* AG Grid Header Styling (legacy - excluded from shadcn theme) */
+:not(.ag-theme-shadcn) .ag-header {
     border-bottom: 2px solid #cbd5e1 !important;
     background-color: #f1f5f9 !important;
 }
 
-.dark .ag-header {
+.dark :not(.ag-theme-shadcn) .ag-header {
     border-bottom: 2px solid #4b5563 !important;
     background-color: #1f2937 !important;
 }
 
-.dark .ag-header-cell {
+.dark :not(.ag-theme-shadcn) .ag-header-cell {
     color: #e5e7eb !important;
 }
 
-.dark .ag-header-group-cell {
+.dark :not(.ag-theme-shadcn) .ag-header-group-cell {
     color: #e5e7eb !important;
 }
 
-/* AG Grid Body Styling */
-.dark .ag-body {
+/* AG Grid Body Styling (legacy - excluded from shadcn theme) */
+.dark :not(.ag-theme-shadcn) .ag-body {
     background-color: #111827 !important;
 }
 
-.dark .ag-row {
+.dark :not(.ag-theme-shadcn) .ag-row {
     background-color: #111827 !important;
 }
 
-.dark .ag-row-odd {
+.dark :not(.ag-theme-shadcn) .ag-row-odd {
     background-color: #0d1117 !important;
 }
 
-.dark .ag-cell {
+.dark :not(.ag-theme-shadcn) .ag-cell {
     color: #e5e7eb !important;
     border-color: #374151 !important;
 }
@@ -237,28 +237,28 @@
     color: #f3f4f6 !important;
 }
 
-/* AG Grid Row Hover Effect */
-.ag-row:hover:not(.ag-row-total) {
+/* AG Grid Row Hover Effect (legacy - excluded from shadcn theme) */
+:not(.ag-theme-shadcn) .ag-row:hover:not(.ag-row-total) {
     background-color: #f1f5f9 !important;
 }
 
-.dark .ag-row:hover:not(.ag-row-total) {
+.dark :not(.ag-theme-shadcn) .ag-row:hover:not(.ag-row-total) {
     background-color: #1e293b !important;
 }
 
-/* AG Grid Pinned Columns */
-.dark .ag-pinned-left-cols-container .ag-cell,
-.dark .ag-pinned-right-cols-container .ag-cell {
+/* AG Grid Pinned Columns (legacy - excluded from shadcn theme) */
+.dark :not(.ag-theme-shadcn) .ag-pinned-left-cols-container .ag-cell,
+.dark :not(.ag-theme-shadcn) .ag-pinned-right-cols-container .ag-cell {
     background-color: #111827 !important;
 }
 
-.dark .ag-pinned-left-cols-container .ag-row-odd .ag-cell,
-.dark .ag-pinned-right-cols-container .ag-row-odd .ag-cell {
+.dark :not(.ag-theme-shadcn) .ag-pinned-left-cols-container .ag-row-odd .ag-cell,
+.dark :not(.ag-theme-shadcn) .ag-pinned-right-cols-container .ag-row-odd .ag-cell {
     background-color: #0d1117 !important;
 }
 
-.dark .ag-pinned-left-header,
-.dark .ag-pinned-right-header {
+.dark :not(.ag-theme-shadcn) .ag-pinned-left-header,
+.dark :not(.ag-theme-shadcn) .ag-pinned-right-header {
     background-color: #1f2937 !important;
 }
 
@@ -268,11 +268,9 @@
 
 /* Row type left border indicators */
 .forecast-row-revenue {
-    border-left: 3px solid #10b981 !important; /* emerald-500 */
 }
 
 .forecast-row-cost {
-    border-left: 3px solid #f59e0b !important; /* amber-500 */
     background-color: rgba(251, 191, 36, 0.05) !important;
 }
 
@@ -281,7 +279,6 @@
 }
 
 .forecast-row-profit {
-    border-left: 3px solid #3b82f6 !important; /* blue-500 */
     background-color: rgba(59, 130, 246, 0.05) !important;
 }
 
@@ -290,7 +287,6 @@
 }
 
 .forecast-row-target {
-    border-left: 3px solid #8b5cf6 !important; /* violet-500 */
     background-color: rgba(139, 92, 246, 0.05) !important;
 }
 
@@ -299,11 +295,9 @@
 }
 
 .forecast-row-variance {
-    border-left: 3px solid #6366f1 !important; /* indigo-500 */
 }
 
 .forecast-row-labour {
-    border-left: 3px solid #a855f7 !important; /* purple-500 */
     background-color: rgba(168, 85, 247, 0.08) !important;
 }
 
@@ -312,7 +306,6 @@
 }
 
 .forecast-row-total {
-    border-left: 3px solid #64748b !important; /* slate-500 */
     background-color: #f1f5f9 !important;
     font-weight: 700 !important;
 }
@@ -350,23 +343,23 @@
     @apply border-slate-700 bg-slate-800/50;
 }
 
-/* Pinned bottom row styling for totals */
-.ag-row-pinned {
+/* Pinned bottom row styling for totals (legacy - excluded from shadcn theme) */
+:not(.ag-theme-shadcn) .ag-row-pinned {
     font-weight: 600 !important;
     background-color: #f8fafc !important;
     border-top: 2px solid #cbd5e1 !important;
 }
 
-.ag-row-pinned .ag-cell {
+:not(.ag-theme-shadcn) .ag-row-pinned .ag-cell {
     background-color: #f8fafc !important;
 }
 
-.dark .ag-row-pinned {
+.dark :not(.ag-theme-shadcn) .ag-row-pinned {
     background-color: #1e293b !important;
     border-top-color: #475569 !important;
 }
 
-.dark .ag-row-pinned .ag-cell {
+.dark :not(.ag-theme-shadcn) .ag-row-pinned .ag-cell {
     background-color: #1e293b !important;
     color: #f1f5f9 !important;
 }
@@ -376,13 +369,13 @@
     transition: background-color 0.15s ease;
 }
 
-/* Better focus states */
-.ag-cell-focus {
+/* Better focus states (legacy - excluded from shadcn theme) */
+:not(.ag-theme-shadcn) .ag-cell-focus {
     outline: 2px solid #3b82f6 !important;
     outline-offset: -2px;
 }
 
-.dark .ag-cell-focus {
+.dark :not(.ag-theme-shadcn) .ag-cell-focus {
     outline-color: #60a5fa !important;
 }
 
@@ -476,6 +469,23 @@
 
 .dark .ag-theme-shadcn .ag-body {
     background-color: #09090b !important;
+}
+
+/* Pinned left columns - border separator */
+.ag-theme-shadcn .ag-pinned-left-header {
+    border-right: 2px solid #d4d4d8 !important;
+}
+
+.dark .ag-theme-shadcn .ag-pinned-left-header {
+    border-right: 2px solid #3f3f46 !important;
+}
+
+.ag-theme-shadcn .ag-pinned-left-cols-container {
+    border-right: 2px solid #d4d4d8 !important;
+}
+
+.dark .ag-theme-shadcn .ag-pinned-left-cols-container {
+    border-right: 2px solid #3f3f46 !important;
 }
 
 /* AG Grid Cell Error Styling */
