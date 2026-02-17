@@ -35,6 +35,12 @@ return new class extends Migration
         $oldUniqueExists = $segStatusIndexes->contains('name', 'seg_status_unique');
 
         if ($oldUniqueExists) {
+            // Add a standalone index on drawing_measurement_id first so MySQL
+            // has an alternative index for its FK after we drop the unique
+            Schema::table('measurement_segment_statuses', function (Blueprint $table) {
+                $table->index('drawing_measurement_id', 'seg_status_dm_idx');
+            });
+
             // Drop the old 4-column unique (includes labour_cost_code_id)
             Schema::table('measurement_segment_statuses', function (Blueprint $table) {
                 $table->dropUnique('seg_status_unique');
@@ -46,6 +52,11 @@ return new class extends Migration
                     ['drawing_measurement_id', 'segment_index', 'work_date'],
                     'seg_status_unique_v2'
                 );
+            });
+
+            // Drop the temporary standalone index (the new unique covers the FK)
+            Schema::table('measurement_segment_statuses', function (Blueprint $table) {
+                $table->dropIndex('seg_status_dm_idx');
             });
         }
 
@@ -98,6 +109,10 @@ return new class extends Migration
 
         if ($segStatusIndexes->contains('name', 'seg_status_unique_v2')) {
             Schema::table('measurement_segment_statuses', function (Blueprint $table) {
+                $table->index('drawing_measurement_id', 'seg_status_dm_idx');
+            });
+
+            Schema::table('measurement_segment_statuses', function (Blueprint $table) {
                 $table->dropUnique('seg_status_unique_v2');
             });
 
@@ -106,6 +121,10 @@ return new class extends Migration
                     ['drawing_measurement_id', 'labour_cost_code_id', 'segment_index', 'work_date'],
                     'seg_status_unique'
                 );
+            });
+
+            Schema::table('measurement_segment_statuses', function (Blueprint $table) {
+                $table->dropIndex('seg_status_dm_idx');
             });
         }
 
