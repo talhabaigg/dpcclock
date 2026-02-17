@@ -50,12 +50,9 @@ return new class extends Migration
         }
 
         // Make labour_cost_code_id nullable (drop FK first, alter, re-add)
-        $fks = collect(\Illuminate\Support\Facades\DB::select(
-            "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'measurement_segment_statuses' AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
-        ))->pluck('CONSTRAINT_NAME');
-
-        $lccFk = $fks->first(fn ($name) => str_contains($name, 'labour_cost_code_id'));
+        $fks = collect(Schema::getForeignKeys('measurement_segment_statuses'));
+        $lccFk = $fks->first(fn ($fk) => in_array('labour_cost_code_id', $fk['columns']));
+        $lccFk = $lccFk ? $lccFk['name'] : null;
 
         if ($lccFk) {
             Schema::table('measurement_segment_statuses', function (Blueprint $table) use ($lccFk) {
@@ -78,12 +75,9 @@ return new class extends Migration
     public function down(): void
     {
         // Reverse labour_cost_code_id changes
-        $fks = collect(\Illuminate\Support\Facades\DB::select(
-            "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'measurement_segment_statuses' AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
-        ))->pluck('CONSTRAINT_NAME');
-
-        $lccFk = $fks->first(fn ($name) => str_contains($name, 'labour_cost_code_id'));
+        $fks = collect(Schema::getForeignKeys('measurement_segment_statuses'));
+        $lccFk = $fks->first(fn ($fk) => in_array('labour_cost_code_id', $fk['columns']));
+        $lccFk = $lccFk ? $lccFk['name'] : null;
 
         if ($lccFk) {
             Schema::table('measurement_segment_statuses', function (Blueprint $table) use ($lccFk) {

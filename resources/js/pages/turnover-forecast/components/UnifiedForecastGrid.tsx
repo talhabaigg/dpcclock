@@ -457,7 +457,8 @@ export function UnifiedForecastGrid({
             try {
                 const stored = localStorage.getItem(COLUMN_STATE_KEY);
                 if (stored) {
-                    const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => rest);
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => rest);
                     params.api.applyColumnState({ state, applyOrder: true });
                 }
             } catch {
