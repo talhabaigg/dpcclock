@@ -17,6 +17,10 @@ class SyncKioskEmployees implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $timeout = 600;
+
+    public int $tries = 2;
+
     protected int $userId;
 
     public function __construct(int $userId)
@@ -38,15 +42,18 @@ class SyncKioskEmployees implements ShouldQueue
                         // API failed or returned bad data — skip this employee entirely
                         Log::warning("Skipped employee {$employeeId}: API returned null or invalid.");
 
-                        return; // skip detach
+                        continue;
                     }
 
                     if (empty($locationIds)) {
                         // API call was valid, but employee genuinely has no locations
-                        $employeeModel->kiosks()->detach();
-                        Log::info("Detached all kiosks for employee {$employeeId} (no locations).");
+                        $employeeModel = Employee::where('eh_employee_id', $employeeId)->first();
+                        if ($employeeModel) {
+                            $employeeModel->kiosks()->detach();
+                            Log::info("Detached all kiosks for employee {$employeeId} (no locations).");
+                        }
 
-                        return;
+                        continue;
                     }
                     $kioskIds = $this->getKioskIdforLocationIds($locationIds);
 
@@ -106,7 +113,7 @@ class SyncKioskEmployees implements ShouldQueue
         $apiKey = config('services.employment_hero.api_key');
 
         try {
-            $response = Http::withHeaders([
+            $response = Http::timeout(15)->withHeaders([
                 'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             ])->get("https://api.yourpayroll.com.au/api/v2/business/431152/employee/{$employeeId}/location");
 

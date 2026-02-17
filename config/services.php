@@ -69,4 +69,8 @@ return [
         'business_id' => env('PAYROLL_BUSINESS_ID', '431152'),
     ],
 
+    'power_automate' => [
+        'notification_url' => env('POWER_AUTOMATE_NOTIFICATION_URL'),
+    ],
+
 ];

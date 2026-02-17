@@ -29,7 +29,7 @@ class RequisitionService
         $timestamp = now()->format('d/m/Y h:i A');
         $auth = auth()->user()->name;
         $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
-        $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+        $response = Http::post(config('services.power_automate.notification_url'), [
             'user_email' => $creatorEmail,
             'requisition_id' => $requisition->id,
             'message' => $messageBody,
@@ -123,24 +123,31 @@ class RequisitionService
         $token = $authService->getAccessToken();
         $base_url = config('premier.swagger_api.base_url');
         Log::info($payload);
-        $response = Http::withToken($token)
-            ->acceptJson()
-            ->post($base_url.'/api/PurchaseOrder/CreatePurchaseOrder', $payload);
 
-        $poid = $response->json('Data.0.POID') ?? null;
-        Log::info('Premier API Response: '.$response->body());
-        Log::info('Extracted POID: '.$poid);
-        if ($response->failed()) {
+        try {
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(60)
+                ->post($base_url.'/api/PurchaseOrder/CreatePurchaseOrder', $payload);
+        } catch (\Exception $e) {
+            Log::error("Premier API exception for Requisition #{$requisition->id}", [
+                'error' => $e->getMessage(),
+            ]);
             $requisition->status = 'failed';
             $requisition->save();
-            activity()
-                ->performedOn($requisition)
-                ->event('api request failed')
-                ->causedBy(auth()->user())
-                ->log("Requisition #{$requisition->id} API request failed with error: ".$response->body());
 
-            return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send API request to Premier. Please check the logs for more details.'.$response->body());
-        } else {
+            return redirect()->route('requisition.show', $requisition->id)->with('error', 'Premier API request timed out or failed to connect. Please check if the order was created in Premier before retrying.');
+        }
+
+        $poid = $response->json('Data.0.POID') ?? null;
+        Log::info("Premier API Response for Requisition #{$requisition->id}", [
+            'status' => $response->status(),
+            'poid' => $poid,
+            'body' => $response->body(),
+        ]);
+
+        // If we got a POID back, the order was created — treat as success regardless of HTTP status
+        if ($poid) {
             $requisition->status = 'success';
             $requisition->premier_po_id = $poid;
             $requisition->processed_by = auth()->id();
@@ -149,31 +156,62 @@ class RequisitionService
                 ->performedOn($requisition)
                 ->event('api request successful')
                 ->causedBy(auth()->user())
-                ->log("Requisition #{$requisition->id} API request successful.");
+                ->log("Requisition #{$requisition->id} API request successful. POID: {$poid}");
 
+            if ($response->failed()) {
+                Log::warning("Premier returned HTTP {$response->status()} but PO was created with POID: {$poid}", [
+                    'requisition_id' => $requisition->id,
+                    'body' => $response->body(),
+                ]);
+            }
+        } elseif ($response->failed()) {
+            $requisition->status = 'failed';
+            $requisition->save();
+            activity()
+                ->performedOn($requisition)
+                ->event('api request failed')
+                ->causedBy(auth()->user())
+                ->log("Requisition #{$requisition->id} API request failed (HTTP {$response->status()}): ".$response->body());
+
+            return redirect()->route('requisition.show', $requisition->id)->with('error', 'Failed to send API request to Premier (HTTP '.$response->status().'). '.$response->body());
+        } else {
+            // 2xx but no POID — unexpected
+            Log::warning("Premier returned success but no POID for Requisition #{$requisition->id}", [
+                'body' => $response->body(),
+            ]);
+            $requisition->status = 'success';
+            $requisition->processed_by = auth()->id();
+            $requisition->save();
+        }
+
+        // Send notification (only if PO was created)
+        if ($requisition->status === 'success') {
             $creator = $requisition->creator;
             $creatorEmail = $creator->email ?? null;
-            // dd($creatorEmail);
             if (! $creatorEmail) {
-                return redirect()->route('requisition.index')->with('success', 'Creator email not found.');
+                return redirect()->route('requisition.index')->with('success', 'PO created in Premier successfully. Creator email not found for notification.');
             }
 
-            $timestamp = now()->format('d/m/Y h:i A');
             $auth = auth()->user()->name;
             $messageBody = "Requisition #{$requisition->id} (PO number (PO{$requisition->po_number})) has been sent to Premier for Processing by {$auth}.";
-            $response = Http::post(env('POWER_AUTOMATE_NOTIFICATION_URL'), [
+            $notificationResponse = Http::timeout(15)->post(config('services.power_automate.notification_url'), [
                 'user_email' => $creatorEmail,
                 'requisition_id' => $requisition->id,
                 'message' => $messageBody,
             ]);
 
-            if ($response->failed()) {
-                return redirect()->route('requisition.index')->with('error', 'Failed to send notification.');
+            if ($notificationResponse->failed()) {
+                Log::warning("Notification failed for Requisition #{$requisition->id}", [
+                    'status' => $notificationResponse->status(),
+                ]);
+
+                return redirect()->route('requisition.index')->with('success', 'PO created in Premier successfully. Notification failed to send.');
             }
 
             return redirect()->route('requisition.index')->with('success', 'Requisition processed and submitted successfully.');
         }
 
+        return redirect()->route('requisition.show', $requisition->id)->with('error', 'Unexpected response from Premier.');
     }
 
     public function loadPurchaseOrderIdsForLocation($locationId)
