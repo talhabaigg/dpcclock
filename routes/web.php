@@ -471,6 +471,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/cash-forecast/cash-in-adjustments', [CashForecastController::class, 'storeCashInAdjustments'])->name('cashForecast.storeCashInAdjustments');
         Route::post('/cash-forecast/cash-out-adjustments', [CashForecastController::class, 'storeCashOutAdjustments'])->name('cashForecast.storeCashOutAdjustments');
         Route::post('/cash-forecast/vendor-payment-delays', [CashForecastController::class, 'storeVendorPaymentDelays'])->name('cashForecast.storeVendorPaymentDelays');
+        Route::post('/cash-forecast/retention-settings', [CashForecastController::class, 'storeRetentionSettings'])->name('cashForecast.storeRetentionSettings');
+        Route::delete('/cash-forecast/retention-settings/{jobNumber}', [CashForecastController::class, 'destroyRetentionSettings'])->name('cashForecast.destroyRetentionSettings');
     });
 
     // Labour Forecast

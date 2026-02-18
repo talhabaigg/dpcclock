@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import type {
     CashInAdjustment,
     CashInModalState,
@@ -148,6 +149,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to save adjustments'),
             },
         );
     }, [modalState, closeModal]);
@@ -164,6 +166,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to reset adjustments'),
             },
         );
     }, [modalState, closeModal]);
@@ -369,6 +372,7 @@ export const useCashOutAdjustments = ({ cashOutSources, cashOutAdjustments }: Us
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to save adjustments'),
             },
         );
     }, [modalState, closeModal]);
@@ -387,6 +391,7 @@ export const useCashOutAdjustments = ({ cashOutSources, cashOutAdjustments }: Us
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to reset adjustments'),
             },
         );
     }, [modalState, closeModal]);
@@ -558,6 +563,7 @@ export const useVendorPaymentDelays = ({ cashOutSources, vendorPaymentDelays }: 
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to save vendor delays'),
             },
         );
     }, [modalState, closeModal]);
@@ -574,6 +580,7 @@ export const useVendorPaymentDelays = ({ cashOutSources, vendorPaymentDelays }: 
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to reset vendor delays'),
             },
         );
     }, [modalState, closeModal]);

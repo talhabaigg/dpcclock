@@ -25,9 +25,11 @@ export const formatAmount = (value: number): string => value.toLocaleString(unde
  * Format a number as compact currency (e.g., $1.2M, $500K)
  */
 export const formatCompactAmount = (val: number): string => {
-    if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
-    if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
-    return `$${val.toFixed(0)}`;
+    const abs = Math.abs(val);
+    const sign = val < 0 ? '-' : '';
+    if (abs >= 1000000) return `${sign}$${(abs / 1000000).toFixed(1)}M`;
+    if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(0)}K`;
+    return `${sign}$${abs.toFixed(0)}`;
 };
 
 /**
@@ -83,6 +85,7 @@ export const getCostItemLabel = (
         return GENERAL_COST_LABELS[costItem];
     }
     if (costItem === '99-99') return 'Revenue';
+    if (costItem === 'RET-HELD') return 'Retention Held';
     if (costItem === 'GST-PAYABLE') return 'GST Payable to ATO';
 
     const prefix = parseInt(costItem.substring(0, 2), 10);
@@ -123,9 +126,9 @@ export const cn = (...classes: (string | boolean | undefined)[]): string => {
  */
 export const getValueColorClass = (value: number, type: 'text' | 'bg' = 'text'): string => {
     if (type === 'text') {
-        return value >= 0 ? 'text-green-600' : 'text-red-600';
+        return value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
     }
-    return value >= 0 ? 'bg-green-50' : 'bg-red-50';
+    return value >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-red-50 dark:bg-red-950/30';
 };
 
 /**

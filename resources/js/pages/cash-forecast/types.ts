@@ -55,7 +55,20 @@ export type CashInSource = {
     job_number: string;
     month: string;
     amount: number;
+    retainage?: number;
     source?: DataSource;
+};
+
+export type RetentionSetting = {
+    job_number: string;
+    retention_rate: number; // percentage, e.g. 5.0
+    retention_cap_pct: number; // percentage, e.g. 10.0
+    contract_sum: number;
+    retainage_to_date: number;
+    cap_amount: number;
+    cap_reached: boolean;
+    is_auto: boolean;
+    release_date: string | null;
 };
 
 export type CashInAdjustment = {
@@ -132,6 +145,8 @@ export type CashForecastProps = {
     vendorPaymentDelays: VendorPaymentDelay[];
     costTypeByCostItem: Record<string, string | null>;
     gstBreakdown: GstQuarterBreakdown[];
+    breakdownRows: BreakdownRow[];
+    retentionSummary: RetentionSetting[];
 };
 
 export type VendorDelayModalState = {
@@ -197,6 +212,32 @@ export type CashOutModalState = {
     vendor: string | null;
     sourceMonth: string | null;
     splits: CashOutSplit[];
+};
+
+// Breakdown row (line-by-line detail of how each amount was computed)
+export type BreakdownRow = {
+    month: string;
+    source_month: string;
+    cost_item: string;
+    cost_item_description: string | null;
+    job_number: string;
+    vendor: string | null;
+    amount: number;
+    ex_gst_amount: number;
+    gst_amount: number;
+    gst_rate: number;
+    source: 'actual' | 'forecast';
+    flow_type: 'cash_in' | 'cash_out';
+    rule: string;
+};
+
+// Breakdown modal filter
+export type BreakdownFilter = {
+    month: string;
+    flowType: 'cash_in' | 'cash_out';
+    costItem?: string;
+    jobNumber?: string;
+    vendor?: string;
 };
 
 // Summary totals

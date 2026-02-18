@@ -13,6 +13,10 @@ class CashForecastSetting extends Model
         'gst_q2_pay_month',
         'gst_q3_pay_month',
         'gst_q4_pay_month',
+        'gst_rate',
+        'wage_tax_ratio',
+        'default_retention_rate',
+        'default_retention_cap_pct',
     ];
 
     protected $casts = [
@@ -22,6 +26,10 @@ class CashForecastSetting extends Model
         'gst_q2_pay_month' => 'integer',
         'gst_q3_pay_month' => 'integer',
         'gst_q4_pay_month' => 'integer',
+        'gst_rate' => 'float',
+        'wage_tax_ratio' => 'float',
+        'default_retention_rate' => 'float',
+        'default_retention_cap_pct' => 'float',
     ];
 
     /**

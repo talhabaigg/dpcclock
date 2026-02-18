@@ -107,7 +107,8 @@ class CashForecastGeneralCost extends Model
 
         // Add GST if not already included
         if (! $this->includes_gst) {
-            $monthlyAmount *= 1.1;
+            $gstRate = (float) (CashForecastSetting::current()->gst_rate ?? 0.10);
+            $monthlyAmount *= (1 + $gstRate);
         }
 
         return $monthlyAmount;

@@ -1,18 +1,20 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronRight } from 'lucide-react';
 import React from 'react';
-import type { CashOutSource, DataSource, MonthNode } from '../types';
+import type { BreakdownFilter, CashOutSource, DataSource, MonthNode } from '../types';
 import { formatAmount, formatMonthHeader, getCostItemLabel } from '../utils';
 import { DataSourceLegend, SourceIndicator } from './summary-cards';
+
+// Re-export TableBody for use in consumer (show.tsx)
+export { TableBody };
 
 // Icons
 const ExpandIcon = ({ expanded }: { expanded: boolean }) => (
     <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
 );
-
-const DotIcon = ({ color }: { color: string }) => <span className={`h-2 w-2 rounded-full ${color}`} />;
 
 // Table Header Component
 type TableHeaderProps = {
@@ -20,24 +22,29 @@ type TableHeaderProps = {
     currentMonth?: string;
 };
 
+// Shared sticky-cell shadow class for horizontal scroll indication
+const stickyColClass = 'sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]';
+// Total column left-border separator
+const totalColBorder = 'border-l-2 border-l-muted-foreground/20';
+
 export const CashFlowTableHeader = ({ months, currentMonth }: TableHeaderProps) => (
-    <thead>
-        <tr className="bg-muted/50 border-border border-b">
-            <th className="text-muted-foreground bg-muted/50 sticky left-0 z-10 min-w-[220px] px-4 py-3 text-left font-semibold">Category</th>
+    <TableHeader>
+        <TableRow className="bg-muted hover:bg-muted">
+            <TableHead className={`bg-muted ${stickyColClass} min-w-[140px] sm:min-w-[220px] px-2 sm:px-4 py-2.5 sm:py-3.5 font-semibold text-xs sm:text-sm text-foreground/80 uppercase tracking-wider`}>Category</TableHead>
             {months.map((month) => (
-                <th
+                <TableHead
                     key={month.month}
-                    className={`text-muted-foreground min-w-[95px] px-3 py-3 text-right font-semibold ${
-                        month.month === currentMonth ? 'bg-primary/10' : ''
+                    className={`min-w-[75px] sm:min-w-[95px] px-1.5 sm:px-3 py-2.5 sm:py-3.5 text-right font-semibold text-[10px] sm:text-xs ${
+                        month.month === currentMonth ? 'bg-primary/10 border-b-2 border-b-primary' : 'text-muted-foreground'
                     }`}
                 >
-                    <div>{formatMonthHeader(month.month)}</div>
-                    {month.month === currentMonth && <div className="text-primary text-xs font-normal">Current</div>}
-                </th>
+                    <div className={month.month === currentMonth ? 'text-primary font-bold' : ''}>{formatMonthHeader(month.month)}</div>
+                    {month.month === currentMonth && <div className="text-primary text-[9px] sm:text-[10px] font-medium mt-0.5">Current</div>}
+                </TableHead>
             ))}
-            <th className="text-muted-foreground bg-muted min-w-[110px] px-4 py-3 text-right font-semibold">Total</th>
-        </tr>
-    </thead>
+            <TableHead className={`bg-muted min-w-[80px] sm:min-w-[110px] px-2 sm:px-4 py-2.5 sm:py-3.5 text-right font-bold text-xs sm:text-sm text-foreground/80 uppercase tracking-wider ${totalColBorder}`}>Total</TableHead>
+        </TableRow>
+    </TableHeader>
 );
 
 // Cash In/Out Section Row
@@ -48,40 +55,45 @@ type SectionRowProps = {
     months: MonthNode[];
     total: number;
     currentMonth?: string;
+    onCellClick?: (filter: BreakdownFilter) => void;
 };
 
-export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, currentMonth }: SectionRowProps) => {
+export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, currentMonth, onCellClick }: SectionRowProps) => {
     const isIn = type === 'in';
-    const bgClass = isIn
-        ? 'bg-green-50/50 hover:bg-green-50 dark:bg-green-950/30 dark:hover:bg-green-950/50'
-        : 'bg-red-50/50 hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/50';
-    const textClass = isIn ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400';
-    const dotColor = isIn ? 'bg-green-500' : 'bg-red-500';
-    const highlightClass = isIn ? 'bg-green-100/50 dark:bg-green-900/30' : 'bg-red-100/50 dark:bg-red-900/30';
-    const totalBgClass = isIn ? 'bg-green-100/70 dark:bg-green-900/50' : 'bg-red-100/70 dark:bg-red-900/50';
+    const textClass = 'text-foreground';
+    const bgClass = isIn ? 'bg-muted/50' : 'bg-muted/40';
+    const hoverClass = 'hover:bg-muted/70';
+    const stickyBg = 'bg-muted/60';
 
     return (
-        <tr className={`${bgClass} border-border cursor-pointer border-b transition-colors`} onClick={onToggle}>
-            <td className={`px-4 py-3 font-semibold ${textClass} sticky left-0 ${bgClass} z-10`}>
-                <span className="inline-flex items-center gap-2">
+        <TableRow className={`${bgClass} ${hoverClass} cursor-pointer border-t border-t-border/60`} onClick={onToggle}>
+            <TableCell className={`px-2 sm:px-4 py-2.5 sm:py-3.5 font-semibold text-xs sm:text-sm ${textClass} ${stickyColClass} ${stickyBg}`}>
+                <span className="inline-flex items-center gap-1.5 sm:gap-2">
                     <ExpandIcon expanded={expanded} />
-                    <DotIcon color={dotColor} />
                     Cash {isIn ? 'In' : 'Out'}
                 </span>
-            </td>
+            </TableCell>
             {months.map((month) => {
                 const value = isIn ? (month.cash_in?.total ?? 0) : (month.cash_out?.total ?? 0);
                 return (
-                    <td
+                    <TableCell
                         key={month.month}
-                        className={`px-3 py-3 text-right font-medium ${textClass} ${month.month === currentMonth ? highlightClass : ''}`}
+                        className={`px-1.5 sm:px-3 py-2.5 sm:py-3.5 text-right text-[10px] sm:text-sm font-medium tabular-nums ${textClass} ${month.month === currentMonth ? 'bg-primary/5' : ''} ${onCellClick ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={(e) => {
+                            if (onCellClick && value !== 0) {
+                                e.stopPropagation();
+                                onCellClick({ month: month.month, flowType: isIn ? 'cash_in' : 'cash_out' });
+                            }
+                        }}
                     >
                         {formatAmount(value)}
-                    </td>
+                    </TableCell>
                 );
             })}
-            <td className={`px-4 py-3 text-right font-bold ${textClass} ${totalBgClass}`}>{formatAmount(total)}</td>
-        </tr>
+            <TableCell className={`px-2 sm:px-4 py-2.5 sm:py-3.5 text-right text-[10px] sm:text-sm font-bold tabular-nums ${textClass} ${stickyBg} ${totalColBorder}`}>
+                {formatAmount(total)}
+            </TableCell>
+        </TableRow>
     );
 };
 
@@ -98,6 +110,7 @@ type CostItemRowProps = {
     currentMonth?: string;
     costCodeDescriptions?: Record<string, string>;
     cashOutSources?: CashOutSource[];
+    onCellClick?: (filter: BreakdownFilter) => void;
 };
 
 // Helper to get aggregated source for a cost item across all months
@@ -128,6 +141,7 @@ export const CostItemRow = ({
     currentMonth,
     costCodeDescriptions,
     cashOutSources,
+    onCellClick,
 }: CostItemRowProps) => {
     // Get overall source for this cost item (aggregated across all months)
     const aggregatedSource = flowType === 'cash_out' ? getAggregatedSource(costItemCode, cashOutSources) : undefined;
@@ -150,32 +164,37 @@ export const CostItemRow = ({
     };
 
     return (
-        <tr className="border-border bg-background hover:bg-muted/50 cursor-pointer border-b transition-colors" onClick={onToggle}>
-            <td className="text-foreground/80 bg-background sticky left-0 z-10 px-4 py-2.5 pl-8">
-                <span className="inline-flex items-center gap-2">
+        <TableRow className="cursor-pointer hover:bg-muted/40 transition-colors" onClick={onToggle}>
+            <TableCell className={`bg-background ${stickyColClass} px-2 sm:px-4 py-2 sm:py-2.5 pl-5 sm:pl-8`}>
+                <span className="inline-flex items-center gap-1 sm:gap-2">
                     {itemCount > 0 ? <ExpandIcon expanded={expanded} /> : <span className="w-4" />}
-                    <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{costItemCode}</span>
-                    <span className="font-medium">{getCostItemLabel(costItemCode, description, costCodeDescriptions)}</span>
-                    {itemCount > 0 && <span className="text-muted-foreground text-xs">({itemCount} items)</span>}
-                    {/* Show aggregated source indicator at cost item level */}
-                    {aggregatedSource && <SourceIndicator source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource} />}
+                    <span className="text-muted-foreground bg-muted/80 rounded px-1 sm:px-1.5 py-0.5 font-mono text-[10px] sm:text-xs">{costItemCode}</span>
+                    <span className="font-medium text-xs sm:text-sm truncate max-w-[60px] sm:max-w-none">{getCostItemLabel(costItemCode, description, costCodeDescriptions)}</span>
+                    {itemCount > 0 && <span className="text-muted-foreground text-[10px] sm:text-xs hidden sm:inline">({itemCount})</span>}
+                    <span className="hidden sm:inline">{aggregatedSource && <SourceIndicator source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource} />}</span>
                 </span>
-            </td>
+            </TableCell>
             {months.map((month) => {
                 const flow = flowType === 'cash_in' ? month.cash_in : month.cash_out;
                 const item = flow?.cost_items?.find((ci) => ci.cost_item === costItemCode);
 
                 return (
-                    <td
+                    <TableCell
                         key={month.month}
-                        className={`text-foreground/80 px-3 py-2.5 text-right ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
+                        className={`px-1.5 sm:px-3 py-2 sm:py-2.5 text-right text-[10px] sm:text-sm tabular-nums ${month.month === currentMonth ? 'bg-primary/5' : ''} ${onCellClick && item ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={(e) => {
+                            if (onCellClick && item) {
+                                e.stopPropagation();
+                                onCellClick({ month: month.month, flowType, costItem: costItemCode });
+                            }
+                        }}
                     >
-                        <span>{item ? formatAmount(item.total) : '-'}</span>
-                    </td>
+                        <span>{item ? formatAmount(item.total) : <span className="text-muted-foreground/30">-</span>}</span>
+                    </TableCell>
                 );
             })}
-            <td className="text-foreground bg-muted/50 px-4 py-2.5 text-right font-medium">{formatAmount(total)}</td>
-        </tr>
+            <TableCell className={`bg-muted/30 px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[10px] sm:text-sm font-medium tabular-nums ${totalColBorder}`}>{formatAmount(total)}</TableCell>
+        </TableRow>
     );
 };
 
@@ -183,14 +202,14 @@ export const CostItemRow = ({
 type JobRowProps = {
     jobNumber: string;
     hasAdjustment: boolean;
-    onAdjust: () => void;
+    onAdjust?: () => void;
     months: MonthNode[];
     costItemCode: string;
     flowType: 'cash_in' | 'cash_out';
     total: number;
     currentMonth?: string;
-    indent?: number;
     cashOutSources?: CashOutSource[];
+    onCellClick?: (filter: BreakdownFilter) => void;
 };
 
 export const JobRow = ({
@@ -202,8 +221,8 @@ export const JobRow = ({
     flowType,
     total,
     currentMonth,
-    indent = 16,
     cashOutSources,
+    onCellClick,
 }: JobRowProps) => {
     // Get source for specific job
     const getJobSource = (month: string): DataSource | undefined => {
@@ -214,99 +233,19 @@ export const JobRow = ({
     };
 
     return (
-        <tr className="border-border/50 bg-muted/30 border-b">
-            <td className="text-muted-foreground bg-muted/30 sticky left-0 z-10 px-4 py-2" style={{ paddingLeft: `${indent}px` }}>
-                <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-2">
-                        <ChevronRight className="text-muted-foreground/50 h-3 w-3" />
-                        <span className="font-mono text-xs">{jobNumber}</span>
+        <TableRow className="bg-muted/30 hover:bg-muted/40">
+            <TableCell className={`text-muted-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-8 sm:pl-14`}>
+                <div className="flex items-center justify-between gap-1 sm:gap-2">
+                    <span className="inline-flex items-center gap-1 sm:gap-2">
+                        <ChevronRight className="text-muted-foreground/50 h-3 w-3 shrink-0" />
+                        <span className="font-mono text-[10px] sm:text-xs">{jobNumber}</span>
                         {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[10px] tracking-wide uppercase">
+                            <Badge variant="secondary" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
                                 Adj
                             </Badge>
                         )}
                     </span>
-                    <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onAdjust();
-                        }}
-                        className="h-auto p-0 text-[10px] tracking-wide uppercase"
-                    >
-                        Adjust
-                    </Button>
-                </div>
-            </td>
-            {months.map((month) => {
-                const flow = flowType === 'cash_in' ? month.cash_in : month.cash_out;
-                const costItem = flow?.cost_items?.find((ci) => ci.cost_item === costItemCode);
-                const jobData = costItem?.jobs?.find((j) => j.job_number === jobNumber);
-                const source = getJobSource(month.month);
-
-                return (
-                    <td
-                        key={month.month}
-                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
-                    >
-                        <div className="flex items-center justify-end gap-1">
-                            {source && <SourceIndicator source={source} className="mr-1" />}
-                            <span>{jobData ? formatAmount(jobData.total) : '-'}</span>
-                        </div>
-                    </td>
-                );
-            })}
-            <td className="text-muted-foreground bg-muted/50 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
-        </tr>
-    );
-};
-
-// Vendor Row (for cash out)
-// Vendors can be either:
-// - Real vendors from ACTUAL data (from JobCostDetail invoices)
-// - "Remaining Forecast" pseudo-vendor for forecast data (expected costs still to come)
-type VendorRowProps = {
-    vendor: string;
-    costItemCode: string;
-    hasAdjustment: boolean;
-    onAdjust: () => void;
-    months: MonthNode[];
-    total: number;
-    currentMonth?: string;
-    source?: DataSource; // 'actual' for real vendors, 'forecast' for "Remaining Forecast"
-};
-
-export const VendorRow = ({
-    vendor,
-    costItemCode,
-    hasAdjustment,
-    onAdjust,
-    months,
-    total,
-    currentMonth,
-    source = 'actual', // Default to 'actual' for backward compatibility
-}: VendorRowProps) => {
-    const isForecast = source === 'forecast';
-    const bgClass = isForecast ? 'bg-amber-50/30 dark:bg-amber-950/20' : 'bg-muted/30';
-
-    return (
-        <tr className={`border-border/50 border-b ${bgClass}`}>
-            <td className={`text-muted-foreground sticky left-0 px-4 py-2 pl-16 ${bgClass} z-10`}>
-                <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-2">
-                        <ChevronRight className="text-muted-foreground/50 h-3 w-3" />
-                        <span className={`text-xs ${isForecast ? 'text-amber-700 italic dark:text-amber-400' : ''}`}>{vendor}</span>
-                        <SourceIndicator source={source} />
-                        {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[10px] tracking-wide uppercase">
-                                Adj
-                            </Badge>
-                        )}
-                    </span>
-                    {/* Only show adjust button for actual vendors, not forecast */}
-                    {!isForecast && (
+                    {onAdjust && (
                         <Button
                             type="button"
                             variant="link"
@@ -315,33 +254,130 @@ export const VendorRow = ({
                                 e.stopPropagation();
                                 onAdjust();
                             }}
-                            className="h-auto p-0 text-[10px] tracking-wide uppercase"
+                            className="h-auto p-0 text-[8px] sm:text-[10px] tracking-wide uppercase"
                         >
                             Adjust
                         </Button>
                     )}
                 </div>
-            </td>
+            </TableCell>
+            {months.map((month) => {
+                const flow = flowType === 'cash_in' ? month.cash_in : month.cash_out;
+                const costItem = flow?.cost_items?.find((ci) => ci.cost_item === costItemCode);
+                const jobData = costItem?.jobs?.find((j) => j.job_number === jobNumber);
+                const source = getJobSource(month.month);
+
+                return (
+                    <TableCell
+                        key={month.month}
+                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={() => {
+                            if (onCellClick && jobData) {
+                                onCellClick({ month: month.month, flowType, costItem: costItemCode, jobNumber });
+                            }
+                        }}
+                    >
+                        <div className="flex items-center justify-end gap-1">
+                            {source && <span className="hidden sm:inline"><SourceIndicator source={source} className="mr-1" /></span>}
+                            <span>{jobData ? formatAmount(jobData.total) : <span className="text-muted-foreground/30">-</span>}</span>
+                        </div>
+                    </TableCell>
+                );
+            })}
+            <TableCell className={`text-muted-foreground bg-muted/30 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+                {formatAmount(total)}
+            </TableCell>
+        </TableRow>
+    );
+};
+
+// Vendor Row (for cash out)
+type VendorRowProps = {
+    vendor: string;
+    costItemCode: string;
+    hasAdjustment: boolean;
+    hasVendorDelay?: boolean;
+    onAdjust: () => void;
+    months: MonthNode[];
+    total: number;
+    currentMonth?: string;
+    source?: DataSource;
+    onCellClick?: (filter: BreakdownFilter) => void;
+};
+
+export const VendorRow = ({
+    vendor,
+    costItemCode,
+    hasAdjustment,
+    hasVendorDelay = false,
+    onAdjust,
+    months,
+    total,
+    currentMonth,
+    source = 'actual',
+    onCellClick,
+}: VendorRowProps) => {
+    return (
+        <TableRow className="bg-muted/30 hover:bg-muted/40">
+            <TableCell className={`text-muted-foreground ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-8 sm:pl-14 bg-muted`}>
+                <div className="flex items-center justify-between gap-1 sm:gap-2">
+                    <span className="inline-flex items-center gap-1 sm:gap-2 min-w-0">
+                        <ChevronRight className="text-muted-foreground/50 h-3 w-3 shrink-0" />
+                        <span className="text-[10px] sm:text-xs truncate max-w-[60px] sm:max-w-none">{vendor}</span>
+                        <span className="hidden sm:inline"><SourceIndicator source={source} /></span>
+                        {hasAdjustment && (
+                            <Badge variant="secondary" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
+                                Adj
+                            </Badge>
+                        )}
+                        {hasVendorDelay && !hasAdjustment && (
+                            <Badge variant="outline" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
+                                Delay
+                            </Badge>
+                        )}
+                    </span>
+                    {source !== 'forecast' && (
+                        <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onAdjust();
+                            }}
+                            className="h-auto p-0 text-[8px] sm:text-[10px] tracking-wide uppercase shrink-0"
+                        >
+                            Adjust
+                        </Button>
+                    )}
+                </div>
+            </TableCell>
             {months.map((month) => {
                 const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
                 const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor);
 
                 return (
-                    <td
+                    <TableCell
                         key={month.month}
-                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
+                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && vendorData ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={() => {
+                            if (onCellClick && vendorData) {
+                                onCellClick({ month: month.month, flowType: 'cash_out', costItem: costItemCode, vendor });
+                            }
+                        }}
                     >
-                        <span>{vendorData ? formatAmount(vendorData.total) : '-'}</span>
-                    </td>
+                        <span>{vendorData ? formatAmount(vendorData.total) : <span className="text-muted-foreground/30">-</span>}</span>
+                    </TableCell>
                 );
             })}
-            <td className="text-muted-foreground bg-muted/50 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
-        </tr>
+            <TableCell className={`text-muted-foreground bg-muted/30 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+                {formatAmount(total)}
+            </TableCell>
+        </TableRow>
     );
 };
 
 // Vendor's Job Row
-// NOTE: Jobs under a vendor are ALWAYS from actual data (vendor breakdown only exists in actuals)
 type VendorJobRowProps = {
     jobNumber: string;
     vendor: string;
@@ -349,34 +385,41 @@ type VendorJobRowProps = {
     months: MonthNode[];
     total: number;
     currentMonth?: string;
+    onCellClick?: (filter: BreakdownFilter) => void;
 };
 
-export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, currentMonth }: VendorJobRowProps) => {
-    // Jobs under vendors are always from actual data (no source indicator needed - inherited from parent)
+export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, currentMonth, onCellClick }: VendorJobRowProps) => {
     return (
-        <tr className="border-border/30 bg-background border-b">
-            <td className="text-muted-foreground bg-background sticky left-0 z-10 px-4 py-2 pl-24">
-                <span className="inline-flex items-center gap-2">
-                    <span className="bg-muted-foreground/30 h-1.5 w-1.5 rounded-full" />
-                    <span className="font-mono text-xs">{jobNumber}</span>
+        <TableRow className="hover:bg-muted/30">
+            <TableCell className={`text-muted-foreground bg-background ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-12 sm:pl-20`}>
+                <span className="inline-flex items-center gap-1.5 sm:gap-2">
+                    <span className="bg-muted-foreground/30 h-1.5 w-1.5 rounded-full shrink-0" />
+                    <span className="font-mono text-[10px] sm:text-xs">{jobNumber}</span>
                 </span>
-            </td>
+            </TableCell>
             {months.map((month) => {
                 const costItem = month.cash_out?.cost_items?.find((ci) => ci.cost_item === costItemCode);
                 const vendorData = costItem?.vendors?.find((v) => v.vendor === vendor);
                 const jobData = vendorData?.jobs?.find((j) => j.job_number === jobNumber);
 
                 return (
-                    <td
+                    <TableCell
                         key={month.month}
-                        className={`text-muted-foreground px-3 py-2 text-right text-xs ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
+                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={() => {
+                            if (onCellClick && jobData) {
+                                onCellClick({ month: month.month, flowType: 'cash_out', costItem: costItemCode, vendor, jobNumber });
+                            }
+                        }}
                     >
-                        <span>{jobData ? formatAmount(jobData.total) : '-'}</span>
-                    </td>
+                        <span>{jobData ? formatAmount(jobData.total) : <span className="text-muted-foreground/30">-</span>}</span>
+                    </TableCell>
                 );
             })}
-            <td className="text-muted-foreground bg-muted/30 px-4 py-2 text-right text-xs">{formatAmount(total)}</td>
-        </tr>
+            <TableCell className={`text-muted-foreground bg-muted/20 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+                {formatAmount(total)}
+            </TableCell>
+        </TableRow>
     );
 };
 
@@ -388,31 +431,30 @@ type NetCashflowRowProps = {
 };
 
 export const NetCashflowRow = ({ months, total, currentMonth }: NetCashflowRowProps) => (
-    <tr className="bg-muted border-border border-b-2">
-        <td className="text-foreground bg-muted sticky left-0 z-10 px-4 py-3 font-bold">
-            <span className="inline-flex items-center gap-2">
-                <DotIcon color="bg-muted-foreground" />
+    <TableRow className="bg-muted/80 hover:bg-muted border-t-2 border-t-foreground/15 border-b border-b-border/50">
+        <TableCell className={`text-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-3 sm:py-4 font-bold text-xs sm:text-sm`}>
+            <span className="inline-flex items-center gap-1.5 sm:gap-2">
                 Net Cashflow
             </span>
-        </td>
+        </TableCell>
         {months.map((month) => (
-            <td
+            <TableCell
                 key={month.month}
-                className={`px-3 py-3 text-right font-bold ${
-                    month.net >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-                } ${month.month === currentMonth ? 'bg-muted-foreground/10' : ''}`}
+                className={`px-1.5 sm:px-3 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums ${
+                    month.net >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
+                } ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
             >
                 {formatAmount(month.net ?? 0)}
-            </td>
+            </TableCell>
         ))}
-        <td
-            className={`px-4 py-3 text-right font-bold ${
-                total >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-            } bg-muted-foreground/10`}
+        <TableCell
+            className={`px-2 sm:px-4 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums ${
+                total >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
+            } bg-muted ${totalColBorder}`}
         >
             {formatAmount(total)}
-        </td>
-    </tr>
+        </TableCell>
+    </TableRow>
 );
 
 // Running Balance Row
@@ -425,34 +467,29 @@ type RunningBalanceRowProps = {
 };
 
 export const RunningBalanceRow = ({ months, runningBalances, startingBalance, endingBalance, currentMonth }: RunningBalanceRowProps) => (
-    <tr className="from-muted/50 to-background bg-gradient-to-r">
-        <td className="text-foreground bg-muted/50 sticky left-0 z-10 px-4 py-3 font-semibold">
-            <span className="inline-flex items-center gap-2">
-                <DotIcon color="bg-blue-500" />
+    <TableRow className="bg-muted/40 hover:bg-muted/60">
+        <TableCell className={`text-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-3 sm:py-4 font-semibold text-xs sm:text-sm`}>
+            <span className="inline-flex items-center gap-1.5 sm:gap-2">
                 Running Balance
             </span>
-        </td>
+        </TableCell>
         {runningBalances.map((balance, idx) => {
             const withStarting = startingBalance + balance;
             return (
-                <td
+                <TableCell
                     key={months[idx].month}
-                    className={`px-3 py-3 text-right font-semibold ${
-                        withStarting >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                    } ${months[idx].month === currentMonth ? 'bg-muted/50' : ''}`}
+                    className={`px-1.5 sm:px-3 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-semibold tabular-nums text-foreground ${months[idx].month === currentMonth ? 'bg-primary/5' : ''}`}
                 >
                     {formatAmount(withStarting)}
-                </td>
+                </TableCell>
             );
         })}
-        <td
-            className={`px-4 py-3 text-right font-bold ${
-                endingBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-            } bg-muted/50`}
+        <TableCell
+            className={`px-2 sm:px-4 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums text-foreground bg-muted ${totalColBorder}`}
         >
             {formatAmount(endingBalance)}
-        </td>
-    </tr>
+        </TableCell>
+    </TableRow>
 );
 
 // Main Table Container
@@ -469,18 +506,20 @@ export const CashFlowTableContainer = ({
     children,
     showSourceLegend = true,
 }: CashFlowTableContainerProps) => (
-    <Card className="overflow-hidden">
-        <CardHeader className="border-border bg-muted/40 border-b">
+    <Card className="gap-0 rounded-xl overflow-hidden py-0 shadow-sm border">
+        <CardHeader className="bg-muted/60 border-b px-3 py-2.5 sm:px-5 sm:py-3.5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <CardTitle>{title}</CardTitle>
-                    <CardDescription>{description}</CardDescription>
+                    <CardTitle className="text-foreground text-sm sm:text-base font-bold">{title}</CardTitle>
+                    <CardDescription className="text-muted-foreground text-xs hidden sm:block mt-0.5">{description}</CardDescription>
                 </div>
-                {showSourceLegend && <DataSourceLegend />}
+                <div className="hidden sm:block">
+                    {showSourceLegend && <DataSourceLegend />}
+                </div>
             </div>
         </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-            <table className="min-w-full text-sm">{children}</table>
+        <CardContent className="p-0 overflow-x-auto">
+            <Table aria-label="Cash flow forecast breakdown by month" className="min-w-[900px]">{children}</Table>
         </CardContent>
     </Card>
 );

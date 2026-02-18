@@ -1,15 +1,17 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Card } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { Clock, Maximize2, Plus, Receipt, Settings } from 'lucide-react';
-import React, { useState } from 'react';
+import { Clock, ExternalLink, HelpCircle, Maximize2, Menu, Plus, Receipt, Settings, Shield } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 // Local imports
 import {
+    AmountBreakdownModal,
     CashFlowBarChart,
     CashFlowSectionRow,
     CashFlowTableContainer,
@@ -22,10 +24,12 @@ import {
     GeneralCostsModal,
     GstBreakdownModal,
     JobRow,
+    RetentionSettingsModal,
     NetCashflowRow,
-    PaymentRulesLegend,
+    PaymentRulesDialog,
     RunningBalanceRow,
     SettingsModal,
+    TableBody,
     SummaryCardsGrid,
     VendorJobRow,
     VendorPaymentDelayModal,
@@ -33,7 +37,7 @@ import {
     WaterfallChart,
 } from './components';
 import { useCashForecastData, useCashInAdjustments, useCashOutAdjustments, useVendorPaymentDelays, useWaterfallData } from './hooks';
-import type { CashForecastProps, GeneralCost } from './types';
+import type { BreakdownFilter, CashForecastProps, GeneralCost } from './types';
 import { formatAmount, formatMonthHeader } from './utils';
 
 const ShowCashForecast = ({
@@ -51,6 +55,8 @@ const ShowCashForecast = ({
     vendorPaymentDelays,
     costTypeByCostItem,
     gstBreakdown,
+    retentionSummary = [],
+    breakdownRows = [],
 }: CashForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
 
@@ -61,6 +67,9 @@ const ShowCashForecast = ({
     const [showGeneralCosts, setShowGeneralCosts] = useState(false);
     const [showFullscreenChart, setShowFullscreenChart] = useState<'bar' | 'cumulative' | 'waterfall' | null>(null);
     const [showGstBreakdown, setShowGstBreakdown] = useState(false);
+    const [breakdownFilter, setBreakdownFilter] = useState<BreakdownFilter | null>(null);
+    const [showRetention, setShowRetention] = useState(false);
+    const [showPaymentRules, setShowPaymentRules] = useState(false);
 
     // Settings State
     const [startingBalance, setStartingBalance] = useState(settings.startingBalance);
@@ -128,6 +137,12 @@ const ShowCashForecast = ({
         vendorPaymentDelays,
     });
 
+    // Track which vendors have payment delays configured
+    const vendorDelayVendors = useMemo(
+        () => new Set(vendorPaymentDelays.map((delay) => delay.vendor)),
+        [vendorPaymentDelays],
+    );
+
     // Computed values
     const endingBalance = startingBalance + (runningBalances[runningBalances.length - 1] ?? 0);
 
@@ -157,7 +172,10 @@ const ShowCashForecast = ({
                 gst_q3_pay_month: gstPayMonths.q3,
                 gst_q4_pay_month: gstPayMonths.q4,
             },
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to save settings'),
+            },
         );
         setShowSettings(false);
     };
@@ -181,12 +199,16 @@ const ShowCashForecast = ({
                         start_date: new Date().toISOString().split('T')[0],
                     });
                 },
+                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to add general cost'),
             },
         );
     };
 
     const handleDeleteGeneralCost = (id: number) => {
-        router.delete(`/cash-forecast/general-costs/${id}`, { preserveScroll: true });
+        router.delete(`/cash-forecast/general-costs/${id}`, {
+            preserveScroll: true,
+            onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to delete general cost'),
+        });
     };
 
     // Render cash in details
@@ -214,19 +236,21 @@ const ShowCashForecast = ({
                         total={costItemTotal}
                         currentMonth={currentMonth}
                         costCodeDescriptions={costCodeDescriptions}
+                        onCellClick={setBreakdownFilter}
                     />
                     {isExpanded &&
                         jobs.map((job) => (
                             <JobRow
                                 key={`in-${costItemCode}-${job.jobNumber}`}
                                 jobNumber={job.jobNumber}
-                                hasAdjustment={cashInAdjustmentJobs.has(job.jobNumber)}
-                                onAdjust={() => cashInAdjustmentHook.openModal(job.jobNumber)}
+                                hasAdjustment={costItemCode !== 'RET-HELD' && cashInAdjustmentJobs.has(job.jobNumber)}
+                                onAdjust={costItemCode !== 'RET-HELD' ? () => cashInAdjustmentHook.openModal(job.jobNumber) : undefined}
                                 months={months}
                                 costItemCode={costItemCode}
                                 flowType="cash_in"
                                 total={job.total}
                                 currentMonth={currentMonth}
+                                onCellClick={setBreakdownFilter}
                             />
                         ))}
                 </React.Fragment>
@@ -262,6 +286,7 @@ const ShowCashForecast = ({
                         currentMonth={currentMonth}
                         costCodeDescriptions={costCodeDescriptions}
                         cashOutSources={cashOutSources}
+                        onCellClick={setBreakdownFilter}
                     />
                     {isExpanded &&
                         hasVendors &&
@@ -271,11 +296,13 @@ const ShowCashForecast = ({
                                     vendor={vendor.vendor}
                                     costItemCode={costItemCode}
                                     hasAdjustment={cashOutAdjustmentVendors.has(`${costItemCode}|${vendor.vendor}`)}
+                                    hasVendorDelay={vendorDelayVendors.has(vendor.vendor)}
                                     onAdjust={() => cashOutAdjustmentHook.openModal('ALL', costItemCode, vendor.vendor)}
                                     months={months}
                                     total={vendor.total}
                                     currentMonth={currentMonth}
                                     source={vendor.source}
+                                    onCellClick={setBreakdownFilter}
                                 />
                                 {vendor.jobs?.map((job) => (
                                     <VendorJobRow
@@ -286,6 +313,7 @@ const ShowCashForecast = ({
                                         months={months}
                                         total={job.total}
                                         currentMonth={currentMonth}
+                                        onCellClick={setBreakdownFilter}
                                     />
                                 ))}
                             </React.Fragment>
@@ -304,6 +332,7 @@ const ShowCashForecast = ({
                                 total={job.total}
                                 currentMonth={currentMonth}
                                 cashOutSources={cashOutSources}
+                                onCellClick={setBreakdownFilter}
                             />
                         ))}
                 </React.Fragment>
@@ -314,43 +343,60 @@ const ShowCashForecast = ({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashflow Forecast" />
-            <div className="bg-background text-foreground min-h-screen space-y-6 p-4 sm:p-6">
+            <div className="bg-background text-foreground min-h-screen space-y-4 sm:space-y-6 p-3 sm:p-6 max-w-[100vw] overflow-x-hidden">
                 {/* Header */}
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Cashflow Forecast</h1>
-                        <p className="text-muted-foreground mt-1 text-sm">12-month rolling forecast with payment timing rules applied</p>
+                        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Cashflow Forecast</h1>
+                        <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">12-month rolling forecast</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="gap-2">
-                                    <Clock className="h-4 w-4" />
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="gap-2">
+                                <Menu className="h-4 w-4" />
+                                Menu
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem onClick={() => setShowGeneralCosts(true)}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                General Transactions
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setShowGstBreakdown(true)}>
+                                <Receipt className="mr-2 h-4 w-4" />
+                                GST Breakdown
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setShowRetention(true)}>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Retention
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                    <Clock className="mr-2 h-4 w-4" />
                                     Vendor Delays
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
-                                {vendorDelayHook.getVendors().map((vendor) => (
-                                    <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
-                                        {vendor}
-                                    </DropdownMenuItem>
-                                ))}
-                                {vendorDelayHook.getVendors().length === 0 && <DropdownMenuItem disabled>No vendors found</DropdownMenuItem>}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button onClick={() => setShowGstBreakdown(true)} variant="outline" className="gap-2">
-                            <Receipt className="h-4 w-4" />
-                            GST Breakdown
-                        </Button>
-                        <Button onClick={() => setShowGeneralCosts(true)} variant="outline" className="gap-2">
-                            <Plus className="h-4 w-4" />
-                            General Transactions
-                        </Button>
-                        <Button onClick={() => setShowSettings(true)} className="gap-2">
-                            <Settings className="h-4 w-4" />
-                            Settings
-                        </Button>
-                    </div>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                                    {vendorDelayHook.getVendors().map((vendor) => (
+                                        <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
+                                            {vendor}
+                                        </DropdownMenuItem>
+                                    ))}
+                                    {vendorDelayHook.getVendors().length === 0 && <DropdownMenuItem disabled>No vendors found</DropdownMenuItem>}
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setShowPaymentRules(true)}>
+                                <HelpCircle className="mr-2 h-4 w-4" />
+                                Payment Timing Rules
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setShowSettings(true)}>
+                                <Settings className="mr-2 h-4 w-4" />
+                                Settings
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
                 {/* Summary Cards */}
@@ -363,62 +409,46 @@ const ShowCashForecast = ({
                 />
 
                 {/* Charts Section */}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
                     {/* Monthly Cash Flow Chart */}
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-sm">Monthly Cash Flow</CardTitle>
-                            <Button onClick={() => setShowFullscreenChart('bar')} variant="ghost" size="icon" title="Fullscreen">
-                                <Maximize2 className="h-4 w-4" />
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
+                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Monthly Cash Flow</span>
+                            <Button onClick={() => setShowFullscreenChart('bar')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
+                                <Maximize2 className="h-3 w-3" />
                             </Button>
-                        </CardHeader>
-                        <CardContent>
-                            <CashFlowBarChart data={chartData} height={200} />
-                        </CardContent>
+                        </div>
+                        <div className="flex flex-1 items-center px-1 py-1.5 sm:px-2 sm:py-2">
+                            <CashFlowBarChart data={chartData} height={180} />
+                        </div>
                     </Card>
 
                     {/* Cumulative Chart */}
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-sm">Cumulative Cash Position</CardTitle>
-                            <Button onClick={() => setShowFullscreenChart('cumulative')} variant="ghost" size="icon" title="Fullscreen">
-                                <Maximize2 className="h-4 w-4" />
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
+                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cumulative Cash Position</span>
+                            <Button onClick={() => setShowFullscreenChart('cumulative')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
+                                <Maximize2 className="h-3 w-3" />
                             </Button>
-                        </CardHeader>
-                        <CardContent>
-                            <CumulativeLineChart data={cumulativeData} height={200} startingBalance={startingBalance} />
-                            <div className="mt-2 text-center">
-                                <span className={`text-sm font-medium ${endingBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        </div>
+                        <div className="flex flex-1 flex-col justify-center px-1 py-1.5 sm:px-2 sm:py-2">
+                            <CumulativeLineChart data={cumulativeData} height={180} startingBalance={startingBalance} />
+                            <div className="mt-1 text-center">
+                                <span className={`text-[10px] sm:text-xs font-medium ${endingBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                                     Ending: ${formatAmount(endingBalance)}
                                 </span>
                             </div>
-                        </CardContent>
+                        </div>
                     </Card>
 
                     {/* Waterfall Chart */}
-                    <Card>
-                        <CardHeader className="space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                    <CardTitle className="text-sm">Cash Waterfall</CardTitle>
-                                    <CardDescription>Summarized by cost type for the selected range</CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button onClick={() => setShowFullscreenChart('waterfall')} variant="ghost" size="icon" title="Fullscreen">
-                                        <Maximize2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="secondary" size="sm" asChild>
-                                        <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
-                                            View Unmapped
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="text-muted-foreground">Start</span>
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <div className="bg-muted flex flex-wrap items-center gap-1.5 sm:gap-2 border-b px-2 py-1.5 sm:px-3 sm:py-2">
+                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cash Waterfall</span>
+                            <div className="flex flex-1 items-center justify-end gap-1 sm:gap-1.5">
                                 <Select value={waterfallStartMonth} onValueChange={setWaterfallStartMonth}>
-                                    <SelectTrigger className="h-8 w-[140px] text-xs">
-                                        <SelectValue placeholder="Start month" />
+                                    <SelectTrigger className="h-6 w-[80px] sm:w-[100px] text-[10px] sm:text-[11px]">
+                                        <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {waterfallMonthOptions.map((month) => (
@@ -428,10 +458,10 @@ const ShowCashForecast = ({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <span className="text-muted-foreground">End</span>
+                                <span className="text-muted-foreground text-[10px] sm:text-[11px]">to</span>
                                 <Select value={waterfallEndMonth} onValueChange={setWaterfallEndMonth}>
-                                    <SelectTrigger className="h-8 w-[140px] text-xs">
-                                        <SelectValue placeholder="End month" />
+                                    <SelectTrigger className="h-6 w-[80px] sm:w-[100px] text-[10px] sm:text-[11px]">
+                                        <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {waterfallMonthOptions.map((month) => (
@@ -441,18 +471,26 @@ const ShowCashForecast = ({
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" title="View Unmapped" asChild>
+                                    <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
+                                        <ExternalLink className="h-3 w-3" />
+                                    </Link>
+                                </Button>
+                                <Button onClick={() => setShowFullscreenChart('waterfall')} variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" title="Fullscreen">
+                                    <Maximize2 className="h-3 w-3" />
+                                </Button>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            <WaterfallChart data={waterfallData} height={200} />
-                        </CardContent>
+                        </div>
+                        <div className="flex flex-1 flex-col justify-center px-1 py-1.5 sm:px-2 sm:py-2">
+                            <WaterfallChart data={waterfallData} height={180} />
+                        </div>
                     </Card>
                 </div>
 
                 {/* Main Cashflow Table */}
                 <CashFlowTableContainer>
                     <CashFlowTableHeader months={months} currentMonth={currentMonth} />
-                    <tbody>
+                    <TableBody>
                         {/* Cash In Section */}
                         <CashFlowSectionRow
                             type="in"
@@ -461,6 +499,7 @@ const ShowCashForecast = ({
                             months={months}
                             total={totals.cashIn}
                             currentMonth={currentMonth}
+                            onCellClick={setBreakdownFilter}
                         />
                         {renderCashInDetails()}
 
@@ -472,6 +511,7 @@ const ShowCashForecast = ({
                             months={months}
                             total={totals.cashOut}
                             currentMonth={currentMonth}
+                            onCellClick={setBreakdownFilter}
                         />
                         {renderCashOutDetails()}
 
@@ -486,14 +526,13 @@ const ShowCashForecast = ({
                             endingBalance={endingBalance}
                             currentMonth={currentMonth}
                         />
-                    </tbody>
+                    </TableBody>
                 </CashFlowTableContainer>
 
-                {/* Payment Rules Legend */}
-                <PaymentRulesLegend />
             </div>
 
             {/* Modals */}
+            <PaymentRulesDialog open={showPaymentRules} onOpenChange={setShowPaymentRules} />
             <SettingsModal
                 open={showSettings}
                 onOpenChange={setShowSettings}
@@ -553,10 +592,10 @@ const ShowCashForecast = ({
                 sourceMonths={
                     cashOutAdjustmentHook.modalState.jobNumber && cashOutAdjustmentHook.modalState.costItem && cashOutAdjustmentHook.modalState.vendor
                         ? cashOutAdjustmentHook.getSourceMonths(
-                              cashOutAdjustmentHook.modalState.jobNumber,
-                              cashOutAdjustmentHook.modalState.costItem,
-                              cashOutAdjustmentHook.modalState.vendor,
-                          )
+                            cashOutAdjustmentHook.modalState.jobNumber,
+                            cashOutAdjustmentHook.modalState.costItem,
+                            cashOutAdjustmentHook.modalState.vendor,
+                        )
                         : []
                 }
                 splits={cashOutAdjustmentHook.modalState.splits}
@@ -604,8 +643,8 @@ const ShowCashForecast = ({
                     showFullscreenChart === 'bar'
                         ? 'Monthly Cash Flow'
                         : showFullscreenChart === 'cumulative'
-                          ? 'Cumulative Cash Position'
-                          : 'Cash Waterfall'
+                            ? 'Cumulative Cash Position'
+                            : 'Cash Waterfall'
                 }
             >
                 {showFullscreenChart === 'bar' && <CashFlowBarChart data={chartData} height={600} />}
@@ -615,7 +654,19 @@ const ShowCashForecast = ({
                 {showFullscreenChart === 'waterfall' && <WaterfallChart data={waterfallData} height="100%" />}
             </FullscreenChartModal>
 
+            <RetentionSettingsModal open={showRetention} onOpenChange={setShowRetention} retentionSummary={retentionSummary} />
+
             <GstBreakdownModal open={showGstBreakdown} onOpenChange={setShowGstBreakdown} gstBreakdown={gstBreakdown} />
+
+            <AmountBreakdownModal
+                open={breakdownFilter !== null}
+                onOpenChange={(open) => {
+                    if (!open) setBreakdownFilter(null);
+                }}
+                filter={breakdownFilter}
+                breakdownRows={breakdownRows}
+                costCodeDescriptions={costCodeDescriptions}
+            />
         </AppLayout>
     );
 };

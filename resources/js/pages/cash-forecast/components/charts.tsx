@@ -1,56 +1,33 @@
-import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js';
-import React from 'react';
-import { Bar, Line } from 'react-chartjs-2';
+import {
+    type ChartConfig,
+    ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
+    ChartTooltip,
+    ChartTooltipContent,
+} from '@/components/ui/chart';
+import { useMemo } from 'react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts';
 import type { ChartDataPoint, CumulativeDataPoint, WaterfallDataPoint } from '../types';
 import { formatCompactAmount } from '../utils';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
-
-// Chart color constants
+// ── Shared palette ───────────────────────────────────────────────────────────
 const COLORS = {
-    cashIn: '#86efac',
-    cashOut: '#fca5a5',
-    netPositive: '#93c5fd',
-    netNegative: '#fdba74',
-    cumulative: '#7dd3fc',
-    cumulativeFill: 'rgba(125, 211, 252, 0.2)',
-    cumulativePoint: '#0ea5e9',
-    waterfallIncrease: '#5eead4',
-    waterfallDecrease: '#fca5a5',
-    waterfallTotal: '#94a3b8',
-    grid: '#e2e8f0',
-    text: '#64748b',
-    labelDark: '#0f172a',
+    cashIn:   '#5b9bd5',  // soft blue   — income
+    cashOut:  '#d4a054',  // soft amber  — expenses
+    netPos:   '#5a9a6e',  // soft green  — net positive
+    netNeg:   '#c06060',  // soft red    — net negative
+    neutral:  '#6b7280',  // gray-500   — cumulative line
+    muted:    '#6b7280',  // gray-500   — totals / reference
 } as const;
 
-type ChartContainerProps = {
-    height?: number | string;
-    children: React.ReactNode;
-    className?: string;
-};
+// ── Cash Flow Bar Chart ──────────────────────────────────────────────────────
 
-const ChartContainer = ({ height = 200, children, className = '' }: ChartContainerProps) => {
-    const heightStyle = typeof height === 'number' ? `${height}px` : height;
-    const isFluid = typeof height === 'string';
-
-    return (
-        <div className={`w-full px-2 ${isFluid ? 'h-full' : ''} ${className}`} style={isFluid ? { height: heightStyle } : undefined}>
-            <div style={{ height: isFluid ? '100%' : heightStyle }}>{children}</div>
-        </div>
-    );
-};
-
-type LegendItemProps = {
-    color: string;
-    label: string;
-};
-
-const LegendItem = ({ color, label }: LegendItemProps) => (
-    <div className="flex items-center gap-1.5">
-        <div className={`h-3 w-3 rounded`} style={{ backgroundColor: color }} />
-        <span className="text-muted-foreground">{label}</span>
-    </div>
-);
+const cashFlowConfig = {
+    cashIn:  { label: 'Cash In',  color: COLORS.cashIn },
+    cashOut: { label: 'Cash Out', color: COLORS.cashOut },
+    net:     { label: 'Net',      color: COLORS.netPos },
+} satisfies ChartConfig;
 
 type BarChartProps = {
     data: ChartDataPoint[];
@@ -58,80 +35,36 @@ type BarChartProps = {
     showLabels?: boolean;
 };
 
-export const CashFlowBarChart = ({ data, height = 200, showLabels = true }: BarChartProps) => {
-    const chartData = {
-        labels: data.map((d) => d.label),
-        datasets: [
-            {
-                label: 'Cash In',
-                data: data.map((d) => d.cashIn),
-                backgroundColor: COLORS.cashIn,
-                borderRadius: 4,
-                borderSkipped: false,
-            },
-            {
-                label: 'Cash Out',
-                data: data.map((d) => d.cashOut),
-                backgroundColor: COLORS.cashOut,
-                borderRadius: 4,
-                borderSkipped: false,
-            },
-            {
-                label: 'Net',
-                data: data.map((d) => d.net),
-                backgroundColor: data.map((d) => (d.net >= 0 ? COLORS.netPositive : COLORS.netNegative)),
-                borderRadius: 4,
-                borderSkipped: false,
-            },
-        ],
-    };
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-            duration: 900,
-            easing: 'easeOutQuart' as const,
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label(context: { dataset: { label?: string }; parsed: { y: number } }) {
-                        return `${context.dataset.label}: ${formatCompactAmount(context.parsed.y)}`;
-                    },
-                },
-            },
-        },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: showLabels ? { color: COLORS.text, font: { size: 10 } } : { display: false },
-            },
-            y: {
-                grid: { color: COLORS.grid },
-                ticks: {
-                    color: COLORS.text,
-                    callback(value: string | number) {
-                        return formatCompactAmount(Number(value));
-                    },
-                },
-            },
-        },
-    } as const;
-
+export const CashFlowBarChart = ({ data, height = 260, showLabels = true }: BarChartProps) => {
     return (
-        <ChartContainer height={height}>
-            <Bar data={chartData} options={chartOptions} />
-            <div className="mt-4 flex justify-center gap-6 text-xs">
-                <LegendItem color={COLORS.cashIn} label="Cash In" />
-                <LegendItem color={COLORS.cashOut} label="Cash Out" />
-                <LegendItem color={COLORS.netPositive} label="Net (+)" />
-                <LegendItem color={COLORS.netNegative} label="Net (-)" />
-            </div>
+        <ChartContainer
+            config={cashFlowConfig}
+            className="aspect-auto w-full"
+            style={{ height: typeof height === 'number' ? height : '100%' }}
+        >
+            <BarChart data={data} barCategoryGap="18%">
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} hide={!showLabels} tick={{ fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} width={45} tick={{ fontSize: 11 }} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="cashIn" fill="var(--color-cashIn)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cashOut" fill="var(--color-cashOut)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="net" radius={[4, 4, 0, 0]}>
+                    {data.map((entry, index) => (
+                        <Cell key={index} fill={entry.net >= 0 ? COLORS.netPos : COLORS.netNeg} />
+                    ))}
+                </Bar>
+            </BarChart>
         </ChartContainer>
     );
 };
+
+// ── Cumulative Line Chart ────────────────────────────────────────────────────
+
+const cumulativeConfig = {
+    value: { label: 'Cumulative Cash', color: COLORS.neutral },
+} satisfies ChartConfig;
 
 type CumulativeChartProps = {
     data: CumulativeDataPoint[];
@@ -139,188 +72,144 @@ type CumulativeChartProps = {
     startingBalance?: number;
 };
 
-export const CumulativeLineChart = ({ data, height = 120, startingBalance = 0 }: CumulativeChartProps) => {
-    const adjustedData = data.map((d) => ({
-        ...d,
-        value: startingBalance + d.value,
-    }));
-
-    const chartData = {
-        labels: adjustedData.map((d) => d.label),
-        datasets: [
-            {
-                label: 'Cumulative Cash',
-                data: adjustedData.map((d) => d.value),
-                borderColor: COLORS.cumulative,
-                backgroundColor: COLORS.cumulativeFill,
-                fill: true,
-                tension: 0.35,
-                pointRadius: 3,
-                pointHoverRadius: 4,
-                pointBackgroundColor: COLORS.cumulativePoint,
-            },
-        ],
-    };
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-            duration: 900,
-            easing: 'easeOutQuart' as const,
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label(context: { label: string; parsed: { y: number } }) {
-                        return `${context.label}: ${formatCompactAmount(context.parsed.y)}`;
-                    },
-                },
-            },
-        },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { color: COLORS.text, font: { size: 10 } },
-            },
-            y: {
-                grid: { color: COLORS.grid },
-                ticks: {
-                    color: COLORS.text,
-                    callback(value: string | number) {
-                        return formatCompactAmount(Number(value));
-                    },
-                },
-            },
-        },
-    } as const;
+export const CumulativeLineChart = ({ data, height = 260, startingBalance = 0 }: CumulativeChartProps) => {
+    const adjustedData = useMemo(() => data.map((d) => ({ ...d, value: startingBalance + d.value })), [data, startingBalance]);
 
     return (
-        <ChartContainer height={height}>
-            <Line data={chartData} options={chartOptions} />
+        <ChartContainer
+            config={cumulativeConfig}
+            className="aspect-auto w-full"
+            style={{ height: typeof height === 'number' ? height : '100%' }}
+        >
+            <AreaChart data={adjustedData}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <defs>
+                    <linearGradient id="cumulativeFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLORS.neutral} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={COLORS.neutral} stopOpacity={0.05} />
+                    </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="value" stroke={COLORS.neutral} fill="url(#cumulativeFill)" strokeWidth={2} />
+            </AreaChart>
         </ChartContainer>
     );
 };
+
+// ── Waterfall Chart ──────────────────────────────────────────────────────────
+
+const waterfallConfig = {
+    increase: { label: 'Increase', color: COLORS.netPos },
+    decrease: { label: 'Decrease', color: COLORS.netNeg },
+    total: { label: 'Total', color: COLORS.muted },
+} satisfies ChartConfig;
 
 type WaterfallChartProps = {
     data: WaterfallDataPoint[];
     height?: number | string;
 };
 
-export const WaterfallChart = ({ data, height = 200 }: WaterfallChartProps) => {
-    const cumulative = data.reduce<number[]>((acc, item, idx) => {
-        const prev = idx === 0 ? 0 : acc[idx - 1];
-        acc.push(prev + item.value);
-        return acc;
-    }, []);
+type WaterfallRow = {
+    label: string;
+    base: number;
+    value: number;
+    rawValue: number;
+    type: 'increase' | 'decrease' | 'total';
+};
 
-    const total = cumulative[cumulative.length - 1] ?? 0;
-    const totalLabel = 'Total';
-    const extended = [...data, { label: totalLabel, value: total }];
+const WaterfallTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: WaterfallRow }> }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload;
+    if (!row) return null;
+    return (
+        <div className="border-border/50 bg-background rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+            <div className="flex items-center gap-2">
+                <div
+                    className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                    style={{
+                        backgroundColor:
+                            row.type === 'total'
+                                ? waterfallConfig.total.color
+                                : row.type === 'increase'
+                                  ? waterfallConfig.increase.color
+                                  : waterfallConfig.decrease.color,
+                    }}
+                />
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="text-foreground font-mono font-medium tabular-nums">{formatCompactAmount(row.rawValue)}</span>
+            </div>
+        </div>
+    );
+};
 
-    const waterfallLabelsPlugin = {
-        id: 'waterfallLabels',
-        afterDatasetsDraw(chart: ChartJS) {
-            const { ctx } = chart;
-            const meta = chart.getDatasetMeta(0);
-            const dataset = chart.data.datasets[0] as { data: Array<{ isTotal?: boolean; total?: number; delta?: number }> };
-            ctx.save();
-            ctx.fillStyle = COLORS.labelDark;
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'center';
-            meta.data.forEach((bar: { x: number; y: number }, index: number) => {
-                const raw = dataset.data[index];
-                if (!raw) return;
-                const value = raw.isTotal ? (raw.total ?? 0) : (raw.delta ?? 0);
-                const label = formatCompactAmount(value);
-                const y = bar.y - 6;
-                ctx.fillText(label, bar.x, y);
-            });
-            ctx.restore();
-        },
-    };
+export const WaterfallChart = ({ data, height = 260 }: WaterfallChartProps) => {
+    const transformedData = useMemo<WaterfallRow[]>(() => {
+        const cumulative = data.reduce<number[]>((acc, item, idx) => {
+            acc.push((idx === 0 ? 0 : acc[idx - 1]) + item.value);
+            return acc;
+        }, []);
+        const total = cumulative[cumulative.length - 1] ?? 0;
 
-    const dataPoints = extended.map((item, idx) => {
-        const isTotal = idx === extended.length - 1;
-        const start = isTotal ? 0 : idx === 0 ? 0 : cumulative[idx - 1];
-        const end = isTotal ? total : start + item.value;
-        return {
-            x: item.label,
-            y: [start, end],
-            delta: item.value,
-            total,
-            isTotal,
-        };
-    });
+        const rows: WaterfallRow[] = data.map((item, idx) => {
+            const start = idx === 0 ? 0 : cumulative[idx - 1];
+            return {
+                label: item.label,
+                base: Math.min(start, start + item.value),
+                value: Math.abs(item.value),
+                rawValue: item.value,
+                type: item.value >= 0 ? 'increase' : 'decrease',
+            };
+        });
 
-    const backgroundColors = extended.map((item, idx) => {
-        const isTotal = idx === extended.length - 1;
-        if (isTotal) return COLORS.waterfallTotal;
-        return item.value >= 0 ? COLORS.waterfallIncrease : COLORS.waterfallDecrease;
-    });
+        rows.push({
+            label: 'Total',
+            base: 0,
+            value: Math.abs(total),
+            rawValue: total,
+            type: 'total',
+        });
 
-    const chartData = {
-        labels: extended.map((item) => item.label),
-        datasets: [
-            {
-                label: 'Net Cashflow',
-                data: dataPoints,
-                backgroundColor: backgroundColors,
-                borderRadius: 4,
-                borderSkipped: false,
-            },
-        ],
-    };
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-            duration: 900,
-            easing: 'easeOutQuart' as const,
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label(context: { label: string; raw: { isTotal?: boolean; total?: number; delta?: number } }) {
-                        const raw = context.raw;
-                        const value = raw.isTotal ? (raw.total ?? 0) : (raw.delta ?? 0);
-                        return `${context.label}: ${formatCompactAmount(value)}`;
-                    },
-                },
-            },
-        },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { color: COLORS.text, font: { size: 10 } },
-            },
-            y: {
-                grid: { color: COLORS.grid },
-                ticks: {
-                    color: COLORS.text,
-                    callback(value: string | number) {
-                        return formatCompactAmount(Number(value));
-                    },
-                },
-            },
-        },
-    } as const;
-
-    const heightStyle = typeof height === 'number' ? `${height}px` : height;
-    const isFluid = typeof height === 'string';
+        return rows;
+    }, [data]);
 
     return (
-        <div className={`w-full px-2 ${isFluid ? 'flex h-full flex-col' : ''}`} style={isFluid ? { height: heightStyle } : undefined}>
-            <div style={{ height: isFluid ? '100%' : heightStyle }} className={isFluid ? 'min-h-0 flex-1' : undefined}>
-                <Bar data={chartData} options={chartOptions} plugins={[waterfallLabelsPlugin]} />
-            </div>
-            <div className="mt-3 flex justify-center gap-6 text-xs">
-                <LegendItem color={COLORS.waterfallIncrease} label="Increase" />
-                <LegendItem color={COLORS.waterfallDecrease} label="Decrease" />
-                <LegendItem color={COLORS.waterfallTotal} label="Total" />
+        <div className={typeof height === 'string' ? 'flex h-full flex-col' : ''}>
+            <ChartContainer
+                config={waterfallConfig}
+                className="aspect-auto w-full flex-1"
+                style={{ height: typeof height === 'number' ? height : undefined }}
+            >
+                <BarChart data={transformedData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} />
+                    <ChartTooltip content={<WaterfallTooltip />} />
+                    <Bar dataKey="base" stackId="waterfall" fill="transparent" radius={0} isAnimationActive={false} />
+                    <Bar dataKey="value" stackId="waterfall" radius={4}>
+                        {transformedData.map((entry, index) => (
+                            <Cell
+                                key={index}
+                                fill={
+                                    entry.type === 'total'
+                                        ? 'var(--color-total)'
+                                        : entry.type === 'increase'
+                                          ? 'var(--color-increase)'
+                                          : 'var(--color-decrease)'
+                                }
+                            />
+                        ))}
+                    </Bar>
+                </BarChart>
+            </ChartContainer>
+            <div className="mt-2 flex justify-center gap-4 text-xs">
+                {Object.entries(waterfallConfig).map(([key, config]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                        <div className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: config.color }} />
+                        <span className="text-muted-foreground">{config.label}</span>
+                    </div>
+                ))}
             </div>
         </div>
     );
