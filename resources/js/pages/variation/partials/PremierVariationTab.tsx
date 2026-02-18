@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
-import { Download, HardHat, Loader2, Package, Send, Zap } from 'lucide-react';
+import { Download, Loader2, Send, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
@@ -35,6 +35,7 @@ export default function PremierVariationTab({
     const totalLabour = pricingItems.reduce((sum, i) => sum + Number(i.labour_cost || 0), 0);
     const totalMaterial = pricingItems.reduce((sum, i) => sum + Number(i.material_cost || 0), 0);
     const premierTotalCost = lineItems.reduce((sum, i) => sum + Number(i.total_cost || 0), 0);
+    const premierTotalRevenue = lineItems.reduce((sum, i) => sum + Number(i.revenue || 0), 0);
 
     const handleGenerate = async () => {
         if (!variationId) {
@@ -46,13 +47,8 @@ export default function PremierVariationTab({
             return;
         }
         setGenerating(true);
-        console.log('[Premier] variationId:', variationId);
-        console.log('[Premier] pricingItems:', pricingItems);
         try {
             const { data } = await axios.post(`/variations/${variationId}/generate-premier`);
-            console.log('[Premier] response:', data);
-            console.log('[Premier] line_items:', data.variation?.line_items);
-            console.log('[Premier] summary:', data.summary);
             onLineItemsChange(data.variation.line_items);
             toast.success(`Generated ${data.summary.line_count} Premier lines`);
         } catch (err: any) {
@@ -74,13 +70,11 @@ export default function PremierVariationTab({
                 </div>
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
-                        <HardHat className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm text-slate-500">Labour:</span>
+                        <span className="text-muted-foreground text-sm">Labour:</span>
                         <span className="text-sm font-bold tabular-nums">{fmt(totalLabour)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-purple-500" />
-                        <span className="text-sm text-slate-500">Material:</span>
+                        <span className="text-muted-foreground text-sm">Material:</span>
                         <span className="text-sm font-bold tabular-nums">{fmt(totalMaterial)}</span>
                     </div>
                     <div className="ml-auto">
@@ -103,10 +97,17 @@ export default function PremierVariationTab({
             {/* Summary bar */}
             {lineItems.length > 0 && (
                 <div className="flex items-center justify-between rounded-lg border border-slate-200/60 bg-slate-50/80 px-4 py-2.5 dark:border-slate-700/60 dark:bg-slate-800/50">
-                    <div className="text-sm">
-                        <span className="text-slate-500">{lineItems.length} lines</span>
-                        <span className="mx-2 text-slate-300">|</span>
-                        <span className="font-bold tabular-nums">{fmt(premierTotalCost)}</span>
+                    <div className="flex items-center gap-4 text-sm">
+                        <span className="text-muted-foreground">{lineItems.length} lines</span>
+                        <span className="text-muted-foreground/30">|</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs">Cost:</span>
+                            <span className="font-semibold tabular-nums">{fmt(premierTotalCost)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs">Revenue:</span>
+                            <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{fmt(premierTotalRevenue)}</span>
+                        </div>
                     </div>
                     <div className="flex gap-2">
                         {variationId && (

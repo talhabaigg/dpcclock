@@ -1,23 +1,39 @@
 import { ConditionManager } from '@/components/condition-manager';
 import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { AlertCircle, ArrowLeft, ClipboardList, DollarSign, FileText, GripHorizontal, Package, Plus, Save, Send, Trash2, TrendingUp, Wrench, Zap } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    ClipboardList,
+    DollarSign,
+    GripHorizontal,
+    Package,
+    Plus,
+    Save,
+    Send,
+    Trash2,
+    TrendingUp,
+    Wrench,
+    Zap,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CostCode } from '../purchasing/types';
 import ClientVariationTab from './partials/ClientVariationTab';
 import { Condition } from './partials/ConditionPricingPanel';
 import PremierVariationTab from './partials/PremierVariationTab';
-import VariationHeaderGrid, { VariationHeaderGridRef } from './partials/variationHeader/VariationHeaderGrid';
 import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
 import VariationPricingTab, { PricingItem } from './partials/VariationPricingTab';
 
@@ -56,17 +72,23 @@ interface VariationCreateProps {
     costCodes: CostCode[];
     variation?: any;
     conditions?: Condition[];
+    selectedLocationId?: string | number;
 }
 
-const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: VariationCreateProps) => {
+const STEPS = [
+    { id: 1, label: 'Details', description: 'Variation info' },
+    { id: 2, label: 'Pricing', description: 'Cost breakdown' },
+    { id: 3, label: 'Submit', description: 'Review & send' },
+] as const;
+
+const VariationCreate = ({ locations, costCodes, variation, conditions = [], selectedLocationId }: VariationCreateProps) => {
     const gridRef = useRef<VariationLineGridRef>(null);
-    const headerGridRef = useRef<VariationHeaderGridRef>(null);
     const { data, setData, post, errors } = useForm({
-        location_id: variation ? String(variation.location_id) : '',
+        location_id: variation ? String(variation.location_id) : selectedLocationId ? String(selectedLocationId) : '',
         type: variation ? variation.type : 'dayworks',
         co_number: variation ? variation.co_number : '',
         description: variation ? variation.description : '',
-        client_notes: variation ? (variation.client_notes || '') : '',
+        client_notes: variation ? variation.client_notes || '' : '',
         amount: variation ? variation.amount : '',
         date: variation ? variation.co_date : new Date().toISOString().split('T')[0],
         line_items: variation
@@ -94,22 +116,12 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
               ],
     });
 
-    // Track variation ID (either from prop or auto-saved)
+    const [activeStep, setActiveStep] = useState(1);
     const [savedVariationId, setSavedVariationId] = useState<number | undefined>(variation?.id);
-
-    // Conditions state (mutable so condition manager can update)
     const [localConditions, setLocalConditions] = useState<any[]>(conditions);
     const [showConditionManager, setShowConditionManager] = useState(false);
+    const [pricingItems, setPricingItems] = useState<PricingItem[]>(variation?.pricing_items ?? []);
 
-    // Pricing items state (from variation_pricing_items table)
-    const [pricingItems, setPricingItems] = useState<PricingItem[]>(
-        variation?.pricing_items ?? []
-    );
-
-    /**
-     * Persist any unsaved (local-only) pricing items to the server.
-     * Called after the variation has been saved/created.
-     */
     const persistUnsavedPricingItems = async (varId: number) => {
         const unsaved = pricingItems.filter((item) => !item.id);
         if (unsaved.length === 0) return;
@@ -142,18 +154,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
     });
     const [isResizing, setIsResizing] = useState(false);
     const resizeRef = useRef<HTMLDivElement>(null);
-
-    const gridSizeOptions = [
-        { value: '300px', label: 'Small' },
-        { value: '500px', label: 'Medium' },
-        { value: '1000px', label: 'Large' },
-        { value: '2000px', label: 'XXL' },
-    ];
-
-    const handleGridSizeChange = (value: string) => {
-        setGridHeight(value);
-        localStorage.setItem('variationGridSize', value);
-    };
 
     const handleResizeStart = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
@@ -206,14 +206,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
         setSelectedCount(count);
     };
 
-    const handleHeaderDataChange = (headerData: any) => {
-        setData('location_id', headerData.location_id);
-        setData('type', headerData.type);
-        setData('co_number', headerData.co_number);
-        setData('date', headerData.date);
-        setData('description', headerData.description);
-    };
-
     const [saving, setSaving] = useState(false);
 
     const handleSubmit = async (e?: React.FormEvent) => {
@@ -223,7 +215,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
         try {
             let varId = savedVariationId;
 
-            // If we have unsaved pricing items and no variation yet, quick-store first
             const hasUnsaved = pricingItems.some((item) => !item.id);
             if (!varId && hasUnsaved) {
                 if (!data.location_id || !data.co_number || !data.description) {
@@ -248,7 +239,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                 }
             }
 
-            // Persist unsaved pricing items
             if (varId && hasUnsaved) {
                 await persistUnsavedPricingItems(varId);
             }
@@ -267,13 +257,15 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
     const [quickGenOpen, setQuickGenOpen] = useState(false);
     const [genAmount, setGenAmount] = useState('');
     const costData = locations.find((location) => String(location.id) === data.location_id)?.cost_codes || [];
-    const waste_ratio = costData.find((code) => code.pivot?.waste_ratio)?.pivot.waste_ratio || 0;
 
-    useEffect(() => {
-        // Update cost data when location changes
-    }, [data.location_id, costData]);
+    const gridTotals = useMemo(() => {
+        const totalCost = data.line_items.reduce((sum: number, i: any) => sum + (Number(i.total_cost) || 0), 0);
+        const totalRevenue = data.line_items.reduce((sum: number, i: any) => sum + (Number(i.revenue) || 0), 0);
+        return { totalCost, totalRevenue };
+    }, [data.line_items]);
 
-    void waste_ratio;
+    const fmtCurrency = (v: number) =>
+        new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(v);
 
     const generatePrelimLabour = () => {
         if (!genAmount || !data.location_id) {
@@ -297,7 +289,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                 cost_type: costType,
                 percent: (percentRaw ?? 0) / 100 || 0,
                 prelim_type: prelimType,
-                prelim_type_raw: prelimTypeRaw,
                 description: code.description,
             };
         });
@@ -345,7 +336,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                 cost_type: costType,
                 percent: (percentRaw ?? 0) / 100 || 0,
                 prelim_type: prelimType,
-                prelim_type_raw: prelimTypeRaw,
                 description: code.description,
             };
         });
@@ -371,39 +361,48 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
         setGenAmount('');
     };
 
+    const selectedLocation = locations.find((loc) => String(loc.id) === data.location_id);
+
+    const canProceedToStep2 = data.location_id && data.co_number && data.description;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="dark:from-background dark:via-background dark:to-background min-h-screen min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50">
-                {/* Header Section */}
-                <div className="dark:border-border dark:bg-background/70 border-b border-slate-200/40 bg-white/70 px-3 py-4 backdrop-blur-xl sm:px-6 sm:py-6 md:px-8">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="min-h-screen min-w-0 overflow-x-hidden">
+                {/* Header */}
+                <div className="border-b px-4 py-5 sm:px-6 md:px-8">
+                    <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-50">
-                                {savedVariationId ? 'Edit Variation' : 'Create Variation'}
+                            <h1 className="text-xl font-semibold tracking-tight">
+                                {savedVariationId ? 'Edit Variation' : 'New Variation'}
                             </h1>
-                            <p className="mt-0.5 text-xs font-medium text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
-                                {savedVariationId ? 'Update variation details and line items' : 'Enter variation details and add line items'}
+                            <p className="text-muted-foreground mt-1 text-sm">
+                                {savedVariationId ? 'Update variation details and line items' : 'Create a new variation in 3 steps'}
                             </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
+                                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                                Back
+                            </Button>
+                            <Button onClick={handleSubmit} disabled={saving} size="sm">
+                                <Save className="mr-1.5 h-4 w-4" />
+                                {saving ? 'Saving...' : variation?.id ? 'Update' : 'Save Variation'}
+                            </Button>
                         </div>
                     </div>
                 </div>
 
-                <div className="p-2 sm:p-6 md:p-8">
+                <div className="p-4 sm:p-6 md:p-8">
                     <LoadingDialog open={open} setOpen={setOpen} />
 
-                    {/* Error Summary Banner */}
+                    {/* Error Banner */}
                     {Object.keys(errors).length > 0 && (
-                        <div className="border-destructive/50 bg-destructive/5 mb-4 rounded-xl border p-4">
-                            <div className="mb-3 flex items-center gap-2">
-                                <div className="bg-destructive/10 flex h-8 w-8 items-center justify-center rounded-lg">
-                                    <AlertCircle className="text-destructive h-4 w-4" />
-                                </div>
-                                <div>
-                                    <h3 className="text-destructive text-sm font-semibold">Validation Errors</h3>
-                                    <p className="text-destructive/80 text-xs">Please fix the following errors before submitting</p>
-                                </div>
+                        <div className="bg-destructive/5 border-destructive/20 mb-6 rounded-lg border p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                                <AlertCircle className="text-destructive h-4 w-4" />
+                                <h3 className="text-destructive text-sm font-medium">Please fix the following errors</h3>
                             </div>
-                            <ul className="space-y-1.5 pl-10">
+                            <ul className="space-y-1 pl-6">
                                 {Object.entries(errors).map(([key, message]) => {
                                     const formatErrorKey = (errorKey: string): string => {
                                         const itemMatch = errorKey.match(/^line_items\.(\d+)\.(\w+)$/);
@@ -416,12 +415,8 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                                     };
 
                                     return (
-                                        <li key={key} className="flex items-start gap-2 text-sm">
-                                            <span className="bg-destructive mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full" />
-                                            <span>
-                                                <span className="text-destructive font-medium">{formatErrorKey(key)}:</span>{' '}
-                                                <span className="text-destructive/90">{message as string}</span>
-                                            </span>
+                                        <li key={key} className="text-destructive text-sm">
+                                            <span className="font-medium">{formatErrorKey(key)}:</span> {message as string}
                                         </li>
                                     );
                                 })}
@@ -429,208 +424,349 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                         </div>
                     )}
 
-                    {/* Header Grid */}
-                    <div className="mb-4 space-y-3 sm:mb-6">
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <h3 className="text-base font-semibold sm:text-lg">Variation Details</h3>
-                        </div>
-                        <VariationHeaderGrid
-                            ref={headerGridRef}
-                            headerData={{
-                                location_id: data.location_id,
-                                type: data.type,
-                                co_number: data.co_number,
-                                date: data.date,
-                                description: data.description,
-                            }}
-                            locations={locations}
-                            onDataChange={handleHeaderDataChange}
-                        />
-                    </div>
-
-                    {/* 3-Tab Workflow */}
-                    <div className="mb-4 sm:mb-6">
-                        <Tabs defaultValue="pricing" className="w-full">
-                            <TabsList className="mb-4 w-full justify-start">
-                                <TabsTrigger value="pricing" className="gap-1.5">
-                                    <DollarSign className="h-3.5 w-3.5" />
-                                    Variation Pricing
-                                </TabsTrigger>
-                                <TabsTrigger value="client" className="gap-1.5">
-                                    <TrendingUp className="h-3.5 w-3.5" />
-                                    Client Variation
-                                </TabsTrigger>
-                                <TabsTrigger value="premier" className="gap-1.5">
-                                    <Send className="h-3.5 w-3.5" />
-                                    Premier Variation
-                                </TabsTrigger>
-                            </TabsList>
-
-                            {/* Tab: Variation Pricing */}
-                            <TabsContent value="pricing">
-                                <VariationPricingTab
-                                    variationId={savedVariationId}
-                                    conditions={localConditions}
-                                    locationId={data.location_id}
-                                    pricingItems={pricingItems}
-                                    onPricingItemsChange={setPricingItems}
-                                    onManageConditions={() => setShowConditionManager(true)}
-                                />
-                            </TabsContent>
-
-                            {/* Tab: Client Variation */}
-                            <TabsContent value="client">
-                                <ClientVariationTab
-                                    variationId={savedVariationId}
-                                    pricingItems={pricingItems}
-                                    clientNotes={data.client_notes}
-                                    onClientNotesChange={(notes) => setData('client_notes', notes)}
-                                    onPricingItemsChange={setPricingItems}
-                                />
-                            </TabsContent>
-
-                            {/* Tab: Premier Variation */}
-                            <TabsContent value="premier">
-                                <PremierVariationTab
-                                    variationId={savedVariationId}
-                                    pricingItems={pricingItems}
-                                    lineItems={data.line_items}
-                                    onLineItemsChange={(items) => setData('line_items', items)}
-                                />
-
-                                {/* Legacy Line Items Grid (editable) */}
-                                <div className="mt-6 space-y-3">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div className="flex items-center gap-2 sm:gap-3">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
-                                                <ClipboardList className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                                            </div>
-                                            <h3 className="text-base font-semibold sm:text-lg">Line Items</h3>
-                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                                {selectedCount > 0 ? `${selectedCount} selected` : `${data.line_items.length} total`}
+                    {/* Step Indicator */}
+                    <nav className="mb-8">
+                        <ol className="flex items-center gap-2">
+                            {STEPS.map((step, index) => {
+                                const isActive = activeStep === step.id;
+                                const isCompleted = activeStep > step.id;
+                                return (
+                                    <li key={step.id} className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                if (step.id === 1 || canProceedToStep2) {
+                                                    setActiveStep(step.id);
+                                                }
+                                            }}
+                                            className={cn(
+                                                'flex items-center gap-2.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
+                                                isActive && 'bg-primary text-primary-foreground',
+                                                isCompleted && 'bg-muted text-foreground',
+                                                !isActive && !isCompleted && 'text-muted-foreground hover:bg-muted/50',
+                                            )}
+                                        >
+                                            <span
+                                                className={cn(
+                                                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                                    isActive && 'bg-primary-foreground text-primary',
+                                                    isCompleted && 'bg-primary text-primary-foreground',
+                                                    !isActive && !isCompleted && 'border-muted-foreground/30 border',
+                                                )}
+                                            >
+                                                {isCompleted ? <Check className="h-3.5 w-3.5" /> : step.id}
                                             </span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
+                                            <span className="hidden sm:inline">{step.label}</span>
+                                        </button>
+                                        {index < STEPS.length - 1 && (
+                                            <Separator className={cn('w-8', isCompleted && 'bg-primary')} />
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    </nav>
+
+                    {/* Step 1: Variation Details */}
+                    {activeStep === 1 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Variation Details</CardTitle>
+                                <CardDescription>
+                                    Set the location, type, and description for this variation.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="space-y-2 sm:col-span-2">
+                                        <Label htmlFor="location">Location</Label>
+                                        <Select
+                                            value={data.location_id}
+                                            onValueChange={(val) => setData('location_id', val)}
+                                            disabled={!!selectedLocationId}
+                                        >
+                                            <SelectTrigger id="location">
+                                                <SelectValue placeholder="Select a location..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[...locations]
+                                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                                    .map((loc) => (
+                                                        <SelectItem key={loc.id} value={String(loc.id)}>
+                                                            {loc.name}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {selectedLocation && (
+                                            <p className="text-muted-foreground text-xs">{selectedLocation.name}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="type">Type</Label>
+                                        <Select value={data.type} onValueChange={(val) => setData('type', val)}>
+                                            <SelectTrigger id="type">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="dayworks">Dayworks</SelectItem>
+                                                <SelectItem value="variations">Variations</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="co_number">CO Number</Label>
+                                        <Input
+                                            id="co_number"
+                                            value={data.co_number}
+                                            onChange={(e) => setData('co_number', e.target.value)}
+                                            placeholder="e.g. CO-001"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="date">Date</Label>
+                                        <Input
+                                            id="date"
+                                            type="date"
+                                            value={data.date}
+                                            onChange={(e) => setData('date', e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+                                        <Label htmlFor="description">Description</Label>
+                                        <Input
+                                            id="description"
+                                            value={data.description}
+                                            onChange={(e) => setData('description', e.target.value)}
+                                            placeholder="Brief description of the variation..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex justify-end">
+                                    <Button
+                                        onClick={() => setActiveStep(2)}
+                                        disabled={!canProceedToStep2}
+                                    >
+                                        Continue to Pricing
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Step 2: Pricing */}
+                    {activeStep === 2 && (
+                        <div className="space-y-6">
+                            {/* Summary bar showing header details */}
+                            <div className="bg-muted/50 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border px-4 py-3 text-sm">
+                                <div>
+                                    <span className="text-muted-foreground">Location:</span>{' '}
+                                    <span className="font-medium">{selectedLocation?.name || '—'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">CO:</span>{' '}
+                                    <span className="font-medium">{data.co_number || '—'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Type:</span>{' '}
+                                    <span className="font-medium capitalize">{data.type}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Date:</span>{' '}
+                                    <span className="font-medium">{data.date}</span>
+                                </div>
+                            </div>
+
+                            <Card className="py-0">
+                                <CardHeader className="border-b py-4">
+                                    <CardTitle className="flex items-center gap-2">
+                                        <DollarSign className="h-4 w-4" />
+                                        Variation Pricing
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Add pricing items from conditions or manually.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="py-6">
+                                    <VariationPricingTab
+                                        variationId={savedVariationId}
+                                        conditions={localConditions}
+                                        locationId={data.location_id}
+                                        pricingItems={pricingItems}
+                                        onPricingItemsChange={setPricingItems}
+                                        onManageConditions={() => setShowConditionManager(true)}
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            <Card className="py-0">
+                                <CardHeader className="border-b py-4">
+                                    <CardTitle className="flex items-center gap-2">
+                                        <TrendingUp className="h-4 w-4" />
+                                        Client Variation
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Set sell rates and prepare the client quote.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="py-6">
+                                    <ClientVariationTab
+                                        variationId={savedVariationId}
+                                        pricingItems={pricingItems}
+                                        clientNotes={data.client_notes}
+                                        onClientNotesChange={(notes) => setData('client_notes', notes)}
+                                        onPricingItemsChange={setPricingItems}
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            <div className="flex justify-between">
+                                <Button variant="outline" onClick={() => setActiveStep(1)}>
+                                    Back to Details
+                                </Button>
+                                <Button onClick={() => setActiveStep(3)}>
+                                    Continue to Submit
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 3: Premier / Submit */}
+                    {activeStep === 3 && (
+                        <div className="space-y-6">
+                            {/* Summary bar */}
+                            <div className="bg-muted/50 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border px-4 py-3 text-sm">
+                                <div>
+                                    <span className="text-muted-foreground">Location:</span>{' '}
+                                    <span className="font-medium">{selectedLocation?.name || '—'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">CO:</span>{' '}
+                                    <span className="font-medium">{data.co_number || '—'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Pricing Items:</span>{' '}
+                                    <span className="font-medium">{pricingItems.length}</span>
+                                </div>
+                            </div>
+
+                            <Card className="py-0">
+                                <CardHeader className="border-b py-4">
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Send className="h-4 w-4" />
+                                        Premier Variation
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Generate Premier lines and manage the export.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="py-6">
+                                    <PremierVariationTab
+                                        variationId={savedVariationId}
+                                        pricingItems={pricingItems}
+                                        lineItems={data.line_items}
+                                        onLineItemsChange={(items) => setData('line_items', items)}
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            {/* Line Items Grid */}
+                            <div className="space-y-0">
+                                <div className="flex items-center justify-between px-1 py-4">
+                                    <div>
+                                        <h3 className="flex items-center gap-2 text-base font-semibold">
+                                            <ClipboardList className="h-4 w-4" />
+                                            Line Items
+                                            <span className="bg-muted text-muted-foreground ml-1 rounded-md px-2 py-0.5 text-xs font-normal">
+                                                {selectedCount > 0
+                                                    ? `${selectedCount} selected`
+                                                    : `${data.line_items.length} total`}
+                                            </span>
+                                        </h3>
+                                        <p className="text-muted-foreground mt-0.5 text-sm">Premier line items for export.</p>
+                                    </div>
+                                    <div className="flex gap-2">
                                             <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
                                                 <DialogTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-9 gap-1.5 rounded-lg border-amber-200/60 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                                                    >
-                                                        <Zap className="h-3.5 w-3.5" />
+                                                    <Button variant="outline" size="sm">
+                                                        <Zap className="mr-1.5 h-3.5 w-3.5" />
                                                         <span className="hidden sm:inline">Quick Gen</span>
                                                     </Button>
                                                 </DialogTrigger>
-                                                <DialogContent className="sm:max-w-lg">
-                                                    <DialogHeader className="space-y-3">
-                                                        <div className="from-primary to-primary/60 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br shadow-lg">
-                                                            <Zap className="text-primary-foreground h-6 w-6" />
-                                                        </div>
-                                                        <DialogTitle className="text-center text-xl">Quick Generate</DialogTitle>
-                                                        <DialogDescription className="text-center">
-                                                            Automatically populate line items based on your base amount
+                                                <DialogContent className="sm:max-w-md">
+                                                    <DialogHeader>
+                                                        <DialogTitle>Quick Generate</DialogTitle>
+                                                        <DialogDescription>
+                                                            Generate preliminary line items from a base amount.
                                                         </DialogDescription>
                                                     </DialogHeader>
 
-                                                    <div className="space-y-6 py-6">
-                                                        <div className="space-y-3">
-                                                            <label htmlFor="amount" className="flex items-center gap-2 text-sm font-semibold">
-                                                                <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
-                                                                    1
-                                                                </span>
-                                                                Enter Base Amount
-                                                            </label>
+                                                    <div className="space-y-4 py-4">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="gen-amount">Base Amount</Label>
                                                             <Input
-                                                                id="amount"
+                                                                id="gen-amount"
                                                                 type="text"
                                                                 inputMode="decimal"
                                                                 value={genAmount}
                                                                 onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
                                                                 placeholder="0.00"
-                                                                className="focus-visible:border-primary h-12 border-2 text-center text-lg font-medium"
                                                             />
                                                         </div>
 
-                                                        <div className="relative">
-                                                            <div className="absolute inset-0 flex items-center">
-                                                                <div className="border-muted w-full border-t"></div>
-                                                            </div>
-                                                            <div className="relative flex justify-center text-xs uppercase">
-                                                                <span className="bg-background text-muted-foreground px-2 font-medium">Choose Type</span>
-                                                            </div>
-                                                        </div>
+                                                        <Separator />
 
-                                                        <div className="space-y-3">
-                                                            <label className="flex items-center gap-2 text-sm font-semibold">
-                                                                <span className="bg-primary/10 text-primary flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold">
-                                                                    2
-                                                                </span>
-                                                                Select Generation Type
-                                                            </label>
+                                                        <div className="space-y-2">
+                                                            <Label>Generation Type</Label>
                                                             <div className="grid grid-cols-2 gap-3">
-                                                                <button
+                                                                <Button
+                                                                    variant="outline"
                                                                     onClick={generatePrelimLabour}
-                                                                    className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-blue-50/50 p-4 text-left transition-all duration-200 dark:from-blue-950/20"
+                                                                    className="h-auto flex-col gap-1 py-4"
                                                                 >
-                                                                    <div className="space-y-2">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 transition-transform group-hover:scale-110 dark:bg-blue-900/30">
-                                                                                <Wrench className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                                                            </div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-sm font-semibold">Labour</div>
-                                                                            <div className="text-muted-foreground text-xs">Generate labour costs</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
-                                                                </button>
+                                                                    <Wrench className="h-5 w-5" />
+                                                                    <span className="text-sm font-medium">Labour</span>
+                                                                    <span className="text-muted-foreground text-xs">
+                                                                        Generate labour costs
+                                                                    </span>
+                                                                </Button>
 
-                                                                <button
+                                                                <Button
+                                                                    variant="outline"
                                                                     onClick={generatePrelimMaterial}
-                                                                    className="group border-muted to-background hover:border-primary dark:to-background relative overflow-hidden rounded-lg border-2 bg-gradient-to-br from-purple-50/50 p-4 text-left transition-all duration-200 dark:from-purple-950/20"
+                                                                    className="h-auto flex-col gap-1 py-4"
                                                                 >
-                                                                    <div className="space-y-2">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 transition-transform group-hover:scale-110 dark:bg-purple-900/30">
-                                                                                <Package className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                                                                            </div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-sm font-semibold">Material</div>
-                                                                            <div className="text-muted-foreground text-xs">Generate material costs</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
-                                                                </button>
+                                                                    <Package className="h-5 w-5" />
+                                                                    <span className="text-sm font-medium">Material</span>
+                                                                    <span className="text-muted-foreground text-xs">
+                                                                        Generate material costs
+                                                                    </span>
+                                                                </Button>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </DialogContent>
                                             </Dialog>
-                                            <Button onClick={addRow} size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg">
-                                                <Plus className="h-3.5 w-3.5" />
-                                                <span className="xs:inline hidden">Add Row</span>
-                                                <span className="xs:hidden">Add</span>
+                                            <Button onClick={addRow} size="sm" variant="outline">
+                                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                Add Row
                                             </Button>
                                             <Button
                                                 onClick={deleteSelectedRows}
                                                 size="sm"
                                                 variant="outline"
                                                 disabled={selectedCount === 0}
-                                                className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive h-9 gap-1.5 rounded-lg disabled:opacity-50"
                                             >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                                <span className="hidden sm:inline">Delete</span>
-                                                {selectedCount > 0 && <span>({selectedCount})</span>}
+                                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                                Delete
+                                                {selectedCount > 0 && <span className="ml-1">({selectedCount})</span>}
                                             </Button>
                                         </div>
                                     </div>
-
                                     <div ref={resizeRef}>
                                         <VariationLineGrid
                                             ref={gridRef}
@@ -642,58 +778,52 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [] }: V
                                             height={gridHeight}
                                         />
                                     </div>
-                                    {/* Drag Handle */}
                                     <div
                                         onMouseDown={handleResizeStart}
-                                        className={`group flex w-full cursor-ns-resize items-center justify-center rounded py-1 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isResizing ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                                        className={cn(
+                                            'group flex w-full cursor-ns-resize items-center justify-center py-1 transition-all',
+                                            'hover:bg-muted',
+                                            isResizing && 'bg-muted',
+                                        )}
                                         title="Drag to resize"
                                     >
-                                        <GripHorizontal className="h-4 w-4 text-slate-400 transition-colors group-hover:text-slate-600 dark:group-hover:text-slate-300" />
+                                        <GripHorizontal className="text-muted-foreground h-4 w-4" />
                                     </div>
-                                </div>
-                            </TabsContent>
-                        </Tabs>
-                    </div>
+                                    {/* Totals Footer */}
+                                    <div className="bg-muted/50 flex items-center justify-between border-t px-4 py-3">
+                                        <div className="flex items-center gap-6 text-sm">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-muted-foreground text-xs font-medium">Total Cost:</span>
+                                                <span className="font-semibold tabular-nums">{fmtCurrency(gridTotals.totalCost)}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-muted-foreground text-xs font-medium">Revenue:</span>
+                                                <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                    {fmtCurrency(gridTotals.totalRevenue)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span className="text-muted-foreground text-xs">
+                                            {data.line_items.length} {data.line_items.length === 1 ? 'line' : 'lines'}
+                                        </span>
+                                    </div>
+                            </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                        {/* Grid Size Selector */}
-                        <div className="flex items-center gap-2">
-                            <Label className="text-[10px] text-slate-500 dark:text-slate-400">Grid Size</Label>
-                            <Select value={gridHeight} onValueChange={handleGridSizeChange}>
-                                <SelectTrigger className="h-8 w-24 py-0 text-xs">
-                                    <SelectValue placeholder="Size" />
-                                </SelectTrigger>
-                                <SelectContent className="w-24">
-                                    {gridSizeOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value} className="text-xs">
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {/* Footer Actions */}
+                            <div className="flex items-center justify-between">
+                                <Button variant="outline" onClick={() => setActiveStep(2)}>
+                                    Back to Pricing
+                                </Button>
+                                <Button onClick={handleSubmit} disabled={saving}>
+                                    <Save className="mr-1.5 h-4 w-4" />
+                                    {saving ? 'Saving...' : variation?.id ? 'Update Variation' : 'Save Variation'}
+                                </Button>
+                            </div>
                         </div>
-                        <div className="flex gap-3 sm:gap-4">
-                            <Button
-                                variant="outline"
-                                onClick={() => window.history.back()}
-                                className="h-10 w-full gap-2 rounded-lg border-slate-200/60 sm:h-11 sm:w-auto sm:rounded-xl sm:px-6"
-                            >
-                                <ArrowLeft className="h-4 w-4" />
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleSubmit}
-                                disabled={saving}
-                                className="h-10 w-full gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 px-6 shadow-lg ring-1 shadow-slate-900/20 ring-slate-900/10 transition-all hover:from-slate-800 hover:to-slate-700 hover:shadow-xl hover:shadow-slate-900/30 sm:h-11 sm:w-auto sm:rounded-xl dark:from-white dark:to-slate-100 dark:text-slate-900 dark:shadow-white/10 dark:ring-white/20 dark:hover:from-slate-50 dark:hover:to-white"
-                            >
-                                <Save className="h-4 w-4" />
-                                {saving ? 'Saving...' : variation?.id ? 'Update Variation' : 'Create Variation'}
-                            </Button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
+
             {/* Condition Manager Dialog */}
             {data.location_id && (
                 <ConditionManager

@@ -678,57 +678,57 @@ const ShowCashForecast = ({
                         <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">12-month rolling forecast</p>
                     </div>
                     <div className="flex items-center gap-2">
-                    <Button variant="outline" className="gap-2" onClick={handlePrint}>
-                        <Printer className="h-4 w-4" />
-                        Print
-                    </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="gap-2">
-                                <Menu className="h-4 w-4" />
-                                Menu
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem onClick={() => setShowGeneralCosts(true)}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                General Transactions
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setShowGstBreakdown(true)}>
-                                <Receipt className="mr-2 h-4 w-4" />
-                                GST Breakdown
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setShowRetention(true)}>
-                                <Shield className="mr-2 h-4 w-4" />
-                                Retention
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Vendor Delays
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                                    {vendorDelayHook.getVendors().map((vendor) => (
-                                        <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
-                                            {vendor}
-                                        </DropdownMenuItem>
-                                    ))}
-                                    {vendorDelayHook.getVendors().length === 0 && <DropdownMenuItem disabled>No vendors found</DropdownMenuItem>}
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setShowPaymentRules(true)}>
-                                <HelpCircle className="mr-2 h-4 w-4" />
-                                Payment Timing Rules
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setShowSettings(true)}>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Settings
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                        <Button variant="outline" className="gap-2" onClick={handlePrint}>
+                            <Printer className="h-4 w-4" />
+                            Print
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="gap-2">
+                                    <Menu className="h-4 w-4" />
+                                    Menu
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuItem onClick={() => setShowGeneralCosts(true)}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    General Transactions
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setShowGstBreakdown(true)}>
+                                    <Receipt className="mr-2 h-4 w-4" />
+                                    GST Breakdown
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowRetention(true)}>
+                                    <Shield className="mr-2 h-4 w-4" />
+                                    Retention
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Clock className="mr-2 h-4 w-4" />
+                                        Vendor Delays
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                                        {vendorDelayHook.getVendors().map((vendor) => (
+                                            <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
+                                                {vendor}
+                                            </DropdownMenuItem>
+                                        ))}
+                                        {vendorDelayHook.getVendors().length === 0 && <DropdownMenuItem disabled>No vendors found</DropdownMenuItem>}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setShowPaymentRules(true)}>
+                                    <HelpCircle className="mr-2 h-4 w-4" />
+                                    Payment Timing Rules
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowSettings(true)}>
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Settings
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 

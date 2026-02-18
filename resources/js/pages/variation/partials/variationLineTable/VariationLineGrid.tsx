@@ -67,13 +67,18 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
 
                 let updated = false;
 
-                // When cost_item changes, update cost_type and waste_ratio
+                // When cost_item changes, update cost_type, waste_ratio, and description
                 if (field === 'cost_item') {
+                    const matchedCode = costCodes.find((c) => c.code === data.cost_item);
                     const newCostType = getCostTypeFromCostCode(costCodes, data.cost_item);
                     const newWasteRatio = getWasteRatioFromCostCode(costCodes, data.cost_item);
 
                     data.cost_type = newCostType;
                     data.waste_ratio = newWasteRatio;
+
+                    if (matchedCode && !data.description) {
+                        data.description = matchedCode.description;
+                    }
 
                     // Recalculate total cost with new waste ratio
                     data.total_cost = calculateTotalCost(data.qty, data.unit_cost, newWasteRatio);

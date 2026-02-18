@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import axios from 'axios';
-import { DollarSign, ExternalLink, Percent, Save, TrendingUp } from 'lucide-react';
+import { ExternalLink, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
@@ -22,47 +22,52 @@ export default function ClientVariationTab({
     onClientNotesChange,
     onPricingItemsChange,
 }: ClientVariationTabProps) {
-    const [sellRates, setSellRates] = useState<Record<number, string>>({});
+    const [sellRates, setSellRates] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
+
+    const itemKey = (item: PricingItem, idx: number): string =>
+        item.id ? String(item.id) : `local-${idx}`;
 
     // Initialize sell rates from pricing items
     useEffect(() => {
-        const rates: Record<number, string> = {};
-        pricingItems.forEach((item) => {
-            if (item.id && item.sell_rate != null) {
-                rates[item.id] = String(item.sell_rate);
+        const rates: Record<string, string> = {};
+        pricingItems.forEach((item, idx) => {
+            const key = itemKey(item, idx);
+            if (item.sell_rate != null) {
+                rates[key] = String(item.sell_rate);
             }
         });
         setSellRates(rates);
     }, [pricingItems]);
 
-    const handleSellRateChange = (itemId: number, value: string) => {
-        setSellRates((prev) => ({ ...prev, [itemId]: value }));
+    const handleSellRateChange = (key: string, value: string) => {
+        setSellRates((prev) => ({ ...prev, [key]: value }));
     };
 
-    const getSellRate = (item: PricingItem): number => {
-        if (item.id && sellRates[item.id] !== undefined) {
-            return parseFloat(sellRates[item.id]) || 0;
+    const getSellRate = (item: PricingItem, idx: number): number => {
+        const key = itemKey(item, idx);
+        if (sellRates[key] !== undefined) {
+            return parseFloat(sellRates[key]) || 0;
         }
         return item.sell_rate || 0;
     };
 
-    const getSellTotal = (item: PricingItem): number => {
-        return item.qty * getSellRate(item);
+    const getSellTotal = (item: PricingItem, idx: number): number => {
+        return item.qty * getSellRate(item, idx);
     };
 
-    const getMargin = (item: PricingItem): number => {
-        return getSellTotal(item) - item.total_cost;
+    const getMargin = (item: PricingItem, idx: number): number => {
+        return getSellTotal(item, idx) - item.total_cost;
     };
 
-    const getMarginPercent = (item: PricingItem): number => {
-        const sellTotal = getSellTotal(item);
+    const getMarginPercent = (item: PricingItem, idx: number): number => {
+        const sellTotal = getSellTotal(item, idx);
         if (sellTotal <= 0) return 0;
-        return (getMargin(item) / sellTotal) * 100;
+        return (getMargin(item, idx) / sellTotal) * 100;
     };
 
     const totalCost = pricingItems.reduce((sum, i) => sum + i.total_cost, 0);
-    const totalSell = pricingItems.reduce((sum, i) => sum + getSellTotal(i), 0);
+    const totalSell = pricingItems.reduce((sum, i, idx) => sum + getSellTotal(i, idx), 0);
     const totalMargin = totalSell - totalCost;
     const overallMarginPercent = totalSell > 0 ? (totalMargin / totalSell) * 100 : 0;
 
@@ -140,9 +145,10 @@ export default function ClientVariationTab({
                         </thead>
                         <tbody>
                             {pricingItems.map((item, idx) => {
-                                const sellTotal = getSellTotal(item);
-                                const margin = getMargin(item);
-                                const marginPct = getMarginPercent(item);
+                                const key = itemKey(item, idx);
+                                const sellTotal = getSellTotal(item, idx);
+                                const margin = getMargin(item, idx);
+                                const marginPct = getMarginPercent(item, idx);
                                 const costRate = item.qty > 0 ? item.total_cost / item.qty : 0;
 
                                 return (
@@ -170,8 +176,8 @@ export default function ClientVariationTab({
                                                 type="number"
                                                 step="0.01"
                                                 min="0"
-                                                value={item.id ? (sellRates[item.id] ?? '') : ''}
-                                                onChange={(e) => item.id && handleSellRateChange(item.id, e.target.value)}
+                                                value={sellRates[key] ?? ''}
+                                                onChange={(e) => handleSellRateChange(key, e.target.value)}
                                                 placeholder="0.00"
                                                 className="h-8 w-28 text-right text-sm"
                                             />
@@ -194,19 +200,10 @@ export default function ClientVariationTab({
                     {/* Save Button */}
                     <div className="border-t border-slate-200/60 bg-slate-50/80 px-3 py-3 dark:border-slate-700/60 dark:bg-slate-800/50">
                         <div className="flex items-center justify-between">
-                            <div className="flex gap-4">
-                                <div className="flex items-center gap-1.5">
-                                    <DollarSign className="h-3.5 w-3.5 text-slate-400" />
-                                    <span className="text-xs text-slate-500">Cost: {fmt(totalCost)}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <TrendingUp className="h-3.5 w-3.5 text-blue-400" />
-                                    <span className="text-xs text-slate-500">Sell: {fmt(totalSell)}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Percent className="h-3.5 w-3.5 text-emerald-400" />
-                                    <span className="text-xs text-slate-500">Margin: {fmtPct(overallMarginPercent)}</span>
-                                </div>
+                            <div className="text-muted-foreground flex gap-4 text-xs">
+                                <span>Cost: {fmt(totalCost)}</span>
+                                <span>Sell: {fmt(totalSell)}</span>
+                                <span>Margin: {fmtPct(overallMarginPercent)}</span>
                             </div>
                             <Button onClick={handleSaveSellRates} size="sm" disabled={saving} className="h-8 gap-1.5">
                                 <Save className="h-3.5 w-3.5" />
@@ -216,9 +213,8 @@ export default function ClientVariationTab({
                     </div>
                 </div>
             ) : (
-                <div className="rounded-lg border border-dashed border-slate-300 py-12 text-center dark:border-slate-600">
-                    <TrendingUp className="mx-auto mb-3 h-8 w-8 text-slate-300 dark:text-slate-600" />
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed py-12 text-center">
+                    <p className="text-muted-foreground text-sm">
                         Add pricing items in the Variation Pricing tab first.
                     </p>
                 </div>

@@ -19,15 +19,15 @@ export const ActionsCellRenderer = (props: ActionsCellRendererProps) => {
     }
 
     return (
-        <div className="flex items-center justify-center">
+        <div className="flex h-full items-center justify-center">
             <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
-                className="text-muted-foreground h-8 w-8"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7"
                 onClick={handleDelete}
                 aria-label={`Delete line ${props.data?.line_number || ''}`}
             >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
             </Button>
         </div>
     );

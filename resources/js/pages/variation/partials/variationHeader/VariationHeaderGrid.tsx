@@ -26,13 +26,14 @@ interface VariationHeaderGridProps {
     headerData: HeaderData;
     locations: Location[];
     onDataChange: (data: HeaderData) => void;
+    locationLocked?: boolean;
 }
 
 export interface VariationHeaderGridRef {
     getData: () => HeaderData;
 }
 
-const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGridProps>(({ headerData, locations, onDataChange }, ref) => {
+const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGridProps>(({ headerData, locations, onDataChange, locationLocked = false }, ref) => {
     const gridRef = useRef<AgGridReact>(null);
 
     const columnDefs: ColDef[] = useMemo(() => {
@@ -44,7 +45,7 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
                 minWidth: 200,
                 wrapText: true,
                 autoHeight: true,
-                editable: true,
+                editable: !locationLocked,
                 cellEditor: LocationSearchEditor,
                 cellEditorParams: (params: any) => ({
                     value: params.value || '',

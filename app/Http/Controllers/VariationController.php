@@ -21,23 +21,9 @@ use Inertia\Inertia;
 
 class VariationController extends Controller
 {
-    public function locationVariations(Location $location)
+    public function locationVariations(Request $request, Location $location)
     {
-        $location->load('variations.lineItems');
-
-        foreach ($location->variations as $variation) {
-            $location->total_variation_cost = $variation->lineItems->sum('total_cost');
-            $location->total_variation_revenue = $variation->lineItems->sum('revenue');
-        }
-
-        foreach ($location->variations as $variation) {
-            $variation->total_variation_cost = $variation->lineItems->sum('total_cost');
-            $variation->total_variation_revenue = $variation->lineItems->sum('revenue');
-        }
-
-        return Inertia::render('variation/location-variations', [
-            'location' => $location,
-        ]);
+        return $this->index($request, $location);
     }
 
     public function loadVariationsFromPremier(Location $location)
@@ -47,19 +33,111 @@ class VariationController extends Controller
         return redirect()->back()->with('success', 'Variation sync job has been queued. Changes will appear shortly.');
     }
 
-    public function index()
+    public function index(Request $request, ?Location $location = null)
     {
-        $variations = Variation::with('lineItems', 'location')->get();
+        $user = auth()->user();
 
-        foreach ($variations as $variation) {
-            $variation->total_cost = $variation->lineItems->sum('total_cost');
-            $variation->total_revenue = $variation->lineItems->sum('revenue');
+        $query = Variation::with('location')
+            ->withSum('lineItems', 'total_cost')
+            ->withSum('lineItems', 'revenue');
+
+        // Location scope — when accessed via /locations/{location}/variations
+        if ($location) {
+            $query->where('location_id', $location->id);
         }
 
-        // Logic to retrieve variations
-        return Inertia::render('variation/index', [
+        // Permission-based filtering for managers
+        if ($user->hasRole('manager')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationIds = Location::whereIn('eh_location_id', $ehLocationIds)->pluck('id');
+            $query->whereIn('location_id', $locationIds);
+        }
+
+        // Search filter
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('co_number', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('location', function ($lq) use ($search) {
+                        $lq->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Status filter
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        // Location filter (only when not scoped to a specific location)
+        if (! $location && $request->filled('location')) {
+            $query->whereHas('location', function ($q) use ($request) {
+                $q->where('name', $request->input('location'));
+            });
+        }
+
+        // Type filter
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        $variations = $query->orderByDesc('id')->paginate(50)->withQueryString();
+
+        // Build filter options
+        $filterOptionsQuery = Variation::query();
+        if ($location) {
+            $filterOptionsQuery->where('location_id', $location->id);
+        }
+        if ($user->hasRole('manager')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationIds = Location::whereIn('eh_location_id', $ehLocationIds)->pluck('id');
+            $filterOptionsQuery->whereIn('location_id', $locationIds);
+        }
+
+        $filterOptions = [
+            'statuses' => $filterOptionsQuery->clone()->distinct()->pluck('status')->filter()->values(),
+            'types' => $filterOptionsQuery->clone()->distinct()->pluck('type')->filter()->values(),
+        ];
+
+        if (! $location) {
+            $filterOptions['locations'] = Location::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('location_id'))
+                ->pluck('name')->filter()->values();
+        }
+
+        $props = [
             'variations' => $variations,
-        ]);
+            'filterOptions' => $filterOptions,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'status' => $request->input('status', ''),
+                'location' => $request->input('location', ''),
+                'type' => $request->input('type', ''),
+            ],
+        ];
+
+        // Location-specific extras
+        if ($location) {
+            $approvedRevenue = Variation::where('location_id', $location->id)
+                ->where('type', 'APPROVED')
+                ->withSum('lineItems', 'revenue')
+                ->get()
+                ->sum('line_items_sum_revenue');
+
+            $pendingRevenue = Variation::where('location_id', $location->id)
+                ->where('type', 'PENDING')
+                ->withSum('lineItems', 'revenue')
+                ->get()
+                ->sum('line_items_sum_revenue');
+
+            $props['location'] = ['id' => $location->id, 'name' => $location->name];
+            $props['summaryCards'] = [
+                'approvedRevenue' => $approvedRevenue,
+                'pendingRevenue' => $pendingRevenue,
+            ];
+        }
+
+        return Inertia::render('variation/index', $props);
     }
 
     public function create()
@@ -94,6 +172,7 @@ class VariationController extends Controller
             'locations' => $locations,
             'costCodes' => $costCodes,
             'conditions' => $conditions,
+            'selectedLocationId' => request()->query('location_id'),
         ]);
     }
 

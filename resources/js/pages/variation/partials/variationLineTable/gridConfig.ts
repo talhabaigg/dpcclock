@@ -1,5 +1,6 @@
-import { shadcnTheme } from '@/themes/ag-grid-theme';
 import { GridOptions } from 'ag-grid-community';
+
+const isDark = () => document.documentElement.classList.contains('dark');
 
 export const defaultColDef = {
     resizable: true,
@@ -12,7 +13,6 @@ export const defaultColDef = {
 
 export const getGridOptions = (): GridOptions => {
     return {
-        theme: shadcnTheme,
         defaultColDef,
         rowSelection: {
             mode: 'multiRow',
@@ -24,8 +24,8 @@ export const getGridOptions = (): GridOptions => {
         enableCellTextSelection: true,
         ensureDomOrder: true,
         animateRows: true,
-        rowHeight: 52,
-        headerHeight: 44,
+        rowHeight: 44,
+        headerHeight: 40,
         suppressMenuHide: true,
         suppressContextMenu: false,
         enableBrowserTooltips: true,
@@ -35,10 +35,9 @@ export const getGridOptions = (): GridOptions => {
 };
 
 export const getRowStyle = (params: any) => {
-    // Highlight REV rows with green background
     if (params.data?.cost_type === 'REV') {
         return {
-            backgroundColor: '#f0fdf4',
+            backgroundColor: isDark() ? '#052e1680' : '#f0fdf4',
         };
     }
     return undefined;

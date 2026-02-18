@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import axios from 'axios';
-import { DollarSign, HardHat, Package, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import ConditionPricingPanel, { Condition } from './ConditionPricingPanel';
@@ -340,18 +340,16 @@ export default function VariationPricingTab({
                         <div className="flex items-center justify-between">
                             <div className="flex gap-6">
                                 <div className="flex items-center gap-2">
-                                    <HardHat className="h-4 w-4 text-blue-500" />
-                                    <span className="text-xs text-slate-500">Labour:</span>
+                                    <span className="text-muted-foreground text-xs">Labour:</span>
                                     <span className="text-sm font-semibold tabular-nums">{fmt(totalLabour)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Package className="h-4 w-4 text-purple-500" />
-                                    <span className="text-xs text-slate-500">Material:</span>
+                                    <span className="text-muted-foreground text-xs">Material:</span>
                                     <span className="text-sm font-semibold tabular-nums">{fmt(totalMaterial)}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4 text-emerald-500" />
+                                <span className="text-muted-foreground text-xs">Total:</span>
                                 <span className="text-sm font-bold tabular-nums">{fmt(grandTotal)}</span>
                             </div>
                         </div>
@@ -360,9 +358,8 @@ export default function VariationPricingTab({
             )}
 
             {pricingItems.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-300 py-12 text-center dark:border-slate-600">
-                    <DollarSign className="mx-auto mb-3 h-8 w-8 text-slate-300 dark:text-slate-600" />
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed py-12 text-center">
+                    <p className="text-muted-foreground text-sm">
                         No pricing items yet. Add items using conditions or manual entry above.
                     </p>
                 </div>

@@ -27,13 +27,18 @@ export const calculateTotalCost = (qty: number, unitCost: number, wasteRatio: nu
     return baseTotal + wasteAmount;
 };
 
-/**
- * Format currency value with $ symbol and 2 decimal places
- */
+const auCurrencyFormat = new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
 export const currencyFormatter = (params: any): string => {
     if (params.value == null || params.value === '') return '';
     const value = typeof params.value === 'string' ? parseFloat(params.value) : params.value;
-    return `$${value.toFixed(2)}`;
+    if (isNaN(value)) return '';
+    return auCurrencyFormat.format(value);
 };
 
 /**

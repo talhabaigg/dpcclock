@@ -5,17 +5,24 @@ import { CostTypeSearchEditor } from './cellEditors/CostTypeSearchEditor';
 import { ActionsCellRenderer } from './cellRenderers/ActionsCellRenderer';
 import { CostType, currencyFormatter } from './utils';
 
+const isDark = () => document.documentElement.classList.contains('dark');
+
 export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], onDeleteRow: (data: any) => void, canDelete: boolean): ColDef[] => {
     return [
         {
             field: 'line_number',
             headerName: '#',
-            width: 20,
+            width: 70,
+            maxWidth: 80,
             flex: 0,
             editable: false,
-            // cellRenderer: LineNumberRenderer,
             sortable: false,
             suppressMovable: true,
+            cellStyle: () => ({
+                color: isDark() ? '#a1a1aa' : '#71717a',
+                fontWeight: 500,
+                fontSize: '12px',
+            }),
         },
         {
             field: 'cost_item',
@@ -27,6 +34,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             cellEditorParams: (params: any) => ({
                 value: params.value || '',
                 costCodes: costCodes,
+                onValueChange: params.onValueChange,
             }),
             valueFormatter: (params) => {
                 if (!params.value) return 'Select Cost Item...';
@@ -38,7 +46,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             field: 'cost_type',
             headerName: 'Cost Type',
             flex: 1.5,
-            minWidth: 160,
+            minWidth: 150,
             editable: true,
             cellEditor: CostTypeSearchEditor,
             cellEditorParams: (params: any) => ({
@@ -55,7 +63,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         {
             field: 'description',
             headerName: 'Description',
-            flex: 2,
+            flex: 2.5,
             minWidth: 200,
             editable: true,
             cellEditor: 'agLargeTextCellEditor',
@@ -95,8 +103,8 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             field: 'unit_cost',
             headerName: 'Unit Cost',
             flex: 1,
-            minWidth: 120,
-            maxWidth: 150,
+            minWidth: 110,
+            maxWidth: 140,
             editable: (params) => params.data?.cost_type !== 'REV',
             cellEditor: 'agNumberCellEditor',
             cellEditorParams: {
@@ -109,16 +117,18 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         {
             field: 'waste_ratio',
             headerName: 'Waste %',
-            flex: 0.8,
-            minWidth: 90,
-            maxWidth: 110,
+            flex: 0.7,
+            minWidth: 85,
+            maxWidth: 100,
             editable: false,
             valueFormatter: (params) => {
-                if (params.value == null || params.value === '') return '';
+                if (params.value == null || params.value === '' || params.value === 0) return '-';
                 return `${params.value}%`;
             },
             type: 'numericColumn',
-            cellStyle: { backgroundColor: '#f8fafc' },
+            cellStyle: () => ({
+                color: isDark() ? '#a1a1aa' : '#71717a',
+            }),
         },
         {
             field: 'total_cost',
@@ -153,8 +163,8 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             cellStyle: (params) => {
                 if (params.data?.cost_type === 'REV') {
                     return {
-                        backgroundColor: '#f0fdf4',
-                        color: '#16a34a',
+                        backgroundColor: isDark() ? '#052e16' : '#f0fdf4',
+                        color: isDark() ? '#4ade80' : '#16a34a',
                         fontWeight: 600,
                     };
                 }
@@ -164,7 +174,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         {
             field: 'actions',
             headerName: '',
-            width: 80,
+            width: 60,
             flex: 0,
             editable: false,
             sortable: false,
