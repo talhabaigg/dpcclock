@@ -3,9 +3,9 @@ import { Card } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
-import { Clock, ExternalLink, HelpCircle, Maximize2, Menu, Plus, Receipt, Settings, Shield } from 'lucide-react';
+import { BreadcrumbItem, SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Clock, ExternalLink, HelpCircle, Maximize2, Menu, Plus, Printer, Receipt, Settings, Shield } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -58,6 +58,7 @@ const ShowCashForecast = ({
     retentionSummary = [],
     breakdownRows = [],
 }: CashForecastProps) => {
+    const { auth } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cashflow Forecast', href: '/cash-forecast' }];
 
     // UI State
@@ -211,6 +212,332 @@ const ShowCashForecast = ({
         });
     };
 
+    const handlePrint = () => {
+        const printWindow = window.open('', '', 'width=1200,height=800');
+        if (!printWindow) return;
+
+        const dateStr = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+        const fmtDollar = (v: number) => `${v < 0 ? '-$' : '$'}${formatAmount(Math.abs(v))}`;
+
+        // Build month header cells
+        const monthHeaders = months
+            .map((m) => `<th>${formatMonthHeader(m.month)}</th>`)
+            .join('');
+
+        // Cash In row
+        const cashInCells = months
+            .map((m) => `<td>${fmtDollar(m.cash_in?.total ?? 0)}</td>`)
+            .join('');
+
+        // Cash Out row
+        const cashOutCells = months
+            .map((m) => `<td>${fmtDollar(m.cash_out?.total ?? 0)}</td>`)
+            .join('');
+
+        // Net Cashflow row
+        const netCells = months
+            .map((m) => {
+                const net = m.net ?? 0;
+                const color = net >= 0 ? '#166534' : '#991b1b';
+                return `<td style="color: ${color}; font-weight: 700;">${fmtDollar(net)}</td>`;
+            })
+            .join('');
+
+        // Running Balance row
+        const balanceCells = runningBalances
+            .map((bal) => {
+                const withStarting = startingBalance + bal;
+                return `<td>${fmtDollar(withStarting)}</td>`;
+            })
+            .join('');
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Cashflow Forecast Report</title>
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        body {
+                            font-family: 'Segoe UI', Arial, sans-serif;
+                            padding: 30px 40px;
+                            color: #333;
+                            font-size: 11px;
+                            line-height: 1.4;
+                        }
+                        .page-wrapper {
+                            width: 100%;
+                            border-collapse: collapse;
+                        }
+                        .page-wrapper thead td,
+                        .page-wrapper tbody td,
+                        .page-wrapper tfoot td {
+                            padding: 0;
+                            vertical-align: top;
+                        }
+                        .page-header {
+                            display: flex;
+                            align-items: center;
+                            padding: 10px 0 8px 0;
+                            margin-bottom: 12px;
+                            border-bottom: 2px solid #1a3a5c;
+                        }
+                        .page-header .logo {
+                            height: 44px;
+                            flex-shrink: 0;
+                            margin-right: 20px;
+                        }
+                        .page-header .header-center {
+                            flex: 1;
+                            text-align: center;
+                        }
+                        .page-header .header-center .company-name {
+                            font-size: 15px;
+                            font-weight: 700;
+                            color: #1a3a5c;
+                            margin: 0;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        .page-header .header-center .report-title {
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: #444;
+                            margin: 2px 0 0 0;
+                        }
+                        .page-header .header-center .report-date {
+                            font-size: 10px;
+                            color: #888;
+                            margin: 2px 0 0 0;
+                        }
+                        .page-header .header-right {
+                            flex-shrink: 0;
+                            text-align: right;
+                            font-size: 10px;
+                            color: #1a3a5c;
+                            font-weight: 600;
+                            min-width: 80px;
+                        }
+                        .page-footer {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            padding: 6px 0;
+                            margin-top: 10px;
+                            border-top: 2px solid #1a3a5c;
+                            font-size: 8px;
+                            color: #888;
+                        }
+                        h2 {
+                            color: #1a3a5c;
+                            margin: 20px 0 10px 0;
+                            font-size: 13px;
+                            font-weight: 700;
+                            border-bottom: none;
+                            padding-bottom: 4px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.3px;
+                        }
+
+                        /* Summary boxes */
+                        .summary-grid {
+                            display: grid;
+                            grid-template-columns: repeat(5, 1fr);
+                            gap: 12px;
+                            margin-bottom: 25px;
+                        }
+                        .summary-item {
+                            padding: 12px 14px;
+                            border-left: 3px solid #1a3a5c;
+                            background: #f8f9fb;
+                        }
+                        .summary-item label {
+                            font-size: 8px;
+                            color: #1a3a5c;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                            font-weight: 600;
+                            display: block;
+                            margin-bottom: 4px;
+                        }
+                        .summary-item .value {
+                            font-size: 16px;
+                            font-weight: 600;
+                            color: #1a3a5c;
+                        }
+                        .summary-item .value.positive { color: #166534; }
+                        .summary-item .value.negative { color: #991b1b; }
+
+                        /* Data table */
+                        .data-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin: 10px 0;
+                            font-size: 10px;
+                        }
+                        .data-table th {
+                            padding: 8px 8px;
+                            text-align: right;
+                            font-weight: 700;
+                            font-size: 9px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.3px;
+                            color: #1a3a5c;
+                            border: none;
+                            border-bottom: 2px solid #1a3a5c;
+                        }
+                        .data-table th:first-child {
+                            text-align: left;
+                        }
+                        .data-table td {
+                            padding: 6px 8px;
+                            text-align: right;
+                            border: none;
+                            border-bottom: 1px solid #e5e7eb;
+                            color: #333;
+                        }
+                        .data-table td:first-child {
+                            text-align: left;
+                            font-weight: 500;
+                            color: #1a1a1a;
+                        }
+                        .data-table tr.section-row {
+                            background: #f8f9fb;
+                        }
+                        .data-table tr.section-row td {
+                            font-weight: 500;
+                            color: #1a3a5c;
+                            padding: 8px 8px;
+                        }
+                        .data-table tr.net-row {
+                            border-top: 2px solid #1a3a5c;
+                        }
+                        .data-table tr.net-row td {
+                            font-weight: 700;
+                            padding: 8px 8px;
+                        }
+                        .data-table tr.balance-row td {
+                            font-weight: 500;
+                            color: #1a3a5c;
+                            background: #f0f4f8;
+                            padding: 8px 8px;
+                        }
+                        @page {
+                            size: landscape;
+                            margin: 12mm 15mm;
+                            @bottom-center {
+                                content: "Page " counter(page) " of " counter(pages);
+                                font-size: 8px;
+                                color: #888;
+                            }
+                        }
+                        @media print {
+                            body {
+                                padding: 15px 25px;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <table class="page-wrapper">
+                        <thead>
+                            <tr><td>
+                                <div class="page-header">
+                                    <img src="/logo.png" alt="Logo" class="logo" />
+                                    <div class="header-center">
+                                        <p class="company-name">Cashflow Forecast Report</p>
+                                        <p class="report-date">12-Month Rolling Forecast &nbsp;&bull;&nbsp; As of ${dateStr}</p>
+                                    </div>
+                                    <div class="header-right">CONFIDENTIAL</div>
+                                </div>
+                            </td></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>
+
+                        <h2>Forecast Summary</h2>
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <label>Starting Balance</label>
+                                <div class="value">${fmtDollar(startingBalance)}</div>
+                            </div>
+                            <div class="summary-item">
+                                <label>Total Cash In</label>
+                                <div class="value">${fmtDollar(totals.cashIn)}</div>
+                            </div>
+                            <div class="summary-item">
+                                <label>Total Cash Out</label>
+                                <div class="value">${fmtDollar(totals.cashOut)}</div>
+                            </div>
+                            <div class="summary-item">
+                                <label>Net Cashflow</label>
+                                <div class="value ${totals.net >= 0 ? 'positive' : 'negative'}">${fmtDollar(totals.net)}</div>
+                            </div>
+                            <div class="summary-item">
+                                <label>Ending Balance</label>
+                                <div class="value">${fmtDollar(endingBalance)}</div>
+                            </div>
+                        </div>
+
+                        <h2>Detailed Monthly Breakdown</h2>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    ${monthHeaders}
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="section-row">
+                                    <td>Cash In</td>
+                                    ${cashInCells}
+                                    <td style="font-weight: 500;">${fmtDollar(totals.cashIn)}</td>
+                                </tr>
+                                <tr class="section-row">
+                                    <td>Cash Out</td>
+                                    ${cashOutCells}
+                                    <td style="font-weight: 500;">${fmtDollar(totals.cashOut)}</td>
+                                </tr>
+                                <tr class="net-row">
+                                    <td>Net Cashflow</td>
+                                    ${netCells}
+                                    <td style="color: ${totals.net >= 0 ? '#166534' : '#991b1b'}; font-weight: 700;">${fmtDollar(totals.net)}</td>
+                                </tr>
+                                <tr class="balance-row">
+                                    <td>Running Balance</td>
+                                    ${balanceCells}
+                                    <td style="font-weight: 500;">${fmtDollar(endingBalance)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                            </td></tr>
+                        </tbody>
+                        <tfoot>
+                            <tr><td>
+                                <div class="page-footer">
+                                    <span>Cashflow Forecast Report</span>
+                                    <span>Generated by ${auth.user.name} &bull; ${dateStr}</span>
+                                </div>
+                            </td></tr>
+                        </tfoot>
+                    </table>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 500);
+    };
+
     // Render cash in details
     const renderCashInDetails = () => {
         if (expandedSection !== 'in') return null;
@@ -350,6 +677,11 @@ const ShowCashForecast = ({
                         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Cashflow Forecast</h1>
                         <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">12-month rolling forecast</p>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <Button variant="outline" className="gap-2" onClick={handlePrint}>
+                        <Printer className="h-4 w-4" />
+                        Print
+                    </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="gap-2">
@@ -397,6 +729,7 @@ const ShowCashForecast = ({
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                 </div>
 
                 {/* Summary Cards */}
