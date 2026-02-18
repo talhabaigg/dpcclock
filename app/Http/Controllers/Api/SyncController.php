@@ -174,11 +174,22 @@ class SyncController extends Controller
             ->get();
 
         // Deleted: soft-deleted records since last pull (only for models with SoftDeletes)
+        // Assign watermelon_id to any trashed records missing one, so the client can identify them.
         $deleted = [];
         if ($softDeletes) {
-            $deleted = (clone $query)
+            $trashedRecords = (clone $query)
                 ->onlyTrashed()
                 ->where('deleted_at', '>', $since)
+                ->get();
+
+            foreach ($trashedRecords as $record) {
+                if (!$record->watermelon_id) {
+                    $record->watermelon_id = (string) Str::uuid();
+                    $record->saveQuietly();
+                }
+            }
+
+            $deleted = $trashedRecords
                 ->pluck('watermelon_id')
                 ->filter()
                 ->values()
