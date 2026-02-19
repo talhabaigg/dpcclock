@@ -2,11 +2,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { cn, fmtCurrency, fmtPercent } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { ArrowLeft, Copy, Download, Eye, Pencil, Printer, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -103,7 +102,6 @@ export default function VariationShow({ variation, totals }: Props) {
     const locked = isSentOrApproved(variation.status);
     const totalCost = Number(totals.cost) || 0;
     const totalRevenue = Number(totals.revenue) || 0;
-    const totalSell = Number(totals.pricing_sell) || 0;
     const margin = totalRevenue - totalCost;
     const marginPercent = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
 
