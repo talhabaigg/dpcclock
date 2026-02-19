@@ -519,6 +519,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:variations.view')->group(function () {
         Route::get('/locations/{location}/variations', [VariationController::class, 'locationVariations'])->name('locations.variations');
         Route::get('/variations', [VariationController::class, 'index'])->name('variations.index');
+        Route::get('/variations/{variation}/show', [VariationController::class, 'show'])->name('variations.show');
     });
     Route::middleware('permission:variations.create')->group(function () {
         Route::get('/variations/create', [VariationController::class, 'create'])->name('variations.create');

@@ -23,7 +23,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, CirclePlus, Copy, Download, EllipsisVertical, FileText, LayoutGrid, LayoutList, MapPin, Pencil, RefreshCcw, Search, Send, SlidersHorizontal, Tag, Trash2, X } from 'lucide-react';
+import { Check, CirclePlus, Copy, Download, EllipsisVertical, Eye, FileText, LayoutGrid, LayoutList, MapPin, Pencil, RefreshCcw, Search, Send, SlidersHorizontal, Tag, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import VariationCardsIndex from './index-partials/cardsIndex';
@@ -105,6 +105,10 @@ function VariationActions({ variation }: { variation: Variation }) {
             <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.visit(`/variations/${variation.id}/show`)}>
+                    <Eye className="h-4 w-4" />
+                    View
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                     <a href={`/variations/${variation.id}/download/excel`}>
                         <Download className="h-4 w-4" />
@@ -173,6 +177,13 @@ function VariationActionsMobile({ variation }: { variation: Variation }) {
                     <SheetTitle>{variation.co_number} Actions</SheetTitle>
                 </SheetHeader>
                 <nav className="flex flex-col gap-1 px-4 pb-6">
+                    <button
+                        onClick={() => router.visit(`/variations/${variation.id}/show`)}
+                        className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-left"
+                    >
+                        <Eye className="text-muted-foreground h-4 w-4" />
+                        View
+                    </button>
                     <a href={`/variations/${variation.id}/download/excel`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
                         <Download className="text-muted-foreground h-4 w-4" />
                         Download Excel
@@ -691,7 +702,7 @@ export default function VariationIndex() {
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/variations/${variation.id}/edit`} className="font-mono text-sm font-semibold hover:underline">
+                                                <Link href={`/variations/${variation.id}/show`} className="font-mono text-sm font-semibold hover:underline">
                                                     {variation.co_number}
                                                 </Link>
                                                 <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(variation.status))}>
@@ -736,7 +747,7 @@ export default function VariationIndex() {
                                     {reqs.map((variation) => (
                                         <TableRow key={variation.id}>
                                             <TableCell className="pl-4">
-                                                <Link href={`/variations/${variation.id}/edit`} className="font-mono text-xs font-semibold hover:underline">
+                                                <Link href={`/variations/${variation.id}/show`} className="font-mono text-xs font-semibold hover:underline">
                                                     {variation.co_number}
                                                 </Link>
                                             </TableCell>

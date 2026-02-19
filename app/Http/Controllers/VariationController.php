@@ -214,6 +214,21 @@ class VariationController extends Controller
         ]);
     }
 
+    public function show(Variation $variation)
+    {
+        $variation->load(['lineItems', 'location', 'pricingItems.condition.conditionType', 'drawing']);
+
+        return Inertia::render('variation/show', [
+            'variation' => $variation,
+            'totals' => [
+                'cost' => $variation->lineItems->sum('total_cost'),
+                'revenue' => $variation->lineItems->sum('revenue'),
+                'pricing_cost' => $variation->pricingItems->sum('total_cost'),
+                'pricing_sell' => $variation->pricingItems->sum('sell_total'),
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
