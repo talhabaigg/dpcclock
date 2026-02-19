@@ -9,6 +9,8 @@ export interface Condition {
     id: number;
     name: string;
     location_id: number;
+    type: 'linear' | 'area' | 'count';
+    height?: number | null;
     pricing_method: string;
     labour_unit_rate?: number;
     unit_rate_multiplier?: number;
@@ -34,7 +36,17 @@ export default function ConditionPricingPanel({ conditions, locationId, onAdd, l
 
     const filteredConditions = conditions.filter((c) => String(c.location_id) === locationId);
     const selectedCondition = filteredConditions.find((c) => String(c.id) === selectedConditionId);
-    const unit = selectedCondition?.condition_type?.unit ?? 'EA';
+
+    // Natural measurement unit based on condition type
+    const getNaturalUnit = (c?: Condition): string => {
+        if (!c) return 'EA';
+        if (c.type === 'linear') return 'LM';
+        if (c.type === 'area') return 'm2';
+        return c.condition_type?.unit ?? 'EA';
+    };
+    const unit = getNaturalUnit(selectedCondition);
+    const isLinearWithHeight = selectedCondition?.type === 'linear' && selectedCondition?.height && selectedCondition.height > 0;
+    const rateUnit = selectedCondition?.condition_type?.unit ?? 'm2';
 
     const handleAdd = () => {
         if (!selectedConditionId || !qty || parseFloat(qty) <= 0) return;
@@ -47,13 +59,13 @@ export default function ConditionPricingPanel({ conditions, locationId, onAdd, l
     };
 
     return (
-        <div className="rounded-lg border border-slate-200/60 bg-slate-50/50 p-4 dark:border-slate-700/60 dark:bg-slate-800/30">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <div className="bg-muted/50 rounded-lg border p-4">
+            <div className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
                 Add from Condition
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                    <Label className="mb-1 text-xs text-slate-600 dark:text-slate-400">Condition</Label>
+                    <Label className="text-muted-foreground mb-1 text-xs">Condition</Label>
                     <Select value={selectedConditionId} onValueChange={setSelectedConditionId}>
                         <SelectTrigger className="h-9">
                             <SelectValue placeholder="Select condition..." />
@@ -69,8 +81,11 @@ export default function ConditionPricingPanel({ conditions, locationId, onAdd, l
                                             />
                                         )}
                                         <span>{c.name}</span>
-                                        <span className="text-xs text-slate-400">
-                                            ({c.condition_type?.unit ?? 'EA'})
+                                        <span className="text-muted-foreground text-xs">
+                                            ({getNaturalUnit(c)})
+                                            {c.type === 'linear' && c.height && c.height > 0 && (
+                                                <span className="ml-1 text-purple-400">&rarr; {c.condition_type?.unit ?? 'm2'}</span>
+                                            )}
                                         </span>
                                     </div>
                                 </SelectItem>
@@ -78,8 +93,8 @@ export default function ConditionPricingPanel({ conditions, locationId, onAdd, l
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="w-32">
-                    <Label className="mb-1 text-xs text-slate-600 dark:text-slate-400">
+                <div className="w-full sm:w-32">
+                    <Label className="text-muted-foreground mb-1 text-xs">
                         Qty ({unit})
                     </Label>
                     <Input
@@ -92,12 +107,17 @@ export default function ConditionPricingPanel({ conditions, locationId, onAdd, l
                         className="h-9"
                         onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
                     />
+                    {isLinearWithHeight && qty && parseFloat(qty) > 0 && (
+                        <div className="text-muted-foreground mt-1 text-[10px]">
+                            = {(parseFloat(qty) * (selectedCondition?.height ?? 1)).toFixed(2)} {rateUnit} (&times;{selectedCondition?.height}m H)
+                        </div>
+                    )}
                 </div>
                 <Button
                     onClick={handleAdd}
                     size="sm"
                     disabled={!selectedConditionId || !qty || parseFloat(qty) <= 0 || loading}
-                    className="h-9 gap-1.5"
+                    className="h-9 w-full gap-1.5 sm:w-auto"
                 >
                     <Plus className="h-3.5 w-3.5" />
                     Add

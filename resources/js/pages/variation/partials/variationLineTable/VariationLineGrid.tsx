@@ -2,7 +2,7 @@ import { CostCode } from '@/pages/purchasing/types';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { AllCommunityModule, CellValueChangedEvent, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createColumnDefs } from './columnDefs';
 import { getGridOptions, getRowStyle } from './gridConfig';
 import { CostType, LineItem, calculateTotalCost, getCostTypeFromCostCode, getNextLineNumber, getWasteRatioFromCostCode } from './utils';
@@ -30,12 +30,24 @@ const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
 const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProps>(
     ({ lineItems, costCodes, costTypes, onDataChange, onSelectionChange, height }, ref) => {
         const gridRef = useRef<AgGridReact>(null);
+        const isInternalChange = useRef(false);
+        const [internalRowData, setInternalRowData] = useState(lineItems);
 
-        // Sync grid data back to parent
+        // Only sync props → internal state when change came from outside (e.g. Quick Gen)
+        useEffect(() => {
+            if (isInternalChange.current) {
+                isInternalChange.current = false;
+                return;
+            }
+            setInternalRowData(lineItems);
+        }, [lineItems]);
+
+        // Sync grid data back to parent (flag as internal to prevent scroll reset)
         const syncDataToParent = useCallback(() => {
             const gridApi = gridRef.current?.api;
             if (!gridApi) return;
 
+            isInternalChange.current = true;
             const rowData: LineItem[] = [];
             gridApi.forEachNode((node) => {
                 if (node.data) {
@@ -215,7 +227,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
 
         return (
             <div className="ag-theme-shadcn w-full" style={{ height: height || '500px', minHeight: '300px' }}>
-                <AgGridReact ref={gridRef} theme={appliedTheme} rowData={lineItems} columnDefs={columnDefs} {...gridOptions} />
+                <AgGridReact ref={gridRef} theme={appliedTheme} rowData={internalRowData} columnDefs={columnDefs} {...gridOptions} />
             </div>
         );
     },
