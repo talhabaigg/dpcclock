@@ -1,11 +1,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { Clock, Minus, Plus } from 'lucide-react';
+import { AlertTriangle, Clock, Minus, Plus, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
 import AllowanceToggle from '../components/allowanceToggle';
@@ -50,7 +51,7 @@ export default function Clockout() {
         adminMode: boolean;
     }>().props;
 
-    const { setData, post, processing } = useForm<{
+    const { setData, data, post, processing } = useForm<{
         kioskId: number;
         employeeId: number;
         entries: {
@@ -62,12 +63,15 @@ export default function Clockout() {
             insulation_allowance: boolean;
             setout_allowance: boolean;
         }[];
+        safety_concern: boolean | null;
     }>({
         kioskId: kiosk.id,
         employeeId: employee.id,
         entries: [],
+        safety_concern: null,
     });
 
+    const [showSafetyDialog, setShowSafetyDialog] = useState(false);
     const [hoursWorked, setHoursWorked] = useState(0);
     const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([
         {
@@ -173,8 +177,19 @@ export default function Clockout() {
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        post(route('clocks.out'));
+        setShowSafetyDialog(true);
     };
+
+    const confirmSafety = (hasConcern: boolean) => {
+        setShowSafetyDialog(false);
+        setData('safety_concern', hasConcern);
+    };
+
+    useEffect(() => {
+        if (data.safety_concern !== null) {
+            post(route('clocks.out'));
+        }
+    }, [data.safety_concern]);
 
     const isClockOutDisabled = taskAllocations.some((task) => {
         return (
@@ -239,6 +254,57 @@ export default function Clockout() {
                 description="Please wait while we record your timesheet..."
                 variant="loading"
             />
+
+            {/* Safety Confirmation Dialog */}
+            <Dialog open={showSafetyDialog} onOpenChange={setShowSafetyDialog}>
+                <DialogContent
+                    className={cn('max-w-md gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl', 'touch-manipulation')}
+                    hideCloseButton
+                >
+                    <div className="flex items-center justify-center bg-amber-500/10 py-8">
+                        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-500/10">
+                            <ShieldAlert className="h-16 w-16 text-amber-500" />
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-center px-6 pt-4 pb-2">
+                        <h2 className="text-foreground text-center text-lg font-bold">Safety Declaration</h2>
+                        <p className="text-muted-foreground mt-3 text-center text-sm leading-relaxed">
+                            Do you have any injuries or safety concerns to report from today?
+                        </p>
+                        <div className="mt-2 rounded-xl border-2 border-amber-500/30 bg-amber-500/5 p-3">
+                            <p className="text-center text-xs leading-relaxed text-amber-700">
+                                <AlertTriangle className="mb-0.5 inline h-4 w-4" />{' '}
+                                If you select <strong>YES</strong> you must also notify your foreman and/or HSR immediately and
+                                complete an incident / injury report.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 p-6">
+                        <button
+                            type="button"
+                            onClick={() => confirmSafety(true)}
+                            className={cn(
+                                'flex h-16 items-center justify-center rounded-2xl border-2 text-base font-semibold transition-all',
+                                'touch-manipulation active:scale-[0.98]',
+                                'border-gray-200 bg-transparent text-gray-400 hover:bg-gray-100',
+                            )}
+                        >
+                            Yes
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => confirmSafety(false)}
+                            className={cn(
+                                'flex h-16 items-center justify-center rounded-2xl border-2 text-xl font-bold transition-all',
+                                'touch-manipulation active:scale-[0.98]',
+                                'border-emerald-500 bg-emerald-500 text-white shadow-lg hover:bg-emerald-600',
+                            )}
+                        >
+                            No
+                        </button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Header Section */}
             <div className="mb-6 w-full max-w-5xl">

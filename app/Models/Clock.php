@@ -22,6 +22,7 @@ class Clock extends Model
         'insulation_allowance',
         'laser_allowance',
         'setout_allowance',
+        'safety_concern',
         'status',
         'eh_worktype_id',
         'eh_timesheet_id',
@@ -32,6 +33,7 @@ class Clock extends Model
         'insulation_allowance' => 'boolean',
         'laser_allowance' => 'boolean',
         'setout_allowance' => 'boolean',
+        'safety_concern' => 'boolean',
     ];
 
     protected static function booted(): void
