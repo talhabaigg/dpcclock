@@ -82,7 +82,28 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Progress Reporting (same format the PHP job polls)
 // =============================================================================
 
-function reportStep(step, phase, label, screenshotFile) {
+function reportStep(step, phase, label, screenshotFile, reasoning = null) {
+    const progressFile = `${screenshotDir}/progress.json`;
+    let progress = { total_steps: TOTAL_STEPS, events: [] };
+    try {
+        const existing = JSON.parse(readFileSync(progressFile, 'utf-8'));
+        if (existing.events) progress = existing;
+    } catch { /* first write */ }
+
+    const event = {
+        step,
+        phase,
+        label,
+        screenshot: screenshotFile,
+        timestamp: new Date().toISOString(),
+    };
+    if (reasoning) event.thinking = reasoning;
+
+    progress.events.push(event);
+    writeFileSync(progressFile, JSON.stringify(progress));
+}
+
+function reportThinking(text) {
     const progressFile = `${screenshotDir}/progress.json`;
     let progress = { total_steps: TOTAL_STEPS, events: [] };
     try {
@@ -91,13 +112,10 @@ function reportStep(step, phase, label, screenshotFile) {
     } catch { /* first write */ }
 
     progress.events.push({
-        step,
-        phase,
-        label,
-        screenshot: screenshotFile,
+        type: 'thinking',
+        text,
         timestamp: new Date().toISOString(),
     });
-
     writeFileSync(progressFile, JSON.stringify(progress));
 }
 
@@ -284,6 +302,34 @@ function screenshotHash(base64) {
     return createHash('md5').update(base64.substring(0, 5000)).digest('hex');
 }
 
+/**
+ * Strip images from older messages to reduce API input token costs.
+ * Only the latest user message keeps its screenshot — older ones get a
+ * text placeholder so Claude still has the conversation context.
+ */
+function buildTrimmedMessages(messages) {
+    if (messages.length <= 2) return messages;
+
+    return messages.map((msg, i) => {
+        if (i === messages.length - 1) return msg; // keep latest intact
+        if (!Array.isArray(msg.content)) return msg;
+
+        const trimmedContent = msg.content.map(block => {
+            if (block.type === 'image') {
+                return { type: 'text', text: '[previous screenshot]' };
+            }
+            if (block.type === 'tool_result' && Array.isArray(block.content)) {
+                if (block.content.some(b => b.type === 'image')) {
+                    return { ...block, content: [{ type: 'text', text: '[screenshot taken]' }] };
+                }
+            }
+            return block;
+        });
+
+        return { ...msg, content: trimmedContent };
+    });
+}
+
 // =============================================================================
 // Progress Detection (map AI actions to logical steps 1-6)
 // =============================================================================
@@ -356,16 +402,17 @@ ENVIRONMENT:
 
 TASK - Complete these steps in order:
 
-Step 1 - LOGIN (if needed):
-- If you see a login form with Client ID, Username, and Password fields, fill them:
+Step 1 - LOGIN (usually already handled):
+- Login is typically handled automatically before you start.
+- If you see a dashboard or the main application, skip this step entirely.
+- If you somehow see a login form, fill in:
   - Client ID: ${PREMIER_WEB_CLIENT_ID}
   - Username: ${PREMIER_WEB_USERNAME}
   - Password: ${PREMIER_WEB_PASSWORD}
-- Check "Remember Me" if available, then click "Log in".
+  Then click "Log in".
 - If you see "username already in use" conflict, re-fill credentials and click Login again.
 - If you see "Email Validation" popup, click "Do it later".
 - If you see any "OK" or welcome dialog, dismiss it.
-- If you already see a dashboard (no login form), skip this step.
 
 Step 2 - NAVIGATE TO PURCHASE ORDERS:
 - Look for a hamburger menu icon (three horizontal lines) in the top-left area of the sidebar.
@@ -451,10 +498,13 @@ async function runCUALoop(page) {
     for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
         // Call Claude API
         let response;
+        // Strip old screenshots to reduce input tokens (~67% cost saving)
+        const trimmedMessages = buildTrimmedMessages(messages);
+
         try {
             response = await anthropic.beta.messages.create({
                 model: MODEL,
-                max_tokens: 4096,
+                max_tokens: 1024,
                 system: buildSystemPrompt(),
                 tools: [{
                     type: toolType,
@@ -462,7 +512,7 @@ async function runCUALoop(page) {
                     display_width_px: DISPLAY_WIDTH,
                     display_height_px: DISPLAY_HEIGHT,
                 }],
-                messages,
+                messages: trimmedMessages,
                 betas: [beta],
             });
         } catch (err) {
@@ -471,7 +521,7 @@ async function runCUALoop(page) {
             await sleep(5000);
             response = await anthropic.beta.messages.create({
                 model: MODEL,
-                max_tokens: 4096,
+                max_tokens: 1024,
                 system: buildSystemPrompt(),
                 tools: [{
                     type: toolType,
@@ -479,7 +529,7 @@ async function runCUALoop(page) {
                     display_width_px: DISPLAY_WIDTH,
                     display_height_px: DISPLAY_HEIGHT,
                 }],
-                messages,
+                messages: trimmedMessages,
                 betas: [beta],
             });
         }
@@ -491,9 +541,12 @@ async function runCUALoop(page) {
         const textBlocks = response.content.filter(b => b.type === 'text');
         const toolUses = response.content.filter(b => b.type === 'tool_use');
 
-        // Log any text Claude sent
+        // Log and report Claude's reasoning to progress.json
         for (const tb of textBlocks) {
-            if (tb.text) console.error(`DEBUG: Claude: ${tb.text.substring(0, 200)}`);
+            if (tb.text) {
+                console.error(`DEBUG: Claude: ${tb.text.substring(0, 200)}`);
+                reportThinking(tb.text);
+            }
         }
 
         // If no tool calls or stop_reason is end_turn, task is complete
@@ -593,6 +646,123 @@ async function runCUALoop(page) {
 // Main
 // =============================================================================
 
+/**
+ * Handle login programmatically via Playwright (not CUA).
+ * The login form lives in the "loginContainer" iframe with 4 visible inputs:
+ * ClientID, Username, Password, and Remember Me checkbox.
+ * Returns true if login was performed, false if already logged in.
+ */
+async function handleLoginProgrammatically(page) {
+    // Check if we're on the login page by looking for the loginContainer iframe
+    const loginFrame = page.frame('loginContainer');
+    if (!loginFrame) {
+        console.error('DEBUG: No loginContainer iframe found — may already be logged in');
+        return false;
+    }
+
+    // Look for the password input field inside the login frame
+    const passwordField = loginFrame.locator('input[type="password"]');
+    const hasLoginForm = await passwordField.count().catch(() => 0);
+
+    if (!hasLoginForm) {
+        // Could also check for any visible input fields
+        const inputs = loginFrame.locator('input:visible');
+        const inputCount = await inputs.count().catch(() => 0);
+        if (inputCount < 3) {
+            console.error('DEBUG: No login form detected — already logged in');
+            return false;
+        }
+    }
+
+    console.error('DEBUG: Login form detected — filling credentials programmatically');
+    reportStep(1, 'starting', 'Logging into Premier...', null);
+
+    try {
+        // Get all visible inputs in the login frame
+        const inputs = loginFrame.locator('input:visible');
+        const inputCount = await inputs.count();
+        console.error(`DEBUG: Found ${inputCount} visible inputs in loginContainer`);
+
+        // Fill Client ID (first text input)
+        const clientIdField = loginFrame.locator('input[type="text"]').first();
+        await clientIdField.fill(PREMIER_WEB_CLIENT_ID);
+        await page.waitForTimeout(300);
+
+        // Fill Username (second text input)
+        const usernameField = loginFrame.locator('input[type="text"]').nth(1);
+        await usernameField.fill(PREMIER_WEB_USERNAME);
+        await page.waitForTimeout(300);
+
+        // Fill Password
+        await passwordField.first().fill(PREMIER_WEB_PASSWORD);
+        await page.waitForTimeout(300);
+
+        // Check Remember Me if available
+        const rememberCheckbox = loginFrame.locator('input[type="checkbox"]');
+        if (await rememberCheckbox.count() > 0) {
+            const isChecked = await rememberCheckbox.first().isChecked().catch(() => false);
+            if (!isChecked) {
+                await rememberCheckbox.first().check();
+            }
+        }
+
+        // Take screenshot of filled form
+        await takeScreenshot(page, '00b-form-filled');
+
+        // Click the login button
+        const loginButton = loginFrame.locator('button:visible, input[type="submit"]:visible').first();
+        await loginButton.click();
+        console.error('DEBUG: Clicked login button');
+
+        // Wait for navigation / dashboard load (Premier is slow)
+        await page.waitForTimeout(15000);
+
+        // Take screenshot after login
+        const dashScreenshot = await takeScreenshot(page, '01-dashboard');
+        reportStep(1, 'completed', 'Logged in', dashScreenshot.filename);
+
+        // Check for "username already in use" or similar conflict dialogs
+        const pageContent = await page.content().catch(() => '');
+        if (pageContent.toLowerCase().includes('already in use') || pageContent.toLowerCase().includes('username in use')) {
+            console.error('DEBUG: Session conflict detected — retrying login');
+            // Try to dismiss and re-login
+            const okButton = loginFrame.locator('button:has-text("OK"), button:has-text("ok")').first();
+            if (await okButton.count() > 0) {
+                await okButton.click();
+                await page.waitForTimeout(2000);
+            }
+            // Re-fill and re-submit
+            await passwordField.first().fill(PREMIER_WEB_PASSWORD);
+            await loginButton.click();
+            await page.waitForTimeout(15000);
+        }
+
+        // Dismiss any "Email Validation" or welcome popups
+        try {
+            const doItLater = page.locator('text="Do it later"').first();
+            if (await doItLater.isVisible({ timeout: 3000 })) {
+                await doItLater.click();
+                await page.waitForTimeout(1000);
+            }
+        } catch { /* no popup */ }
+
+        try {
+            const okBtn = page.locator('button:has-text("OK")').first();
+            if (await okBtn.isVisible({ timeout: 2000 })) {
+                await okBtn.click();
+                await page.waitForTimeout(1000);
+            }
+        } catch { /* no popup */ }
+
+        console.error('DEBUG: Programmatic login completed');
+        return true;
+
+    } catch (err) {
+        console.error(`DEBUG: Programmatic login failed: ${err.message} — CUA will handle login`);
+        return false;
+    }
+}
+
 async function sendPOToSupplier() {
     const context = await chromium.launchPersistentContext(sessionDir, {
         headless: true,
@@ -607,6 +777,12 @@ async function sendPOToSupplier() {
         console.error(`DEBUG: Model: ${MODEL}, Tool: ${toolType}, Beta: ${beta}`);
         await page.goto(PREMIER_WEB_URL, { waitUntil: 'load', timeout: 30000 });
         await page.waitForTimeout(10000); // Premier SPA takes 10+ seconds to initialize
+
+        // Handle login programmatically (more reliable than CUA for form filling)
+        const didLogin = await handleLoginProgrammatically(page);
+        if (didLogin) {
+            console.error('DEBUG: Login handled programmatically — CUA starts from dashboard');
+        }
 
         // Run the AI agent loop
         const result = await runCUALoop(page);

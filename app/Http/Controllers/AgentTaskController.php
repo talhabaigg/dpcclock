@@ -192,6 +192,11 @@ class AgentTaskController extends Controller
                 $progress = json_decode(file_get_contents($progressFile), true);
                 if ($progress && ! empty($progress['events'])) {
                     foreach ($progress['events'] as $event) {
+                        // Skip thinking-only events (no step field)
+                        if (($event['type'] ?? '') === 'thinking' || ! isset($event['step'])) {
+                            continue;
+                        }
+
                         $screenshotUrl = null;
                         if (($event['phase'] ?? 'completed') === 'completed' && ! empty($event['screenshot'])) {
                             $s3Path = "agent-screenshots/{$requisition->id}/{$event['screenshot']}";
@@ -213,11 +218,24 @@ class AgentTaskController extends Controller
             }
         }
 
+        // Resolve S3 paths in event_log to temporary URLs
+        $eventLog = $task->context['event_log'] ?? null;
+        if ($eventLog) {
+            $eventLog = array_map(function ($entry) {
+                if (! empty($entry['s3_path']) && Storage::disk('s3')->exists($entry['s3_path'])) {
+                    $entry['screenshot_url'] = Storage::disk('s3')->temporaryUrl($entry['s3_path'], now()->addMinutes(30));
+                }
+
+                return $entry;
+            }, $eventLog);
+        }
+
         return response()->json([
             'steps' => $steps,
             'current_step' => count($steps),
             'total_steps' => ! empty($steps) ? $steps[0]['total_steps'] : 6,
             'status' => $task->status,
+            'event_log' => $eventLog,
         ]);
     }
 

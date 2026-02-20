@@ -22,6 +22,8 @@ class SendToSupplierViaAgentJob implements ShouldQueue
 
     public int $timeout = 360;
 
+    private array $eventLog = [];
+
     public function __construct(
         public int $agentTaskId,
         public int $requisitionId
@@ -109,6 +111,9 @@ class SendToSupplierViaAgentJob implements ShouldQueue
                 'status' => 'completed',
                 'completed_at' => now(),
                 'screenshots' => $s3Paths,
+                'context' => array_merge($task->context ?? [], [
+                    'event_log' => $this->eventLog,
+                ]),
             ]);
 
             if ($isDryRun) {
@@ -170,6 +175,30 @@ class SendToSupplierViaAgentJob implements ShouldQueue
         $lastEventCount = count($events);
 
         foreach ($newEvents as $event) {
+            // Thinking events (Claude's reasoning) — broadcast as-is, no screenshot
+            // Collapse consecutive thinking: replace last thinking entry instead of appending
+            if (($event['type'] ?? '') === 'thinking') {
+                $thinkingEntry = [
+                    'type' => 'thinking',
+                    'text' => $event['text'] ?? '',
+                    'timestamp' => $event['timestamp'] ?? now()->toISOString(),
+                ];
+
+                $lastIdx = count($this->eventLog) - 1;
+                if ($lastIdx >= 0 && ($this->eventLog[$lastIdx]['type'] ?? '') === 'thinking') {
+                    $this->eventLog[$lastIdx] = $thinkingEntry;
+                } else {
+                    $this->eventLog[] = $thinkingEntry;
+                }
+
+                event(new AgentTaskUpdated(
+                    $task,
+                    thinking: $event['text'] ?? '',
+                ));
+
+                continue;
+            }
+
             $screenshotUrl = null;
             if (($event['phase'] ?? 'completed') === 'completed' && ! empty($event['screenshot'])) {
                 $screenshotFile = $screenshotDir.'/'.$event['screenshot'];
@@ -180,6 +209,31 @@ class SendToSupplierViaAgentJob implements ShouldQueue
                 }
             }
 
+            // Accumulate inline thinking (attached to a step) before the step entry
+            if (! empty($event['thinking'])) {
+                $this->eventLog[] = [
+                    'type' => 'thinking',
+                    'text' => $event['thinking'],
+                    'timestamp' => $event['timestamp'] ?? now()->toISOString(),
+                ];
+            }
+
+            $stepEntry = [
+                'type' => 'step',
+                'step' => $event['step'],
+                'phase' => $event['phase'] ?? 'completed',
+                'totalSteps' => $progress['total_steps'] ?? 6,
+                'label' => $event['label'] ?? "Step {$event['step']}",
+                'timestamp' => $event['timestamp'] ?? now()->toISOString(),
+            ];
+
+            // Store S3 path so we can resolve screenshot URLs on page refresh
+            if (! empty($event['screenshot'])) {
+                $stepEntry['s3_path'] = "agent-screenshots/{$requisition->id}/{$event['screenshot']}";
+            }
+
+            $this->eventLog[] = $stepEntry;
+
             event(new AgentTaskUpdated(
                 $task,
                 step: $event['step'],
@@ -187,6 +241,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
                 stepMessage: $event['label'] ?? null,
                 screenshotUrl: $screenshotUrl,
                 stepPhase: $event['phase'] ?? 'completed',
+                thinking: $event['thinking'] ?? null,
             ));
         }
     }
@@ -225,6 +280,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
                 'last_error' => substr($result->errorOutput(), -2000),
                 'last_attempt' => now()->toISOString(),
                 'exit_code' => $result->exitCode(),
+                'event_log' => $this->eventLog,
             ]),
         ]);
 

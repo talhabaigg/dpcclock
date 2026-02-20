@@ -1,9 +1,15 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Bot, Check, ImageIcon, Loader2, RotateCcw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
+import { AlertCircle, Bot, BrainCircuit, Check, Loader2, Maximize2, Monitor, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import AgentStepProgress from './AgentStepProgress';
+import AgentTerminal from './AgentTerminal';
+import AgentViewerHeader from './AgentViewerHeader';
 
 interface Step {
     step: number;
@@ -14,6 +20,17 @@ interface Step {
     timestamp: string;
 }
 
+interface TimelineEntry {
+    type: 'step' | 'thinking';
+    timestamp: string;
+    step?: number;
+    phase?: 'starting' | 'completed';
+    totalSteps?: number;
+    label?: string;
+    screenshotUrl?: string | null;
+    text?: string;
+}
+
 interface AgentActivityFeedProps {
     taskId: number;
     requisitionId: number;
@@ -21,78 +38,199 @@ interface AgentActivityFeedProps {
 }
 
 export default function AgentActivityFeed({ taskId, requisitionId, errorMessage: initialError }: AgentActivityFeedProps) {
-    const [steps, setSteps] = useState<Step[]>([]);
+    const [steps, setSteps] = useState<Step[]>([]); // For derived state (currentStep, screenshots)
+    const [timeline, setTimeline] = useState<TimelineEntry[]>([]); // Append-only display order
     const [totalSteps, setTotalSteps] = useState(6);
-    const [status, setStatus] = useState<string>('processing');
+    const [status, setStatus] = useState<'processing' | 'completed' | 'failed'>('processing');
     const [error, setError] = useState<string | null>(initialError || null);
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const [fullscreenOpen, setFullscreenOpen] = useState(false);
+    const [selectedStep, setSelectedStep] = useState<number | null>(null);
+    const [showGlow, setShowGlow] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const glowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Auto-scroll to bottom when new steps arrive
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-    }, [steps, error]);
-
-    // Reset all state when taskId changes (e.g. after retry creates a new task)
+    // Reset state on task change
     useEffect(() => {
         setSteps([]);
+        setTimeline([]);
         setTotalSteps(6);
         setStatus('processing');
         setError(null);
+        setSelectedStep(null);
+        setShowGlow(false);
     }, [taskId]);
 
-    // Fetch progress from server — on mount, taskId change, and when task completes/fails
+    // Fetch progress from server (fallback for page loads mid-run)
     const fetchProgress = (id: number) => {
         fetch(`/agent/task/${id}/progress`)
             .then((res) => res.json())
             .then((data) => {
-                if (data.steps?.length) {
-                    setSteps(
-                        data.steps.map((s: any) => ({
-                            step: s.step,
-                            phase: s.phase || 'completed',
-                            totalSteps: s.total_steps || data.total_steps || 6,
-                            label: s.label,
-                            screenshotUrl: s.screenshot_url || null,
-                            timestamp: s.timestamp,
-                        })),
-                    );
+                // Prefer event_log for both steps and timeline (correct step numbers + screenshots)
+                if (data.event_log?.length) {
+                    const logSteps: Step[] = (data.event_log as any[])
+                        .filter((e: any) => e.type === 'step')
+                        .map((e: any) => ({
+                            step: e.step,
+                            phase: e.phase || 'completed',
+                            totalSteps: e.totalSteps || data.total_steps || 6,
+                            label: e.label,
+                            screenshotUrl: e.screenshot_url || null,
+                            timestamp: e.timestamp,
+                        }));
+
+                    setSteps(logSteps);
+                    setTotalSteps(logSteps[0]?.totalSteps || data.total_steps || 6);
+
+                    setTimeline((prev) => {
+                        if (prev.length > 0) return prev;
+                        return (data.event_log as any[]).map((e: any) => {
+                            if (e.type === 'thinking') {
+                                return {
+                                    type: 'thinking' as const,
+                                    timestamp: e.timestamp,
+                                    text: e.text,
+                                };
+                            }
+                            return {
+                                type: 'step' as const,
+                                timestamp: e.timestamp,
+                                step: e.step,
+                                phase: e.phase,
+                                totalSteps: e.totalSteps || data.total_steps || 6,
+                                label: e.label,
+                                screenshotUrl: e.screenshot_url || null,
+                            };
+                        });
+                    });
+                } else if (data.steps?.length) {
+                    // Fallback: no event_log (old tasks) — use controller steps
+                    const newSteps: Step[] = data.steps.map((s: any) => ({
+                        step: s.step,
+                        phase: s.phase || 'completed',
+                        totalSteps: s.total_steps || data.total_steps || 6,
+                        label: s.label,
+                        screenshotUrl: s.screenshot_url || null,
+                        timestamp: s.timestamp,
+                    }));
+                    setSteps(newSteps);
                     setTotalSteps(data.total_steps || 6);
+
+                    setTimeline((prev) => {
+                        if (prev.length > 0) return prev;
+                        return newSteps.map((s) => ({
+                            type: 'step' as const,
+                            timestamp: s.timestamp,
+                            step: s.step,
+                            phase: s.phase,
+                            totalSteps: s.totalSteps,
+                            label: s.label,
+                            screenshotUrl: s.screenshotUrl,
+                        }));
+                    });
                 }
                 if (data.status) {
-                    setStatus(data.status);
+                    setStatus(data.status as 'processing' | 'completed' | 'failed');
                 }
             })
             .catch(() => {});
     };
 
-    // On mount / taskId change: fetch existing progress
     useEffect(() => {
         fetchProgress(taskId);
     }, [taskId]);
 
-    // Listen for real-time step updates via Echo
+    // Auto-scroll sheet messages
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [timeline, error]);
+
+    // Listen for real-time updates via Echo
     useEffect(() => {
         const channel = (window as any).Echo?.channel('agent-tasks');
 
         const handler = (data: any) => {
             if (data.requisition_id !== requisitionId) return;
 
+            // Thinking update (no step) — collapse consecutive thinking (replace last if also thinking)
+            if (data.thinking && !data.step) {
+                setTimeline((prev) => {
+                    const last = prev[prev.length - 1];
+                    if (last?.type === 'thinking') {
+                        return [
+                            ...prev.slice(0, -1),
+                            { type: 'thinking' as const, timestamp: data.timestamp, text: data.thinking },
+                        ];
+                    }
+                    return [
+                        ...prev,
+                        { type: 'thinking' as const, timestamp: data.timestamp, text: data.thinking },
+                    ];
+                });
+                return;
+            }
+
             // Step update
             if (data.step) {
+                const phase = (data.step_phase || 'completed') as 'starting' | 'completed';
+
+                // Append thinking first (appears before its step), collapse consecutive
+                if (data.thinking) {
+                    setTimeline((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last?.type === 'thinking') {
+                            return [
+                                ...prev.slice(0, -1),
+                                { type: 'thinking' as const, timestamp: data.timestamp, text: data.thinking },
+                            ];
+                        }
+                        return [
+                            ...prev,
+                            { type: 'thinking' as const, timestamp: data.timestamp, text: data.thinking },
+                        ];
+                    });
+                }
+
+                // Append step to timeline (skip duplicates, update existing)
+                setTimeline((prev) => {
+                    const exists = prev.some(
+                        (e) => e.type === 'step' && e.step === data.step && e.phase === phase,
+                    );
+                    if (exists) {
+                        return prev.map((e) =>
+                            e.type === 'step' && e.step === data.step && e.phase === phase
+                                ? { ...e, screenshotUrl: data.screenshot_url || e.screenshotUrl, label: data.step_message || e.label }
+                                : e,
+                        );
+                    }
+                    return [
+                        ...prev,
+                        {
+                            type: 'step' as const,
+                            timestamp: data.timestamp,
+                            step: data.step,
+                            phase,
+                            totalSteps: data.total_steps || 6,
+                            label: data.step_message || `Step ${data.step}`,
+                            screenshotUrl: data.screenshot_url || null,
+                        },
+                    ];
+                });
+
+                // Update steps state for derived data (currentStep, activeScreenshot)
                 const newStep: Step = {
                     step: data.step,
-                    phase: data.step_phase || 'completed',
+                    phase,
                     totalSteps: data.total_steps || 6,
                     label: data.step_message || `Step ${data.step}`,
                     screenshotUrl: data.screenshot_url || null,
                     timestamp: data.timestamp,
                 };
-
                 setTotalSteps(data.total_steps || 6);
                 setSteps((prev) => {
-                    const key = `${data.step}-${newStep.phase}`;
+                    const key = `${data.step}-${phase}`;
                     if (prev.some((s) => `${s.step}-${s.phase}` === key)) {
                         return prev.map((s) => (`${s.step}-${s.phase}` === key ? newStep : s));
                     }
@@ -102,14 +240,14 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
                 });
             }
 
-            // Error message
-            if (data.error_message) {
-                setError(data.error_message);
-            }
+            if (data.error_message) setError(data.error_message);
 
-            // Status update — re-fetch progress on completion/failure to get all steps with S3 URLs
             if (data.status) {
-                setStatus(data.status);
+                setStatus(data.status as 'processing' | 'completed' | 'failed');
+                if (data.status === 'completed') {
+                    setShowGlow(true);
+                    glowTimeoutRef.current = setTimeout(() => setShowGlow(false), 2500);
+                }
                 if (data.status === 'completed' || data.status === 'failed') {
                     setTimeout(() => fetchProgress(taskId), 500);
                 }
@@ -120,14 +258,76 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
 
         return () => {
             channel?.stopListening('.agent.task.updated', handler);
+            if (glowTimeoutRef.current) clearTimeout(glowTimeoutRef.current);
         };
     }, [requisitionId, taskId]);
 
+    // ── Derived state ──
     const currentStep = steps.length > 0 ? Math.max(...steps.map((s) => s.step)) : 0;
     const isFailed = status === 'failed';
     const isCompleted = status === 'completed';
     const isWorking = !isFailed && !isCompleted;
 
+    const completedSteps = useMemo(() => {
+        const set = new Set<number>();
+        steps.forEach((s) => {
+            if (s.phase === 'completed') set.add(s.step);
+        });
+        return set;
+    }, [steps]);
+
+    const activeScreenshot = useMemo(() => {
+        if (selectedStep !== null) {
+            const found = steps.find(
+                (s) => s.step === selectedStep && s.phase === 'completed' && s.screenshotUrl,
+            );
+            if (found) return found;
+        }
+        const withScreenshots = steps.filter((s) => s.screenshotUrl && s.phase === 'completed');
+        return withScreenshots[withScreenshots.length - 1] || null;
+    }, [steps, selectedStep]);
+
+    const handleStepClick = (stepNumber: number) => {
+        setSelectedStep((prev) => (prev === stepNumber ? null : stepNumber));
+    };
+
+    const openFullscreenAtStep = (stepNumber: number) => {
+        setSelectedStep(stepNumber);
+        setFullscreenOpen(true);
+    };
+
+    // Terminal entries for the fullscreen dialog (derived from timeline)
+    const terminalEntries = useMemo(
+        () =>
+            timeline.map((e) => ({
+                type: e.type,
+                timestamp: e.timestamp,
+                step: e.step,
+                phase: e.phase,
+                totalSteps: e.totalSteps,
+                label: e.label,
+                text: e.text,
+            })),
+        [timeline],
+    );
+
+    // Close fullscreen when sheet closes
+    const handleSheetChange = (open: boolean) => {
+        setSheetOpen(open);
+        if (!open) setFullscreenOpen(false);
+    };
+
+    const latestStepLabel = steps.length > 0 ? steps[steps.length - 1].label : 'Starting...';
+
+    const activeScreenshotTime = activeScreenshot?.timestamp
+        ? new Date(activeScreenshot.timestamp).toLocaleTimeString('en-AU', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+          })
+        : '';
+
+    // Card theme colors
     const borderColor = isFailed
         ? 'border-red-200 dark:border-red-800'
         : isCompleted
@@ -146,95 +346,364 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
           ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-blue-600 dark:text-blue-400';
 
-    const title = isFailed ? 'Agent Failed' : isCompleted ? 'Agent Completed' : 'Agent Working';
-
     return (
-        <Card className={`${borderColor} ${bgColor} overflow-hidden`}>
-            <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                    {isFailed ? (
-                        <AlertCircle className={`h-5 w-5 ${iconColor}`} />
-                    ) : (
-                        <Bot className={`h-5 w-5 ${iconColor}`} />
-                    )}
-                    {title}
-                    {isWorking && !error && (
-                        <span className="text-xs font-normal text-muted-foreground">
-                            Step {currentStep} of {totalSteps}
-                        </span>
-                    )}
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-                <div ref={scrollRef} className="max-h-[400px] space-y-2 overflow-y-auto pr-1">
-                    {steps.map((stepData) => (
-                        <ChatMessage key={`${stepData.step}-${stepData.phase}`} step={stepData} allSteps={steps} />
-                    ))}
-
-                    {/* Error message */}
-                    {error && (
-                        <div className="flex items-start gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
-                                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                            </div>
-                            <div className="min-w-0 max-w-full flex-1">
-                                <div className="rounded-xl rounded-tl-none border border-red-200 bg-red-50 px-3 py-2 shadow-sm dark:border-red-800 dark:bg-red-950">
-                                    <p className="text-sm font-medium text-red-700 dark:text-red-300">
-                                        Failed to complete
-                                    </p>
-                                    <p className="mt-1 break-words text-xs text-red-600/80 dark:text-red-400/80">
-                                        {error}
-                                    </p>
-                                </div>
-                                {isFailed && (
-                                    <div className="mt-2 flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="gap-1 border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                                            onClick={() => {
-                                                router.post(`/agent/task/${taskId}/retry`, {}, { preserveScroll: true });
-                                            }}
-                                        >
-                                            <RotateCcw className="h-3 w-3" />
-                                            Retry
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="text-muted-foreground"
-                                            onClick={() => {
-                                                router.post(`/agent/task/${taskId}/cancel`, {}, { preserveScroll: true });
-                                            }}
-                                        >
-                                            Cancel
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Success message */}
-                    {isCompleted && (
-                        <div className="flex items-start gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900">
-                                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <div className="rounded-xl rounded-tl-none border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm dark:border-emerald-800 dark:bg-emerald-950">
-                                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+        <>
+            {/* ── Card: Compact status on page ── */}
+            <Card className={cn(borderColor, bgColor, 'overflow-hidden')}>
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        {isFailed ? (
+                            <AlertCircle className={cn('h-5 w-5', iconColor)} />
+                        ) : isCompleted ? (
+                            <Check className={cn('h-5 w-5', iconColor)} />
+                        ) : (
+                            <Bot className={cn('h-5 w-5', iconColor)} />
+                        )}
+                        {isFailed ? 'Agent Failed' : isCompleted ? 'Agent Completed' : 'Agent Working'}
+                        {isWorking && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-blue-500" />}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                            {isWorking && (
+                                <p className="text-muted-foreground text-sm">
+                                    Step {currentStep}/{totalSteps}: {latestStepLabel}
+                                </p>
+                            )}
+                            {isCompleted && (
+                                <p className="text-sm text-emerald-700 dark:text-emerald-300">
                                     PO sent to supplier successfully
                                 </p>
+                            )}
+                            {isFailed && error && (
+                                <p className="truncate text-sm text-red-600 dark:text-red-400">{error}</p>
+                            )}
+                        </div>
+                        <div className="ml-3 flex shrink-0 gap-2">
+                            {isFailed && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1 text-xs"
+                                    onClick={() =>
+                                        router.post(
+                                            `/agent/task/${taskId}/retry`,
+                                            {},
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    <RotateCcw className="h-3 w-3" />
+                                    Retry
+                                </Button>
+                            )}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs"
+                                onClick={() => setSheetOpen(true)}
+                            >
+                                <Maximize2 className="h-3 w-3" />
+                                {isCompleted || isFailed ? 'View Details' : 'Live View'}
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── Sheet: Vertical Message Stream (View 1) ── */}
+            <Sheet open={sheetOpen} onOpenChange={handleSheetChange}>
+                <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-xl">
+                    {/* Sheet header */}
+                    <SheetHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-3 pr-12">
+                        <div className="flex items-center gap-2">
+                            <div
+                                className={cn(
+                                    'flex h-7 w-7 items-center justify-center rounded-full',
+                                    isWorking && 'bg-blue-100 dark:bg-blue-900',
+                                    isCompleted && 'bg-emerald-100 dark:bg-emerald-900',
+                                    isFailed && 'bg-red-100 dark:bg-red-900',
+                                )}
+                            >
+                                {isFailed ? (
+                                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                ) : isCompleted ? (
+                                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                ) : (
+                                    <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                )}
                             </div>
+                            <div>
+                                <SheetTitle className="text-sm">Agent Activity</SheetTitle>
+                                <SheetDescription className="sr-only">
+                                    Real-time agent activity stream
+                                </SheetDescription>
+                            </div>
+                            {isWorking && (
+                                <span className="text-muted-foreground text-xs">
+                                    Step {currentStep}/{totalSteps}
+                                </span>
+                            )}
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs"
+                            onClick={() => setFullscreenOpen(true)}
+                        >
+                            <Maximize2 className="h-3 w-3" />
+                            Fullscreen
+                        </Button>
+                    </SheetHeader>
+
+                    {/* Message stream */}
+                    <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4">
+                        {timeline.map((entry, i) => {
+                            if (entry.type === 'thinking') {
+                                return <ThinkingBubble key={`t-${i}`} text={entry.text!} />;
+                            }
+                            const stepData = steps.find(
+                                (s) => s.step === entry.step && s.phase === entry.phase,
+                            );
+                            if (stepData) {
+                                return (
+                                    <SheetChatMessage
+                                        key={`s-${entry.step}-${entry.phase}`}
+                                        step={stepData}
+                                        allSteps={steps}
+                                        onScreenshotClick={openFullscreenAtStep}
+                                    />
+                                );
+                            }
+                            return null;
+                        })}
+
+                        {/* Error */}
+                        {error && (
+                            <div className="flex items-start gap-2.5">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
+                                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                </div>
+                                <div className="min-w-0 max-w-full flex-1">
+                                    <div className="rounded-xl rounded-tl-none border border-red-200 bg-red-50 px-3 py-2 shadow-sm dark:border-red-800 dark:bg-red-950">
+                                        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                                            Failed to complete
+                                        </p>
+                                        <p className="mt-1 break-words text-xs text-red-600/80 dark:text-red-400/80">
+                                            {error}
+                                        </p>
+                                    </div>
+                                    {isFailed && (
+                                        <div className="mt-2 flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="gap-1 border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                                                onClick={() =>
+                                                    router.post(
+                                                        `/agent/task/${taskId}/retry`,
+                                                        {},
+                                                        { preserveScroll: true },
+                                                    )
+                                                }
+                                            >
+                                                <RotateCcw className="h-3 w-3" />
+                                                Retry
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-muted-foreground"
+                                                onClick={() =>
+                                                    router.post(
+                                                        `/agent/task/${taskId}/cancel`,
+                                                        {},
+                                                        { preserveScroll: true },
+                                                    )
+                                                }
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Success */}
+                        {isCompleted && !error && (
+                            <div className="flex items-start gap-2.5">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900">
+                                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <div className="rounded-xl rounded-tl-none border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm dark:border-emerald-800 dark:bg-emerald-950">
+                                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                                        PO sent to supplier successfully
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Empty state */}
+                        {timeline.length === 0 && !error && (
+                            <div className="text-muted-foreground flex flex-col items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                                <p className="mt-2 text-sm">Agent is starting up...</p>
+                            </div>
+                        )}
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            {/* ── Fullscreen Dialog: Mission Control (View 2) ── */}
+            <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
+                <DialogContent
+                    className={cn(
+                        'flex h-screen min-w-full flex-col gap-0 overflow-hidden border-slate-700 bg-slate-950 p-0 text-white sm:rounded-none',
+                        showGlow && 'agent-completed-glow',
+                    )}
+                >
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Agent Fullscreen View</DialogTitle>
+                        <DialogDescription>Fullscreen view of agent sending PO</DialogDescription>
+                    </DialogHeader>
+
+                    {/* Visual header */}
+                    <AgentViewerHeader
+                        status={status}
+                        currentStep={currentStep}
+                        totalSteps={totalSteps}
+                        className="pr-12"
+                    />
+
+                    {/* Large screenshot viewport */}
+                    <div className="relative min-h-0 flex-1 bg-slate-950">
+                        {activeScreenshot?.screenshotUrl ? (
+                            <>
+                                <img
+                                    src={activeScreenshot.screenshotUrl}
+                                    alt={activeScreenshot.label}
+                                    className="h-full w-full object-contain"
+                                />
+
+                                {/* Scan-line animation while working */}
+                                {isWorking && (
+                                    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                                        <div className="agent-scanline absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent" />
+                                    </div>
+                                )}
+
+                                {/* Step label overlay */}
+                                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pb-3 pt-8">
+                                    <span className="rounded bg-black/50 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
+                                        {activeScreenshot.label}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-slate-400 sm:text-xs">
+                                        {activeScreenshotTime}
+                                    </span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex h-full items-center justify-center">
+                                <div className="flex flex-col items-center gap-3 text-slate-500">
+                                    <Monitor className="h-10 w-10" />
+                                    <p className="text-sm font-medium">
+                                        Waiting for first screenshot...
+                                    </p>
+                                    <Skeleton className="h-2 w-32 bg-slate-800" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Step progress rail */}
+                    <AgentStepProgress
+                        currentStep={currentStep}
+                        totalSteps={totalSteps}
+                        status={status}
+                        completedSteps={completedSteps}
+                        selectedStep={selectedStep}
+                        onStepClick={handleStepClick}
+                    />
+
+                    {/* Terminal */}
+                    <AgentTerminal entries={terminalEntries} isWorking={isWorking} />
+
+                    {/* Error bar */}
+                    {error && (
+                        <div className="flex items-center justify-between border-t border-red-500/20 bg-red-950/20 px-4 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                                <p className="truncate text-sm text-red-300">{error}</p>
+                            </div>
+                            {isFailed && (
+                                <div className="ml-3 flex shrink-0 gap-2">
+                                    <Button
+                                        size="sm"
+                                        className="gap-1.5 border border-red-500/30 bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                                        onClick={() =>
+                                            router.post(
+                                                `/agent/task/${taskId}/retry`,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <RotateCcw className="h-3 w-3" />
+                                        Retry
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
-            </CardContent>
-        </Card>
+
+                    {/* Success bar */}
+                    {isCompleted && !error && (
+                        <div className="border-t border-emerald-500/20 bg-emerald-950/20 px-4 py-2 text-center">
+                            <p className="text-sm font-medium text-emerald-400">
+                                PO sent to supplier successfully
+                            </p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
 
-function ChatMessage({ step, allSteps }: { step: Step; allSteps: Step[] }) {
+/* ──────────────────────────────────────
+   ThinkingBubble — violet reasoning bubble
+   ────────────────────────────────────── */
+function ThinkingBubble({ text }: { text: string }) {
+    return (
+        <div className="flex items-start gap-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900">
+                <BrainCircuit className="h-4 w-4 animate-pulse text-violet-600 dark:text-violet-400" />
+            </div>
+            <div className="min-w-0 max-w-full flex-1">
+                <div className="rounded-xl rounded-tl-none border border-violet-200/50 bg-violet-50/50 px-3 py-2 shadow-sm dark:border-violet-800/50 dark:bg-violet-950/30">
+                    <p className="line-clamp-3 text-xs italic text-violet-700/80 dark:text-violet-300/80">
+                        {text}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────
+   SheetChatMessage — step message in the sheet
+   ────────────────────────────────────── */
+function SheetChatMessage({
+    step,
+    allSteps,
+    onScreenshotClick,
+}: {
+    step: Step;
+    allSteps: Step[];
+    onScreenshotClick: (step: number) => void;
+}) {
     const time = new Date(step.timestamp).toLocaleTimeString('en-AU', {
         hour: '2-digit',
         minute: '2-digit',
@@ -242,16 +711,18 @@ function ChatMessage({ step, allSteps }: { step: Step; allSteps: Step[] }) {
     });
 
     const isStarting = step.phase === 'starting';
-    // Stop the spinner once the completed phase for this step exists
-    const hasCompleted = isStarting && allSteps.some((s) => s.step === step.step && s.phase === 'completed');
+    const hasCompleted =
+        isStarting && allSteps.some((s) => s.step === step.step && s.phase === 'completed');
 
     return (
         <div className="flex items-start gap-2.5">
-            {/* Avatar */}
             <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                    isStarting && !hasCompleted ? 'bg-blue-100 dark:bg-blue-900' : 'bg-emerald-100 dark:bg-emerald-900'
-                }`}
+                className={cn(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+                    isStarting && !hasCompleted
+                        ? 'bg-blue-100 dark:bg-blue-900'
+                        : 'bg-emerald-100 dark:bg-emerald-900',
+                )}
             >
                 {isStarting && !hasCompleted ? (
                     <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
@@ -260,41 +731,37 @@ function ChatMessage({ step, allSteps }: { step: Step; allSteps: Step[] }) {
                 )}
             </div>
 
-            {/* Message bubble */}
             <div className="min-w-0 max-w-full flex-1">
                 <div className="rounded-xl rounded-tl-none bg-white px-3 py-2 shadow-sm dark:bg-slate-800">
                     <div className="flex items-center gap-2">
-                        <span className={`text-sm ${isStarting ? 'text-muted-foreground' : 'font-medium'}`}>
+                        <span
+                            className={cn(
+                                'text-sm',
+                                isStarting ? 'text-muted-foreground' : 'font-medium',
+                            )}
+                        >
                             {step.label}
                         </span>
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{time}</span>
+                        <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">
+                            {time}
+                        </span>
                     </div>
 
-                    {/* Screenshot — only for completed phase */}
                     {!isStarting && step.screenshotUrl && (
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <button className="group relative mt-2 overflow-hidden rounded-lg border bg-muted transition-all hover:border-primary hover:shadow-md">
-                                    <img
-                                        src={step.screenshotUrl}
-                                        alt={step.label}
-                                        className="max-h-[250px] w-auto rounded-lg"
-                                        loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all group-hover:bg-black/20">
-                                        <ImageIcon className="h-6 w-6 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" />
-                                    </div>
-                                </button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-5xl">
-                                <DialogHeader>
-                                    <DialogTitle>
-                                        Step {step.step}: {step.label}
-                                    </DialogTitle>
-                                </DialogHeader>
-                                <img src={step.screenshotUrl} alt={step.label} className="w-full rounded-lg border" />
-                            </DialogContent>
-                        </Dialog>
+                        <button
+                            onClick={() => onScreenshotClick(step.step)}
+                            className="bg-muted hover:border-primary group relative mt-2 overflow-hidden rounded-lg border transition-all hover:shadow-md"
+                        >
+                            <img
+                                src={step.screenshotUrl}
+                                alt={step.label}
+                                className="max-h-[180px] w-auto rounded-lg"
+                                loading="lazy"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all group-hover:bg-black/20">
+                                <Maximize2 className="h-5 w-5 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" />
+                            </div>
+                        </button>
                     )}
                 </div>
             </div>

@@ -28,6 +28,7 @@ class AgentTaskUpdated implements ShouldBroadcastNow
         public ?string $screenshotUrl = null,
         public ?string $errorMessage = null,
         public ?string $stepPhase = null,
+        public ?string $thinking = null,
     ) {
         $this->taskId = $task->id;
         $this->requisitionId = $task->requisition_id;
@@ -65,6 +66,10 @@ class AgentTaskUpdated implements ShouldBroadcastNow
 
         if ($this->errorMessage) {
             $data['error_message'] = $this->errorMessage;
+        }
+
+        if ($this->thinking) {
+            $data['thinking'] = $this->thinking;
         }
 
         return $data;
