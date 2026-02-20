@@ -1,8 +1,13 @@
 /* eslint-disable no-console */
 import { chromium } from 'playwright';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { createHash } from 'crypto';
+import Anthropic from '@anthropic-ai/sdk';
 
-// Load config from JSON file (passed via --config flag) or fall back to env vars
+// =============================================================================
+// Configuration
+// =============================================================================
+
 let config = {};
 const configIdx = process.argv.indexOf('--config');
 if (configIdx !== -1 && process.argv[configIdx + 1]) {
@@ -20,34 +25,63 @@ const {
     SUPPLIER_MESSAGE,
     SCREENSHOT_DIR,
     SESSION_DIR,
+    ANTHROPIC_API_KEY,
 } = env;
 
-// $10K threshold — EMAIL below, SEND FOR APPROVAL at or above
 const APPROVAL_THRESHOLD = parseFloat(env.APPROVAL_THRESHOLD || '10000');
-
-// Validate required env vars
-if (!PREMIER_WEB_URL || !PREMIER_WEB_CLIENT_ID || !PREMIER_WEB_USERNAME || !PREMIER_WEB_PASSWORD || !PO_NUMBER) {
-    console.error(JSON.stringify({
-        success: false,
-        error: 'Missing required environment variables',
-    }));
-    process.exit(1);
-}
-
 const totalCost = parseFloat(TOTAL_COST || '0');
 const needsApproval = totalCost >= APPROVAL_THRESHOLD;
 const dryRun = env.DRY_RUN === '1' || env.DRY_RUN === 'true';
 
-// Ensure directories exist
+// Model config — default to Sonnet 4.5 (great for computer use, cost-effective)
+const MODEL = env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+
+// Determine tool version + beta flag based on model
+function getBetaConfig(model) {
+    if (model.includes('opus-4-6') || model.includes('sonnet-4-6') || model.includes('opus-4-5')) {
+        return { toolType: 'computer_20251124', beta: 'computer-use-2025-11-24' };
+    }
+    return { toolType: 'computer_20250124', beta: 'computer-use-2025-01-24' };
+}
+const { toolType, beta } = getBetaConfig(MODEL);
+
+// Validate required config
+const missing = [];
+if (!PREMIER_WEB_URL) missing.push('PREMIER_WEB_URL');
+if (!PREMIER_WEB_CLIENT_ID) missing.push('PREMIER_WEB_CLIENT_ID');
+if (!PREMIER_WEB_USERNAME) missing.push('PREMIER_WEB_USERNAME');
+if (!PREMIER_WEB_PASSWORD) missing.push('PREMIER_WEB_PASSWORD');
+if (!PO_NUMBER) missing.push('PO_NUMBER');
+if (!ANTHROPIC_API_KEY) missing.push('ANTHROPIC_API_KEY');
+
+if (missing.length > 0) {
+    console.error(JSON.stringify({
+        success: false,
+        error: `Missing required config: ${missing.join(', ')}`,
+    }));
+    process.exit(1);
+}
+
+// Display dimensions — must stay under Anthropic's 1.15MP limit to avoid downscaling
+// 1280 * 800 = 1,024,000 pixels < 1,150,000 limit
+const DISPLAY_WIDTH = 1280;
+const DISPLAY_HEIGHT = 800;
+const MAX_ITERATIONS = 50;
+const STUCK_THRESHOLD = 10; // Premier is slow — allow many identical screenshots before aborting
+const TOTAL_STEPS = dryRun ? 5 : 6;
+
 const screenshotDir = SCREENSHOT_DIR || './screenshots';
 const sessionDir = SESSION_DIR || './playwright-session';
 for (const dir of [screenshotDir, sessionDir]) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
-// Helper: report step progress to progress.json for PHP job to poll
-// Uses an append-based events array so no events are lost between polls
-const TOTAL_STEPS = dryRun ? 5 : 6;
+const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+// =============================================================================
+// Progress Reporting (same format the PHP job polls)
+// =============================================================================
+
 function reportStep(step, phase, label, screenshotFile) {
     const progressFile = `${screenshotDir}/progress.json`;
     let progress = { total_steps: TOTAL_STEPS, events: [] };
@@ -67,809 +101,545 @@ function reportStep(step, phase, label, screenshotFile) {
     writeFileSync(progressFile, JSON.stringify(progress));
 }
 
-// Helper: find the dashboard/app frame (main page or iframes)
-// Premier renders the app inside the "loginContainer" iframe.
-// After login, the iframe content changes from the login form to the full SPA.
-// The SPA uses Angular/Kendo — innerText returns mostly whitespace, so we can't
-// rely on text matching. Instead we detect dashboard by:
-//   1. Text locator "Custom Dashboard" (works if text is in accessible DOM)
-//   2. Login form is GONE (no visible password input) AND content grew large
-//   3. Frame has visible <input> elements that look like a search bar (not login inputs)
-async function findDashboardFrame(page) {
-    const frames = page.frames();
+// =============================================================================
+// Helpers
+// =============================================================================
 
-    // Strategy 1: try "Custom Dashboard" text locator in all frames
-    for (const frame of frames) {
-        const visible = await frame.locator('text=Custom Dashboard').first().isVisible({ timeout: 500 }).catch(() => false);
-        if (visible) {
-            const type = frame === page.mainFrame() ? 'main' : 'iframe';
-            console.error(`DEBUG: findDashboard: "Custom Dashboard" text found in ${type}`);
-            return { frame, type };
+function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =============================================================================
+// Action Handler (Claude computer_use actions -> Playwright calls)
+// =============================================================================
+
+// Map Claude key names to Playwright key names
+const KEY_MAP = {
+    'Return': 'Enter',
+    'return': 'Enter',
+    'space': ' ',
+    'Space': ' ',
+    'ctrl': 'Control',
+    'alt': 'Alt',
+    'shift': 'Shift',
+    'super': 'Meta',
+    'cmd': 'Meta',
+    'win': 'Meta',
+    'option': 'Alt',
+    'BackSpace': 'Backspace',
+    'Escape': 'Escape',
+    'esc': 'Escape',
+    'Tab': 'Tab',
+    'Delete': 'Delete',
+    'Home': 'Home',
+    'End': 'End',
+    'Page_Up': 'PageUp',
+    'Page_Down': 'PageDown',
+    'Up': 'ArrowUp',
+    'Down': 'ArrowDown',
+    'Left': 'ArrowLeft',
+    'Right': 'ArrowRight',
+};
+
+function mapKey(key) {
+    return KEY_MAP[key] || key;
+}
+
+async function handleAction(page, input) {
+    const action = input.action;
+
+    switch (action) {
+        case 'screenshot':
+            // No physical action — we always return a screenshot after every call
+            return 'screenshot (no-op)';
+
+        case 'left_click': {
+            const [x, y] = input.coordinate;
+            await page.mouse.click(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT));
+            return `left_click(${x}, ${y})`;
         }
+
+        case 'right_click': {
+            const [x, y] = input.coordinate;
+            await page.mouse.click(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT), { button: 'right' });
+            return `right_click(${x}, ${y})`;
+        }
+
+        case 'middle_click': {
+            const [x, y] = input.coordinate;
+            await page.mouse.click(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT), { button: 'middle' });
+            return `middle_click(${x}, ${y})`;
+        }
+
+        case 'double_click': {
+            const [x, y] = input.coordinate;
+            await page.mouse.dblclick(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT));
+            return `double_click(${x}, ${y})`;
+        }
+
+        case 'triple_click': {
+            const [x, y] = input.coordinate;
+            await page.mouse.click(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT), { clickCount: 3 });
+            return `triple_click(${x}, ${y})`;
+        }
+
+        case 'type': {
+            await page.keyboard.type(input.text, { delay: 30 });
+            const preview = input.text.length > 40 ? input.text.substring(0, 40) + '...' : input.text;
+            return `type("${preview}")`;
+        }
+
+        case 'key': {
+            // Claude sends keys like "Return", "ctrl+a", "ctrl+shift+t"
+            const keyStr = input.text;
+            if (keyStr.includes('+')) {
+                // Key combination — hold modifiers, press last key, release
+                const parts = keyStr.split('+');
+                const modifiers = parts.slice(0, -1).map(mapKey);
+                const finalKey = mapKey(parts[parts.length - 1]);
+                for (const mod of modifiers) await page.keyboard.down(mod);
+                await page.keyboard.press(finalKey);
+                for (const mod of modifiers.reverse()) await page.keyboard.up(mod);
+            } else {
+                await page.keyboard.press(mapKey(keyStr));
+            }
+            return `key("${keyStr}")`;
+        }
+
+        case 'mouse_move': {
+            const [x, y] = input.coordinate;
+            await page.mouse.move(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT));
+            return `mouse_move(${x}, ${y})`;
+        }
+
+        case 'scroll': {
+            const [x, y] = input.coordinate;
+            const direction = input.scroll_direction;
+            const amount = input.scroll_amount || 3;
+            const pixels = amount * 100;
+            await page.mouse.move(clamp(x, 0, DISPLAY_WIDTH), clamp(y, 0, DISPLAY_HEIGHT));
+            if (direction === 'down') await page.mouse.wheel(0, pixels);
+            else if (direction === 'up') await page.mouse.wheel(0, -pixels);
+            else if (direction === 'right') await page.mouse.wheel(pixels, 0);
+            else if (direction === 'left') await page.mouse.wheel(-pixels, 0);
+            return `scroll(${x},${y}) ${direction} ${amount}`;
+        }
+
+        case 'left_click_drag': {
+            const [startX, startY] = input.start_coordinate;
+            const [endX, endY] = input.coordinate;
+            await page.mouse.move(clamp(startX, 0, DISPLAY_WIDTH), clamp(startY, 0, DISPLAY_HEIGHT));
+            await page.mouse.down();
+            await page.mouse.move(clamp(endX, 0, DISPLAY_WIDTH), clamp(endY, 0, DISPLAY_HEIGHT), { steps: 10 });
+            await page.mouse.up();
+            return `drag(${startX},${startY} -> ${endX},${endY})`;
+        }
+
+        case 'wait': {
+            await sleep(5000);
+            return 'wait(5s)';
+        }
+
+        case 'hold_key': {
+            const key = mapKey(input.text);
+            const duration = (input.duration || 1) * 1000;
+            await page.keyboard.down(key);
+            await sleep(duration);
+            await page.keyboard.up(key);
+            return `hold_key("${input.text}", ${duration}ms)`;
+        }
+
+        default:
+            console.error(`DEBUG: Unknown action: ${action}`);
+            return `unknown(${action})`;
+    }
+}
+
+// =============================================================================
+// Screenshot Helper
+// =============================================================================
+
+let screenshotCounter = 0;
+
+async function takeScreenshot(page, label) {
+    const padded = String(screenshotCounter).padStart(2, '0');
+    const safeName = (label || 'screen').replace(/[^a-z0-9-]/gi, '-').substring(0, 30);
+    const filename = `${padded}-${safeName}.png`;
+    const filepath = `${screenshotDir}/${filename}`;
+
+    const buffer = await page.screenshot({ fullPage: false });
+    writeFileSync(filepath, buffer);
+
+    const base64 = buffer.toString('base64');
+    screenshotCounter++;
+
+    return { filename, base64 };
+}
+
+function screenshotHash(base64) {
+    return createHash('md5').update(base64.substring(0, 5000)).digest('hex');
+}
+
+// =============================================================================
+// Progress Detection (map AI actions to logical steps 1-6)
+// =============================================================================
+
+const STEP_DEFINITIONS = [
+    { step: 1, label: 'Logging into Premier', completedLabel: 'Logged in' },
+    { step: 2, label: 'Navigating to Purchase Orders', completedLabel: 'Reached Purchase Orders' },
+    { step: 3, label: `Filtering for ${PO_NUMBER}`, completedLabel: `Found ${PO_NUMBER}` },
+    { step: 4, label: 'Selecting PO', completedLabel: 'PO selected' },
+    { step: 5, label: 'Opening send action', completedLabel: needsApproval ? 'Approval dialog ready' : 'Email dialog ready' },
+    { step: 6, label: 'Sending to supplier', completedLabel: 'PO sent to supplier' },
+];
+
+function detectStepFromAction(input, textBlocks) {
+    if (!input) return null;
+    const action = input.action;
+    const text = (input.text || '').toLowerCase();
+
+    // Also check any text blocks Claude sent (reasoning about what it's doing)
+    const reasoning = textBlocks.map(b => b.text || '').join(' ').toLowerCase();
+
+    // Step 1: Login
+    if (action === 'type' && (text.includes(PREMIER_WEB_CLIENT_ID.toLowerCase()) ||
+        text.includes(PREMIER_WEB_USERNAME.toLowerCase()) ||
+        text.includes(PREMIER_WEB_PASSWORD.toLowerCase()))) {
+        return 1;
+    }
+    if (reasoning.includes('log in') || reasoning.includes('login') || reasoning.includes('credential')) return 1;
+
+    // Step 2: Navigation
+    if (reasoning.includes('hamburger') || reasoning.includes('sidebar') ||
+        (reasoning.includes('purchase order') && (reasoning.includes('menu') || reasoning.includes('navigat')))) {
+        return 2;
     }
 
-    // Strategy 2: find a frame where login form is GONE and content has grown
-    for (const frame of frames) {
-        if (frame === page.mainFrame()) continue;
+    // Step 3: Filter
+    if (action === 'type' && text.includes(PO_NUMBER.toLowerCase())) return 3;
+    if (reasoning.includes('filter')) return 3;
 
-        const bodyLen = await frame.evaluate(() => document.body?.innerText?.length || 0).catch(() => 0);
-        const hasPasswordInput = await frame.locator('input[type="password"]:visible').count().catch(() => 0);
-        const hasLoginButton = await frame.locator('button:has-text("Log in"), button:has-text("Logging in")').first().isVisible({ timeout: 300 }).catch(() => false);
+    // Step 4: Select row
+    if (reasoning.includes('select') && reasoning.includes('row')) return 4;
+    if (reasoning.includes('click') && reasoning.includes(PO_NUMBER.toLowerCase())) return 4;
 
-        console.error(`DEBUG: findDashboard: frame "${frame.name()}" bodyLen=${bodyLen}, passwordInputs=${hasPasswordInput}, loginBtn=${hasLoginButton}`);
+    // Step 5: More Actions / Email
+    if (reasoning.includes('more action') || reasoning.includes('email editor') ||
+        reasoning.includes('email dialog') || reasoning.includes('approval')) return 5;
 
-        // Dashboard: content is large (>1000 chars), no login form visible
-        if (bodyLen > 1000 && hasPasswordInput === 0 && !hasLoginButton) {
-            console.error(`DEBUG: findDashboard: frame "${frame.name()}" looks like dashboard (large content, no login form)`);
-            return { frame, type: 'iframe' };
-        }
-    }
+    // Step 6: Send
+    if (reasoning.includes('send button') || reasoning.includes('clicking send') ||
+        reasoning.includes('click send')) return 6;
 
     return null;
 }
 
-// Detect Email Editor dialog by looking for visible SEND/CANCEL buttons or Kendo window title.
-// The contenteditable-based detection fails because Kendo's rich text editor uses iframes,
-// not contenteditable divs, and Playwright's locator considers them "hidden".
-async function detectEmailDialog(page) {
-    // Strategy 1: Look for visible Kendo window dialog (k-window with non-zero rect)
-    for (const fr of page.frames()) {
-        const found = await fr.evaluate(() => {
-            // Check for Kendo window title "Email Editor" that's visible
-            const titles = document.querySelectorAll('.k-window-title, .k-dialog-title');
-            for (const t of titles) {
-                if (t.textContent?.trim() === 'Email Editor') {
-                    const win = t.closest('.k-window, .k-dialog');
-                    if (win) {
-                        const rect = win.getBoundingClientRect();
-                        if (rect.height > 100 && rect.width > 100) {
-                            return { method: 'k-window', w: Math.round(rect.width), h: Math.round(rect.height) };
-                        }
-                    }
-                }
-            }
+// =============================================================================
+// System Prompt
+// =============================================================================
 
-            // Check for visible SEND + CANCEL buttons (both must be present)
-            let hasSend = false, hasCancel = false;
-            const buttons = document.querySelectorAll('button');
-            for (const btn of buttons) {
-                const text = btn.textContent?.trim();
-                const rect = btn.getBoundingClientRect();
-                if (rect.height === 0 || rect.width === 0) continue;
-                if (text === 'SEND') hasSend = true;
-                if (text === 'CANCEL') hasCancel = true;
-            }
-            if (hasSend && hasCancel) {
-                return { method: 'buttons' };
-            }
+function buildSystemPrompt() {
+    const action = needsApproval ? 'SEND FOR APPROVAL' : 'EMAIL';
 
-            // Check for email-specific fields (To, Cc, Subject labels near inputs)
-            const labels = document.querySelectorAll('label, td, div');
-            let emailFields = 0;
-            for (const lbl of labels) {
-                const text = lbl.textContent?.trim();
-                const rect = lbl.getBoundingClientRect();
-                if (rect.height === 0 || rect.width === 0) continue;
-                if (['To:', 'Cc:', 'Subject:', 'Reply To:'].includes(text)) emailFields++;
-            }
-            if (emailFields >= 2) {
-                return { method: 'email-fields', count: emailFields };
-            }
+    return `You are an AI agent automating a task in the Premier procurement system (Jonas Premier).
+Your goal is to send Purchase Order ${PO_NUMBER} to the supplier.
 
-            return null;
-        }).catch(() => null);
+ENVIRONMENT:
+- You are controlling a browser pointed at the Premier web application.
+- The viewport is ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} pixels.
+- Premier is an Angular SPA that uses iframes and Kendo UI components.
+- Elements may render in iframes named "loginContainer" or "appContainer".
 
-        if (found) {
-            console.error(`DEBUG: Email dialog detected via ${found.method}`, JSON.stringify(found));
-            return true;
-        }
-    }
+TASK - Complete these steps in order:
 
-    console.error('DEBUG: Email dialog NOT detected in any frame');
-    return false;
+Step 1 - LOGIN (if needed):
+- If you see a login form with Client ID, Username, and Password fields, fill them:
+  - Client ID: ${PREMIER_WEB_CLIENT_ID}
+  - Username: ${PREMIER_WEB_USERNAME}
+  - Password: ${PREMIER_WEB_PASSWORD}
+- Check "Remember Me" if available, then click "Log in".
+- If you see "username already in use" conflict, re-fill credentials and click Login again.
+- If you see "Email Validation" popup, click "Do it later".
+- If you see any "OK" or welcome dialog, dismiss it.
+- If you already see a dashboard (no login form), skip this step.
+
+Step 2 - NAVIGATE TO PURCHASE ORDERS:
+- Look for a hamburger menu icon (three horizontal lines) in the top-left area of the sidebar.
+- Click it to expand the navigation menu.
+- Find and click "Purchase Orders" in the expanded menu.
+- Then click the "POs" sub-item to open the PO list.
+- Wait for the PO grid/table to load (you should see column headers like "PO #").
+
+Step 3 - FILTER FOR THE PO:
+- Find the "PO #" column header in the grid.
+- Click the filter icon on that column header (small icon near the column title).
+- In the filter dropdown/popup, type: ${PO_NUMBER}
+- Click the "Filter" button or press Enter to apply.
+- Wait for the grid to show the filtered results with ${PO_NUMBER}.
+
+Step 4 - SELECT THE PO:
+- Click on the row containing ${PO_NUMBER} to open the PO detail view.
+- Wait for the PO details to load on the right side or below the grid.
+
+Step 5 - OPEN ${action} DIALOG:
+- Look for a "MORE ACTIONS" button in the PO detail view.
+- Click it to reveal the action dropdown menu.
+- Click "${action}" from the dropdown options.
+${!needsApproval ? `- Wait for the Email Editor dialog to appear (may take 5-15 seconds).
+- The dialog will have To, Cc, Subject fields and a SEND button.` : `- Wait for the approval confirmation dialog to appear.`}
+${SUPPLIER_MESSAGE ? `- If you see an email body editor area, try to add this message at the top: "${SUPPLIER_MESSAGE}"` : ''}
+
+${dryRun ? `Step 6 - STOP (DRY RUN):
+- Do NOT click SEND or any final confirmation button.
+- The email/approval dialog is open - that is sufficient.
+- Stop taking actions. The task is complete.` : `Step 6 - SEND:
+- Click the "SEND" button to send the ${!needsApproval ? 'email' : 'approval request'}.
+- Wait briefly for confirmation.
+- Stop taking actions. The task is complete.`}
+
+IMPORTANT RULES:
+- After each step, take a screenshot and verify you achieved the right outcome before proceeding.
+- CRITICAL: Premier is VERY SLOW. After clicking anything, use the "wait" action before taking a screenshot. Loading spinners and blank screens are normal — just wait and try again.
+- If you see a loading spinner, blank white area, or "Loading..." text, use the "wait" action 2-3 times before concluding something is wrong.
+- After login, wait at least 10-15 seconds for the dashboard to fully render.
+- After navigating to Purchase Orders, wait 5-10 seconds for the grid to load.
+- After filtering, wait 3-5 seconds for results to appear.
+- After completing all steps, stop taking actions.
+- If something unexpected happens (error dialog, wrong page), try to recover.
+- Do not navigate away from the Premier application.
+- If a dropdown or UI element is hard to click, try using keyboard shortcuts.`;
 }
 
+// =============================================================================
+// CUA Agent Loop
+// =============================================================================
+
+async function runCUALoop(page) {
+    // Take initial screenshot
+    const initial = await takeScreenshot(page, 'initial');
+    const screenshots = [initial.filename];
+
+    // Build initial messages
+    const messages = [{
+        role: 'user',
+        content: [
+            {
+                type: 'text',
+                text: `Please send PO ${PO_NUMBER} to the supplier. Here is the current browser state:`,
+            },
+            {
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: 'image/png',
+                    data: initial.base64,
+                },
+            },
+        ],
+    }];
+
+    let currentStep = 0;
+    let lastReportedStep = 0;
+    const recentHashes = [];
+
+    reportStep(1, 'starting', 'Logging into Premier...', null);
+
+    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        // Call Claude API
+        let response;
+        try {
+            response = await anthropic.beta.messages.create({
+                model: MODEL,
+                max_tokens: 4096,
+                system: buildSystemPrompt(),
+                tools: [{
+                    type: toolType,
+                    name: 'computer',
+                    display_width_px: DISPLAY_WIDTH,
+                    display_height_px: DISPLAY_HEIGHT,
+                }],
+                messages,
+                betas: [beta],
+            });
+        } catch (err) {
+            // Retry once on transient API errors
+            console.error(`DEBUG: Anthropic API error: ${err.message} — retrying in 5s`);
+            await sleep(5000);
+            response = await anthropic.beta.messages.create({
+                model: MODEL,
+                max_tokens: 4096,
+                system: buildSystemPrompt(),
+                tools: [{
+                    type: toolType,
+                    name: 'computer',
+                    display_width_px: DISPLAY_WIDTH,
+                    display_height_px: DISPLAY_HEIGHT,
+                }],
+                messages,
+                betas: [beta],
+            });
+        }
+
+        // Add assistant response to conversation history
+        messages.push({ role: 'assistant', content: response.content });
+
+        // Extract text blocks (Claude's reasoning) and tool_use blocks
+        const textBlocks = response.content.filter(b => b.type === 'text');
+        const toolUses = response.content.filter(b => b.type === 'tool_use');
+
+        // Log any text Claude sent
+        for (const tb of textBlocks) {
+            if (tb.text) console.error(`DEBUG: Claude: ${tb.text.substring(0, 200)}`);
+        }
+
+        // If no tool calls or stop_reason is end_turn, task is complete
+        if (toolUses.length === 0 || response.stop_reason === 'end_turn') {
+            console.error('DEBUG: No tool calls — task complete');
+            break;
+        }
+
+        // Process each tool_use call
+        const toolResults = [];
+
+        for (const toolUse of toolUses) {
+            const input = toolUse.input;
+            console.error(`DEBUG: [${iteration + 1}/${MAX_ITERATIONS}] ${input.action} ${JSON.stringify(input).substring(0, 120)}`);
+
+            // Detect and report progress
+            const detectedStep = detectStepFromAction(input, textBlocks);
+            if (detectedStep && detectedStep > currentStep) {
+                // Complete previous step
+                if (currentStep > 0 && currentStep > lastReportedStep) {
+                    const prevDef = STEP_DEFINITIONS[currentStep - 1];
+                    reportStep(currentStep, 'completed', prevDef.completedLabel, screenshots[screenshots.length - 1]);
+                    lastReportedStep = currentStep;
+                }
+                // Start new step
+                currentStep = detectedStep;
+                const stepDef = STEP_DEFINITIONS[currentStep - 1];
+                reportStep(currentStep, 'starting', stepDef.label + '...', null);
+            }
+
+            // Execute the action
+            const actionDesc = await handleAction(page, input);
+            console.error(`DEBUG: Executed: ${actionDesc}`);
+
+            // Generous pause after action — Premier is slow with Angular rendering + spinners
+            if (input.action === 'left_click' || input.action === 'double_click') {
+                await sleep(3000); // Clicks often trigger navigation/loading
+            } else if (input.action !== 'wait' && input.action !== 'screenshot') {
+                await sleep(1500);
+            }
+
+            // Take screenshot after action
+            const screenshot = await takeScreenshot(page, `step-${iteration}`);
+            screenshots.push(screenshot.filename);
+
+            // Stuck detection
+            const hash = screenshotHash(screenshot.base64);
+            recentHashes.push(hash);
+            if (recentHashes.length > STUCK_THRESHOLD) recentHashes.shift();
+            if (recentHashes.length >= STUCK_THRESHOLD && recentHashes.every(h => h === recentHashes[0])) {
+                console.error('DEBUG: AI appears stuck (same screenshot repeated) — aborting');
+                throw new Error(`AI agent stuck after ${iteration + 1} iterations — identical screenshots detected`);
+            }
+
+            // Build tool result with screenshot
+            toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: [{
+                    type: 'image',
+                    source: {
+                        type: 'base64',
+                        media_type: 'image/png',
+                        data: screenshot.base64,
+                    },
+                }],
+            });
+        }
+
+        // Add tool results to conversation
+        messages.push({ role: 'user', content: toolResults });
+    }
+
+    // Complete final reported step
+    if (currentStep > lastReportedStep && currentStep > 0) {
+        const def = STEP_DEFINITIONS[currentStep - 1];
+        reportStep(currentStep, 'completed', def.completedLabel, screenshots[screenshots.length - 1]);
+    }
+
+    if (dryRun) {
+        // Dry run — Claude stopped on its own after opening the dialog
+        if (currentStep < 5) {
+            reportStep(5, 'completed', needsApproval ? 'Approval dialog ready' : 'Email dialog ready', screenshots[screenshots.length - 1]);
+        }
+        return { screenshots, dryRunStopped: true };
+    }
+
+    // If we finished without detecting step 6, report it anyway
+    if (currentStep < 6) {
+        reportStep(6, 'completed', 'PO sent to supplier', screenshots[screenshots.length - 1]);
+    }
+
+    return { screenshots, dryRunStopped: false };
+}
+
+// =============================================================================
+// Main
+// =============================================================================
+
 async function sendPOToSupplier() {
-    // Use persistent context — reuses cookies/session from previous runs
     const context = await chromium.launchPersistentContext(sessionDir, {
         headless: true,
-        viewport: { width: 1366, height: 900 },
+        viewport: { width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const page = context.pages()[0] || await context.newPage();
-    const screenshots = [];
 
     try {
-        // ============================================================
-        // STEP 1: Navigate to Premier — check if already logged in
-        // ============================================================
-        reportStep(1, 'starting', 'Logging into Premier...', null);
-
+        console.error(`DEBUG: Navigating to ${PREMIER_WEB_URL}`);
+        console.error(`DEBUG: Model: ${MODEL}, Tool: ${toolType}, Beta: ${beta}`);
         await page.goto(PREMIER_WEB_URL, { waitUntil: 'load', timeout: 30000 });
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(10000); // Premier SPA takes 10+ seconds to initialize
 
-        await page.screenshot({ path: `${screenshotDir}/00-page-loaded.png`, fullPage: true });
-        screenshots.push('00-page-loaded.png');
+        // Run the AI agent loop
+        const result = await runCUALoop(page);
 
-        // Check if we're already on the dashboard (session from previous run)
-        // Dashboard may be in an iframe — check ALL frames
-        let dashResult = await findDashboardFrame(page);
-
-        if (dashResult) {
-            console.error(`DEBUG: Already logged in — dashboard found in ${dashResult.type}`);
-        } else {
-            console.error('DEBUG: Not logged in — starting login flow');
-            await doLogin(page, screenshotDir, screenshots);
-            // After login, find the dashboard frame
-            dashResult = await findDashboardFrame(page);
-            if (!dashResult) {
-                // Last resort: wait a bit more and try again
-                await page.waitForTimeout(5000);
-                dashResult = await findDashboardFrame(page);
-            }
-        }
-
-        if (!dashResult) {
-            throw new Error('Could not find dashboard in any frame after login');
-        }
-
-        // The SPA shell loads first (shows loading spinner), then the actual UI renders.
-        // Wait for the app to fully load — look for a visible input (search bar) in the frame.
-        let appFrame = dashResult.frame;
-        console.error(`DEBUG: Dashboard shell detected in ${dashResult.type} — waiting for app to fully load...`);
-
-        const appLoadStart = Date.now();
-        let appLoaded = false;
-
-        // The SPA shell loads in loginContainer but the actual app renders in appContainer.
-        // Wait for appContainer to have visible content.
-        while (Date.now() - appLoadStart < 30000) {
-            for (const fr of page.frames()) {
-                const visInputs = await fr.locator('input:visible').count().catch(() => 0);
-                if (visInputs > 0) {
-                    const fname = fr.name() || 'main';
-                    console.error(`DEBUG: Frame "${fname}" has ${visInputs} visible inputs — app is ready!`);
-                    // Switch appFrame to the frame that actually has visible content
-                    if (fr !== appFrame) {
-                        console.error(`DEBUG: Switching appFrame to "${fname}"`);
-                        appFrame = fr;
-                    }
-                    appLoaded = true;
-                    break;
-                }
-            }
-            if (appLoaded) break;
-
-            const elapsed = Math.round((Date.now() - appLoadStart) / 1000);
-            console.error(`DEBUG: Waiting for app to render... (${elapsed}s)`);
-            await page.waitForTimeout(2000);
-        }
-
-        if (!appLoaded) {
-            await page.screenshot({ path: `${screenshotDir}/app-loading-timeout.png`, fullPage: true });
-            screenshots.push('app-loading-timeout.png');
-            throw new Error('Dashboard detected but app UI did not load within 30s');
-        }
-
-        await page.screenshot({ path: `${screenshotDir}/01-dashboard.png`, fullPage: true });
-        screenshots.push('01-dashboard.png');
-        reportStep(1, 'completed', 'Logged in', '01-dashboard.png');
-
-        // ============================================================
-        // STEP 2: Navigate to Purchase Orders via Sidebar Menu
-        // ============================================================
-        reportStep(2, 'starting', 'Navigating to Purchase Orders...', null);
-
-        // Premier uses Angular with rendering that makes DOM elements invisible to
-        // Playwright locators, despite being visually rendered (screenshots confirm this).
-        // We use coordinate-based clicking which is reliable since viewport is fixed 1366x900.
-        //
-        // Layout (from screenshots):
-        //   - Hamburger ☰ icon: top-left sidebar at ~(18, 59)
-        //   - Sidebar expands to show menu items including "Purchase Orders"
-
-        // Click the hamburger menu icon to expand the sidebar
-        console.error('DEBUG: Clicking hamburger menu at (18, 59)');
-        await page.mouse.click(18, 59);
-        await page.waitForTimeout(2000);
-
-        await page.screenshot({ path: `${screenshotDir}/01b-menu-opened.png`, fullPage: true });
-        screenshots.push('01b-menu-opened.png');
-
-        // Now look for "Purchase Orders" in the expanded menu.
-        // First try locator-based approach (in case the expanded menu IS accessible).
-        let poMenuClicked = false;
-        for (const fr of page.frames()) {
-            const poLink = fr.locator('text=Purchase Orders').first();
-            const vis = await poLink.isVisible({ timeout: 2000 }).catch(() => false);
-            if (vis) {
-                console.error(`DEBUG: Found "Purchase Orders" menu item in frame "${fr.name() || 'main'}"`);
-                await poLink.click();
-                poMenuClicked = true;
-                break;
-            }
-        }
-
-        if (!poMenuClicked) {
-            console.error('DEBUG: Locator failed for "Purchase Orders" — trying coordinate click');
-            await page.mouse.click(140, 415);
-        }
-
-        await page.waitForTimeout(1500);
-
-        // "Purchase Orders" is a parent menu — clicking it reveals a sub-item "POs".
-        // We need to click "POs" to actually navigate to the PO list.
-        await page.screenshot({ path: `${screenshotDir}/01c-po-submenu.png`, fullPage: true });
-        screenshots.push('01c-po-submenu.png');
-
-        let posClicked = false;
-        for (const fr of page.frames()) {
-            // Look for the "POs" sub-menu item
-            const posLink = fr.locator('text=/^POs$/').first();
-            const vis = await posLink.isVisible({ timeout: 2000 }).catch(() => false);
-            if (vis) {
-                console.error(`DEBUG: Found "POs" sub-item in frame "${fr.name() || 'main'}"`);
-                await posLink.click();
-                posClicked = true;
-                break;
-            }
-        }
-
-        if (!posClicked) {
-            // From screenshot: "POs" sub-item appears below "Purchase Orders" at ~y=142
-            console.error('DEBUG: Locator failed for "POs" — trying coordinate click at (75, 142)');
-            await page.mouse.click(75, 142);
-        }
-
-        await page.waitForTimeout(3000);
-
-        // After clicking "Purchase Orders", Premier may show a sub-menu or navigate to POs.
-        // Check if we need to click a sub-item like "Purchase Orders-POs"
-        for (const fr of page.frames()) {
-            const poSubItem = fr.locator('text=Purchase Orders-POs').first();
-            const subVis = await poSubItem.isVisible({ timeout: 2000 }).catch(() => false);
-            if (subVis) {
-                console.error('DEBUG: Found sub-menu item "Purchase Orders-POs" — clicking');
-                await poSubItem.click();
-                await page.waitForTimeout(3000);
-                break;
-            }
-        }
-
-        await page.screenshot({ path: `${screenshotDir}/02-po-navigation.png`, fullPage: true });
-        screenshots.push('02-po-navigation.png');
-
-        // Wait for POs grid to load — check all frames for "PO #" column header
-        let poGridFrame = appFrame;
-        let gridFound = false;
-        for (const fr of page.frames()) {
-            const poHeader = await fr.locator('text=PO #').first().isVisible({ timeout: 3000 }).catch(() => false);
-            if (poHeader) {
-                poGridFrame = fr;
-                console.error(`DEBUG: PO grid found in frame "${fr.name() || 'main'}"`);
-                gridFound = true;
-                break;
-            }
-        }
-
-        if (!gridFound) {
-            // Wait longer, the page might still be loading
-            console.error('DEBUG: PO grid not found yet, waiting...');
-            await page.waitForTimeout(5000);
-            await page.screenshot({ path: `${screenshotDir}/02b-waiting-grid.png`, fullPage: true });
-            screenshots.push('02b-waiting-grid.png');
-
-            for (const fr of page.frames()) {
-                const poHeader = await fr.locator('text=PO #').first().isVisible({ timeout: 5000 }).catch(() => false);
-                if (poHeader) {
-                    poGridFrame = fr;
-                    console.error(`DEBUG: PO grid found in frame "${fr.name() || 'main'}" (delayed)`);
-                    gridFound = true;
-                    break;
-                }
-            }
-        }
-
-        if (!gridFound) {
-            throw new Error('Could not find PO grid after navigating to Purchase Orders');
-        }
-
-        await page.waitForTimeout(2000);
-        await page.screenshot({ path: `${screenshotDir}/02-po-list.png`, fullPage: false });
-        screenshots.push('02-po-list.png');
-        reportStep(2, 'completed', 'Reached Purchase Orders', '02-po-list.png');
-
-        // ============================================================
-        // STEP 3: Filter PO # column to find our specific PO
-        // ============================================================
-        reportStep(3, 'starting', `Filtering for ${PO_NUMBER}...`, null);
-
-        // MUST always filter by PO number — the PO could be anywhere in the list.
-        // The Kendo grid column headers each have a small filter icon (≡).
-        // Click the filter icon on the "PO #" column to open the filter dropdown.
-
-        // Try multiple selectors for the filter icon in the PO # column header
-        const filterSelectors = [
-            'th:has-text("PO #") .k-grid-filter',
-            'th:has-text("PO #") .k-grid-header-menu',
-            'th:has-text("PO #") .k-i-filter',
-            'th:has-text("PO #") .k-i-more-vertical',
-            'th:has-text("PO #") [class*="filter"]',
-            'th:has-text("PO #") a',
-            'th:has-text("PO #") button',
-        ];
-
-        let filterClicked = false;
-        for (const sel of filterSelectors) {
-            const el = poGridFrame.locator(sel).first();
-            const vis = await el.isVisible({ timeout: 1000 }).catch(() => false);
-            if (vis) {
-                console.error(`DEBUG: Filter icon found with "${sel}"`);
-                await el.click();
-                filterClicked = true;
-                break;
-            }
-        }
-
-        if (!filterClicked) {
-            // Dump the PO # th element's inner HTML for debugging
-            const thHtml = await poGridFrame.locator('th:has-text("PO #")').first()
-                .evaluate(el => el.innerHTML).catch(() => '<not found>');
-            console.error(`DEBUG: PO # th innerHTML: ${thHtml.substring(0, 300)}`);
-
-            // Fall back to coordinate click — filter icon is at the right edge of PO # column header
-            // From screenshot: PO # header is at ~x=80 y=145, filter icon at ~x=138, y=145
-            console.error('DEBUG: Trying coordinate click for PO # filter icon at (138, 145)');
-            await page.mouse.click(138, 145);
-            filterClicked = true;
-        }
-
-        await page.waitForTimeout(1500);
-        await page.screenshot({ path: `${screenshotDir}/03a-filter-opened.png`, fullPage: true });
-        screenshots.push('03a-filter-opened.png');
-
-        // The filter dropdown should now be open with an input field.
-        // Look for the filter input in the Kendo animation container or popup.
-        const filterInputSelectors = [
-            '.k-animation-container input[type="text"]',
-            '.k-filter-menu input',
-            '.k-popup input[type="text"]',
-            '[class*="filter"] input[type="text"]',
-            '.k-textbox',
-        ];
-
-        let filterInput = null;
-        for (const sel of filterInputSelectors) {
-            // Check all frames — Kendo popups may render outside the grid frame
-            for (const fr of page.frames()) {
-                const el = fr.locator(sel).first();
-                const vis = await el.isVisible({ timeout: 1000 }).catch(() => false);
-                if (vis) {
-                    filterInput = el;
-                    console.error(`DEBUG: Filter input found with "${sel}" in frame "${fr.name() || 'main'}"`);
-                    break;
-                }
-            }
-            if (filterInput) break;
-        }
-
-        if (!filterInput) {
-            console.error('DEBUG: Filter input not found via locator — checking all visible inputs');
-            // Try any newly appeared input
-            for (const fr of page.frames()) {
-                const inputs = fr.locator('input:visible');
-                const count = await inputs.count().catch(() => 0);
-                if (count > 0) {
-                    for (let i = 0; i < count; i++) {
-                        const attrs = await inputs.nth(i).evaluate(el => ({
-                            type: el.type, placeholder: el.placeholder, class: el.className.substring(0, 50),
-                        })).catch(() => null);
-                        if (attrs) console.error(`DEBUG:   input[${i}]: ${JSON.stringify(attrs)}`);
-                    }
-                }
-            }
-            throw new Error('Could not find filter input after clicking PO # filter icon');
-        }
-
-        await filterInput.fill(PO_NUMBER);
-        await page.waitForTimeout(500);
-
-        // Click the Filter button to apply
-        let filterApplied = false;
-        for (const fr of page.frames()) {
-            const filterBtn = fr.locator('button:has-text("Filter"), button:has-text("FILTER")').first();
-            const vis = await filterBtn.isVisible({ timeout: 2000 }).catch(() => false);
-            if (vis) {
-                await filterBtn.click();
-                filterApplied = true;
-                console.error('DEBUG: Clicked Filter button');
-                break;
-            }
-        }
-
-        if (!filterApplied) {
-            // Try pressing Enter instead
-            await filterInput.press('Enter');
-            console.error('DEBUG: Pressed Enter to apply filter');
-        }
-
-        await page.waitForTimeout(3000);
-
-        await page.screenshot({ path: `${screenshotDir}/03b-po-filtered.png`, fullPage: true });
-        screenshots.push('03b-po-filtered.png');
-        reportStep(3, 'completed', `Found ${PO_NUMBER}`, '03b-po-filtered.png');
-
-        // ============================================================
-        // STEP 4: Select the filtered PO row
-        // ============================================================
-        reportStep(4, 'starting', 'Selecting PO...', null);
-
-        const poRow = poGridFrame.locator(`tr:has-text("${PO_NUMBER}")`).first();
-        await poRow.waitFor({ timeout: 10000 });
-        console.error(`DEBUG: Found PO row "${PO_NUMBER}" — clicking`);
-        await poRow.click();
-        await page.waitForTimeout(3000); // Wait for PO detail panel to load
-
-        await page.screenshot({ path: `${screenshotDir}/04-po-selected.png`, fullPage: false });
-        screenshots.push('04-po-selected.png');
-        reportStep(4, 'completed', 'PO selected', '04-po-selected.png');
-
-        // ============================================================
-        // STEP 5: Click MORE ACTIONS → open EMAIL or APPROVAL dialog
-        // ============================================================
-        reportStep(5, 'starting', 'Opening send action...', null);
-
-        const actionLabel = needsApproval ? 'SEND FOR APPROVAL' : 'EMAIL';
-
-        // Step 5a: Click MORE ACTIONS to open dropdown
-        console.error('DEBUG: Clicking MORE ACTIONS at (405, 358)');
-        await page.mouse.click(405, 358);
-        await page.waitForTimeout(1000);
-        await page.screenshot({ path: `${screenshotDir}/05-more-actions.png`, fullPage: false });
-        screenshots.push('05-more-actions.png');
-
-        // Step 5b: Click the dropdown item using coordinates.
-        // Keyboard nav doesn't work (dropdown doesn't receive keyboard focus).
-        // Coordinate map (measured from 05-more-actions.png screenshot):
-        //   PRINT:             y ≈ 387
-        //   EMAIL:             y ≈ 414
-        //   SEND FOR APPROVAL: y ≈ 441
-        const targetY = needsApproval ? 441 : 414;
-        console.error(`DEBUG: Clicking "${actionLabel}" at (413, ${targetY})`);
-        await page.mouse.click(413, targetY);
-
-        // Wait for the Email Editor / Approval dialog to appear.
-        // The dialog can take 5-15 seconds to load (server generates email content).
-        // Poll every 3 seconds instead of a single check.
-        let emailDialogFrame = poGridFrame;
-        if (!needsApproval) {
-            let dialogOpen = false;
-            const detectStart = Date.now();
-            while (Date.now() - detectStart < 15000) {
-                await page.waitForTimeout(3000);
-                dialogOpen = await detectEmailDialog(page);
-                if (dialogOpen) break;
-                console.error(`DEBUG: Email dialog not detected yet... (${Math.round((Date.now() - detectStart) / 1000)}s)`);
-            }
-
-            if (!dialogOpen) {
-                // Take debug screenshot to see current state
-                await page.screenshot({ path: `${screenshotDir}/05b-after-click.png`, fullPage: true });
-                screenshots.push('05b-after-click.png');
-
-                // Retry: re-open dropdown and click EMAIL again
-                console.error('DEBUG: Email dialog not detected — retrying coordinate click');
-                await page.mouse.click(405, 358); // Re-open dropdown
-                await page.waitForTimeout(1000);
-                await page.mouse.click(413, targetY); // Click EMAIL again
-                console.error(`DEBUG: Retry click at (413, ${targetY})`);
-
-                // Poll again for up to 15 seconds
-                const retryStart = Date.now();
-                while (Date.now() - retryStart < 15000) {
-                    await page.waitForTimeout(3000);
-                    dialogOpen = await detectEmailDialog(page);
-                    if (dialogOpen) break;
-                    console.error(`DEBUG: Retry — dialog not detected yet... (${Math.round((Date.now() - retryStart) / 1000)}s)`);
-                }
-            }
-
-            if (!dialogOpen) {
-                await page.screenshot({ path: `${screenshotDir}/05c-no-email-dialog.png`, fullPage: true });
-                screenshots.push('05c-no-email-dialog.png');
-                throw new Error('Email Editor dialog did not appear after clicking EMAIL action');
-            }
-
-            await page.waitForTimeout(2000); // Let dialog fully render
-
-            if (SUPPLIER_MESSAGE) {
-                // Get the LAST contenteditable (most likely the newly opened email body)
-                const editors = emailDialogFrame.locator('[contenteditable="true"]');
-                const editorCount = await editors.count().catch(() => 0);
-                const bodyEditor = editors.nth(editorCount - 1);
-                try {
-                    await bodyEditor.evaluate((el, msg) => {
-                        el.innerHTML = `<p>${msg}</p><br>` + el.innerHTML;
-                    }, SUPPLIER_MESSAGE);
-                } catch {
-                    console.error('DEBUG: Could not modify email body editor');
-                }
-            }
-
-            await page.screenshot({ path: `${screenshotDir}/06-email-dialog.png`, fullPage: true });
-            screenshots.push('06-email-dialog.png');
-            reportStep(5, 'completed', 'Email dialog ready', '06-email-dialog.png');
-        } else {
-            await page.waitForTimeout(3000);
-            await page.screenshot({ path: `${screenshotDir}/05b-approval.png`, fullPage: false });
-            screenshots.push('05b-approval.png');
-            reportStep(5, 'completed', 'Approval dialog ready', '05b-approval.png');
-        }
-
-        // ============================================================
-        // DRY RUN: Stop here — dialog is open but we don't send
-        // ============================================================
-        if (dryRun) {
-            console.log(JSON.stringify({
-                success: true,
-                dry_run: true,
-                po_number: PO_NUMBER,
-                action: needsApproval ? 'would_send_for_approval' : 'would_email',
-                total_cost: totalCost,
-                screenshots,
-                timestamp: new Date().toISOString(),
-            }));
-            return;
-        }
-
-        // ============================================================
-        // STEP 6: Actually send to supplier
-        // ============================================================
-        reportStep(6, 'starting', 'Sending to supplier...', null);
-
-        if (!needsApproval) {
-            const sendButton = emailDialogFrame.locator('button:has-text("SEND"), button:has-text("Send")').last();
-            try {
-                await sendButton.waitFor({ state: 'attached', timeout: 5000 });
-                await sendButton.click({ force: true });
-            } catch {
-                // Coordinate fallback — SEND button is typically bottom-right of email dialog
-                console.error('DEBUG: SEND button not found via locator — using force click');
-                const allBtns = emailDialogFrame.locator('button');
-                const btnCount = await allBtns.count().catch(() => 0);
-                for (let i = btnCount - 1; i >= 0; i--) {
-                    const txt = await allBtns.nth(i).textContent().catch(() => '');
-                    if (/send/i.test(txt)) {
-                        await allBtns.nth(i).click({ force: true });
-                        console.error(`DEBUG: Force-clicked SEND button at index ${i}`);
-                        break;
-                    }
-                }
-            }
-            await page.waitForTimeout(3000);
-        } else {
-            const confirmButton = poGridFrame.locator('button:has-text("OK"), button:has-text("Yes"), button:has-text("Confirm")').first();
-            try {
-                await confirmButton.waitFor({ timeout: 5000 });
-                await confirmButton.click();
-                await page.waitForTimeout(2000);
-            } catch {
-                // No confirmation dialog needed
-            }
-        }
-
-        await page.screenshot({ path: `${screenshotDir}/07-completed.png`, fullPage: false });
-        screenshots.push('07-completed.png');
-        reportStep(6, 'completed', 'PO sent to supplier', '07-completed.png');
-
-        // ============================================================
-        // Output success
-        // ============================================================
+        // Output success JSON to stdout (PHP job reads this)
         console.log(JSON.stringify({
             success: true,
+            dry_run: result.dryRunStopped || false,
             po_number: PO_NUMBER,
-            action: needsApproval ? 'sent_for_approval' : 'emailed',
-            screenshots,
+            action: result.dryRunStopped
+                ? (needsApproval ? 'would_send_for_approval' : 'would_email')
+                : (needsApproval ? 'sent_for_approval' : 'emailed'),
+            total_cost: totalCost,
+            screenshots: result.screenshots,
             timestamp: new Date().toISOString(),
         }));
 
     } catch (error) {
         try {
             await page.screenshot({ path: `${screenshotDir}/error.png`, fullPage: true });
-            screenshots.push('error.png');
-        } catch { /* can't take screenshot */ }
+        } catch { /* can't screenshot */ }
 
         console.error(JSON.stringify({
             success: false,
             error: error.message,
             po_number: PO_NUMBER,
-            screenshots,
+            screenshots: [],
             timestamp: new Date().toISOString(),
         }));
         process.exit(1);
     } finally {
-        // Don't logout — we WANT the session to persist for next run.
-        // Just close the browser (persistent context saves state to disk).
         await context.close();
     }
-}
-
-// ============================================================
-// Login helper — handles iframe login, popups, session conflicts
-// ============================================================
-async function doLogin(page, screenshotDir, screenshots) {
-    // Detect where the login form lives (main page or iframe)
-    const mainInputCount = await page.locator('input').count();
-    const iframeCount = await page.locator('iframe').count();
-    console.error(`DEBUG: main page inputs=${mainInputCount}, iframes=${iframeCount}`);
-
-    let loginFrame = page;
-
-    if (mainInputCount === 0 && iframeCount > 0) {
-        // Wait for iframe login form to render — can take 10-20s on cold start
-        const loginWaitStart = Date.now();
-        while (Date.now() - loginWaitStart < 30000) {
-            for (let i = 0; i < iframeCount; i++) {
-                const frame = page.frameLocator('iframe').nth(i);
-                const visibleInputs = await frame.locator('input:visible').count().catch(() => 0);
-                if (visibleInputs >= 2) {
-                    loginFrame = frame;
-                    console.error(`DEBUG: Using iframe[${i}] as login frame (${visibleInputs} inputs)`);
-                    break;
-                }
-            }
-            if (loginFrame !== page) break;
-            const elapsed = Math.round((Date.now() - loginWaitStart) / 1000);
-            console.error(`DEBUG: No login inputs yet in iframes... (${elapsed}s)`);
-            await page.waitForTimeout(2000);
-        }
-        if (loginFrame === page) {
-            console.error('DEBUG: Login form never appeared in iframes after 30s');
-        }
-    } else if (mainInputCount === 0) {
-        console.error('DEBUG: No inputs found, waiting longer...');
-        await page.waitForSelector('input', { timeout: 15000 });
-    }
-
-    // Fill login form — only target VISIBLE inputs
-    const inputs = loginFrame.locator('input:visible');
-    const inputCount = await inputs.count();
-    console.error(`DEBUG: Found ${inputCount} visible inputs in login form`);
-
-    if (inputCount >= 3) {
-        await inputs.nth(0).fill(PREMIER_WEB_CLIENT_ID);
-        await inputs.nth(1).fill(PREMIER_WEB_USERNAME);
-        await inputs.nth(2).fill(PREMIER_WEB_PASSWORD);
-    } else if (inputCount === 2) {
-        await inputs.nth(0).fill(PREMIER_WEB_USERNAME);
-        await inputs.nth(1).fill(PREMIER_WEB_PASSWORD);
-    }
-
-    // Check "Remember Me" if available
-    const rememberMe = loginFrame.locator('input[type="checkbox"]:visible').first();
-    if (await rememberMe.isVisible({ timeout: 500 }).catch(() => false)) {
-        await rememberMe.check().catch(() => {});
-        console.error('DEBUG: Checked "Remember Me"');
-    }
-
-    await page.screenshot({ path: `${screenshotDir}/00b-form-filled.png`, fullPage: true });
-    screenshots.push('00b-form-filled.png');
-
-    await loginFrame.getByRole('button', { name: /log in/i }).click();
-
-    // Wait for login to complete — "Logging in..." button appears while processing
-    console.error('DEBUG: Waiting for login to complete...');
-    const loginStart = Date.now();
-    while (Date.now() - loginStart < 45000) {
-        await page.waitForTimeout(3000);
-
-        // Check if dashboard appeared — search ALL frames
-        const dashResult = await findDashboardFrame(page);
-        if (dashResult) {
-            console.error(`DEBUG: Dashboard found in ${dashResult.type}! Login successful.`);
-            return;
-        }
-
-        // Before checking login state, try to dismiss any overlay dialogs
-        // (e.g. "Welcome back" dialog that appears OVER the login iframe)
-        // Check both main page AND all frames for OK/dismiss buttons
-        for (const frame of page.frames()) {
-            const okBtn = frame.locator('button:has-text("OK"), button:has-text("Ok")').first();
-            if (await okBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                console.error(`DEBUG: Found OK button in frame "${frame.name() || 'main'}" — clicking to dismiss`);
-                await okBtn.click();
-                await page.waitForTimeout(2000);
-                break;
-            }
-
-            const doItLaterBtn = frame.locator('button:has-text("Do it later")').first();
-            if (await doItLaterBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                console.error(`DEBUG: Found "Do it later" in frame "${frame.name() || 'main'}" — dismissing`);
-                await doItLaterBtn.click();
-                await page.waitForTimeout(2000);
-                break;
-            }
-        }
-
-        // Re-check after dismissing dialogs
-        const dashAfterDismiss = await findDashboardFrame(page);
-        if (dashAfterDismiss) {
-            console.error(`DEBUG: Dashboard found in ${dashAfterDismiss.type} after dismissing dialog!`);
-            return;
-        }
-
-        // Check if still "Logging in..."
-        let stillLogging = false;
-        for (const frame of page.frames()) {
-            const btns = await frame.locator('button:visible').allInnerTexts().catch(() => []);
-            if (btns.some(t => /logging in/i.test(t))) {
-                stillLogging = true;
-                break;
-            }
-        }
-        if (stillLogging) {
-            console.error(`DEBUG: Still "Logging in..." (${Math.round((Date.now() - loginStart) / 1000)}s)`);
-            continue;
-        }
-
-        // Check for session conflict ("username already in use")
-        let conflictHandled = false;
-        for (const frame of page.frames()) {
-            const conflict = await frame.locator('text=/already in use/i').first().isVisible({ timeout: 500 }).catch(() => false);
-            if (conflict) {
-                console.error('DEBUG: Session conflict — re-filling credentials and retrying');
-
-                // Re-fill all fields
-                const visInputs = frame.locator('input:visible:not([type="checkbox"]):not([type="hidden"])');
-                const count = await visInputs.count().catch(() => 0);
-                if (count >= 3) {
-                    await visInputs.nth(0).fill(PREMIER_WEB_CLIENT_ID);
-                    await visInputs.nth(1).fill(PREMIER_WEB_USERNAME);
-                    await visInputs.nth(2).fill(PREMIER_WEB_PASSWORD);
-                }
-
-                // Click Login again
-                const loginBtn = frame.locator('button:has-text("Login"), button:has-text("Log in")').first();
-                if (await loginBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                    await loginBtn.click();
-                    console.error('DEBUG: Re-clicked Login');
-                    await page.waitForTimeout(5000);
-                    conflictHandled = true;
-                }
-                break;
-            }
-        }
-        if (conflictHandled) continue;
-
-        // Check for "Email Validation" popup in all frames
-        for (const frame of page.frames()) {
-            const emailVal = await frame.locator('text=/email validation/i').first().isVisible({ timeout: 500 }).catch(() => false);
-            if (emailVal) {
-                console.error('DEBUG: Email Validation popup detected');
-                const doItLater = frame.locator('button:has-text("Do it later")').first();
-                if (await doItLater.isVisible({ timeout: 2000 }).catch(() => false)) {
-                    await doItLater.click();
-                    console.error('DEBUG: Clicked "Do it later"');
-                    await page.waitForTimeout(2000);
-                }
-                break;
-            }
-        }
-
-        // Debug: dump frame state
-        const elapsed = Math.round((Date.now() - loginStart) / 1000);
-        console.error(`DEBUG: (${elapsed}s) ${page.frames().length} frames — no dashboard detected yet`);
-    }
-
-    // Final check — search ALL frames
-    const finalDash = await findDashboardFrame(page);
-    if (!finalDash) {
-        await page.screenshot({ path: `${screenshotDir}/login-failed.png`, fullPage: true });
-        screenshots.push('login-failed.png');
-        throw new Error('Login failed — could not reach dashboard after 45s');
-    }
-    console.error(`DEBUG: Dashboard found in ${finalDash.type} on final check`);
 }
 
 sendPOToSupplier().catch((err) => {

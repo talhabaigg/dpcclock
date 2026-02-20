@@ -20,7 +20,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
 
     public int $tries = 1;
 
-    public int $timeout = 180;
+    public int $timeout = 360;
 
     public function __construct(
         public int $agentTaskId,
@@ -75,10 +75,11 @@ class SendToSupplierViaAgentJob implements ShouldQueue
             'SCREENSHOT_DIR' => $screenshotDir,
             'SESSION_DIR' => storage_path('app/playwright-session'),
             'DRY_RUN' => $isDryRun ? '1' : '0',
+            'ANTHROPIC_API_KEY' => config('services.anthropic.api_key'),
         ]));
 
         // Start process asynchronously so we can poll progress.json for real-time updates
-        $process = Process::timeout(150)
+        $process = Process::timeout(300)
             ->start(['node', $scriptPath, '--config', $configFile]);
 
         // Poll progress.json every 1.5s to broadcast step updates in real-time

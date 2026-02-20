@@ -35,6 +35,10 @@ return [
         ],
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+    ],
+
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         // Vision model for drawing comparison - options: gpt-4o, gpt-4o-2024-11-20, gpt-4o-mini
