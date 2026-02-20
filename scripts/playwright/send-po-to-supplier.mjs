@@ -651,15 +651,17 @@ async function runCUALoop(page) {
         if (currentStep < 5) {
             reportStep(5, 'completed', needsApproval ? 'Approval dialog ready' : 'Email dialog ready', screenshots[screenshots.length - 1]);
         }
-        return { screenshots, dryRunStopped: true };
+        return { screenshots, dryRunStopped: true, completed: true };
     }
 
-    // If we finished without detecting step 6, report it anyway
+    // Check if the CUA agent actually completed the task
+    // If we exhausted iterations without reaching step 6, this is NOT a success
     if (currentStep < 6) {
-        reportStep(6, 'completed', 'PO sent to supplier', screenshots[screenshots.length - 1]);
+        return { screenshots, dryRunStopped: false, completed: false };
     }
 
-    return { screenshots, dryRunStopped: false };
+    reportStep(6, 'completed', 'PO sent to supplier', screenshots[screenshots.length - 1]);
+    return { screenshots, dryRunStopped: false, completed: true };
 }
 
 // =============================================================================
@@ -806,6 +808,18 @@ async function sendPOToSupplier() {
 
         // Run the AI agent loop
         const result = await runCUALoop(page);
+
+        // If the CUA agent did not complete the task, treat as failure
+        if (!result.completed) {
+            console.error(JSON.stringify({
+                success: false,
+                error: `CUA agent exhausted ${MAX_ITERATIONS} iterations without completing the task`,
+                po_number: PO_NUMBER,
+                screenshots: result.screenshots,
+                timestamp: new Date().toISOString(),
+            }));
+            process.exit(1);
+        }
 
         // Output success JSON to stdout (PHP job reads this)
         console.log(JSON.stringify({

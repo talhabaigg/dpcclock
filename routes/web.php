@@ -280,7 +280,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // AGENT TASK ROUTES
     // ============================================
-    Route::middleware('permission:requisitions.approve-pricing')->group(function () {
+    Route::middleware('role:admin')->group(function () {
         Route::post('/agent/task/{id}/confirm', [AgentTaskController::class, 'confirm'])->name('agent.task.confirm');
         Route::post('/agent/task/{id}/cancel', [AgentTaskController::class, 'cancel'])->name('agent.task.cancel');
         Route::post('/agent/task/{id}/retry', [AgentTaskController::class, 'retry'])->name('agent.task.retry');

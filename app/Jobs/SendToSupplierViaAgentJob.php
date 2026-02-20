@@ -80,78 +80,79 @@ class SendToSupplierViaAgentJob implements ShouldQueue
             'ANTHROPIC_API_KEY' => config('services.anthropic.api_key'),
         ]));
 
-        // Start process asynchronously so we can poll progress.json for real-time updates
-        $process = Process::timeout(300)
-            ->start(['node', $scriptPath, '--config', $configFile]);
+        try {
+            // Start process asynchronously so we can poll progress.json for real-time updates
+            $process = Process::timeout(300)
+                ->start(['node', $scriptPath, '--config', $configFile]);
 
-        // Poll progress.json every 1.5s to broadcast step updates in real-time
-        $progressFile = $screenshotDir.'/progress.json';
-        $lastEventCount = 0;
+            // Poll progress.json every 1.5s to broadcast step updates in real-time
+            $progressFile = $screenshotDir.'/progress.json';
+            $lastEventCount = 0;
 
-        while ($process->running()) {
-            $this->pollProgress($progressFile, $lastEventCount, $task, $requisition, $screenshotDir);
-            usleep(1500000);
-        }
-
-        // Final poll to catch any remaining events
-        $this->pollProgress($progressFile, $lastEventCount, $task, $requisition, $screenshotDir);
-
-        $result = $process->wait();
-
-        // Clean up config file (contains credentials)
-        @unlink($configFile);
-        // Clean up progress file
-        @unlink($progressFile);
-
-        if ($result->successful()) {
-            // Upload any remaining screenshots not yet uploaded during polling
-            $s3Paths = $this->uploadScreenshots($screenshotDir, $requisition->id);
-
-            $task->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'screenshots' => $s3Paths,
-                'context' => array_merge($task->context ?? [], [
-                    'event_log' => $this->eventLog,
-                ]),
-            ]);
-
-            if ($isDryRun) {
-                $requisition->update(['agent_status' => 'completed']);
-
-                activity()
-                    ->performedOn($requisition)
-                    ->event('agent_dry_run_completed')
-                    ->log("Agent dry run for {$poNumber} completed (email dialog opened, not sent). Screenshots: ".count($s3Paths));
-
-                Log::info("Agent: Dry run completed for PO {$poNumber}", [
-                    'task_id' => $task->id,
-                    'screenshots' => count($s3Paths),
-                ]);
-            } else {
-                $requisition->update([
-                    'status' => 'sent',
-                    'agent_status' => 'completed',
-                ]);
-
-                activity()
-                    ->performedOn($requisition)
-                    ->event('agent_sent_to_supplier')
-                    ->log("Agent sent {$poNumber} to supplier via Premier web UI. Screenshots: ".count($s3Paths));
-
-                Log::info("Agent: Successfully sent PO {$poNumber} to supplier", [
-                    'task_id' => $task->id,
-                    'screenshots' => count($s3Paths),
-                ]);
+            while ($process->running()) {
+                $this->pollProgress($progressFile, $lastEventCount, $task, $requisition, $screenshotDir);
+                usleep(1500000);
             }
 
-            event(new AgentTaskUpdated($task));
-        } else {
-            $this->handleFailure($task, $requisition, $result);
-        }
+            // Final poll to catch any remaining events
+            $this->pollProgress($progressFile, $lastEventCount, $task, $requisition, $screenshotDir);
 
-        // Clean up local screenshots
-        $this->cleanupLocalScreenshots($screenshotDir);
+            $result = $process->wait();
+
+            // Clean up progress file
+            @unlink($progressFile);
+
+            if ($result->successful()) {
+                // Upload any remaining screenshots not yet uploaded during polling
+                $s3Paths = $this->uploadScreenshots($screenshotDir, $requisition->id);
+
+                $task->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                    'screenshots' => $s3Paths,
+                    'context' => array_merge($task->context ?? [], [
+                        'event_log' => $this->eventLog,
+                    ]),
+                ]);
+
+                if ($isDryRun) {
+                    $requisition->update(['agent_status' => 'completed']);
+
+                    activity()
+                        ->performedOn($requisition)
+                        ->event('agent_dry_run_completed')
+                        ->log("Agent dry run for {$poNumber} completed (email dialog opened, not sent). Screenshots: ".count($s3Paths));
+
+                    Log::info("Agent: Dry run completed for PO {$poNumber}", [
+                        'task_id' => $task->id,
+                        'screenshots' => count($s3Paths),
+                    ]);
+                } else {
+                    $requisition->update([
+                        'status' => 'sent',
+                        'agent_status' => 'completed',
+                    ]);
+
+                    activity()
+                        ->performedOn($requisition)
+                        ->event('agent_sent_to_supplier')
+                        ->log("Agent sent {$poNumber} to supplier via Premier web UI. Screenshots: ".count($s3Paths));
+
+                    Log::info("Agent: Successfully sent PO {$poNumber} to supplier", [
+                        'task_id' => $task->id,
+                        'screenshots' => count($s3Paths),
+                    ]);
+                }
+
+                event(new AgentTaskUpdated($task));
+            } else {
+                $this->handleFailure($task, $requisition, $result);
+            }
+        } finally {
+            // Always clean up credential config file and local screenshots
+            @unlink($configFile);
+            $this->cleanupLocalScreenshots($screenshotDir);
+        }
     }
 
     protected function pollProgress(string $progressFile, int &$lastEventCount, AgentTask $task, Requisition $requisition, string $screenshotDir): void
@@ -337,10 +338,12 @@ class SendToSupplierViaAgentJob implements ShouldQueue
             ->log("Agent failed to send PO to supplier.");
 
         event(new AgentTaskUpdated($task, errorMessage: $errorMessage));
-
-        throw new \RuntimeException('Playwright script failed: '.substr($result->errorOutput(), 0, 500));
     }
 
+    /**
+     * Handle unexpected job failure (e.g. uncaught exceptions, OOM, timeout).
+     * Ensures the AgentTask doesn't get stuck in 'processing' status.
+     */
     public function failed(\Throwable $exception): void
     {
         Log::error("Agent: SendToSupplierViaAgentJob permanently failed", [
@@ -348,5 +351,33 @@ class SendToSupplierViaAgentJob implements ShouldQueue
             'requisition_id' => $this->requisitionId,
             'error' => $exception->getMessage(),
         ]);
+
+        // Ensure task and requisition are marked as failed even for unexpected exceptions
+        try {
+            $task = AgentTask::find($this->agentTaskId);
+            if ($task && $task->status === 'processing') {
+                $task->update([
+                    'status' => 'failed',
+                    'context' => array_merge($task->context ?? [], [
+                        'last_error' => substr($exception->getMessage(), 0, 2000),
+                        'last_attempt' => now()->toISOString(),
+                    ]),
+                ]);
+                event(new AgentTaskUpdated($task, errorMessage: $exception->getMessage()));
+            }
+
+            $requisition = Requisition::find($this->requisitionId);
+            if ($requisition && $requisition->agent_status === 'sending') {
+                $requisition->update(['agent_status' => 'failed']);
+            }
+        } catch (\Throwable $e) {
+            Log::error("Agent: Failed to update task/requisition status in failed() hook", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Clean up credential config file if it still exists
+        $configFile = storage_path('app/agent-config-'.$this->agentTaskId.'.json');
+        @unlink($configFile);
     }
 }

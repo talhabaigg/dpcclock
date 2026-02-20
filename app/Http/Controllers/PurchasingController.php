@@ -581,7 +581,12 @@ class PurchasingController extends Controller
         if ($uploaded) {
             $requisitionService->notifyRequisitionProcessed($requisition);
         } else {
-            dd('SFTP upload failed');
+            Log::error("SFTP upload failed for requisition #{$requisition->id}", [
+                'po_number' => $requisition->po_number,
+                'file' => $fileName,
+            ]);
+
+            return back()->with('error', 'SFTP upload to Premier failed. Please try again or contact support.');
         }
 
     }

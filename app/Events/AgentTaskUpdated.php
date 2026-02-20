@@ -3,8 +3,8 @@
 namespace App\Events;
 
 use App\Models\AgentTask;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
@@ -36,9 +36,9 @@ class AgentTaskUpdated implements ShouldBroadcastNow
         $this->taskStatus = $task->status;
     }
 
-    public function broadcastOn(): Channel
+    public function broadcastOn(): PrivateChannel
     {
-        return new Channel('agent-tasks');
+        return new PrivateChannel('agent-tasks.'.$this->requisitionId);
     }
 
     public function broadcastAs(): string

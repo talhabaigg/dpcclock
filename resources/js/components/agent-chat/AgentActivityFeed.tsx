@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { AlertCircle, Bot, BrainCircuit, Check, Images, Loader2, Maximize2, Monitor, RotateCcw } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import AgentStepProgress from './AgentStepProgress';
 import AgentTerminal from './AgentTerminal';
 import AgentViewerHeader from './AgentViewerHeader';
@@ -35,13 +35,21 @@ interface AgentActivityFeedProps {
     taskId: number;
     requisitionId: number;
     errorMessage?: string | null;
+    initialStatus?: 'processing' | 'completed' | 'failed';
 }
 
-export default function AgentActivityFeed({ taskId, requisitionId, errorMessage: initialError }: AgentActivityFeedProps) {
+export interface AgentActivityFeedHandle {
+    openSheet: () => void;
+}
+
+const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedProps>(function AgentActivityFeed(
+    { taskId, requisitionId, errorMessage: initialError, initialStatus },
+    ref,
+) {
     const [steps, setSteps] = useState<Step[]>([]); // For derived state (currentStep, screenshots)
     const [timeline, setTimeline] = useState<TimelineEntry[]>([]); // Append-only display order
     const [totalSteps, setTotalSteps] = useState(6);
-    const [status, setStatus] = useState<'processing' | 'completed' | 'failed'>('processing');
+    const [status, setStatus] = useState<'processing' | 'completed' | 'failed'>(initialStatus || 'processing');
     const [error, setError] = useState<string | null>(initialError || null);
     const [sheetOpen, setSheetOpen] = useState(false);
     const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -54,12 +62,14 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
     const scrollRef = useRef<HTMLDivElement>(null);
     const glowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    useImperativeHandle(ref, () => ({ openSheet: () => setSheetOpen(true) }), []);
+
     // Reset state on task change
     useEffect(() => {
         setSteps([]);
         setTimeline([]);
         setTotalSteps(6);
-        setStatus('processing');
+        setStatus(initialStatus || 'processing');
         setError(null);
         setSelectedStep(null);
         setShowGlow(false);
@@ -175,7 +185,7 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
 
     // Listen for real-time updates via Echo
     useEffect(() => {
-        const channel = (window as any).Echo?.channel('agent-tasks');
+        const channel = (window as any).Echo?.private(`agent-tasks.${requisitionId}`);
 
         const handler = (data: any) => {
             if (data.requisition_id !== requisitionId) return;
@@ -305,6 +315,7 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
 
         return () => {
             channel?.stopListening('.agent.task.updated', handler);
+            (window as any).Echo?.leaveChannel(`private-agent-tasks.${requisitionId}`);
             if (glowTimeoutRef.current) clearTimeout(glowTimeoutRef.current);
         };
     }, [requisitionId, taskId]);
@@ -408,69 +419,34 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
 
     return (
         <>
-            {/* ── Card: Compact status on page ── */}
-            <Card className={cn(borderColor, bgColor, 'overflow-hidden')}>
-                <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        {isFailed ? (
-                            <AlertCircle className={cn('h-5 w-5', iconColor)} />
-                        ) : isCompleted ? (
-                            <Check className={cn('h-5 w-5', iconColor)} />
-                        ) : (
+            {/* ── Inline card for all agent states ── */}
+            {isWorking && (
+                <Card className={cn(borderColor, bgColor, 'overflow-hidden')}>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-base">
                             <Bot className={cn('h-5 w-5', iconColor)} />
-                        )}
-                        {isFailed ? 'Agent Failed' : isCompleted ? 'Agent Completed' : 'Agent Working'}
-                        {isWorking && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-blue-500" />}
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                    <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                            {isWorking && (
-                                <p className="text-muted-foreground text-sm">
-                                    Step {currentStep}/{totalSteps}: {latestStepLabel}
-                                </p>
-                            )}
-                            {isCompleted && (
-                                <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                                    PO sent to supplier successfully
-                                </p>
-                            )}
-                            {isFailed && error && (
-                                <p className="truncate text-sm text-red-600 dark:text-red-400">{error}</p>
-                            )}
-                        </div>
-                        <div className="ml-3 flex shrink-0 gap-2">
-                            {isFailed && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-1 text-xs"
-                                    onClick={() =>
-                                        router.post(
-                                            `/agent/task/${taskId}/retry`,
-                                            {},
-                                            { preserveScroll: true },
-                                        )
-                                    }
-                                >
-                                    <RotateCcw className="h-3 w-3" />
-                                    Retry
-                                </Button>
-                            )}
+                            Agent Working
+                            <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-blue-500" />
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                        <div className="flex items-center justify-between">
+                            <p className="text-muted-foreground text-sm">
+                                Step {currentStep}/{totalSteps}: {latestStepLabel}
+                            </p>
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="gap-1.5 text-xs"
+                                className="ml-3 gap-1.5 text-xs"
                                 onClick={() => setSheetOpen(true)}
                             >
-                                <Maximize2 className="h-3 w-3" />
-                                {isCompleted || isFailed ? 'View Details' : 'Live View'}
+                                <Monitor className="h-3 w-3" />
+                                Live View
                             </Button>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* ── Sheet: Vertical Message Stream (View 1) ── */}
             <Sheet open={sheetOpen} onOpenChange={handleSheetChange}>
@@ -801,7 +777,9 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
             </Dialog>
         </>
     );
-}
+});
+
+export default AgentActivityFeed;
 
 /* ──────────────────────────────────────
    ThinkingBubble — violet reasoning bubble
