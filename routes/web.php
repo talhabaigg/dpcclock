@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentTaskController;
 use App\Http\Controllers\AllowanceTypeController;
 use App\Http\Controllers\BidAreaController;
 use App\Http\Controllers\CalendarController;
@@ -274,6 +275,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:requisitions.view')->group(function () {
         Route::get('/requisition/{id}/compare', [PurchasingController::class, 'getComparison'])->name('requisition.compare');
         Route::post('/requisition/{id}/compare/refresh', [PurchasingController::class, 'refreshComparison'])->name('requisition.compare.refresh');
+    });
+
+    // ============================================
+    // AGENT TASK ROUTES
+    // ============================================
+    Route::middleware('permission:requisitions.approve-pricing')->group(function () {
+        Route::post('/agent/task/{id}/confirm', [AgentTaskController::class, 'confirm'])->name('agent.task.confirm');
+        Route::post('/agent/task/{id}/cancel', [AgentTaskController::class, 'cancel'])->name('agent.task.cancel');
+        Route::post('/agent/task/{id}/retry', [AgentTaskController::class, 'retry'])->name('agent.task.retry');
+        Route::get('/agent/task/{id}/screenshots', [AgentTaskController::class, 'screenshots'])->name('agent.task.screenshots');
+        Route::get('/agent/task/{id}/progress', [AgentTaskController::class, 'progress'])->name('agent.task.progress');
     });
 
     // ============================================

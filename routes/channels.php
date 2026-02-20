@@ -19,3 +19,8 @@ Broadcast::channel('drawing-sets.{projectId}', function () {
 Broadcast::channel('premier-sync', function () {
     return true;
 });
+
+// Public channel for agent task updates
+Broadcast::channel('agent-tasks', function () {
+    return true;
+});

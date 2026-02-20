@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useInitials } from '@/hooks/use-initials';
 import { Link } from '@inertiajs/react';
 import { CircleCheck, EllipsisVertical, TruckIcon } from 'lucide-react';
+import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
 import AddNoteButton from './addNoteButton';
 import LatestNoteButton from './latestNoteButton';
 import { Requisition } from './types';
@@ -77,7 +78,10 @@ const RequisitionCard = ({ requisition }: RequisitionCardProps) => {
 
                 {/* Footer: Actions */}
                 <div className="dark:border-border dark:bg-muted/30 flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-3 py-2 sm:py-1.5">
-                    <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>{statusConfig.text}</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-medium capitalize sm:text-[11px] ${statusConfig.color}`}>{statusConfig.text}</span>
+                        <AgentStatusBadge agentStatus={requisition.agent_status} />
+                    </div>
                     <div
                         className="flex items-center gap-1 sm:gap-0.5"
                         onClick={(e) => {

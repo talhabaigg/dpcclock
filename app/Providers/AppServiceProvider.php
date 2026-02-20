@@ -7,6 +7,8 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
+use App\Models\Requisition;
+use App\Observers\RequisitionObserver;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
                 'verify' => false,
             ]);
         }
+
+        Requisition::observe(RequisitionObserver::class);
 
         // Register queue event listeners for real-time broadcasting
         Event::listen(JobProcessing::class, [BroadcastQueueJobEvents::class, 'handleJobProcessing']);

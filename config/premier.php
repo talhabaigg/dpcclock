@@ -40,4 +40,12 @@ return [
         'timeout' => env('PREMIER_JOB_TIMEOUT', 600), // 10 minutes
         'batch_size' => env('PREMIER_JOB_BATCH_SIZE', 1000),
     ],
+
+    'web' => [
+        'url' => env('PREMIER_WEB_URL'),
+        'client_id' => env('PREMIER_WEB_CLIENT_ID', '324204'),
+        'username' => env('PREMIER_WEB_USERNAME'),
+        'password' => env('PREMIER_WEB_PASSWORD'),
+        'dry_run' => env('PREMIER_AGENT_DRY_RUN', false),
+    ],
 ];

@@ -4,6 +4,7 @@ export interface Requisition {
     supplier: { name: string; code: string };
     location: { name: string } | null;
     status: string;
+    agent_status: string | null;
     po_number: string | null;
     is_template: boolean;
     order_reference: string | null;

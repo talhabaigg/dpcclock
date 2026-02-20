@@ -20,6 +20,7 @@ class Requisition extends Model
         'requested_by',
         'deliver_to',
         'status',
+        'agent_status',
         'is_template',
         'order_reference',
         'premier_po_id',
@@ -37,15 +38,20 @@ class Requisition extends Model
     protected static function booted()
     {
         static::creating(function ($requisition) {
-            // Get the last requisition number, if any
-            $requisition->created_by = auth()->id();
+            if (auth()->check()) {
+                $requisition->created_by = auth()->id();
+            }
         });
 
         static::updating(function ($requisition) {
-            $requisition->updated_by = auth()->id();
+            if (auth()->check()) {
+                $requisition->updated_by = auth()->id();
+            }
         });
         static::deleting(function ($requisition) {
-            $requisition->deleted_by = auth()->id();
+            if (auth()->check()) {
+                $requisition->deleted_by = auth()->id();
+            }
         });
         static::restoring(function ($requisition) {
             $requisition->deleted_by = null;
@@ -98,5 +104,17 @@ class Requisition extends Model
     public function notes()
     {
         return $this->hasMany(RequisitionNote::class);
+    }
+
+    public function agentTasks()
+    {
+        return $this->hasMany(AgentTask::class);
+    }
+
+    public function activeAgentTask()
+    {
+        return $this->hasOne(AgentTask::class)
+            ->whereNotIn('status', ['cancelled'])
+            ->latest();
     }
 }

@@ -287,7 +287,7 @@ class PurchasingController extends Controller
 
     public function show($id)
     {
-        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator', 'submitter', 'processor')->withSum('lineItems', 'total_cost')->findOrFail($id);
+        $requisition = Requisition::with('supplier', 'lineItems', 'location', 'creator', 'submitter', 'processor', 'activeAgentTask')->withSum('lineItems', 'total_cost')->findOrFail($id);
         $requisitionItemIds = $requisition->lineItems()->pluck('id');
         $activities = Activity::query()
             ->with('causer')

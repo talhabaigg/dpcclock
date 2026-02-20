@@ -10,7 +10,7 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertCircleIcon,
     ArrowUpDown,
@@ -44,6 +44,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import AgentActivityFeed from '@/components/agent-chat/AgentActivityFeed';
+import AgentConfirmationCard from '@/components/agent-chat/AgentConfirmationCard';
+import AgentScreenshotsGallery from '@/components/agent-chat/AgentScreenshotsGallery';
+import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
 import ComparisonTab from './show-partials/ComparisonTab';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -66,6 +70,13 @@ export default function RequisitionShow() {
             date_required: string;
             order_reference: string;
             status: string;
+            agent_status: string | null;
+            active_agent_task: {
+                id: number;
+                type: string;
+                status: string;
+                screenshots: string[] | null;
+            } | null;
             premier_po_id: string | null;
             submitted_at: string | null;
             processed_at: string | null;
@@ -274,6 +285,23 @@ export default function RequisitionShow() {
         }
     }, []);
 
+    // Listen for agent task updates via Echo
+    // Step events are handled by AgentActivityFeed — only reload on status changes
+    useEffect(() => {
+        if (!requisition.agent_status) return;
+
+        const channel = (window as any).Echo?.channel('agent-tasks');
+        channel?.listen('.agent.task.updated', (data: any) => {
+            if (data.requisition_id === requisition.id && !data.step) {
+                router.reload({ only: ['requisition'] });
+            }
+        });
+
+        return () => {
+            (window as any).Echo?.leaveChannel('agent-tasks');
+        };
+    }, [requisition.id, requisition.agent_status]);
+
     // Format datetime for display
     const formatDateTime = (dateString: string | null) => {
         if (!dateString) return null;
@@ -330,6 +358,7 @@ export default function RequisitionShow() {
                                     <div className={cn('mr-1.5 h-1.5 w-1.5 rounded-full', statusConfig.bg)} />
                                     {statusConfig.text}
                                 </Badge>
+                                <AgentStatusBadge agentStatus={requisition.agent_status} />
                             </div>
 
                             <div className="flex items-center gap-2 text-sm sm:gap-4">
@@ -597,6 +626,31 @@ export default function RequisitionShow() {
                             <AlertTitle>Errors found in PO</AlertTitle>
                             <AlertDescription>{flash.error}</AlertDescription>
                         </Alert>
+                    </div>
+                )}
+
+                {/* Agent Confirmation Card */}
+                {requisition.agent_status === 'awaiting_confirmation' && requisition.active_agent_task && (
+                    <div className="px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-0">
+                        <AgentConfirmationCard
+                            taskId={requisition.active_agent_task.id}
+                            poNumber={'PO' + (requisition.po_number || '')}
+                            supplierName={requisition.supplier?.name || 'Unknown'}
+                            locationName={requisition.location?.name || 'Unknown'}
+                            totalCost={totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        />
+                    </div>
+                )}
+
+                {/* Agent Activity Feed — real-time chat for sending, completed, and failed */}
+                {requisition.active_agent_task &&
+                    ['sending', 'completed', 'failed'].includes(requisition.agent_status || '') && (
+                    <div className="px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-0">
+                        <AgentActivityFeed
+                            taskId={requisition.active_agent_task.id}
+                            requisitionId={requisition.id}
+                            errorMessage={requisition.active_agent_task.context?.last_error}
+                        />
                     </div>
                 )}
 
