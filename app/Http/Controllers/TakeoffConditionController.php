@@ -125,6 +125,7 @@ class TakeoffConditionController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'type' => 'sometimes|required|string|in:linear,area,count',
             'condition_type_id' => 'nullable|integer|exists:condition_types,id',
             'color' => 'sometimes|required|string|regex:/^#[0-9a-fA-F]{6}$/',
             'pattern' => 'nullable|string|in:solid,dashed,dotted,dashdot',

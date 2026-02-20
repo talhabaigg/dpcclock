@@ -352,6 +352,7 @@ class ClockController extends Controller
             'employeeId' => 'required',
             'kioskId' => 'required',
             'entries' => 'required|array',
+            'safety_concern' => 'required|boolean',
         ]);
         // dd($validated);
         // Get employee details
@@ -393,6 +394,7 @@ class ClockController extends Controller
                     $clock->insulation_allowance = $entry['insulation_allowance'] ?? false;
                     $clock->setout_allowance = $entry['setout_allowance'] ?? false;
                     $clock->laser_allowance = $entry['laser_allowance'] ?? false;
+                    $clock->safety_concern = $validated['safety_concern'];
                     $clock->save();
 
                 }

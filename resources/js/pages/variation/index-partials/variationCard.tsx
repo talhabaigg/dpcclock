@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Link, router } from '@inertiajs/react';
-import { Copy, Download, EllipsisVertical, MapPin, Pencil, Send, Trash } from 'lucide-react';
+import { Copy, Download, EllipsisVertical, Eye, MapPin, Pencil, Send, Trash } from 'lucide-react';
 
 export interface Variation {
     id: number;
@@ -59,7 +59,7 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
     const margin = revenue - cost;
 
     return (
-        <Link href={`/variations/${variation.id}/edit`} className="block max-w-full min-w-0">
+        <Link href={`/variations/${variation.id}/show`} className="block max-w-full min-w-0">
             <Card className="group relative gap-0 overflow-hidden py-0 transition-all duration-150 hover:shadow-md hover:ring-1 hover:ring-ring/20 active:scale-[0.99]">
                 <div className="space-y-2 px-3 py-3">
                     {/* Row 1: CO Number + Status badge */}
@@ -125,6 +125,13 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuItem
+                                        className="gap-2"
+                                        onClick={() => router.visit(`/variations/${variation.id}/show`)}
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                        View
+                                    </DropdownMenuItem>
                                     <a href={`/variations/${variation.id}/download/excel`}>
                                         <DropdownMenuItem className="gap-2">
                                             <Download className="h-4 w-4" />

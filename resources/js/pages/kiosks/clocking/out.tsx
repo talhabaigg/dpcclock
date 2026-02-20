@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { Clock, Minus, Plus } from 'lucide-react';
+import { AlertTriangle, Clock, Minus, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
 import AllowanceToggle from '../components/allowanceToggle';
@@ -50,7 +50,7 @@ export default function Clockout() {
         adminMode: boolean;
     }>().props;
 
-    const { setData, post, processing } = useForm<{
+    const { setData, data, post, processing } = useForm<{
         kioskId: number;
         employeeId: number;
         entries: {
@@ -62,12 +62,15 @@ export default function Clockout() {
             insulation_allowance: boolean;
             setout_allowance: boolean;
         }[];
+        safety_concern: boolean;
     }>({
         kioskId: kiosk.id,
         employeeId: employee.id,
         entries: [],
+        safety_concern: false,
     });
 
+    const [safetyConfirmed, setSafetyConfirmed] = useState(false);
     const [hoursWorked, setHoursWorked] = useState(0);
     const [taskAllocations, setTaskAllocations] = useState<TaskAllocation[]>([
         {
@@ -183,7 +186,7 @@ export default function Clockout() {
             task.hours <= 0 ||
             hoursAllocated !== hoursWorked
         );
-    });
+    }) || !safetyConfirmed;
     const toggleAllowance = (index: number, type: 'insulation' | 'setout') => {
         setTaskAllocations((prev) => {
             return prev.map((task, i) => {
@@ -456,7 +459,7 @@ export default function Clockout() {
                 </div>
 
                 {/* Footer Section */}
-                <div className="bg-muted/30 rounded-2xl border-2 p-4 sm:p-6">
+                <div className="bg-muted/30 space-y-4 rounded-2xl border-2 p-4 sm:p-6">
                     <div className={cn('flex flex-wrap items-center gap-4', kiosk.laser_allowance_enabled ? 'justify-between' : 'justify-end')}>
                         {/* Laser Allowance */}
                         {kiosk.laser_allowance_enabled && (
@@ -511,6 +514,53 @@ export default function Clockout() {
                                 <span className="text-muted-foreground ml-1 text-sm font-medium">hours</span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Safety Declaration */}
+                    <div>
+                        <p className="text-foreground mb-2 text-sm font-semibold">
+                            Do you have any injuries or safety concerns to report from today?
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSafetyConfirmed(true);
+                                    setData('safety_concern', true);
+                                }}
+                                className={cn(
+                                    'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
+                                    'touch-manipulation active:scale-[0.98]',
+                                    safetyConfirmed && data.safety_concern
+                                        ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                                        : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+                                )}
+                            >
+                                Yes
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSafetyConfirmed(true);
+                                    setData('safety_concern', false);
+                                }}
+                                className={cn(
+                                    'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
+                                    'touch-manipulation active:scale-[0.98]',
+                                    safetyConfirmed && !data.safety_concern
+                                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+                                        : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+                                )}
+                            >
+                                No
+                            </button>
+                        </div>
+                        {safetyConfirmed && data.safety_concern && (
+                            <p className="mt-2 text-xs leading-relaxed text-amber-700">
+                                <AlertTriangle className="mb-0.5 inline h-3.5 w-3.5" />{' '}
+                                You must notify your foreman and/or HSR immediately and complete an incident / injury report.
+                            </p>
+                        )}
                     </div>
                 </div>
 

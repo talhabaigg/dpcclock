@@ -391,7 +391,7 @@ export function ConditionManager({
                 unit_rate: cc.unit_rate.toString(),
             }))
         );
-        setFormLabourSource(c.labour_rate_source);
+        setFormLabourSource(c.labour_rate_source || 'manual');
         setFormManualRate(c.manual_labour_rate?.toString() || '');
         setFormTemplateId(c.pay_rate_template_id?.toString() || '');
         setFormProductionRate(c.production_rate?.toString() || '');
@@ -506,7 +506,13 @@ export function ConditionManager({
                 body: JSON.stringify(payload),
             });
 
-            if (!response.ok) throw new Error('Failed to save');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                const messages = errorData?.errors
+                    ? Object.values(errorData.errors).flat().join(', ')
+                    : errorData?.message || `Server error (${response.status})`;
+                throw new Error(messages);
+            }
             const saved = await response.json();
 
             if (isUpdating) {
@@ -519,8 +525,8 @@ export function ConditionManager({
             setCreating(false);
             setEditing(false);
             toast.success(isUpdating ? 'Condition updated.' : 'Condition created.');
-        } catch {
-            toast.error('Failed to save condition.');
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Failed to save condition.');
         } finally {
             setSaving(false);
         }

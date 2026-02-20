@@ -168,11 +168,14 @@ class VariationController extends Controller
             ->orderBy('name')
             ->get();
 
+        $changeTypes = Variation::distinct()->whereNotNull('type')->pluck('type')->filter()->values()->toArray();
+
         return Inertia::render('variation/create', [
             'locations' => $locations,
             'costCodes' => $costCodes,
             'conditions' => $conditions,
             'selectedLocationId' => request()->query('location_id'),
+            'changeTypes' => $changeTypes,
         ]);
     }
 
@@ -200,11 +203,29 @@ class VariationController extends Controller
             ->orderBy('name')
             ->get();
 
+        $changeTypes = Variation::distinct()->whereNotNull('type')->pluck('type')->filter()->values()->toArray();
+
         return Inertia::render('variation/create', [
             'locations' => $locations,
             'costCodes' => $costCodes,
             'variation' => $variation,
             'conditions' => $conditions,
+            'changeTypes' => $changeTypes,
+        ]);
+    }
+
+    public function show(Variation $variation)
+    {
+        $variation->load(['lineItems', 'location', 'pricingItems.condition.conditionType', 'drawing']);
+
+        return Inertia::render('variation/show', [
+            'variation' => $variation,
+            'totals' => [
+                'cost' => $variation->lineItems->sum('total_cost'),
+                'revenue' => $variation->lineItems->sum('revenue'),
+                'pricing_cost' => $variation->pricingItems->sum('total_cost'),
+                'pricing_sell' => $variation->pricingItems->sum('sell_total'),
+            ],
         ]);
     }
 
@@ -235,7 +256,7 @@ class VariationController extends Controller
             'co_number' => $validated['co_number'],
             'description' => $validated['description'],
             'client_notes' => $validated['client_notes'] ?? null,
-
+            'created_by' => auth()->user()->name ?? null,
             'co_date' => $validated['date'],
         ]);
 
@@ -458,12 +479,19 @@ class VariationController extends Controller
             $variation->save();
             Log::info('Variation sent to Premier successfully.', $response->json());
 
+            if (request()->wantsJson()) {
+                return response()->json(['message' => 'Variation sent to Premier successfully.']);
+            }
+
             return redirect()->back()->with('success', 'Variation sent to Premier successfully.');
         } else {
             Log::error('Failed to send variation to Premier.', [
-                'response' => $response->
-                    json(),
+                'response' => $response->json(),
             ]);
+
+            if (request()->wantsJson()) {
+                return response()->json(['error' => 'Failed to send variation to Premier.'], 500);
+            }
 
             return redirect()->back()->with('error', 'Failed to send variation to Premier.');
         }
@@ -504,6 +532,7 @@ class VariationController extends Controller
             'type' => $validated['type'] ?? 'extra',
             'co_number' => $validated['co_number'],
             'description' => $validated['description'],
+            'created_by' => auth()->user()->name ?? null,
             'co_date' => now()->toDateString(),
             'status' => 'pending',
         ]);
@@ -630,6 +659,7 @@ class VariationController extends Controller
             // Manual entry fields (used when no condition)
             'labour_cost' => 'nullable|numeric|min:0',
             'material_cost' => 'nullable|numeric|min:0',
+            'sell_rate' => 'nullable|numeric|min:0',
         ]);
 
         $labourCost = 0;
@@ -655,6 +685,9 @@ class VariationController extends Controller
         $totalCost = round($labourCost + $materialCost, 2);
         $maxSort = $variation->pricingItems()->max('sort_order') ?? 0;
 
+        $sellRate = isset($validated['sell_rate']) ? round((float) $validated['sell_rate'], 2) : null;
+        $sellTotal = $sellRate !== null ? round($validated['qty'] * $sellRate, 2) : null;
+
         $item = $variation->pricingItems()->create([
             'takeoff_condition_id' => $conditionId,
             'description' => $validated['description'],
@@ -663,6 +696,8 @@ class VariationController extends Controller
             'labour_cost' => $labourCost,
             'material_cost' => $materialCost,
             'total_cost' => $totalCost,
+            'sell_rate' => $sellRate,
+            'sell_total' => $sellTotal,
             'sort_order' => $maxSort + 1,
         ]);
 
@@ -793,13 +828,18 @@ class VariationController extends Controller
 
     /**
      * Render printable client quote.
+     * Accepts optional ?uom_m2[]=id query params to display specific items in m2 instead of LM.
      */
-    public function clientQuote(Variation $variation)
+    public function clientQuote(Request $request, Variation $variation)
     {
         $variation->load('pricingItems.condition.conditionType', 'location');
 
+        // IDs of pricing items the user toggled to m2 display
+        $uomM2Ids = collect($request->input('uom_m2', []))->map(fn ($v) => (int) $v)->all();
+
         return view('variations.client-quote', [
             'variation' => $variation,
+            'uomM2Ids' => $uomM2Ids,
         ]);
     }
 }
