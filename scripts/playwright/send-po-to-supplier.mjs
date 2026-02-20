@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { chromium } from 'playwright';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 

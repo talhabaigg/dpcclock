@@ -15,7 +15,7 @@ interface AgentScreenshotsGalleryProps {
 export default function AgentScreenshotsGallery({ taskId }: AgentScreenshotsGalleryProps) {
     const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedScreenshot, setSelectedScreenshot] = useState<Screenshot | null>(null);
+    const [, setSelectedScreenshot] = useState<Screenshot | null>(null);
 
     useEffect(() => {
         fetch(`/agent/task/${taskId}/screenshots`)

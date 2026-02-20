@@ -46,7 +46,6 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import AgentActivityFeed from '@/components/agent-chat/AgentActivityFeed';
 import AgentConfirmationCard from '@/components/agent-chat/AgentConfirmationCard';
-import AgentScreenshotsGallery from '@/components/agent-chat/AgentScreenshotsGallery';
 import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
 import ComparisonTab from './show-partials/ComparisonTab';
 
