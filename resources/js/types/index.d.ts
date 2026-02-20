@@ -16,13 +16,12 @@ export interface NavGroup {
 }
 
 export interface NavItem {
-    permission: any;
-    permission(permission: any): unknown;
     title: string;
     href: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
     adminOnly?: boolean;
+    permission?: string;
 }
 
 export interface SharedData {

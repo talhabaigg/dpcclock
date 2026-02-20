@@ -139,30 +139,13 @@ const documents = [
         name: 'Data',
         icon: Database,
         permission: 'materials.view',
+        groupByAlpha: true,
         subItems: [
             {
-                name: 'Material',
-                url: '/material-items/all',
-                icon: Pickaxe,
+                name: 'Allowance Types',
+                url: '/allowance-types',
+                icon: DollarSign,
                 permission: 'materials.view',
-            },
-            {
-                name: 'Update Pricing',
-                url: '/update-pricing',
-                icon: RefreshCw,
-                permission: 'materials.view',
-            },
-            {
-                name: 'Suppliers',
-                url: '/suppliers',
-                icon: Box,
-                permission: 'suppliers.view',
-            },
-            {
-                name: 'Supplier Categories',
-                url: '/supplier-categories',
-                icon: FolderTree,
-                permission: 'suppliers.view',
             },
             {
                 name: 'Cost Codes',
@@ -177,15 +160,33 @@ const documents = [
                 permission: 'costtypes.view',
             },
             {
+                name: 'Material',
+                url: '/material-items/all',
+                icon: Pickaxe,
+                permission: 'materials.view',
+            },
+            {
                 name: 'Pay Rate Templates',
                 url: '/pay-rate-templates',
                 icon: DollarSign,
                 permission: 'materials.view',
             },
             {
-                name: 'Allowance Types',
-                url: '/allowance-types',
-                icon: DollarSign,
+                name: 'Supplier Categories',
+                url: '/supplier-categories',
+                icon: FolderTree,
+                permission: 'suppliers.view',
+            },
+            {
+                name: 'Suppliers',
+                url: '/suppliers',
+                icon: Box,
+                permission: 'suppliers.view',
+            },
+            {
+                name: 'Update Pricing',
+                url: '/update-pricing',
+                icon: RefreshCw,
                 permission: 'materials.view',
             },
         ],
@@ -301,10 +302,10 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={filteredMainNavItems} />
-                <NavDocuments items={filteredTimesheets} />
-                <NavDocuments items={filteredDocuments} />
-                <NavDocuments items={filteredReports} />
-                <NavDocuments items={filteredAdmin} />
+                <NavDocuments items={filteredTimesheets} permissions={permissions} />
+                <NavDocuments items={filteredDocuments} permissions={permissions} />
+                <NavDocuments items={filteredReports} permissions={permissions} />
+                <NavDocuments items={filteredAdmin} permissions={permissions} />
             </SidebarContent>
 
             <SidebarFooter>
