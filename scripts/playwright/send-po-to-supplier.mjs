@@ -119,6 +119,23 @@ function reportThinking(text) {
     writeFileSync(progressFile, JSON.stringify(progress));
 }
 
+function reportScreenshot(screenshotFile, actionDesc) {
+    const progressFile = `${screenshotDir}/progress.json`;
+    let progress = { total_steps: TOTAL_STEPS, events: [] };
+    try {
+        const existing = JSON.parse(readFileSync(progressFile, 'utf-8'));
+        if (existing.events) progress = existing;
+    } catch { /* first write */ }
+
+    progress.events.push({
+        type: 'screenshot',
+        screenshot: screenshotFile,
+        action: actionDesc || '',
+        timestamp: new Date().toISOString(),
+    });
+    writeFileSync(progressFile, JSON.stringify(progress));
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -591,6 +608,9 @@ async function runCUALoop(page) {
             // Take screenshot after action
             const screenshot = await takeScreenshot(page, `step-${iteration}`);
             screenshots.push(screenshot.filename);
+
+            // Report every screenshot for real-time streaming to UI
+            reportScreenshot(screenshot.filename, actionDesc);
 
             // Stuck detection
             const hash = screenshotHash(screenshot.base64);

@@ -75,6 +75,7 @@ export default function RequisitionShow() {
                 type: string;
                 status: string;
                 screenshots: string[] | null;
+                context?: Record<string, any> | null;
             } | null;
             premier_po_id: string | null;
             submitted_at: string | null;

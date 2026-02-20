@@ -64,6 +64,11 @@ class AgentTaskUpdated implements ShouldBroadcastNow
             $data['step_phase'] = $this->stepPhase;
         }
 
+        // Screenshot-only broadcast (intermediate CUA screenshots, no step)
+        if ($this->screenshotUrl && $this->step === null) {
+            $data['screenshot_url'] = $this->screenshotUrl;
+        }
+
         if ($this->errorMessage) {
             $data['error_message'] = $this->errorMessage;
         }

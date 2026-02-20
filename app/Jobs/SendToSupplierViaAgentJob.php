@@ -199,6 +199,23 @@ class SendToSupplierViaAgentJob implements ShouldQueue
                 continue;
             }
 
+            // Intermediate screenshot events — upload and broadcast for live streaming
+            if (($event['type'] ?? '') === 'screenshot') {
+                $screenshotFile = $screenshotDir.'/'.$event['screenshot'];
+                if (! empty($event['screenshot']) && file_exists($screenshotFile)) {
+                    $s3Path = "agent-screenshots/{$requisition->id}/{$event['screenshot']}";
+                    Storage::disk('s3')->put($s3Path, file_get_contents($screenshotFile));
+                    $url = Storage::disk('s3')->temporaryUrl($s3Path, now()->addHour());
+
+                    event(new AgentTaskUpdated(
+                        $task,
+                        screenshotUrl: $url,
+                    ));
+                }
+
+                continue;
+            }
+
             $screenshotUrl = null;
             if (($event['phase'] ?? 'completed') === 'completed' && ! empty($event['screenshot'])) {
                 $screenshotFile = $screenshotDir.'/'.$event['screenshot'];

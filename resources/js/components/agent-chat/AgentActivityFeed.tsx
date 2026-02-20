@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { AlertCircle, Bot, BrainCircuit, Check, Loader2, Maximize2, Monitor, RotateCcw } from 'lucide-react';
+import { AlertCircle, Bot, BrainCircuit, Check, Images, Loader2, Maximize2, Monitor, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AgentStepProgress from './AgentStepProgress';
 import AgentTerminal from './AgentTerminal';
@@ -47,6 +47,10 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
     const [fullscreenOpen, setFullscreenOpen] = useState(false);
     const [selectedStep, setSelectedStep] = useState<number | null>(null);
     const [showGlow, setShowGlow] = useState(false);
+    const [liveScreenshotUrl, setLiveScreenshotUrl] = useState<string | null>(null);
+    const [allScreenshots, setAllScreenshots] = useState<{ url: string; label: string }[]>([]);
+    const [galleryOpen, setGalleryOpen] = useState(false);
+    const [gallerySelected, setGallerySelected] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
     const glowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,6 +63,8 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
         setError(null);
         setSelectedStep(null);
         setShowGlow(false);
+        setLiveScreenshotUrl(null);
+        setAllScreenshots([]);
     }, [taskId]);
 
     // Fetch progress from server (fallback for page loads mid-run)
@@ -140,6 +146,26 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
         fetchProgress(taskId);
     }, [taskId]);
 
+    // Fetch all screenshots for gallery (completed/failed tasks)
+    const fetchAllScreenshots = () => {
+        setGallerySelected(0);
+        if (allScreenshots.length > 0) {
+            setGalleryOpen(true);
+            return;
+        }
+        fetch(`/agent/task/${taskId}/screenshots`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.screenshots?.length) {
+                    setAllScreenshots(
+                        data.screenshots.map((s: any) => ({ url: s.url, label: s.label })),
+                    );
+                }
+                setGalleryOpen(true);
+            })
+            .catch(() => {});
+    };
+
     // Auto-scroll sheet messages
     useEffect(() => {
         if (scrollRef.current) {
@@ -153,6 +179,27 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
 
         const handler = (data: any) => {
             if (data.requisition_id !== requisitionId) return;
+
+            // Screenshot-only update (intermediate CUA screenshot, no step or thinking)
+            if (data.screenshot_url && !data.step && !data.thinking) {
+                setLiveScreenshotUrl(data.screenshot_url);
+                setTimeline((prev) => {
+                    // Replace last screenshot entry if consecutive, to avoid flooding
+                    const last = prev[prev.length - 1];
+                    const entry: TimelineEntry = {
+                        type: 'step' as const,
+                        timestamp: data.timestamp,
+                        phase: 'completed' as const,
+                        label: 'Browser action',
+                        screenshotUrl: data.screenshot_url,
+                    };
+                    if (last?.type === 'step' && last.label === 'Browser action') {
+                        return [...prev.slice(0, -1), entry];
+                    }
+                    return [...prev, entry];
+                });
+                return;
+            }
 
             // Thinking update (no step) — collapse consecutive thinking (replace last if also thinking)
             if (data.thinking && !data.step) {
@@ -283,9 +330,22 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
             );
             if (found) return found;
         }
+        // Use latest live screenshot if available, otherwise latest step screenshot
         const withScreenshots = steps.filter((s) => s.screenshotUrl && s.phase === 'completed');
-        return withScreenshots[withScreenshots.length - 1] || null;
-    }, [steps, selectedStep]);
+        const latestStep = withScreenshots[withScreenshots.length - 1] || null;
+
+        if (liveScreenshotUrl && isWorking) {
+            return {
+                step: latestStep?.step || 0,
+                phase: 'completed' as const,
+                totalSteps: totalSteps,
+                label: latestStep?.label || 'Agent working...',
+                screenshotUrl: liveScreenshotUrl,
+                timestamp: new Date().toISOString(),
+            };
+        }
+        return latestStep;
+    }, [steps, selectedStep, liveScreenshotUrl, isWorking, totalSteps]);
 
     const handleStepClick = (stepNumber: number) => {
         setSelectedStep((prev) => (prev === stepNumber ? null : stepNumber));
@@ -446,15 +506,28 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
                                 </span>
                             )}
                         </div>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 text-xs"
-                            onClick={() => setFullscreenOpen(true)}
-                        >
-                            <Maximize2 className="h-3 w-3" />
-                            Fullscreen
-                        </Button>
+                        <div className="flex gap-1.5">
+                            {(isCompleted || isFailed) && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-xs"
+                                    onClick={fetchAllScreenshots}
+                                >
+                                    <Images className="h-3 w-3" />
+                                    All Screenshots
+                                </Button>
+                            )}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs"
+                                onClick={() => setFullscreenOpen(true)}
+                            >
+                                <Maximize2 className="h-3 w-3" />
+                                Fullscreen
+                            </Button>
+                        </div>
                     </SheetHeader>
 
                     {/* Message stream */}
@@ -664,6 +737,64 @@ export default function AgentActivityFeed({ taskId, requisitionId, errorMessage:
                             <p className="text-sm font-medium text-emerald-400">
                                 PO sent to supplier successfully
                             </p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* All Screenshots Gallery — PowerPoint-style: thumbnails left, preview right */}
+            <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
+                <DialogContent className="flex max-h-[90vh] min-w-full max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:min-w-[90vw]">
+                    <DialogHeader className="border-b px-5 py-3">
+                        <DialogTitle>All Screenshots</DialogTitle>
+                        <DialogDescription>
+                            {allScreenshots.length} screenshots captured during automation
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {allScreenshots.length === 0 ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+                        </div>
+                    ) : (
+                        <div className="flex min-h-0 flex-1">
+                            {/* Left — thumbnail strip */}
+                            <div className="flex w-48 shrink-0 flex-col overflow-y-auto border-r bg-slate-50 dark:bg-slate-900/50">
+                                {allScreenshots.map((shot, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setGallerySelected(i)}
+                                        className={cn(
+                                            'flex flex-col gap-1 border-b p-2 text-left transition-colors',
+                                            i === gallerySelected
+                                                ? 'bg-blue-50 ring-2 ring-inset ring-blue-500 dark:bg-blue-950/40'
+                                                : 'hover:bg-slate-100 dark:hover:bg-slate-800/60',
+                                        )}
+                                    >
+                                        <img
+                                            src={shot.url}
+                                            alt={shot.label}
+                                            className="aspect-video w-full rounded border object-cover"
+                                            loading="lazy"
+                                        />
+                                        <span className="text-muted-foreground truncate text-[10px]">
+                                            {i + 1}. {shot.label}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Right — large preview */}
+                            <div className="flex min-w-0 flex-1 flex-col items-center justify-center bg-slate-950 p-4">
+                                <img
+                                    src={allScreenshots[gallerySelected]?.url}
+                                    alt={allScreenshots[gallerySelected]?.label}
+                                    className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                                />
+                                <p className="mt-3 text-sm font-medium text-slate-300">
+                                    {gallerySelected + 1}/{allScreenshots.length} — {allScreenshots[gallerySelected]?.label}
+                                </p>
+                            </div>
                         </div>
                     )}
                 </DialogContent>
