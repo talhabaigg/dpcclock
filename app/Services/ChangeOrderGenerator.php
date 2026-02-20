@@ -145,7 +145,13 @@ class ChangeOrderGenerator
             $drawingMeasurementId,
         );
 
-        // Offset line numbers by existing count
+        // Remove existing lines for the same condition + measurement to prevent duplicates
+        $variation->lineItems()
+            ->where('takeoff_condition_id', $condition->id)
+            ->where('drawing_measurement_id', $drawingMeasurementId)
+            ->delete();
+
+        // Re-number all remaining lines, then append new ones
         $existingCount = $variation->lineItems()->count();
         foreach ($result['line_items'] as &$item) {
             $item['line_number'] += $existingCount;

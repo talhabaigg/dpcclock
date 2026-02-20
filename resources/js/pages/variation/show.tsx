@@ -101,7 +101,7 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 export default function VariationShow({ variation, totals }: Props) {
     const locked = isSentOrApproved(variation.status);
     const totalCost = Number(totals.cost) || 0;
-    const totalRevenue = Number(totals.revenue) || 0;
+    const totalRevenue = Number(totals.pricing_sell) || 0;
     const margin = totalRevenue - totalCost;
     const marginPercent = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
 

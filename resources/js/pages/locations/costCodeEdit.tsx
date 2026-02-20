@@ -82,7 +82,7 @@ export default function CostCodeEdit({
     const handlePrelimTypeChange = (id: number, value: string) => {
         setData(
             'costCodes',
-            data.costCodes.map((c) => (c.id === id ? { ...c, prelim_type: value } : c)),
+            data.costCodes.map((c) => (c.id === id ? { ...c, prelim_type: value === 'NONE' ? '' : value } : c)),
         );
     };
 
@@ -186,12 +186,13 @@ export default function CostCodeEdit({
                                                         <TableCell className="pr-3 sm:pr-6">
                                                             <Select
                                                                 onValueChange={(val) => handlePrelimTypeChange(code.id, val)}
-                                                                value={row?.prelim_type ?? ''}
+                                                                value={row?.prelim_type || 'NONE'}
                                                             >
                                                                 <SelectTrigger className="h-8 w-20 sm:w-24">
                                                                     <SelectValue placeholder="-" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
+                                                                    <SelectItem value="NONE">None</SelectItem>
                                                                     <SelectItem value="MAT">MAT</SelectItem>
                                                                     <SelectItem value="LAB">LAB</SelectItem>
                                                                 </SelectContent>
