@@ -243,6 +243,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:requisitions.view');
     Route::middleware('permission:requisitions.create')->group(function () {
         Route::get('/requisition/create', [PurchasingController::class, 'create'])->name('requisition.create');
+
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
         Route::get('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
     });

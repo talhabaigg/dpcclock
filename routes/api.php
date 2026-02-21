@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\SiteWalkController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
+
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -53,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/chat', [ChatController::class, 'handle'])->name('api.chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream']);
+
+
 
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
