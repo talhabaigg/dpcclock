@@ -1,5 +1,3 @@
-'use client';
-
 import { addDays, format, subDays } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
@@ -10,14 +8,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 
 export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (weekEndingDate: Date) => void; initialDate: Date }) {
-    // Initialize the date state with the initialWeekEnding prop
     const [date, setDate] = React.useState<Date | undefined>(initialDate);
 
     const handlePrevious = () => {
         if (date) {
             const newDate = subDays(date, 7);
             setDate(newDate);
-            onDateChange(newDate); // Emit the new date
+            onDateChange(newDate);
         }
     };
 
@@ -25,12 +22,12 @@ export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (w
         if (date) {
             const newDate = addDays(date, 7);
             setDate(newDate);
-            onDateChange(newDate); // Emit the new date
+            onDateChange(newDate);
         }
     };
 
     return (
-        <div className="flex max-w-96 min-w-96 flex-row items-center sm:max-w-[250px]">
+        <div className="flex w-full flex-row items-center sm:w-auto">
             <Button variant="outline" onClick={handlePrevious} className="rounded-r-none">
                 <ChevronLeft />
             </Button>
@@ -38,7 +35,7 @@ export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (w
                 <PopoverTrigger asChild>
                     <Button
                         variant={'outline'}
-                        className={cn('w-72 justify-start rounded-none text-left font-normal sm:w-[250px]', !date && 'text-muted-foreground')}
+                        className={cn('w-full min-w-0 flex-1 justify-start rounded-none text-left font-normal sm:w-[200px] sm:flex-none', !date && 'text-muted-foreground')}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {date ? format(date, 'PPP') : <span>Week ending date</span>}
@@ -49,8 +46,10 @@ export function DatePickerDemo({ onDateChange, initialDate }: { onDateChange: (w
                         mode="single"
                         selected={date}
                         onSelect={(newDate) => {
-                            setDate(newDate);
-                            onDateChange(newDate);
+                            if (newDate) {
+                                setDate(newDate);
+                                onDateChange(newDate);
+                            }
                         }}
                         initialFocus
                     />
