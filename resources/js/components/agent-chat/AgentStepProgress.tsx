@@ -33,7 +33,7 @@ export default function AgentStepProgress({
         ? 'bg-red-500'
         : isCompleted
           ? 'bg-emerald-500'
-          : 'bg-blue-500';
+          : 'bg-zinc-400';
 
     return (
         <div className="bg-slate-900 px-4 py-3">
@@ -74,15 +74,15 @@ export default function AgentStepProgress({
                                 className={cn(
                                     'flex h-[26px] w-[26px] items-center justify-center rounded-full border-2 transition-all sm:h-[30px] sm:w-[30px]',
                                     isDone && 'border-emerald-500 bg-emerald-500/20',
-                                    isCurrent && !isFailed && 'animate-pulse border-blue-400 bg-blue-500/20',
+                                    isCurrent && !isFailed && 'animate-pulse border-zinc-400 bg-zinc-500/20',
                                     isCurrent && isFailed && 'border-red-400 bg-red-500/20',
                                     isFutureStep && 'border-slate-600 bg-slate-800',
-                                    isSelected && 'ring-2 ring-blue-400 ring-offset-1 ring-offset-slate-900',
+                                    isSelected && 'ring-2 ring-zinc-400 ring-offset-1 ring-offset-slate-900',
                                 )}
                             >
                                 {isDone && <Check className="h-3 w-3 text-emerald-400 sm:h-3.5 sm:w-3.5" />}
                                 {isCurrent && !isFailed && (
-                                    <Loader2 className="h-3 w-3 animate-spin text-blue-400 sm:h-3.5 sm:w-3.5" />
+                                    <Loader2 className="h-3 w-3 animate-spin text-zinc-400 sm:h-3.5 sm:w-3.5" />
                                 )}
                                 {isCurrent && isFailed && (
                                     <AlertCircle className="h-3 w-3 text-red-400 sm:h-3.5 sm:w-3.5" />
@@ -95,7 +95,7 @@ export default function AgentStepProgress({
                                 className={cn(
                                     'hidden text-[10px] font-medium sm:block',
                                     isDone && 'text-emerald-400/70',
-                                    isCurrent && !isFailed && 'text-blue-400',
+                                    isCurrent && !isFailed && 'text-zinc-400',
                                     isCurrent && isFailed && 'text-red-400',
                                     isFutureStep && 'text-slate-600',
                                 )}

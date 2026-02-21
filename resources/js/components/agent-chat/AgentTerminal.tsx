@@ -51,9 +51,9 @@ export default function AgentTerminal({ entries, isWorking }: AgentTerminalProps
 
                     if (entry.type === 'thinking') {
                         return (
-                            <div key={`t-${i}`} className="flex gap-1.5 text-violet-400/70">
+                            <div key={`t-${i}`} className="flex gap-1.5 text-zinc-500">
                                 <span className="shrink-0 text-slate-600">{time}</span>
-                                <span className="shrink-0 text-violet-500/50">$</span>
+                                <span className="shrink-0 text-zinc-600">$</span>
                                 <span className="min-w-0 truncate italic">{entry.text}</span>
                             </div>
                         );
@@ -65,7 +65,7 @@ export default function AgentTerminal({ entries, isWorking }: AgentTerminalProps
                             key={`s-${entry.step}-${entry.phase}`}
                             className={cn(
                                 'flex gap-1.5',
-                                isDone ? 'text-emerald-400/80' : 'text-blue-400/80',
+                                isDone ? 'text-emerald-400/80' : 'text-zinc-400',
                             )}
                         >
                             <span className="shrink-0 text-slate-600">{time}</span>
@@ -76,7 +76,7 @@ export default function AgentTerminal({ entries, isWorking }: AgentTerminalProps
                             <span
                                 className={cn(
                                     'ml-auto shrink-0',
-                                    isDone ? 'text-emerald-500' : 'text-blue-400',
+                                    isDone ? 'text-emerald-500' : 'text-zinc-500',
                                 )}
                             >
                                 {isDone ? '✓' : '⟳'}

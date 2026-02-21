@@ -36,6 +36,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SmartPricingController;
 use App\Http\Controllers\SupplierCategoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimesheetEventController;
@@ -260,9 +261,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/api-send', [PurchasingController::class, 'sendApi'])->name('requisition.sendapi');
         Route::get('/requisition/{id}/refresh-pricing', [PurchasingController::class, 'refreshPricing'])->name('requisition.refreshPricing');
         Route::get('/location/{locationId}/purchase-orders/sync-premier', [PurchasingController::class, 'getPurchaseOrdersForLocation'])->name('location.purchase-orders');
+
+        // Smart Pricing (office side)
+        Route::post('/requisition/{id}/smart-pricing-apply', [SmartPricingController::class, 'apply'])->name('requisition.smartPricingApply');
     });
     Route::get('/requisition/{id}/send-to-office', [PurchasingController::class, 'sendToOffice'])->name('requisition.sendToOffice')
         ->middleware('permission:requisitions.create');
+
+    // Smart Pricing (field worker side — runs before send-to-office)
+    Route::middleware('permission:requisitions.create')->group(function () {
+        Route::get('/requisition/{id}/smart-pricing-check', [SmartPricingController::class, 'check'])->name('requisition.smartPricingCheck');
+        Route::post('/requisition/{id}/smart-pricing-assess', [SmartPricingController::class, 'assess'])->name('requisition.smartPricingAssess');
+        Route::post('/requisition/{id}/smart-pricing-context', [SmartPricingController::class, 'saveContext'])->name('requisition.smartPricingContext');
+        Route::post('/requisition/{id}/smart-pricing-remove-item', [SmartPricingController::class, 'removeItem'])->name('requisition.smartPricingRemoveItem');
+    });
     Route::get('/requisition/{id}/mark-sent-to-supplier', [PurchasingController::class, 'markSentToSupplier'])->name('requisition.markSentToSupplier')
         ->middleware('permission:requisitions.send');
     Route::middleware('permission:requisitions.export')->group(function () {

@@ -20,7 +20,7 @@ export default function AgentViewerHeader({ status, currentStep, totalSteps, cla
                 'bg-slate-900 text-white',
                 isCompleted && 'border-b-emerald-500',
                 isFailed && 'border-b-red-500',
-                isWorking && 'border-b-blue-500/50',
+                isWorking && 'border-b-zinc-600/50',
                 className,
             )}
         >
@@ -34,8 +34,8 @@ export default function AgentViewerHeader({ status, currentStep, totalSteps, cla
                         <Check className="h-4 w-4 text-emerald-400" />
                     </div>
                 ) : (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500/20">
-                        <Bot className="h-4 w-4 text-blue-400" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-700/40">
+                        <Bot className="h-4 w-4 text-zinc-300" />
                     </div>
                 )}
                 <span className="text-sm font-semibold">
@@ -46,7 +46,7 @@ export default function AgentViewerHeader({ status, currentStep, totalSteps, cla
                           : 'Agent: Sending PO to Supplier'}
                 </span>
                 {isWorking && (
-                    <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-blue-400" />
+                    <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-zinc-400" />
                 )}
             </div>
 
@@ -55,7 +55,7 @@ export default function AgentViewerHeader({ status, currentStep, totalSteps, cla
                 <div
                     className={cn(
                         'h-2 w-2 rounded-full',
-                        isWorking && 'animate-pulse bg-blue-400',
+                        isWorking && 'animate-pulse bg-zinc-400',
                         isCompleted && 'bg-emerald-400',
                         isFailed && 'bg-red-400',
                     )}

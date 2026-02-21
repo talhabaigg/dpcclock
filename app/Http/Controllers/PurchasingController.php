@@ -303,9 +303,12 @@ class PurchasingController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
+        $costCodes = \App\Models\CostCode::select('id', 'code', 'description')->ordered()->get();
+
         return Inertia::render('purchasing/show', [
             'requisition' => $requisition,
             'activities' => $activities,
+            'costCodes' => $costCodes,
         ]);
     }
 

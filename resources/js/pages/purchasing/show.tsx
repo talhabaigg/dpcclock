@@ -31,6 +31,7 @@ import {
     GitCompare,
     HelpCircle,
     History,
+    Loader2,
     Lock,
     MapPin,
     Package,
@@ -39,6 +40,7 @@ import {
     RefreshCw,
     RotateCcw,
     Send,
+
     Trash2,
     User,
     UserCheck,
@@ -49,6 +51,8 @@ import AgentActivityFeed, { type AgentActivityFeedHandle } from '@/components/ag
 import AgentConfirmationCard from '@/components/agent-chat/AgentConfirmationCard';
 import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
 import ComparisonTab from './show-partials/ComparisonTab';
+import { SmartPricingCards } from './show-partials/SmartPricingCards';
+import { SmartPricingWizard } from '@/components/SmartPricingWizard';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -58,7 +62,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function RequisitionShow() {
-    const { requisition, activities, flash, auth } = usePage().props as unknown as {
+    const { requisition, activities, flash, auth, costCodes } = usePage().props as unknown as {
         requisition: {
             id: number;
             po_number: string;
@@ -82,13 +86,14 @@ export default function RequisitionShow() {
             submitted_at: string | null;
             processed_at: string | null;
             created_at: string;
-            location: { name: string };
+            location: { name: string; external_id: string };
             supplier: { name: string };
             creator: { name: string };
             submitter: { name: string } | null;
             processor: { name: string } | null;
             line_items: {
                 id: number;
+                serial_number: number;
                 code: string;
                 description: string;
                 qty: number;
@@ -97,6 +102,7 @@ export default function RequisitionShow() {
                 cost_code: string;
                 price_list: string;
                 is_locked: boolean;
+                resolution_context: any;
             }[];
             line_items_sum_total_cost: number;
         };
@@ -110,6 +116,7 @@ export default function RequisitionShow() {
             permissions: string[];
             isAdmin: boolean;
         };
+        costCodes: { id: number; code: string; description: string }[];
     };
 
     // Check if any line items have base price (not from project list)
@@ -125,6 +132,38 @@ export default function RequisitionShow() {
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
     const [expandedActivities, setExpandedActivities] = useState<Set<number>>(new Set());
     const agentFeedRef = useRef<AgentActivityFeedHandle>(null);
+
+    // Smart Pricing state
+    const [smartPricingWizardOpen, setSmartPricingWizardOpen] = useState(false);
+    const [smartPricingProblems, setSmartPricingProblems] = useState<any[]>([]);
+    const [smartPricingChecking, setSmartPricingChecking] = useState(false);
+
+    const handleSendToOffice = async () => {
+        setSmartPricingChecking(true);
+        try {
+            const res = await fetch(`/requisition/${requisition.id}/smart-pricing-check`, {
+                headers: { Accept: 'application/json' },
+            });
+            const data = await res.json();
+
+            if (data.count > 0) {
+                setSmartPricingProblems(data.problems);
+                setSmartPricingWizardOpen(true);
+            } else {
+                // No problems — proceed directly
+                router.visit(`/requisition/${requisition.id}/send-to-office`);
+            }
+        } catch {
+            // If check fails, proceed anyway
+            router.visit(`/requisition/${requisition.id}/send-to-office`);
+        } finally {
+            setSmartPricingChecking(false);
+        }
+    };
+
+    const hasPendingSmartPricing = requisition.line_items?.some(
+        (item) => item.resolution_context?.status === 'pending_review',
+    );
 
     function handleSort(key: string) {
         if (sortKey === key) {
@@ -467,15 +506,19 @@ export default function RequisitionShow() {
                             )}
                             {requisition.status === 'pending' && hasBasePriceItems && (
                                 <div className="flex items-center gap-1">
-                                    <Link href={`/requisition/${requisition.id}/send-to-office`}>
-                                        <Button
-                                            size="sm"
-                                            className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
-                                        >
+                                    <Button
+                                        size="sm"
+                                        onClick={handleSendToOffice}
+                                        disabled={smartPricingChecking}
+                                        className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                    >
+                                        {smartPricingChecking ? (
+                                            <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" />
+                                        ) : (
                                             <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            Send to Office
-                                        </Button>
-                                    </Link>
+                                        )}
+                                        {smartPricingChecking ? 'Checking...' : 'Send to Office'}
+                                    </Button>
                                     <Dialog>
                                         <DialogTrigger asChild>
                                             <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2 sm:h-9">
@@ -767,6 +810,18 @@ export default function RequisitionShow() {
 
                                 {/* Line Items Tab */}
                                 <TabsContent value="items" className="mt-0">
+                                    {/* Smart Pricing Resolution Cards (office review) */}
+                                    {requisition.status === 'office_review' && canApprovePricing && hasPendingSmartPricing && (
+                                        <SmartPricingCards
+                                            requisitionId={requisition.id}
+                                            lineItems={requisition.line_items}
+                                            projectNumber={requisition.location?.external_id ?? requisition.project_number}
+                                            costCodes={costCodes ?? []}
+                                            submitterName={requisition.submitter?.name ?? requisition.creator?.name ?? 'Field Worker'}
+                                            onResolved={() => router.reload({ only: ['requisition'] })}
+                                        />
+                                    )}
+
                                     <Card className="dark:border-border max-w-full overflow-hidden border-slate-200/60">
                                         <div className="-mx-px overflow-x-auto">
                                             <Table>
@@ -1080,6 +1135,19 @@ export default function RequisitionShow() {
                     </div>
                 </div>
             </div>
+            {/* Smart Pricing Wizard (field worker — shown before send to office) */}
+            {smartPricingWizardOpen && smartPricingProblems.length > 0 && (
+                <SmartPricingWizard
+                    open={smartPricingWizardOpen}
+                    onClose={() => setSmartPricingWizardOpen(false)}
+                    requisitionId={requisition.id}
+                    problems={smartPricingProblems}
+                    onComplete={() => {
+                        setSmartPricingWizardOpen(false);
+                        router.visit(`/requisition/${requisition.id}/send-to-office`);
+                    }}
+                />
+            )}
         </AppLayout>
     );
 }

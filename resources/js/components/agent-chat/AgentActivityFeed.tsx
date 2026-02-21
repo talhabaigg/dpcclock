@@ -403,19 +403,19 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
         ? 'border-red-200 dark:border-red-800'
         : isCompleted
           ? 'border-emerald-200 dark:border-emerald-800'
-          : 'border-blue-200 dark:border-blue-800';
+          : 'border-border';
 
     const bgColor = isFailed
         ? 'bg-red-50/50 dark:bg-red-950/30'
         : isCompleted
           ? 'bg-emerald-50/50 dark:bg-emerald-950/30'
-          : 'bg-blue-50/50 dark:bg-blue-950/30';
+          : 'bg-muted/50';
 
     const iconColor = isFailed
         ? 'text-red-600 dark:text-red-400'
         : isCompleted
           ? 'text-emerald-600 dark:text-emerald-400'
-          : 'text-blue-600 dark:text-blue-400';
+          : 'text-foreground';
 
     return (
         <>
@@ -426,7 +426,7 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                         <CardTitle className="flex items-center gap-2 text-base">
                             <Bot className={cn('h-5 w-5', iconColor)} />
                             Agent Working
-                            <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-blue-500" />
+                            <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -457,7 +457,7 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                             <div
                                 className={cn(
                                     'flex h-7 w-7 items-center justify-center rounded-full',
-                                    isWorking && 'bg-blue-100 dark:bg-blue-900',
+                                    isWorking && 'bg-muted',
                                     isCompleted && 'bg-emerald-100 dark:bg-emerald-900',
                                     isFailed && 'bg-red-100 dark:bg-red-900',
                                 )}
@@ -467,7 +467,7 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                                 ) : isCompleted ? (
                                     <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
-                                    <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <Bot className="h-4 w-4 text-foreground" />
                                 )}
                             </div>
                             <div>
@@ -639,7 +639,7 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                                 {/* Scan-line animation while working */}
                                 {isWorking && (
                                     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                                        <div className="agent-scanline absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent" />
+                                        <div className="agent-scanline absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-zinc-400/30 to-transparent" />
                                     </div>
                                 )}
 
@@ -743,8 +743,8 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                                         className={cn(
                                             'flex flex-col gap-1 border-b p-2 text-left transition-colors',
                                             i === gallerySelected
-                                                ? 'bg-blue-50 ring-2 ring-inset ring-blue-500 dark:bg-blue-950/40'
-                                                : 'hover:bg-slate-100 dark:hover:bg-slate-800/60',
+                                                ? 'bg-accent ring-ring ring-2 ring-inset'
+                                                : 'hover:bg-muted',
                                         )}
                                     >
                                         <img
@@ -787,12 +787,12 @@ export default AgentActivityFeed;
 function ThinkingBubble({ text }: { text: string }) {
     return (
         <div className="flex items-start gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900">
-                <BrainCircuit className="h-4 w-4 animate-pulse text-violet-600 dark:text-violet-400" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                <BrainCircuit className="text-muted-foreground h-4 w-4 animate-pulse" />
             </div>
             <div className="min-w-0 max-w-full flex-1">
-                <div className="rounded-xl rounded-tl-none border border-violet-200/50 bg-violet-50/50 px-3 py-2 shadow-sm dark:border-violet-800/50 dark:bg-violet-950/30">
-                    <p className="line-clamp-3 text-xs italic text-violet-700/80 dark:text-violet-300/80">
+                <div className="rounded-xl rounded-tl-none border border-border/50 bg-muted/40 px-3 py-2 shadow-sm">
+                    <p className="text-muted-foreground line-clamp-3 text-xs italic">
                         {text}
                     </p>
                 </div>
@@ -829,12 +829,12 @@ function SheetChatMessage({
                 className={cn(
                     'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
                     isStarting && !hasCompleted
-                        ? 'bg-blue-100 dark:bg-blue-900'
+                        ? 'bg-muted'
                         : 'bg-emerald-100 dark:bg-emerald-900',
                 )}
             >
                 {isStarting && !hasCompleted ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+                    <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
                 ) : (
                     <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 )}

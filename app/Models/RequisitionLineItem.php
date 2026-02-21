@@ -22,6 +22,11 @@ class RequisitionLineItem extends Model
         'cost_code',
         'price_list',
         'is_locked',
+        'resolution_context',
+    ];
+
+    protected $casts = [
+        'resolution_context' => 'array',
     ];
 
     public function requisition()
