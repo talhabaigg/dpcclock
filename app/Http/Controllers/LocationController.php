@@ -48,18 +48,54 @@ class LocationController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Load base location data with tab counts (shared across all tab pages).
+     */
+    private function getLocationWithCounts(Location $location): Location
+    {
+        $location->load('worktypes');
+        $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
+        $location->tab_counts = [
+            'sublocations' => $location->subLocations->count(),
+            'cost_codes' => $location->costCodes()->count(),
+            'price_list' => $location->materialItems()->count(),
+            'favourites' => $location->favouriteMaterials()->count(),
+        ];
+
+        return $location;
+    }
+
+    /**
+     * Display the specified resource (sub-locations tab).
      */
     public function show(Location $location)
     {
-        $location->load([
-            'worktypes',
-            'costCodes' => fn ($query) => $query->orderByRaw('CAST(code AS UNSIGNED)'),
-            'materialItems.supplier',
-            'favouriteMaterials',
-            'variations',
-            'requisitions' => fn ($query) => $query->withSum('lineItems', 'total_cost'),
+        $this->getLocationWithCounts($location);
+
+        return Inertia::render('locations/show', [
+            'location' => $location,
         ]);
+    }
+
+    /**
+     * Display the cost codes tab.
+     */
+    public function costCodes(Location $location)
+    {
+        $this->getLocationWithCounts($location);
+        $location->load(['costCodes' => fn ($query) => $query->orderByRaw('CAST(code AS UNSIGNED)')]);
+
+        return Inertia::render('locations/cost-codes', [
+            'location' => $location,
+        ]);
+    }
+
+    /**
+     * Display the price list tab.
+     */
+    public function priceList(Location $location)
+    {
+        $this->getLocationWithCounts($location);
+        $location->load('materialItems.supplier');
 
         // Load user names for material items updated_by
         $userIds = $location->materialItems->pluck('pivot.updated_by')->filter()->unique()->values();
@@ -70,14 +106,21 @@ class LocationController extends Controller
             $item->pivot->updated_by_name = $item->pivot->updated_by ? ($users[$item->pivot->updated_by] ?? null) : null;
         });
 
-        $monthlySpending = $this->getMonthlySpending($location);
-
-        // Fetch sub-locations for the specified location
-        $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
-
-        return Inertia::render('locations/show', [
+        return Inertia::render('locations/price-list', [
             'location' => $location,
-            'monthlySpending' => $monthlySpending,
+        ]);
+    }
+
+    /**
+     * Display the favourite materials tab.
+     */
+    public function favourites(Location $location)
+    {
+        $this->getLocationWithCounts($location);
+        $location->load('favouriteMaterials');
+
+        return Inertia::render('locations/favourites', [
+            'location' => $location,
         ]);
     }
 

@@ -23,12 +23,16 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
     ArrowUpDown,
+    ChartColumnIncreasing,
     CheckCircle2,
-    CirclePlus,
     ClockAlert,
+    Code2,
+    DollarSign,
     Download,
     EllipsisVertical,
     Eye,
+    FileImage,
+    Heart,
     MapPin,
     Pencil,
     RefreshCcw,
@@ -73,26 +77,28 @@ const companyTabs = [
 function getLocationActions(location: Location) {
     return [
         {
-            group: 'Actions',
-            items: [{ href: `locations/${location.id}`, icon: Eye, label: 'View Details' }],
-        },
-        {
-            group: 'Material Items',
+            group: 'View',
             items: [
-                { href: `location/${location.id}/material-items`, icon: Eye, label: 'View Items' },
-                { href: `location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
+                { href: `/locations/${location.id}`, icon: Eye, label: 'Overview' },
+                { href: `/locations/${location.id}/cost-codes`, icon: Code2, label: 'Cost Codes' },
+                { href: `/locations/${location.id}/price-list`, icon: DollarSign, label: 'Price List' },
+                { href: `/locations/${location.id}/favourites`, icon: Heart, label: 'Favourites' },
             ],
         },
         {
-            group: 'Variations',
+            group: 'Tools',
             items: [
-                { href: `locations/${location.id}/variations`, icon: CirclePlus, label: 'Create New' },
-                { href: `locations/${location.id}/variations`, icon: Eye, label: 'View All' },
+                { href: `/location/${location.id}/job-forecast`, icon: ChartColumnIncreasing, label: 'Job Forecast' },
+                { href: `/projects/${location.id}/drawings`, icon: FileImage, label: 'Drawings' },
+                { href: `/locations/${location.id}/variations`, icon: Eye, label: 'Variations' },
             ],
         },
         {
-            group: 'Requisition',
-            items: [{ href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Edit Header' }],
+            group: 'Admin',
+            items: [
+                { href: `/location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
+                { href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Requisition Header' },
+            ],
         },
     ];
 }

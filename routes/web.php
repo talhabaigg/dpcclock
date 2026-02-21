@@ -142,6 +142,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:locations.view')->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
+        Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes');
+        Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list');
+        Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites');
     });
     Route::post('/locations', [LocationController::class, 'store'])->name('locations.store')
         ->middleware('permission:locations.create');
