@@ -126,7 +126,7 @@ export default function EventsIndex({ events, flash }) {
                     </div>
 
                     <TabsContent value="calendar" className="mt-4 flex min-h-0 flex-1 flex-col">
-                        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0">
                             <CardContent className="min-h-0 flex-1 p-0">
                                 <Calendar timesheetEvents={events} />
                             </CardContent>
@@ -175,7 +175,7 @@ export default function EventsIndex({ events, flash }) {
                         ) : (
                             <div className="space-y-3">
                                 {grouped.map(({ month, events: monthEvents }) => (
-                                    <Card key={month} className="overflow-hidden">
+                                    <Card key={month} className="gap-0 overflow-hidden py-0">
                                         <div className="bg-muted/50 border-b px-4 py-2.5">
                                             <h3 className="text-sm font-medium">
                                                 {month}
