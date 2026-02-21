@@ -108,6 +108,14 @@ export default function DrawingVariations() {
         return map;
     }, [conditions]);
 
+    const conditionOpacities = useMemo(() => {
+        const map: Record<number, number> = {};
+        for (const c of conditions) {
+            map[c.id] = c.opacity ?? 50;
+        }
+        return map;
+    }, [conditions]);
+
     const getCsrfToken = () => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const getXsrfToken = () => {
         const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
@@ -367,6 +375,7 @@ export default function DrawingVariations() {
                         selectedMeasurementId={selectedMeasurementId}
                         calibration={calibration}
                         conditionPatterns={conditionPatterns}
+                        conditionOpacities={conditionOpacities}
                         onCalibrationComplete={handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}

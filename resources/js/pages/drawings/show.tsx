@@ -272,6 +272,14 @@ export default function DrawingShow() {
         return map;
     }, [conditions]);
 
+    const conditionOpacities = useMemo(() => {
+        const map: Record<number, number> = {};
+        for (const c of conditions) {
+            map[c.id] = c.opacity ?? 50;
+        }
+        return map;
+    }, [conditions]);
+
     const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
     const PAPER_SIZES = ['A0', 'A1', 'A2', 'A3', 'A4'];
     const SCALE_OPTIONS = ['1:1', '1:2', '1:5', '1:10', '1:20', '1:25', '1:50', '1:100', '1:200', '1:250', '1:500', '1:1000', 'Custom'];
@@ -1415,6 +1423,7 @@ export default function DrawingShow() {
                             selectedMeasurementId={selectedMeasurementId}
                             calibration={calibration}
                             conditionPatterns={conditionPatterns}
+                            conditionOpacities={conditionOpacities}
                             onCalibrationComplete={handleCalibrationComplete}
                             onMeasurementComplete={handleMeasurementComplete}
                             onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}

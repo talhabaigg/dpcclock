@@ -24,6 +24,10 @@ class TakeoffCostCalculator
             return $this->computeUnitRate($condition, $measurement);
         }
 
+        if ($condition->pricing_method === 'detailed') {
+            return $this->computeDetailed($condition, $measurement);
+        }
+
         $materialCost = $this->computeMaterialCost($condition, $measurement);
         $labourCost = $this->computeLabourCost($condition, $measurement);
 
@@ -108,6 +112,79 @@ class TakeoffCostCalculator
         $hours = $measurement->computed_value / $productionRate;
 
         return $hours * $effectiveRate;
+    }
+
+    /**
+     * Compute costs using the Detailed (QuickBid-style) method.
+     *
+     * Each line item calculates its own quantity from the measurement's
+     * primary (computed_value) or secondary (perimeter_value) quantity,
+     * applying OC spacing, layers, and waste.
+     */
+    private function computeDetailed(TakeoffCondition $condition, DrawingMeasurement $measurement): array
+    {
+        $condition->loadMissing('lineItems.materialItem');
+        $locationId = $condition->location_id;
+        $totalMat = 0;
+        $totalLab = 0;
+
+        foreach ($condition->lineItems as $line) {
+            // 1. Resolve base quantity from source
+            $baseQty = match ($line->qty_source) {
+                'secondary' => $measurement->perimeter_value ?? 0,
+                'fixed' => $line->fixed_qty ?? 0,
+                default => $measurement->computed_value ?? 0, // 'primary'
+            };
+
+            if ($baseQty <= 0) {
+                continue;
+            }
+
+            // 2. Apply OC spacing and layers
+            $ocSpacing = $line->oc_spacing;
+            $layers = max(1, $line->layers);
+
+            if ($ocSpacing && $ocSpacing > 0) {
+                $lineQty = ($baseQty / $ocSpacing) * $layers;
+            } else {
+                $lineQty = $baseQty * $layers;
+            }
+
+            // 3. Apply waste percentage
+            $effectiveQty = $lineQty * (1 + ($line->waste_percentage ?? 0) / 100);
+
+            // 4. Material cost
+            if ($line->entry_type === 'material') {
+                $unitCost = $line->cost_source === 'manual' || ! $line->materialItem
+                    ? ($line->unit_cost ?? 0)
+                    : $this->getMaterialUnitCost($line->materialItem, $locationId);
+
+                if ($unitCost > 0) {
+                    $matCost = ($line->pack_size && $line->pack_size > 0)
+                        ? ceil($effectiveQty / $line->pack_size) * $unitCost
+                        : $effectiveQty * $unitCost;
+
+                    $totalMat += $matCost;
+                }
+            }
+
+            // 5. Labour cost
+            if ($line->entry_type === 'labour') {
+                $hourlyRate = $line->hourly_rate ?? 0;
+                $productionRate = $line->production_rate ?? 0;
+
+                if ($hourlyRate > 0 && $productionRate > 0) {
+                    $hours = $effectiveQty / $productionRate;
+                    $totalLab += $hours * $hourlyRate;
+                }
+            }
+        }
+
+        return [
+            'material_cost' => round($totalMat, 2),
+            'labour_cost' => round($totalLab, 2),
+            'total_cost' => round($totalMat + $totalLab, 2),
+        ];
     }
 
     /**

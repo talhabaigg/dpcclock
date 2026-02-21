@@ -280,6 +280,17 @@ export default function DrawingProduction() {
         return map;
     }, [initialMeasurements]);
 
+    const conditionOpacities = useMemo(() => {
+        const map: Record<number, number> = {};
+        if (!initialMeasurements) return map;
+        for (const m of initialMeasurements) {
+            if (m.takeoff_condition_id && m.condition) {
+                map[m.takeoff_condition_id] = (m.condition as { opacity?: number }).opacity ?? 50;
+            }
+        }
+        return map;
+    }, [initialMeasurements]);
+
     // Production status labels for measurements (percent badges) — only for non-segmented
     const productionLabels = useMemo(() => {
         if (!selectedLccId) return {};
@@ -733,6 +744,7 @@ export default function DrawingProduction() {
                         selectedMeasurementId={selectedMeasurementId}
                         calibration={initialCalibration}
                         conditionPatterns={conditionPatterns}
+                        conditionOpacities={conditionOpacities}
                         onCalibrationComplete={() => {}}
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={handleMeasurementClick}

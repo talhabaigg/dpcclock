@@ -53,6 +53,7 @@ type LeafletDrawingViewerProps = {
     selectedMeasurementId?: number | null;
     calibration?: CalibrationData | null;
     conditionPatterns?: Record<number, string>;
+    conditionOpacities?: Record<number, number>;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area') => void;
     onMeasurementClick?: (measurement: MeasurementData, event?: { clientX: number; clientY: number }) => void;
@@ -296,6 +297,7 @@ export function LeafletDrawingViewer({
     selectedMeasurementId = null,
     calibration = null,
     conditionPatterns,
+    conditionOpacities,
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
@@ -478,6 +480,7 @@ export function LeafletDrawingViewer({
                     selectedMeasurementId={selectedMeasurementId}
                     calibration={calibration}
                     conditionPatterns={conditionPatterns}
+                    conditionOpacities={conditionOpacities}
                     onCalibrationComplete={onCalibrationComplete}
                     onMeasurementComplete={onMeasurementComplete}
                     onMeasurementClick={onMeasurementClick}

@@ -4,7 +4,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { TakeoffCondition } from './condition-manager';
+import { PatternSwatch, type TakeoffCondition } from './condition-manager';
 import {
     Box,
     Calculator,
@@ -288,7 +288,7 @@ export function TakeoffPanel({
                             {activeCondition && (
                                 <div className="border-b px-2 py-1.5" style={{ borderLeftWidth: 3, borderLeftColor: activeCondition.color }}>
                                     <div className="flex items-center gap-1.5">
-                                        <div className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: activeCondition.color }} />
+                                        <PatternSwatch pattern={activeCondition.pattern} color={activeCondition.color} opacity={activeCondition.opacity ?? 50} size={12} />
                                         <span className="flex-1 truncate text-[11px] font-semibold">{activeCondition.name}</span>
                                         <span className="rounded-sm bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground">
                                             {TYPE_LABELS[activeCondition.type]}
@@ -663,10 +663,7 @@ export function TakeoffPanel({
                                                             onActivateCondition(isActive ? null : c.id);
                                                         }}
                                                     >
-                                                        <div
-                                                            className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                                                            style={{ backgroundColor: c.color }}
-                                                        />
+                                                        <PatternSwatch pattern={c.pattern} color={c.color} opacity={c.opacity ?? 50} size={12} />
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-1">
                                                                 {c.condition_number != null && (

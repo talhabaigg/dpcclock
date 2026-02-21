@@ -17,6 +17,7 @@ class TakeoffCondition extends Model
         'type',
         'color',
         'pattern',
+        'opacity',
         'description',
         'pricing_method',
         'height',
@@ -36,6 +37,7 @@ class TakeoffCondition extends Model
         'thickness' => 'float',
         'labour_unit_rate' => 'float',
         'condition_number' => 'integer',
+        'opacity' => 'integer',
     ];
 
     protected static function booted()
@@ -98,6 +100,11 @@ class TakeoffCondition extends Model
     public function conditionLabourCodes(): HasMany
     {
         return $this->hasMany(ConditionLabourCode::class);
+    }
+
+    public function lineItems(): HasMany
+    {
+        return $this->hasMany(ConditionLineItem::class)->orderBy('sort_order');
     }
 
     /**

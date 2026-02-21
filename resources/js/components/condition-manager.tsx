@@ -1,9 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConditionDetailGrid } from '@/components/condition-detail-grid';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import {
     DollarSign,
@@ -16,7 +18,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 
 export type ConditionCostCode = {
@@ -59,11 +61,12 @@ export type TakeoffCondition = {
     condition_number: number | null;
     type: 'linear' | 'area' | 'count';
     color: string;
-    pattern: 'solid' | 'dashed' | 'dotted' | 'dashdot';
+    pattern: 'none' | 'solid' | 'transparent' | 'horizontal' | 'vertical' | 'backward_diagonal' | 'forward_diagonal' | 'crosshatch' | 'diagonal_crosshatch';
+    opacity: number;
     description: string | null;
     height: number | null;
     thickness: number | null;
-    pricing_method: 'unit_rate' | 'build_up';
+    pricing_method: 'unit_rate' | 'build_up' | 'detailed';
     labour_unit_rate: number | null;
     cost_codes: ConditionCostCode[];
     labour_rate_source: 'manual' | 'template';
@@ -73,6 +76,7 @@ export type TakeoffCondition = {
     production_rate: number | null;
     materials: ConditionMaterial[];
     condition_labour_codes?: ConditionLabourCodeItem[];
+    line_items?: import('./condition-detail-grid').ConditionLineItem[];
 };
 
 export type ConditionMaterial = {
@@ -149,12 +153,92 @@ const STYLE_LABELS: Record<string, string> = {
     count: 'Each',
 };
 
-const PATTERN_OPTIONS: { value: TakeoffCondition['pattern']; label: string; dash?: string }[] = [
+const PATTERN_OPTIONS: { value: TakeoffCondition['pattern']; label: string }[] = [
+    { value: 'none', label: 'None' },
     { value: 'solid', label: 'Solid' },
-    { value: 'dashed', label: 'Dashed', dash: '12,6' },
-    { value: 'dotted', label: 'Dotted', dash: '3,5' },
-    { value: 'dashdot', label: 'Dash-Dot', dash: '12,5,3,5' },
+    { value: 'transparent', label: 'Transparent' },
+    { value: 'horizontal', label: 'Horizontal' },
+    { value: 'vertical', label: 'Vertical' },
+    { value: 'backward_diagonal', label: 'Back Diag.' },
+    { value: 'forward_diagonal', label: 'Fwd Diag.' },
+    { value: 'crosshatch', label: 'Crosshatch' },
+    { value: 'diagonal_crosshatch', label: 'Diag. Cross' },
 ];
+
+/** Renders an SVG preview of a fill pattern swatch */
+export function PatternSwatch({ pattern, color, opacity, size = 24 }: { pattern: TakeoffCondition['pattern']; color: string; opacity: number; size?: number }) {
+    const uid = useId();
+    const id = `pat-${uid.replace(/:/g, '')}`;
+    const o = opacity / 100;
+
+    const patternDefs: Record<string, React.ReactNode> = {
+        none: null,
+        solid: null,
+        transparent: null,
+        horizontal: (
+            <pattern id={id} width={size} height="4" patternUnits="userSpaceOnUse">
+                <line x1="0" y1="2" x2={size} y2="2" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
+            </pattern>
+        ),
+        vertical: (
+            <pattern id={id} width="4" height={size} patternUnits="userSpaceOnUse">
+                <line x1="2" y1="0" x2="2" y2={size} stroke={color} strokeWidth="1.5" strokeOpacity={o} />
+            </pattern>
+        ),
+        backward_diagonal: (
+            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
+            </pattern>
+        ),
+        forward_diagonal: (
+            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
+            </pattern>
+        ),
+        crosshatch: (
+            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse">
+                <line x1="0" y1="3" x2="6" y2="3" stroke={color} strokeWidth="1" strokeOpacity={o} />
+                <line x1="3" y1="0" x2="3" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
+            </pattern>
+        ),
+        diagonal_crosshatch: (
+            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse">
+                <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
+                <line x1="6" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
+            </pattern>
+        ),
+    };
+
+    let fill: string;
+    let fillOpacity = o;
+    if (pattern === 'none') {
+        fill = 'transparent';
+        fillOpacity = 0;
+    } else if (pattern === 'solid') {
+        fill = color;
+    } else if (pattern === 'transparent') {
+        fill = color;
+        fillOpacity = o * 0.35;
+    } else {
+        fill = `url(#${id})`;
+        fillOpacity = 1; // pattern itself has the opacity
+    }
+
+    return (
+        <svg width={size} height={size} className="shrink-0">
+            <defs>{patternDefs[pattern]}</defs>
+            <rect
+                x="0.5" y="0.5"
+                width={size - 1} height={size - 1}
+                fill={fill}
+                fillOpacity={fillOpacity}
+                stroke={color}
+                strokeWidth="1"
+                strokeOpacity={o}
+            />
+        </svg>
+    );
+}
 
 export function ConditionManager({
     open,
@@ -179,10 +263,11 @@ export function ConditionManager({
     const [formConditionTypeId, setFormConditionTypeId] = useState<string>('');
     const [formColor, setFormColor] = useState('#3b82f6');
     const [formPattern, setFormPattern] = useState<TakeoffCondition['pattern']>('solid');
+    const [formOpacity, setFormOpacity] = useState(50);
     const [formDescription, setFormDescription] = useState('');
     const [formHeight, setFormHeight] = useState('');
     const [formThickness, setFormThickness] = useState('');
-    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up'>('build_up');
+    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up' | 'detailed'>('build_up');
 
     // Unit Rate form state
     const [formLabourUnitRate, setFormLabourUnitRate] = useState('');
@@ -346,6 +431,7 @@ export function ConditionManager({
         setFormConditionTypeId('');
         setFormColor('#3b82f6');
         setFormPattern('solid');
+        setFormOpacity(50);
         setFormDescription('');
         setFormHeight('');
         setFormThickness('');
@@ -378,6 +464,7 @@ export function ConditionManager({
         setFormConditionTypeId(c.condition_type_id?.toString() || '');
         setFormColor(c.color);
         setFormPattern(c.pattern || 'solid');
+        setFormOpacity(c.opacity ?? 50);
         setFormDescription(c.description || '');
         setFormHeight(c.height?.toString() || '');
         setFormThickness(c.thickness?.toString() || '');
@@ -454,6 +541,7 @@ export function ConditionManager({
                 condition_type_id: formConditionTypeId ? parseInt(formConditionTypeId) : null,
                 color: formColor,
                 pattern: formPattern,
+                opacity: formOpacity,
                 description: formDescription || null,
                 height: formHeight ? parseFloat(formHeight) : null,
                 thickness: formThickness ? parseFloat(formThickness) : null,
@@ -745,10 +833,11 @@ export function ConditionManager({
     };
 
     const showForm = creating || editing;
+    const isDetailedView = selectedCondition?.pricing_method === 'detailed' || (showForm && formPricingMethod === 'detailed');
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0">
+            <DialogContent className={`${isDetailedView ? 'sm:max-w-[95vw] xl:max-w-7xl' : 'sm:max-w-3xl'} max-h-[90vh] flex flex-col gap-0 p-0 transition-all`}>
                 <DialogHeader className="border-b px-4 py-2.5">
                     <DialogTitle className="flex items-center gap-1.5 text-sm">
                         <DollarSign className="h-3.5 w-3.5" />
@@ -785,10 +874,7 @@ export function ConditionManager({
                                                     style={selectedId === c.id && !creating ? { borderLeftColor: c.color } : undefined}
                                                     onClick={() => handleSelect(c.id)}
                                                 >
-                                                    <div
-                                                        className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                                                        style={{ backgroundColor: c.color }}
-                                                    />
+                                                    <PatternSwatch pattern={c.pattern} color={c.color} opacity={c.opacity ?? 50} size={12} />
                                                     <span className="min-w-0 truncate flex-1 font-medium">
                                                         {c.condition_number != null && (
                                                             <span className="font-mono text-[9px] text-muted-foreground mr-0.5">#{c.condition_number}</span>
@@ -950,48 +1036,84 @@ export function ConditionManager({
                                     )}
                                 </div>
 
-                                {/* 5. Appearance: Color, Pattern */}
+                                {/* 5. Appearance: Color, Opacity, Pattern */}
                                 <div className="rounded-sm border p-2 space-y-2">
                                     <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                         Appearance
                                     </h4>
                                     <div className="grid gap-1.5">
                                         <Label className="text-[11px]">Color</Label>
-                                        <div className="flex gap-1 items-center">
-                                            {PRESET_COLORS.map((color) => (
-                                                <button
-                                                    key={color}
-                                                    type="button"
-                                                    className={`h-5 w-5 rounded-sm border-2 transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
-                                                    style={{ backgroundColor: color }}
-                                                    onClick={() => setFormColor(color)}
+                                        <div className="flex gap-1.5 items-center">
+                                            <label
+                                                className="relative h-6 w-6 shrink-0 rounded-sm border-2 border-border cursor-pointer overflow-hidden transition-all hover:scale-105"
+                                                style={{ backgroundColor: formColor }}
+                                            >
+                                                <input
+                                                    type="color"
+                                                    value={formColor}
+                                                    onChange={(e) => setFormColor(e.target.value)}
+                                                    className="absolute inset-0 opacity-0 cursor-pointer"
                                                 />
-                                            ))}
+                                            </label>
+                                            <Input
+                                                value={formColor}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setFormColor(v);
+                                                }}
+                                                maxLength={7}
+                                                className="h-6 w-[5.5rem] font-mono text-[11px] px-1.5 rounded-sm"
+                                                placeholder="#3b82f6"
+                                            />
+                                            <div className="flex gap-0.5">
+                                                {PRESET_COLORS.map((color) => (
+                                                    <button
+                                                        key={color}
+                                                        type="button"
+                                                        className={`h-4 w-4 rounded-[2px] border transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                                                        style={{ backgroundColor: color }}
+                                                        onClick={() => setFormColor(color)}
+                                                    />
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="grid gap-1.5">
-                                        <Label className="text-[11px]">Pattern</Label>
-                                        <div className="grid grid-cols-4 gap-1">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[11px]">Opacity</Label>
+                                            <span className="text-[10px] tabular-nums text-muted-foreground">{formOpacity}%</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Slider
+                                                min={5}
+                                                max={100}
+                                                step={5}
+                                                value={[formOpacity]}
+                                                onValueChange={([v]) => setFormOpacity(v)}
+                                                className="flex-1"
+                                            />
+                                        </div>
+                                        <div
+                                            className="h-3 rounded-sm border"
+                                            style={{ backgroundColor: formColor, opacity: formOpacity / 100 }}
+                                        />
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[11px]">Fill Pattern</Label>
+                                        <div className="grid grid-cols-3 gap-1">
                                             {PATTERN_OPTIONS.map((opt) => (
                                                 <button
                                                     key={opt.value}
                                                     type="button"
-                                                    className={`rounded-sm border px-1.5 py-1.5 text-[10px] transition-colors flex flex-col items-center gap-0.5 ${
+                                                    className={`rounded-sm border px-1 py-1 text-[10px] transition-colors flex items-center gap-1.5 ${
                                                         formPattern === opt.value
                                                             ? 'border-primary bg-primary/10 text-primary'
                                                             : 'border-border hover:bg-muted/50'
                                                     }`}
                                                     onClick={() => setFormPattern(opt.value)}
                                                 >
-                                                    <svg width="36" height="4" className="shrink-0">
-                                                        <line
-                                                            x1="0" y1="2" x2="36" y2="2"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2"
-                                                            strokeDasharray={opt.dash || 'none'}
-                                                        />
-                                                    </svg>
-                                                    <span>{opt.label}</span>
+                                                    <PatternSwatch pattern={opt.value} color={formColor} opacity={formOpacity} size={20} />
+                                                    <span className="truncate">{opt.label}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -1001,7 +1123,7 @@ export function ConditionManager({
                                 {/* 6. Pricing Method Toggle */}
                                 <div className="grid gap-1">
                                     <Label className="text-[11px] font-semibold">Pricing Method</Label>
-                                    <div className="grid grid-cols-2 gap-1">
+                                    <div className="grid grid-cols-3 gap-1">
                                         <button
                                             type="button"
                                             className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
@@ -1030,11 +1152,34 @@ export function ConditionManager({
                                                 Materials + production rate
                                             </span>
                                         </button>
+                                        <button
+                                            type="button"
+                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
+                                                formPricingMethod === 'detailed'
+                                                    ? 'border-primary bg-primary/10 text-primary'
+                                                    : 'border-border hover:bg-muted/50'
+                                            }`}
+                                            onClick={() => setFormPricingMethod('detailed')}
+                                        >
+                                            Detailed
+                                            <span className="block text-[9px] font-normal text-muted-foreground">
+                                                Line items + sections
+                                            </span>
+                                        </button>
                                     </div>
                                 </div>
 
                                 {/* 7. Pricing-specific fields */}
-                                {formPricingMethod === 'unit_rate' ? (
+                                {formPricingMethod === 'detailed' ? (
+                                    <div className="rounded-sm border border-dashed p-3 text-center space-y-1">
+                                        <p className="text-xs text-muted-foreground">
+                                            Line items are managed in the detail grid after saving this condition.
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Save the condition first, then add materials and labour line items with sections, OC spacing, layers, and per-line costs.
+                                        </p>
+                                    </div>
+                                ) : formPricingMethod === 'unit_rate' ? (
                                     <>
                                         {/* Unit Rate: Labour */}
                                         <div className="rounded-sm border p-2 space-y-2">
@@ -1519,7 +1664,7 @@ export function ConditionManager({
                                         {STYLE_LABELS[selectedCondition.type]}
                                     </span>
                                     <span className="rounded-sm border px-1.5 py-0.5 text-[9px] text-muted-foreground">
-                                        {selectedCondition.pricing_method === 'unit_rate' ? 'UR' : 'BU'}
+                                        {selectedCondition.pricing_method === 'unit_rate' ? 'UR' : selectedCondition.pricing_method === 'detailed' ? 'DT' : 'BU'}
                                     </span>
                                     <Button size="sm" variant="outline" className="h-6 rounded-sm text-[11px] gap-1" onClick={handleEdit}>
                                         <Pencil className="h-2.5 w-2.5" />
@@ -1566,19 +1711,13 @@ export function ConditionManager({
                                     </h4>
                                     <div className="flex items-center gap-3 text-[11px]">
                                         <div className="flex items-center gap-1.5">
-                                            <div className="h-3 w-3 rounded-[2px]" style={{ backgroundColor: selectedCondition.color }} />
+                                            <div className="h-3 w-3 rounded-[2px]" style={{ backgroundColor: selectedCondition.color, opacity: (selectedCondition.opacity ?? 50) / 100 }} />
                                             <span className="font-mono text-muted-foreground">{selectedCondition.color}</span>
                                         </div>
+                                        <span className="text-muted-foreground">{selectedCondition.opacity ?? 50}%</span>
                                         <div className="flex items-center gap-1.5">
-                                            <svg width="28" height="4">
-                                                <line
-                                                    x1="0" y1="2" x2="28" y2="2"
-                                                    stroke={selectedCondition.color}
-                                                    strokeWidth="2"
-                                                    strokeDasharray={PATTERN_OPTIONS.find((p) => p.value === selectedCondition.pattern)?.dash || 'none'}
-                                                />
-                                            </svg>
-                                            <span className="text-muted-foreground capitalize">{selectedCondition.pattern}</span>
+                                            <PatternSwatch pattern={selectedCondition.pattern} color={selectedCondition.color} opacity={selectedCondition.opacity ?? 50} size={18} />
+                                            <span className="text-muted-foreground capitalize">{PATTERN_OPTIONS.find((p) => p.value === selectedCondition.pattern)?.label || selectedCondition.pattern}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1739,6 +1878,25 @@ export function ConditionManager({
                                             Notes
                                         </h4>
                                         <p className="text-[11px] text-muted-foreground">{selectedCondition.description}</p>
+                                    </div>
+                                )}
+
+                                {/* Detailed line items grid */}
+                                {selectedCondition.pricing_method === 'detailed' && (
+                                    <div className="mt-2">
+                                        <ConditionDetailGrid
+                                            conditionId={selectedCondition.id}
+                                            conditionType={selectedCondition.type}
+                                            conditionHeight={selectedCondition.height}
+                                            locationId={locationId}
+                                            lineItems={selectedCondition.line_items ?? []}
+                                            onLineItemsChange={(updatedItems) => {
+                                                const updated = conditions.map((c) =>
+                                                    c.id === selectedCondition.id ? { ...c, line_items: updatedItems } : c,
+                                                );
+                                                onConditionsChange(updated);
+                                            }}
+                                        />
                                     </div>
                                 )}
                             </div>

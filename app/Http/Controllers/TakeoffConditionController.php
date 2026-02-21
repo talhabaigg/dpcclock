@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConditionLineItem;
 use App\Models\ConditionType;
 use App\Models\CostCode;
 use App\Models\LabourCostCode;
@@ -15,12 +16,21 @@ class TakeoffConditionController extends Controller
     public function index(Location $location)
     {
         $conditions = TakeoffCondition::where('location_id', $location->id)
-            ->with(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode'])
+            ->with([
+                'materials.materialItem',
+                'payRateTemplate',
+                'costCodes.costCode',
+                'conditionType',
+                'conditionLabourCodes.labourCostCode',
+                'lineItems.materialItem',
+                'lineItems.labourCostCode',
+            ])
             ->orderBy('condition_number')
             ->orderBy('name')
             ->get();
 
         $this->appendEffectiveUnitCosts($conditions, $location->id);
+        $this->appendLineItemEffectiveUnitCosts($conditions, $location->id);
 
         return response()->json(['conditions' => $conditions]);
     }
@@ -32,11 +42,12 @@ class TakeoffConditionController extends Controller
             'type' => 'required|string|in:linear,area,count',
             'condition_type_id' => 'nullable|integer|exists:condition_types,id',
             'color' => 'required|string|regex:/^#[0-9a-fA-F]{6}$/',
-            'pattern' => 'nullable|string|in:solid,dashed,dotted,dashdot',
+            'pattern' => 'nullable|string|in:none,solid,transparent,horizontal,vertical,backward_diagonal,forward_diagonal,crosshatch,diagonal_crosshatch',
+            'opacity' => 'nullable|integer|min:0|max:100',
             'description' => 'nullable|string|max:2000',
             'height' => 'nullable|numeric|min:0.0001|max:100',
             'thickness' => 'nullable|numeric|min:0.0001|max:100',
-            'pricing_method' => 'required|string|in:unit_rate,build_up',
+            'pricing_method' => 'required|string|in:unit_rate,build_up,detailed',
 
             // Unit Rate fields
             'labour_unit_rate' => 'nullable|numeric|min:0',
@@ -70,6 +81,7 @@ class TakeoffConditionController extends Controller
             'type' => $validated['type'],
             'color' => $validated['color'],
             'pattern' => $validated['pattern'] ?? 'solid',
+            'opacity' => $validated['opacity'] ?? 50,
             'description' => $validated['description'] ?? null,
             'height' => $validated['height'] ?? null,
             'thickness' => $validated['thickness'] ?? null,
@@ -111,8 +123,17 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode']);
+        $condition->load([
+            'materials.materialItem',
+            'payRateTemplate',
+            'costCodes.costCode',
+            'conditionType',
+            'conditionLabourCodes.labourCostCode',
+            'lineItems.materialItem',
+            'lineItems.labourCostCode',
+        ]);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
+        $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
     }
@@ -128,11 +149,12 @@ class TakeoffConditionController extends Controller
             'type' => 'sometimes|required|string|in:linear,area,count',
             'condition_type_id' => 'nullable|integer|exists:condition_types,id',
             'color' => 'sometimes|required|string|regex:/^#[0-9a-fA-F]{6}$/',
-            'pattern' => 'nullable|string|in:solid,dashed,dotted,dashdot',
+            'pattern' => 'nullable|string|in:none,solid,transparent,horizontal,vertical,backward_diagonal,forward_diagonal,crosshatch,diagonal_crosshatch',
+            'opacity' => 'nullable|integer|min:0|max:100',
             'description' => 'nullable|string|max:2000',
             'height' => 'nullable|numeric|min:0.0001|max:100',
             'thickness' => 'nullable|numeric|min:0.0001|max:100',
-            'pricing_method' => 'sometimes|required|string|in:unit_rate,build_up',
+            'pricing_method' => 'sometimes|required|string|in:unit_rate,build_up,detailed',
 
             // Unit Rate fields
             'labour_unit_rate' => 'nullable|numeric|min:0',
@@ -171,14 +193,19 @@ class TakeoffConditionController extends Controller
             $validated['production_rate'] = null;
         } elseif ($pricingMethod === 'build_up') {
             $validated['labour_unit_rate'] = null;
+        } elseif ($pricingMethod === 'detailed') {
+            $validated['labour_unit_rate'] = null;
+            $validated['manual_labour_rate'] = null;
+            $validated['pay_rate_template_id'] = null;
+            $validated['production_rate'] = null;
         }
 
         $condition->update($validated);
 
         // Sync cost codes for unit_rate method
         if ($pricingMethod === 'unit_rate') {
-            // Clean up materials if switching from build_up
             $condition->materials()->delete();
+            $condition->lineItems()->delete();
 
             if ($costCodeData !== null) {
                 $condition->costCodes()->delete();
@@ -193,8 +220,8 @@ class TakeoffConditionController extends Controller
 
         // Sync materials for build_up method
         if ($pricingMethod === 'build_up') {
-            // Clean up cost codes if switching from unit_rate
             $condition->costCodes()->delete();
+            $condition->lineItems()->delete();
 
             if ($materialData !== null) {
                 $condition->materials()->delete();
@@ -208,7 +235,15 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        // Sync Labour Cost Codes (independent of pricing method)
+        // Clean up old tables when switching to detailed
+        if ($pricingMethod === 'detailed') {
+            $condition->materials()->delete();
+            $condition->costCodes()->delete();
+        }
+
+        // Sync Labour Cost Codes (for production tracking)
+        // For detailed pricing, LCCs are auto-synced from line items via batchLineItems,
+        // but also allow explicit LCC updates from the condition form.
         if ($labourCostCodeData !== null) {
             $condition->conditionLabourCodes()->delete();
             foreach ($labourCostCodeData as $lcc) {
@@ -220,8 +255,17 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load(['materials.materialItem', 'payRateTemplate', 'costCodes.costCode', 'conditionType', 'conditionLabourCodes.labourCostCode']);
+        $condition->load([
+            'materials.materialItem',
+            'payRateTemplate',
+            'costCodes.costCode',
+            'conditionType',
+            'conditionLabourCodes.labourCostCode',
+            'lineItems.materialItem',
+            'lineItems.labourCostCode',
+        ]);
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
+        $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
     }
@@ -362,6 +406,103 @@ class TakeoffConditionController extends Controller
         return response()->json($lcc);
     }
 
+    // ---- Condition Line Items (Detailed mode) ----
+
+    public function indexLineItems(Location $location, TakeoffCondition $condition)
+    {
+        if ($condition->location_id !== $location->id) {
+            abort(404);
+        }
+
+        $lineItems = $condition->lineItems()
+            ->with(['materialItem', 'labourCostCode'])
+            ->get();
+
+        $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
+
+        return response()->json(['line_items' => $lineItems]);
+    }
+
+    public function batchLineItems(Request $request, Location $location, TakeoffCondition $condition)
+    {
+        if ($condition->location_id !== $location->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable|integer',
+            'items.*._delete' => 'nullable|boolean',
+            'items.*.sort_order' => 'required|integer|min:0',
+            'items.*.section' => 'nullable|string|max:100',
+            'items.*.entry_type' => 'required|string|in:material,labour',
+            'items.*.material_item_id' => 'nullable|integer|exists:material_items,id',
+            'items.*.labour_cost_code_id' => 'nullable|integer|exists:labour_cost_codes,id',
+            'items.*.item_code' => 'nullable|string|max:50',
+            'items.*.description' => 'nullable|string|max:500',
+            'items.*.qty_source' => 'required|string|in:primary,secondary,fixed',
+            'items.*.fixed_qty' => 'nullable|numeric|min:0',
+            'items.*.oc_spacing' => 'nullable|numeric|min:0',
+            'items.*.layers' => 'required|integer|min:1|max:99',
+            'items.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
+            'items.*.unit_cost' => 'nullable|numeric|min:0',
+            'items.*.cost_source' => 'required|string|in:material,manual',
+            'items.*.uom' => 'nullable|string|max:20',
+            'items.*.pack_size' => 'nullable|numeric|min:0.0001',
+            'items.*.hourly_rate' => 'nullable|numeric|min:0',
+            'items.*.production_rate' => 'nullable|numeric|min:0',
+        ]);
+
+        $existingIds = $condition->lineItems()->pluck('id')->toArray();
+        $receivedIds = [];
+
+        foreach ($validated['items'] as $item) {
+            $id = $item['id'] ?? null;
+            $shouldDelete = $item['_delete'] ?? false;
+
+            if ($id && $shouldDelete) {
+                ConditionLineItem::where('id', $id)
+                    ->where('takeoff_condition_id', $condition->id)
+                    ->delete();
+
+                continue;
+            }
+
+            $data = collect($item)->except(['id', '_delete'])->toArray();
+            $data['takeoff_condition_id'] = $condition->id;
+
+            if ($id) {
+                $lineItem = ConditionLineItem::where('id', $id)
+                    ->where('takeoff_condition_id', $condition->id)
+                    ->first();
+
+                if ($lineItem) {
+                    $lineItem->update($data);
+                    $receivedIds[] = $id;
+                }
+            } else {
+                $lineItem = ConditionLineItem::create($data);
+                $receivedIds[] = $lineItem->id;
+            }
+        }
+
+        // Delete any items that were not in the batch (full replacement)
+        $toDelete = array_diff($existingIds, $receivedIds);
+        if (! empty($toDelete)) {
+            ConditionLineItem::whereIn('id', $toDelete)
+                ->where('takeoff_condition_id', $condition->id)
+                ->delete();
+        }
+
+        // Auto-sync condition_labour_codes from labour line items for production tracking
+        $this->syncLabourCodesFromLineItems($condition);
+
+        $condition->load(['lineItems.materialItem', 'lineItems.labourCostCode']);
+        $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
+
+        return response()->json(['line_items' => $condition->lineItems]);
+    }
+
     /**
      * Append effective_unit_cost to each condition material,
      * using location-specific pricing overrides when available.
@@ -394,6 +535,72 @@ class TakeoffConditionController extends Controller
                     ? (float) $overrides[$materialItem->id]
                     : (float) $materialItem->unit_cost;
             }
+        }
+    }
+
+    /**
+     * Append effective_unit_cost to each detailed line item's materialItem,
+     * using location-specific pricing overrides when available.
+     */
+    private function appendLineItemEffectiveUnitCosts($conditions, int $locationId): void
+    {
+        $materialItemIds = $conditions->flatMap(function ($c) {
+            return $c->lineItems->where('entry_type', 'material')->pluck('material_item_id')->filter();
+        })->unique()->values()->all();
+
+        if (empty($materialItemIds)) {
+            return;
+        }
+
+        $overrides = \Illuminate\Support\Facades\DB::table('location_item_pricing')
+            ->where('location_id', $locationId)
+            ->whereIn('material_item_id', $materialItemIds)
+            ->pluck('unit_cost_override', 'material_item_id');
+
+        foreach ($conditions as $condition) {
+            foreach ($condition->lineItems as $lineItem) {
+                $materialItem = $lineItem->materialItem;
+                if (! $materialItem) {
+                    continue;
+                }
+                $materialItem->effective_unit_cost = isset($overrides[$materialItem->id])
+                    ? (float) $overrides[$materialItem->id]
+                    : (float) $materialItem->unit_cost;
+            }
+        }
+    }
+
+    /**
+     * Sync condition_labour_codes from labour line items so
+     * the production tracking system can see them.
+     */
+    private function syncLabourCodesFromLineItems(TakeoffCondition $condition): void
+    {
+        $labourLineItems = $condition->lineItems()
+            ->where('entry_type', 'labour')
+            ->whereNotNull('labour_cost_code_id')
+            ->get();
+
+        // Collect unique LCCs with their rates from line items
+        $lccMap = [];
+        foreach ($labourLineItems as $line) {
+            $lccId = $line->labour_cost_code_id;
+            if (! isset($lccMap[$lccId])) {
+                $lccMap[$lccId] = [
+                    'production_rate' => $line->production_rate,
+                    'hourly_rate' => $line->hourly_rate,
+                ];
+            }
+        }
+
+        // Replace condition_labour_codes with the LCCs from line items
+        $condition->conditionLabourCodes()->delete();
+        foreach ($lccMap as $lccId => $rates) {
+            $condition->conditionLabourCodes()->create([
+                'labour_cost_code_id' => $lccId,
+                'production_rate' => $rates['production_rate'],
+                'hourly_rate' => $rates['hourly_rate'],
+            ]);
         }
     }
 }

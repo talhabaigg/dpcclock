@@ -646,6 +646,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}/condition-types', [TakeoffConditionController::class, 'indexTypes'])->name('condition-types.index');
         Route::get('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'indexLabourCostCodes'])->name('labour-cost-codes.index');
         Route::get('/locations/{location}/labour-cost-codes/search', [TakeoffConditionController::class, 'searchLabourCostCodes'])->name('labour-cost-codes.search');
+        Route::get('/locations/{location}/takeoff-conditions/{condition}/line-items', [TakeoffConditionController::class, 'indexLineItems'])->name('condition-line-items.index');
         Route::get('/locations/{location}/bid-areas', [BidAreaController::class, 'index'])->name('bid-areas.index');
         // Takeoff summary & export
         Route::get('/projects/{project}/takeoff-summary', [TakeoffExportController::class, 'index'])->name('takeoff-summary.index');
@@ -668,6 +669,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/condition-types', [TakeoffConditionController::class, 'storeType'])->name('condition-types.store');
         Route::delete('/locations/{location}/condition-types/{conditionType}', [TakeoffConditionController::class, 'destroyType'])->name('condition-types.destroy');
         Route::post('/locations/{location}/labour-cost-codes', [TakeoffConditionController::class, 'storeLabourCostCode'])->name('labour-cost-codes.store');
+        Route::post('/locations/{location}/takeoff-conditions/{condition}/line-items/batch', [TakeoffConditionController::class, 'batchLineItems'])->name('condition-line-items.batch');
         // Bid areas (write)
         Route::post('/locations/{location}/bid-areas', [BidAreaController::class, 'store'])->name('bid-areas.store');
         Route::put('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'update'])->name('bid-areas.update');
