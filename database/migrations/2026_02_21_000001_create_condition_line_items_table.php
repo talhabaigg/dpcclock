@@ -11,7 +11,11 @@ return new class extends Migration
     {
         // Expand pricing_method enum to include 'detailed'
         if (Schema::hasColumn('takeoff_conditions', 'pricing_method')) {
-            DB::statement("ALTER TABLE takeoff_conditions MODIFY pricing_method ENUM('unit_rate','build_up','detailed') NOT NULL DEFAULT 'build_up'");
+            if (DB::getDriverName() === 'sqlite') {
+                // SQLite doesn't support MODIFY — but also doesn't enforce ENUM, so this is a no-op
+            } else {
+                DB::statement("ALTER TABLE takeoff_conditions MODIFY pricing_method ENUM('unit_rate','build_up','detailed') NOT NULL DEFAULT 'build_up'");
+            }
         }
 
         if (! Schema::hasTable('condition_line_items')) {
@@ -55,7 +59,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('condition_line_items');
 
-        if (Schema::hasColumn('takeoff_conditions', 'pricing_method')) {
+        if (Schema::hasColumn('takeoff_conditions', 'pricing_method') && DB::getDriverName() !== 'sqlite') {
             DB::statement("ALTER TABLE takeoff_conditions MODIFY pricing_method ENUM('unit_rate','build_up') NOT NULL DEFAULT 'build_up'");
         }
     }

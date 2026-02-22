@@ -163,6 +163,7 @@ export function ConditionDetailGrid({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<(MaterialSearchResult | LccSearchResult)[]>([]);
     const [searching, setSearching] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [insertSection, setInsertSection] = useState<string | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
