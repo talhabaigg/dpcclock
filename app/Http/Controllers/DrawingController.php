@@ -13,6 +13,7 @@ use App\Models\DrawingObservation;
 use App\Models\Location;
 use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
+use App\Models\TakeoffCondition;
 use App\Models\Variation;
 use App\Services\DrawingComparisonService;
 use App\Services\DrawingMetadataService;
@@ -223,6 +224,570 @@ class DrawingController extends Controller
             'project' => $drawing->project,
             'activeTab' => 'takeoff',
             'projectDrawings' => $projectDrawings,
+        ]);
+    }
+
+    /**
+     * Condition summary — project-level condition table across all drawings.
+     */
+    public function conditions(Drawing $drawing): Response
+    {
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+        $project = $drawing->project;
+
+        $conditions = TakeoffCondition::where('location_id', $project->id)
+            ->with([
+                'conditionType',
+                'lineItems',
+            ])
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+
+        // Aggregate measurements across all drawings for this project
+        $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->whereNotNull('takeoff_condition_id')
+            ->whereNull('parent_measurement_id')
+            ->with(['bidArea:id,name', 'deductions', 'drawing:id,quantity_multiplier'])
+            ->get();
+
+        $conditionSummaries = [];
+
+        foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+            $condition = $conditions->firstWhere('id', $conditionId);
+            if (! $condition) {
+                continue;
+            }
+
+            $netQty = 0;
+            $materialCost = 0;
+            $labourCost = 0;
+            $totalCost = 0;
+            $areaNames = [];
+
+            foreach ($condMeasurements as $m) {
+                $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                $netQty += ($m->computed_value ?? 0) * $mul;
+                $materialCost += ($m->material_cost ?? 0) * $mul;
+                $labourCost += ($m->labour_cost ?? 0) * $mul;
+                $totalCost += ($m->total_cost ?? 0) * $mul;
+
+                foreach ($m->deductions as $d) {
+                    $netQty -= ($d->computed_value ?? 0) * $mul;
+                    $materialCost -= ($d->material_cost ?? 0) * $mul;
+                    $labourCost -= ($d->labour_cost ?? 0) * $mul;
+                    $totalCost -= ($d->total_cost ?? 0) * $mul;
+                }
+
+                if ($m->bidArea) {
+                    $areaNames[] = $m->bidArea->name;
+                }
+            }
+
+            $unit = match ($condition->type) {
+                'linear' => 'lm',
+                'area' => 'm²',
+                'count' => 'ea',
+                default => 'm',
+            };
+
+            $uniqueAreas = array_values(array_unique($areaNames));
+
+            $conditionSummaries[] = [
+                'condition_id' => (int) $conditionId,
+                'condition_number' => $condition->condition_number,
+                'condition_name' => $condition->name,
+                'condition_type' => $condition->conditionType?->name ?? 'Uncategorized',
+                'type' => $condition->type,
+                'pricing_method' => $condition->pricing_method,
+                'color' => $condition->color,
+                'height' => $condition->height,
+                'areas' => $uniqueAreas,
+                'qty' => round($netQty, 2),
+                'unit' => $unit,
+                'unit_price' => $netQty > 0 ? round($totalCost / $netQty, 2) : 0,
+                'material_cost' => round($materialCost, 2),
+                'labour_cost' => round($labourCost, 2),
+                'total_cost' => round($totalCost, 2),
+                'line_items' => $condition->pricing_method === 'detailed'
+                    ? $condition->lineItems->map(fn ($li) => [
+                        'entry_type' => $li->entry_type,
+                        'qty_source' => $li->qty_source,
+                        'fixed_qty' => $li->fixed_qty,
+                        'oc_spacing' => $li->oc_spacing,
+                        'layers' => $li->layers,
+                        'waste_percentage' => $li->waste_percentage,
+                        'unit_cost' => $li->unit_cost,
+                        'pack_size' => $li->pack_size,
+                        'hourly_rate' => $li->hourly_rate,
+                        'production_rate' => $li->production_rate,
+                    ])->all()
+                    : null,
+            ];
+        }
+
+        // Sort by condition number
+        usort($conditionSummaries, fn ($a, $b) => ($a['condition_number'] ?? 0) <=> ($b['condition_number'] ?? 0));
+
+        return Inertia::render('drawings/conditions', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'conditions',
+            'projectDrawings' => $projectDrawings,
+            'conditionSummaries' => $conditionSummaries,
+        ]);
+    }
+
+    /**
+     * Labour summary — project-level labour cost codes across all drawings.
+     *
+     * One row per condition × LCC pair (not aggregated by LCC), since
+     * different conditions can use the same LCC at different rates.
+     */
+    public function labour(Drawing $drawing): Response
+    {
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+        $project = $drawing->project;
+
+        $conditions = TakeoffCondition::where('location_id', $project->id)
+            ->with([
+                'conditionLabourCodes.labourCostCode',
+                'lineItems' => fn ($q) => $q->where('entry_type', 'labour'),
+                'lineItems.labourCostCode',
+                'payRateTemplate',
+            ])
+            ->get();
+
+        // Aggregate measurements across all drawings for this project
+        $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->whereNotNull('takeoff_condition_id')
+            ->whereNull('parent_measurement_id')
+            ->with(['deductions', 'drawing:id,quantity_multiplier'])
+            ->get();
+
+        // Build a map of condition_id → net qty and labour_cost
+        $condQtyMap = [];
+        foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+            $netQty = 0;
+            $labourCost = 0;
+            foreach ($condMeasurements as $m) {
+                $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                $netQty += ($m->computed_value ?? 0) * $mul;
+                $labourCost += ($m->labour_cost ?? 0) * $mul;
+                foreach ($m->deductions as $d) {
+                    $netQty -= ($d->computed_value ?? 0) * $mul;
+                    $labourCost -= ($d->labour_cost ?? 0) * $mul;
+                }
+            }
+            $condQtyMap[$conditionId] = ['qty' => $netQty, 'labour_cost' => $labourCost];
+        }
+
+        // Build one row per condition × LCC pair
+        $labourRows = [];
+
+        // Load wage type names from pay rate templates (keyed by hourly rate)
+        $payRateTemplates = \App\Models\LocationPayRateTemplate::where('location_id', $project->id)
+            ->where('is_active', true)
+            ->with('payRateTemplate:id,name')
+            ->get();
+        $wageTypeByRate = [];
+        foreach ($payRateTemplates as $t) {
+            $wageTypeByRate[(string) round((float) $t->hourly_rate, 2)] = $t->display_label;
+        }
+
+        foreach ($conditions as $condition) {
+            $data = $condQtyMap[$condition->id] ?? null;
+            if (! $data || $data['qty'] <= 0) {
+                continue;
+            }
+
+            $netQty = $data['qty'];
+            $condUnit = match ($condition->type) {
+                'linear' => 'm',
+                'area' => 'm²',
+                'count' => 'EA',
+                default => 'm',
+            };
+
+            if ($condition->pricing_method === 'detailed') {
+                foreach ($condition->lineItems->where('entry_type', 'labour') as $li) {
+                    $lcc = $li->labourCostCode;
+                    if (! $lcc) {
+                        continue;
+                    }
+                    $hr = $li->hourly_rate ?? 0;
+                    $pr = $li->production_rate ?? 0;
+                    if ($hr <= 0 || $pr <= 0) {
+                        continue;
+                    }
+                    $costPerUnit = $hr / $pr;
+                    $total = $netQty * $costPerUnit;
+                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+
+                    $labourRows[] = [
+                        'code' => $lcc->code,
+                        'name' => $lcc->name,
+                        'qty' => round($netQty, 2),
+                        'unit' => $condUnit,
+                        'cost' => round($costPerUnit, 2),
+                        'wage_type' => $wageType,
+                        'qty_per_hr' => round($pr, 2),
+                        'total_cost' => round($total, 2),
+                    ];
+                }
+            } elseif ($condition->pricing_method === 'build_up') {
+                foreach ($condition->conditionLabourCodes as $clc) {
+                    $lcc = $clc->labourCostCode;
+                    if (! $lcc) {
+                        continue;
+                    }
+                    $pr = $clc->effective_production_rate ?? 0;
+                    $hr = $clc->effective_hourly_rate ?? 0;
+                    if ($pr <= 0 || $hr <= 0) {
+                        continue;
+                    }
+                    $costPerUnit = $hr / $pr;
+                    $total = $netQty * $costPerUnit;
+                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+
+                    $labourRows[] = [
+                        'code' => $lcc->code,
+                        'name' => $lcc->name,
+                        'qty' => round($netQty, 2),
+                        'unit' => $condUnit,
+                        'cost' => round($costPerUnit, 2),
+                        'wage_type' => $wageType,
+                        'qty_per_hr' => round($pr, 2),
+                        'total_cost' => round($total, 2),
+                    ];
+                }
+            } elseif ($condition->pricing_method === 'unit_rate') {
+                foreach ($condition->conditionLabourCodes as $clc) {
+                    $lcc = $clc->labourCostCode;
+                    if (! $lcc) {
+                        continue;
+                    }
+                    $pr = $clc->effective_production_rate ?? 0;
+                    $hr = $clc->effective_hourly_rate ?? 0;
+                    if ($pr <= 0 || $hr <= 0) {
+                        continue;
+                    }
+                    $costPerUnit = $hr / $pr;
+                    $total = $netQty * $costPerUnit;
+                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+
+                    $labourRows[] = [
+                        'code' => $lcc->code,
+                        'name' => $lcc->name,
+                        'qty' => round($netQty, 2),
+                        'unit' => $condUnit,
+                        'cost' => round($costPerUnit, 2),
+                        'wage_type' => $wageType,
+                        'qty_per_hr' => round($pr, 2),
+                        'total_cost' => round($total, 2),
+                    ];
+                }
+            }
+        }
+
+        // Sort by LCC code, then by cost
+        usort($labourRows, function ($a, $b) {
+            $cmp = strcmp($a['code'], $b['code']);
+
+            return $cmp !== 0 ? $cmp : $a['cost'] <=> $b['cost'];
+        });
+
+        return Inertia::render('drawings/labour', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'labour',
+            'projectDrawings' => $projectDrawings,
+            'labourSummaries' => $labourRows,
+        ]);
+    }
+
+    /**
+     * Material summary — project-level material breakdown across all drawings.
+     *
+     * One row per condition × material line item.
+     */
+    public function material(Drawing $drawing): Response
+    {
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+        $project = $drawing->project;
+
+        $conditions = TakeoffCondition::where('location_id', $project->id)
+            ->with([
+                'lineItems' => fn ($q) => $q->where('entry_type', 'material'),
+                'lineItems.materialItem.costCode',
+                'lineItems.materialItem.supplier',
+                'materials.materialItem.costCode',
+                'materials.materialItem.supplier',
+            ])
+            ->get();
+
+        // Aggregate measurements across all drawings for this project
+        $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->whereNotNull('takeoff_condition_id')
+            ->whereNull('parent_measurement_id')
+            ->with(['deductions', 'drawing:id,quantity_multiplier'])
+            ->get();
+
+        // Build condition_id → net qty map
+        $condQtyMap = [];
+        foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+            $netQty = 0;
+            foreach ($condMeasurements as $m) {
+                $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                $netQty += ($m->computed_value ?? 0) * $mul;
+                foreach ($m->deductions as $d) {
+                    $netQty -= ($d->computed_value ?? 0) * $mul;
+                }
+            }
+            $condQtyMap[$conditionId] = $netQty;
+        }
+
+        $materialRows = [];
+
+        foreach ($conditions as $condition) {
+            $netQty = $condQtyMap[$condition->id] ?? 0;
+            if ($netQty <= 0) {
+                continue;
+            }
+
+            $condUnit = match ($condition->type) {
+                'linear' => 'm',
+                'area' => 'm²',
+                'count' => 'EA',
+                default => 'm',
+            };
+
+            if ($condition->pricing_method === 'detailed') {
+                // Secondary qty = primary / height (theoretical per-unit)
+                $pvPerUnit = ($condition->type === 'area' || $condition->type === 'linear')
+                    && $condition->height && $condition->height > 0
+                    ? $netQty / $condition->height : 0;
+
+                foreach ($condition->lineItems->where('entry_type', 'material') as $li) {
+                    $mat = $li->materialItem;
+
+                    // Resolve base quantity from source
+                    $baseQty = match ($li->qty_source) {
+                        'secondary' => $pvPerUnit,
+                        'fixed' => $li->fixed_qty ?? 0,
+                        default => $netQty, // 'primary'
+                    };
+                    if ($baseQty <= 0) {
+                        continue;
+                    }
+
+                    // Apply OC spacing and layers
+                    $layers = max(1, $li->layers);
+                    $lineQty = ($li->oc_spacing && $li->oc_spacing > 0)
+                        ? ($baseQty / $li->oc_spacing) * $layers
+                        : $baseQty * $layers;
+
+                    // Apply waste
+                    $waste = $li->waste_percentage ?? 0;
+                    $effectiveQty = $lineQty * (1 + $waste / 100);
+
+                    // Cost
+                    $unitCost = $li->unit_cost ?? ($mat ? $mat->unit_cost : 0);
+                    $packSize = $li->pack_size;
+                    $total = ($packSize && $packSize > 0)
+                        ? ceil($effectiveQty / $packSize) * $unitCost
+                        : $effectiveQty * $unitCost;
+
+                    // Format pack size display
+                    $perDisplay = $this->formatPackSize($packSize, $li->uom ?? $condUnit);
+
+                    $materialRows[] = [
+                        'item_code' => $li->item_code ?? ($mat?->code ?? ''),
+                        'cost_code' => $mat?->costCode?->code ?? '',
+                        'description' => $li->description ?? ($mat?->description ?? ''),
+                        'qty' => round($effectiveQty, 2),
+                        'uom' => $li->uom ?? $condUnit,
+                        'mat_cost' => round($unitCost, 2),
+                        'per' => $perDisplay,
+                        'total' => round($total, 2),
+                        'waste_pct' => $waste,
+                        'units' => round($unitCost > 0 ? $total / $unitCost : 0, 2),
+                        'price_updated' => $mat?->updated_at?->format('d/m/Y'),
+                        'supplier' => $mat?->supplier?->name,
+                    ];
+                }
+            } elseif ($condition->pricing_method === 'build_up') {
+                foreach ($condition->materials as $cm) {
+                    $mat = $cm->materialItem;
+                    if (! $mat) {
+                        continue;
+                    }
+
+                    $waste = $cm->waste_percentage ?? 0;
+                    $effectiveQty = $cm->qty_per_unit * (1 + $waste / 100) * $netQty;
+                    $unitCost = (float) ($mat->unit_cost ?? 0);
+                    $total = $effectiveQty * $unitCost;
+
+                    $materialRows[] = [
+                        'item_code' => $mat->code,
+                        'cost_code' => $mat->costCode?->code ?? '',
+                        'description' => $mat->description ?? '',
+                        'qty' => round($effectiveQty, 2),
+                        'uom' => $condUnit,
+                        'mat_cost' => round($unitCost, 2),
+                        'per' => '1 '.$condUnit,
+                        'total' => round($total, 2),
+                        'waste_pct' => $waste,
+                        'units' => round($unitCost > 0 ? $total / $unitCost : 0, 2),
+                        'price_updated' => $mat->updated_at?->format('d/m/Y'),
+                        'supplier' => $mat->supplier?->name,
+                    ];
+                }
+            }
+            // unit_rate: no individual material items — cost codes only
+        }
+
+        // Sort by cost_code, then item_code
+        usort($materialRows, function ($a, $b) {
+            $cmp = strcmp($a['cost_code'], $b['cost_code']);
+
+            return $cmp !== 0 ? $cmp : strcmp($a['item_code'], $b['item_code']);
+        });
+
+        return Inertia::render('drawings/material', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'material',
+            'projectDrawings' => $projectDrawings,
+            'materialSummaries' => $materialRows,
+        ]);
+    }
+
+    /**
+     * Format a pack size for display (e.g., "1 m", "15kg bag", "1,000 EA").
+     */
+    private function formatPackSize(?float $packSize, string $unit): string
+    {
+        if (! $packSize || $packSize <= 0) {
+            return '1 '.$unit;
+        }
+        if ($packSize == 1) {
+            return '1 '.$unit;
+        }
+
+        return number_format($packSize, 0).' '.$unit;
+    }
+
+    /**
+     * Estimate — project-level summary of all conditions with quantities & costs.
+     */
+    public function estimate(Drawing $drawing): Response
+    {
+        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
+        $project = $drawing->project;
+
+        $conditions = TakeoffCondition::where('location_id', $project->id)
+            ->with('conditionType')
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+
+        // Aggregate measurements across all drawings for this project
+        $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->whereNotNull('takeoff_condition_id')
+            ->whereNull('parent_measurement_id')
+            ->with(['deductions', 'drawing:id,quantity_multiplier'])
+            ->get();
+
+        // Build condition_id → {qty, material_cost, labour_cost, total_cost}
+        $condAgg = [];
+        foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+            $netQty = 0;
+            $matCost = 0;
+            $labCost = 0;
+            $totCost = 0;
+
+            foreach ($condMeasurements as $m) {
+                $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                $netQty += ($m->computed_value ?? 0) * $mul;
+                $matCost += ($m->material_cost ?? 0) * $mul;
+                $labCost += ($m->labour_cost ?? 0) * $mul;
+                $totCost += ($m->total_cost ?? 0) * $mul;
+
+                foreach ($m->deductions as $d) {
+                    $netQty -= ($d->computed_value ?? 0) * $mul;
+                    $matCost -= ($d->material_cost ?? 0) * $mul;
+                    $labCost -= ($d->labour_cost ?? 0) * $mul;
+                    $totCost -= ($d->total_cost ?? 0) * $mul;
+                }
+            }
+
+            $condAgg[$conditionId] = [
+                'qty' => $netQty,
+                'material_cost' => $matCost,
+                'labour_cost' => $labCost,
+                'total_cost' => $totCost,
+            ];
+        }
+
+        $estimateRows = [];
+
+        foreach ($conditions as $condition) {
+            $agg = $condAgg[$condition->id] ?? ['qty' => 0, 'material_cost' => 0, 'labour_cost' => 0, 'total_cost' => 0];
+            $netQty = $agg['qty'];
+            $height = $condition->height;
+
+            // Primary qty/uom
+            [$qty1, $uom1] = match ($condition->type) {
+                'area' => [$netQty, 'm²'],
+                'linear' => [$netQty, 'm'],
+                'count' => [$netQty, 'EA'],
+                default => [$netQty, 'm'],
+            };
+
+            // Secondary qty/uom (derived from height)
+            $qty2 = null;
+            $uom2 = null;
+            if ($height && $height > 0 && $netQty > 0) {
+                if ($condition->type === 'area') {
+                    // Area → linear run = area / height
+                    $qty2 = round($netQty / $height, 0);
+                    $uom2 = 'm';
+                } elseif ($condition->type === 'linear') {
+                    // Linear → area = length * height
+                    $qty2 = round($netQty * $height, 0);
+                    $uom2 = 'm²';
+                }
+            }
+
+            $estimateRows[] = [
+                'condition_id' => $condition->id,
+                'condition_number' => $condition->condition_number,
+                'name' => $condition->name,
+                'condition_type' => $condition->conditionType?->name ?? 'Uncategorized',
+                'color' => $condition->color ?? '#888888',
+                'pattern' => $condition->pattern,
+                'qty1' => round($qty1, 0),
+                'uom1' => $uom1,
+                'qty2' => $qty2,
+                'uom2' => $uom2,
+                'material_cost' => round($agg['material_cost'], 2),
+                'labour_cost' => round($agg['labour_cost'], 2),
+                'sub_cost' => 0,
+                'total_cost' => round($agg['total_cost'], 2),
+            ];
+        }
+
+        return Inertia::render('drawings/estimate', [
+            'drawing' => $drawing,
+            'revisions' => $revisions,
+            'project' => $drawing->project,
+            'activeTab' => 'estimate',
+            'projectDrawings' => $projectDrawings,
+            'estimateRows' => $estimateRows,
         ]);
     }
 

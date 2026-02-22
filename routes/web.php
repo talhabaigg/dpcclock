@@ -637,6 +637,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------
     Route::middleware('permission:takeoff.view')->group(function () {
         Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
+        Route::get('/drawings/{drawing}/conditions', [DrawingController::class, 'conditions'])->name('drawings.conditions');
+        Route::get('/drawings/{drawing}/labour', [DrawingController::class, 'labour'])->name('drawings.labour');
+        Route::get('/drawings/{drawing}/material', [DrawingController::class, 'material'])->name('drawings.material');
+        Route::get('/drawings/{drawing}/estimate', [DrawingController::class, 'estimate'])->name('drawings.estimate');
         Route::get('/drawings/{drawing}/measurements', [DrawingMeasurementController::class, 'index'])->name('drawings.measurements.index');
         Route::get('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'getCalibration'])->name('drawings.calibration.get');
         // Takeoff conditions (read)
@@ -712,6 +716,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'update'])->name('drawings.observations.update');
         Route::post('/drawings/{drawing}/observations/{observation}/confirm', [DrawingObservationController::class, 'confirm'])->name('drawings.observations.confirm');
         Route::delete('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'destroy'])->name('drawings.observations.destroy');
+        Route::post('/drawings/{drawing}/observations/bulk-delete', [DrawingObservationController::class, 'bulkDestroy'])->name('drawings.observations.bulk-destroy');
         Route::post('/drawings/{drawing}/observations/{observation}/describe', [DrawingObservationController::class, 'describe'])->name('drawings.observations.describe');
         Route::get('/drawing-observations/{observation}/photo', [DrawingObservationController::class, 'photo'])->name('drawings.observations.photo');
         // Drawing Alignment

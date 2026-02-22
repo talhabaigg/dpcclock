@@ -160,6 +160,43 @@ class DrawingObservationController extends Controller
         }
     }
 
+    public function bulkDestroy(Request $request, Drawing $drawing)
+    {
+        $validated = $request->validate([
+            'observation_ids' => 'required|array|min:1',
+            'observation_ids.*' => 'required|integer',
+        ]);
+
+        $observations = DrawingObservation::where('drawing_id', $drawing->id)
+            ->whereIn('id', $validated['observation_ids'])
+            ->get();
+
+        $deleted = 0;
+        $failed = 0;
+
+        foreach ($observations as $observation) {
+            try {
+                if ($observation->photo_path) {
+                    Storage::disk('s3')->delete($observation->photo_path);
+                }
+                $observation->delete();
+                $deleted++;
+            } catch (\Exception $e) {
+                Log::error('Bulk observation delete failed', [
+                    'observation_id' => $observation->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $failed++;
+            }
+        }
+
+        return response()->json([
+            'success' => $failed === 0,
+            'deleted_count' => $deleted,
+            'failed_count' => $failed,
+        ]);
+    }
+
     public function destroy(Drawing $drawing, DrawingObservation $observation)
     {
         if ($observation->drawing_id !== $drawing->id) {

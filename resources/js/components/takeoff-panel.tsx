@@ -26,7 +26,7 @@ import {
     Square,
     Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalibrationData, MeasurementData, ViewMode } from './measurement-layer';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -94,6 +94,7 @@ export function TakeoffPanel({
 }: TakeoffPanelProps) {
     const [activeTab, setActiveTab] = useState<TabId>('takeoff');
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+    const [collapsedBudgetGroups, setCollapsedBudgetGroups] = useState<Set<string>>(new Set());
     const [multiplier, setMultiplier] = useState(quantityMultiplier);
     const hasCalibration = !!calibration;
     const activeCondition = conditions.find((c) => c.id === activeConditionId) || null;
@@ -133,22 +134,24 @@ export function TakeoffPanel({
         return a.localeCompare(b);
     });
 
-    // Compute totals (use net values for areas with deductions)
-    const totalLinear = measurements
-        .filter(m => m.type === 'linear' && m.computed_value != null)
-        .reduce((sum, m) => sum + (m.computed_value || 0), 0);
-    const totalArea = measurements
-        .filter(m => m.type === 'area' && m.computed_value != null)
-        .reduce((sum, m) => {
-            const deductionSum = (m.deductions || []).reduce((s, d) => s + (d.computed_value || 0), 0);
-            return sum + (m.computed_value || 0) - deductionSum;
-        }, 0);
-    const totalCount = measurements
-        .filter(m => m.type === 'count' && m.computed_value != null)
-        .reduce((sum, m) => sum + (m.computed_value || 0), 0);
-    const totalCost = measurements
-        .filter(m => m.total_cost != null)
-        .reduce((sum, m) => sum + (m.total_cost || 0), 0);
+    // Pre-compute totals in a single pass
+    const { totalLinear, totalArea, totalCount, totalCost, totalMaterialCost, totalLabourCost } = useMemo(() => {
+        let linear = 0, area = 0, count = 0, cost = 0, material = 0, labour = 0;
+        for (const m of measurements) {
+            if (m.computed_value != null) {
+                if (m.type === 'linear') linear += m.computed_value || 0;
+                else if (m.type === 'area') {
+                    const deductionSum = (m.deductions || []).reduce((s, d) => s + (d.computed_value || 0), 0);
+                    area += (m.computed_value || 0) - deductionSum;
+                }
+                else if (m.type === 'count') count += m.computed_value || 0;
+            }
+            if (m.total_cost != null) cost += m.total_cost || 0;
+            if (m.material_cost != null) material += m.material_cost || 0;
+            if (m.labour_cost != null) labour += m.labour_cost || 0;
+        }
+        return { totalLinear: linear, totalArea: area, totalCount: count, totalCost: cost, totalMaterialCost: material, totalLabourCost: labour };
+    }, [measurements]);
 
     const linearUnit = calibration?.unit || '';
     const areaUnit = calibration ? `sq ${calibration.unit}` : '';
@@ -706,8 +709,8 @@ export function TakeoffPanel({
                 {/* ===== BUDGET TAB ===== */}
                 <TabsContent value="budget" className="mt-0 flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
                     <ScrollArea className="flex-1">
-                        <div className="space-y-0">
-                            {conditions.length === 0 ? (
+                        <div className="min-w-[240px] space-y-0">
+                            {conditions.length === 0 || !measurements.some(m => m.takeoff_condition_id != null) ? (
                                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
                                         <Calculator className="h-5 w-5 text-muted-foreground/40" />
@@ -715,106 +718,220 @@ export function TakeoffPanel({
                                     <div>
                                         <p className="text-[11px] font-medium text-muted-foreground">No budget data</p>
                                         <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-                                            Create conditions with materials and labour rates to see cost breakdowns.
+                                            {conditions.length === 0
+                                                ? 'Create conditions with materials and labour rates to see cost breakdowns.'
+                                                : 'Add measurements to conditions to see cost breakdowns.'}
                                         </p>
                                     </div>
                                 </div>
                             ) : (
-                                conditions.map((c) => {
-                                    const condMeasurements = measurements.filter(m => m.takeoff_condition_id === c.id);
-                                    const measuredQty = condMeasurements.reduce((sum, m) => sum + (m.computed_value || 0), 0);
-                                    const totalMaterialCost = condMeasurements.reduce((sum, m) => sum + (m.material_cost || 0), 0);
-                                    const totalLabourCost = condMeasurements.reduce((sum, m) => sum + (m.labour_cost || 0), 0);
-                                    const totalCondCost = condMeasurements.reduce((sum, m) => sum + (m.total_cost || 0), 0);
+                                <>
+                                    {/* Table header */}
+                                    <div className="sticky top-0 z-10 grid grid-cols-[22px_1fr_32px_56px_56px_68px] items-center border-b bg-muted/60 px-2 py-1">
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">#</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Name</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Type</span>
+                                        <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Qty</span>
+                                        <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Rate</span>
+                                        <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
+                                    </div>
 
-                                    const isUnitRate = c.pricing_method === 'unit_rate';
-                                    let materialRatePerUnit: number;
-                                    let labourRatePerUnit: number;
-                                    let effectiveQtyMultiplier = 1;
+                                    {/* Grouped rows by condition type — only conditions with measurements */}
+                                    {conditionTypeNames.map((typeName) => {
+                                        const typeConditions = conditionsByConditionType[typeName];
+                                        if (!typeConditions?.length) return null;
 
-                                    if (isUnitRate) {
-                                        materialRatePerUnit = (c.cost_codes || []).reduce((sum, cc) => sum + (cc.unit_rate || 0), 0);
-                                        labourRatePerUnit = c.labour_unit_rate || 0;
-                                        if (c.type === 'linear' && c.height && c.height > 0) {
-                                            effectiveQtyMultiplier = c.height;
-                                        }
-                                    } else {
-                                        materialRatePerUnit = (c.materials || []).reduce((sum, mat) => {
-                                            const unitCost = mat.material_item?.effective_unit_cost ?? (typeof mat.material_item?.unit_cost === 'string' ? parseFloat(mat.material_item.unit_cost) : mat.material_item?.unit_cost || 0);
-                                            const effectiveQty = mat.qty_per_unit * (1 + (mat.waste_percentage || 0) / 100);
-                                            return sum + effectiveQty * unitCost;
-                                        }, 0);
-                                        const effectiveLabourRate = c.labour_rate_source === 'manual'
-                                            ? c.manual_labour_rate || 0
-                                            : c.pay_rate_template?.hourly_rate
-                                                ? typeof c.pay_rate_template.hourly_rate === 'string' ? parseFloat(c.pay_rate_template.hourly_rate) : c.pay_rate_template.hourly_rate
-                                                : 0;
-                                        labourRatePerUnit = c.production_rate && c.production_rate > 0 ? effectiveLabourRate / c.production_rate : 0;
-                                    }
+                                        // Only include conditions that have measurements on this drawing
+                                        const measuredConditions = typeConditions.filter(
+                                            c => measurements.some(m => m.takeoff_condition_id === c.id),
+                                        );
+                                        if (!measuredConditions.length) return null;
 
-                                    const totalRatePerUnit = materialRatePerUnit + labourRatePerUnit;
-                                    const effectiveMeasuredQty = measuredQty * effectiveQtyMultiplier;
+                                        const isGroupOpen = !collapsedBudgetGroups.has(typeName);
 
-                                    const unitLabel = isUnitRate && c.type === 'linear' && c.height && c.height > 0
-                                        ? 'm2'
-                                        : c.type === 'linear' ? linearUnit : c.type === 'area' ? areaUnit : 'ea';
+                                        // Compute per-condition data + group subtotals
+                                        let groupTotalCost = 0;
 
-                                    return (
-                                        <div key={c.id} className="border-b">
-                                            {/* Condition header row */}
-                                            <div className="flex items-center gap-1.5 bg-muted/30 px-2 py-1" style={{ borderLeftWidth: 3, borderLeftColor: c.color }}>
-                                                <span className="flex-1 truncate text-[11px] font-semibold">{c.name}</span>
-                                                <span className="rounded-[2px] bg-muted px-1 text-[9px] text-muted-foreground">{TYPE_LABELS[c.type]}</span>
-                                                <span className="rounded-[2px] border px-1 text-[8px] text-muted-foreground">{isUnitRate ? 'UR' : 'BU'}</span>
-                                            </div>
+                                        const conditionRows = measuredConditions.map((c) => {
+                                            const condMeasurements = measurements.filter(m => m.takeoff_condition_id === c.id);
+                                            const measuredQty = condMeasurements.reduce((sum, m) => sum + (m.computed_value || 0), 0);
+                                            const totalCondCost = condMeasurements.reduce((sum, m) => sum + (m.total_cost || 0), 0);
 
-                                            {/* Compact rate grid */}
-                                            <div className="grid grid-cols-3 gap-px bg-border px-0">
-                                                <div className="bg-background px-2 py-1 text-center">
-                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Mat</div>
-                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${fmtNum(materialRatePerUnit)}</div>
+                                            // Effective qty multiplier for linear+height → m²
+                                            const isUnitRate = c.pricing_method === 'unit_rate';
+                                            let effectiveQtyMultiplier = 1;
+                                            if (isUnitRate && c.type === 'linear' && c.height && c.height > 0) {
+                                                effectiveQtyMultiplier = c.height;
+                                            }
+
+                                            const effectiveMeasuredQty = measuredQty * effectiveQtyMultiplier;
+
+                                            // Compute rate per unit
+                                            let totalRatePerUnit = 0;
+                                            if (c.pricing_method === 'detailed' && c.line_items?.length) {
+                                                // Compute theoretical rate from line items
+                                                // For area conditions with height: secondary per unit = 1/height
+                                                const cvUnit = 1;
+                                                const pvUnit = (c.type === 'area' || c.type === 'linear') && c.height && c.height > 0
+                                                    ? 1 / c.height : 0;
+                                                for (const li of c.line_items) {
+                                                    const base = li.qty_source === 'secondary' ? pvUnit
+                                                        : li.qty_source === 'fixed' ? (li.fixed_qty ?? 0)
+                                                        : cvUnit;
+                                                    if (base <= 0) continue;
+                                                    const layers = Math.max(1, li.layers);
+                                                    const lineQty = li.oc_spacing && li.oc_spacing > 0
+                                                        ? (base / li.oc_spacing) * layers : base * layers;
+                                                    const effQty = lineQty * (1 + (li.waste_percentage ?? 0) / 100);
+                                                    if (li.entry_type === 'material') {
+                                                        const uc = li.unit_cost ?? 0;
+                                                        totalRatePerUnit += li.pack_size && li.pack_size > 0
+                                                            ? Math.ceil(effQty / li.pack_size) * uc : effQty * uc;
+                                                    }
+                                                    if (li.entry_type === 'labour') {
+                                                        const hr = li.hourly_rate ?? 0;
+                                                        const pr = li.production_rate ?? 0;
+                                                        if (hr > 0 && pr > 0) totalRatePerUnit += (effQty / pr) * hr;
+                                                    }
+                                                }
+                                            } else if (effectiveMeasuredQty > 0) {
+                                                totalRatePerUnit = totalCondCost / effectiveMeasuredQty;
+                                            }
+
+                                            const unitLabel = isUnitRate && c.type === 'linear' && c.height && c.height > 0
+                                                ? 'm\u00B2'
+                                                : c.type === 'linear' ? linearUnit : c.type === 'area' ? areaUnit : 'ea';
+
+                                            // Resolve bid area name — most common area among measurements
+                                            const areaNames = condMeasurements
+                                                .map(m => m.bid_area?.name)
+                                                .filter((n): n is string => !!n);
+                                            const areaName = areaNames.length > 0
+                                                ? [...new Set(areaNames)].length === 1
+                                                    ? areaNames[0]
+                                                    : 'Multiple'
+                                                : null;
+
+                                            groupTotalCost += totalCondCost;
+
+                                            return {
+                                                condition: c,
+                                                effectiveMeasuredQty,
+                                                totalRatePerUnit,
+                                                totalCondCost,
+                                                unitLabel,
+                                                areaName,
+                                            };
+                                        });
+
+                                        return (
+                                            <div key={typeName}>
+                                                {/* Group header */}
+                                                <div
+                                                    className="flex cursor-pointer items-center gap-1 border-b bg-muted/40 px-2 py-1 hover:bg-muted/60"
+                                                    onClick={() => setCollapsedBudgetGroups(prev => {
+                                                        const next = new Set(prev);
+                                                        if (isGroupOpen) next.add(typeName);
+                                                        else next.delete(typeName);
+                                                        return next;
+                                                    })}
+                                                >
+                                                    {isGroupOpen ? (
+                                                        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                    ) : (
+                                                        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                    )}
+                                                    <span className="flex-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                        {typeName}
+                                                    </span>
+                                                    <span className="rounded-sm bg-muted px-1 py-px text-[9px] text-muted-foreground">
+                                                        {measuredConditions.length}
+                                                    </span>
+                                                    <span className="font-mono text-[10px] font-semibold tabular-nums">
+                                                        ${fmtNum(groupTotalCost)}
+                                                    </span>
                                                 </div>
-                                                <div className="bg-background px-2 py-1 text-center">
-                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Lab</div>
-                                                    <div className="font-mono text-[10px] font-semibold tabular-nums">${fmtNum(labourRatePerUnit)}</div>
-                                                </div>
-                                                <div className="bg-primary/5 px-2 py-1 text-center">
-                                                    <div className="text-[8px] font-medium uppercase text-muted-foreground">Rate</div>
-                                                    <div className="font-mono text-[10px] font-bold tabular-nums">${fmtNum(totalRatePerUnit)}</div>
-                                                </div>
-                                            </div>
 
-                                            {/* Qty + cost rows */}
-                                            <div className="space-y-0 px-2 py-1">
-                                                <div className="flex items-center justify-between py-px">
-                                                    <span className="text-[10px] text-muted-foreground">Measured</span>
-                                                    <span className="font-mono text-[10px] font-medium tabular-nums">
-                                                        {c.type === 'count' ? `${Math.round(effectiveMeasuredQty)}` : effectiveMeasuredQty.toFixed(2)} {unitLabel}
-                                                        {isUnitRate && c.type === 'linear' && c.height && c.height > 0 && (
-                                                            <span className="font-sans text-[8px] text-muted-foreground ml-0.5">
-                                                                ({measuredQty.toFixed(1)}lm x {c.height}m)
+                                                {/* Condition rows — two-line layout per condition */}
+                                                {isGroupOpen && conditionRows.map(({
+                                                    condition: c,
+                                                    effectiveMeasuredQty,
+                                                    totalRatePerUnit,
+                                                    totalCondCost,
+                                                    unitLabel,
+                                                    areaName,
+                                                }) => (
+                                                    <div
+                                                        key={c.id}
+                                                        className="border-b border-border/50 px-2 py-[3px]"
+                                                        style={{ borderLeftWidth: 3, borderLeftColor: c.color }}
+                                                    >
+                                                        {/* Row 1: No | Name | Type | Qty | Rate | Total */}
+                                                        <div className="grid grid-cols-[22px_1fr_32px_56px_56px_68px] items-center">
+                                                            {/* No */}
+                                                            <span className="font-mono text-[9px] text-muted-foreground">
+                                                                {c.condition_number ?? ''}
                                                             </span>
+
+                                                            {/* Name */}
+                                                            <span className="truncate text-[10px] pr-1">
+                                                                {c.name}
+                                                            </span>
+
+                                                            {/* Type */}
+                                                            <span className="text-[8px] text-muted-foreground">
+                                                                {TYPE_LABELS[c.type]}
+                                                            </span>
+
+                                                            {/* Qty */}
+                                                            <span className="text-right font-mono text-[10px] tabular-nums">
+                                                                {c.type === 'count'
+                                                                    ? Math.round(effectiveMeasuredQty)
+                                                                    : effectiveMeasuredQty.toFixed(1)}
+                                                                <span className="ml-0.5 text-[8px] text-muted-foreground">{unitLabel}</span>
+                                                            </span>
+
+                                                            {/* Rate */}
+                                                            <span className="text-right font-mono text-[10px] tabular-nums">
+                                                                ${fmtNum(totalRatePerUnit)}
+                                                            </span>
+
+                                                            {/* Total */}
+                                                            <span className={`text-right font-mono text-[10px] font-semibold tabular-nums ${
+                                                                totalCondCost > 0 ? '' : 'text-muted-foreground'
+                                                            }`}>
+                                                                ${fmtNum(totalCondCost)}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Row 2: Area label (if available) */}
+                                                        {areaName && (
+                                                            <div className="mt-px pl-[22px]">
+                                                                <span className="rounded-sm bg-muted/60 px-1 py-px text-[8px] text-muted-foreground">
+                                                                    {areaName}
+                                                                </span>
+                                                            </div>
                                                         )}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center justify-between py-px">
-                                                    <span className="text-[10px] text-muted-foreground">Mat. Cost</span>
-                                                    <span className="font-mono text-[10px] tabular-nums">${fmtNum(totalMaterialCost)}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between py-px">
-                                                    <span className="text-[10px] text-muted-foreground">Lab. Cost</span>
-                                                    <span className="font-mono text-[10px] tabular-nums">${fmtNum(totalLabourCost)}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between border-t py-px">
-                                                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Total</span>
-                                                    <span className="font-mono text-[10px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                        ${fmtNum(totalCondCost)}
-                                                    </span>
-                                                </div>
+                                                    </div>
+                                                ))}
+
+                                                {/* Subtotal row */}
+                                                {isGroupOpen && measuredConditions.length > 1 && (
+                                                    <div className="grid grid-cols-[22px_1fr_32px_56px_56px_68px] items-center border-b bg-muted/20 px-2 py-[2px]">
+                                                        <span />
+                                                        <span className="text-[9px] font-semibold text-muted-foreground">Subtotal</span>
+                                                        <span />
+                                                        <span />
+                                                        <span />
+                                                        <span className="text-right font-mono text-[10px] font-bold tabular-nums">
+                                                            ${fmtNum(groupTotalCost)}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    );
-                                })
+                                        );
+                                    })}
+                                </>
                             )}
                         </div>
                     </ScrollArea>
@@ -839,25 +956,25 @@ export function TakeoffPanel({
                         </div>
                     )}
 
-                    {/* Budget Grand Total - status bar */}
+                    {/* Budget Grand Total */}
                     {conditions.length > 0 && (
                         <div className="border-t bg-muted/40 px-2 py-1.5">
                             <div className="space-y-0.5">
                                 <div className="flex items-center justify-between text-[10px]">
                                     <span className="text-muted-foreground">Materials</span>
                                     <span className="font-mono font-medium tabular-nums">
-                                        ${measurements.filter(m => m.material_cost != null).reduce((s, m) => s + (m.material_cost || 0), 0).toFixed(2)}
+                                        ${fmtNum(totalMaterialCost)}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-[10px]">
                                     <span className="text-muted-foreground">Labour</span>
                                     <span className="font-mono font-medium tabular-nums">
-                                        ${measurements.filter(m => m.labour_cost != null).reduce((s, m) => s + (m.labour_cost || 0), 0).toFixed(2)}
+                                        ${fmtNum(totalLabourCost)}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between border-t pt-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                                     <span>Grand Total</span>
-                                    <span className="font-mono tabular-nums">${totalCost.toFixed(2)}</span>
+                                    <span className="font-mono tabular-nums">${fmtNum(totalCost)}</span>
                                 </div>
                             </div>
                         </div>

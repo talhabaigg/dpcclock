@@ -33,6 +33,8 @@ export type MeasurementData = {
     perimeter_value: number | null;
     unit: string | null;
     takeoff_condition_id: number | null;
+    bid_area_id?: number | null;
+    bid_area?: { id: number; name: string } | null;
     material_cost: number | null;
     labour_cost: number | null;
     total_cost: number | null;
@@ -293,6 +295,7 @@ export function MeasurementLayer({
     const boxSelectLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const vertexLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const snapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+    const hoverLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const tooltipRef = useRef<L.Tooltip | null>(null);
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
@@ -409,12 +412,14 @@ export function MeasurementLayer({
         const boxSel = boxSelectLayerRef.current;
         const vertex = vertexLayerRef.current;
         const snap = snapLayerRef.current;
+        const hover = hoverLayerRef.current;
         saved.addTo(map);
         drawing.addTo(map);
         calib.addTo(map);
         boxSel.addTo(map);
         vertex.addTo(map);
         snap.addTo(map);
+        hover.addTo(map);
         return () => {
             saved.remove();
             drawing.remove();
@@ -422,6 +427,7 @@ export function MeasurementLayer({
             boxSel.remove();
             vertex.remove();
             snap.remove();
+            hover.remove();
         };
     }, [map]);
 
@@ -470,9 +476,8 @@ export function MeasurementLayer({
         measurements.forEach((m) => {
             const latlngs = m.points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
             const isSelected = m.id === selectedMeasurementId;
-            const isHovered = m.id === hoveredMeasurementId && !isSelected;
-            const weight = isSelected ? 6 : isHovered ? 5 : 4;
-            const opacity = isSelected ? 1 : isHovered ? 1 : 0.85;
+            const weight = isSelected ? 6 : 4;
+            const opacity = isSelected ? 1 : 0.85;
 
             if (m.type === 'count') {
                 // Render count markers as numbered circle markers
@@ -599,16 +604,6 @@ export function MeasurementLayer({
                         }).addTo(group);
                     }
 
-                    // Hover glow from panel
-                    if (isHovered && !boxSelectMode && !isMeasSelected) {
-                        L.polyline(latlngs, {
-                            color: m.color,
-                            weight: weight + 4,
-                            opacity: 0.35,
-                            lineCap: 'round',
-                        }).addTo(group);
-                    }
-
                     const line = L.polyline(latlngs, {
                         color: displayColor,
                         weight: isMeasSelected ? weight + 2 : weight,
@@ -680,19 +675,9 @@ export function MeasurementLayer({
                     }).addTo(group);
                 }
 
-                // Hover glow from panel
-                if (isHovered && !boxSelectMode && !isMeasSelected) {
-                    L.polygon(latlngs, {
-                        color: m.color,
-                        weight: weight + 4,
-                        opacity: 0.35,
-                        fill: false,
-                    }).addTo(group);
-                }
-
                 // Determine fill settings based on fill pattern
                 let polyFillColor = isDeduction ? '#ef4444' : displayColor;
-                let polyFillOpacity = isDeduction ? 0.3 : (isHovered ? condOpacity * 1.1 : condOpacity);
+                let polyFillOpacity = isDeduction ? 0.3 : condOpacity;
                 const needsSvgPattern = !isDeduction && ['horizontal', 'vertical', 'backward_diagonal', 'forward_diagonal', 'crosshatch', 'diagonal_crosshatch'].includes(fillPattern);
 
                 if (!isDeduction) {
@@ -753,7 +738,6 @@ export function MeasurementLayer({
                     L.DomEvent.stopPropagation(e);
                     onMeasurementClick?.(m, { clientX: e.originalEvent.clientX, clientY: e.originalEvent.clientY });
                 });
-                polygon.addTo(group);
             }
 
             // Production % label badge (skip segmented measurements — they have per-segment badges)
@@ -781,7 +765,45 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, conditionOpacities, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight, hoveredMeasurementId]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, conditionOpacities, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
+
+    // Lightweight hover highlight (separate from main render to avoid full rebuild)
+    useEffect(() => {
+        const group = hoverLayerRef.current;
+        group.clearLayers();
+
+        if (!hoveredMeasurementId || hoveredMeasurementId === selectedMeasurementId) return;
+
+        const m = measurements.find(ms => ms.id === hoveredMeasurementId);
+        if (!m || m.points.length === 0) return;
+
+        const latlngs = m.points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
+
+        if (m.type === 'count') {
+            latlngs.forEach(ll => {
+                L.circleMarker(ll, {
+                    radius: 12,
+                    color: m.color,
+                    fillColor: m.color,
+                    fillOpacity: 0.3,
+                    weight: 3,
+                }).addTo(group);
+            });
+        } else if (m.type === 'linear') {
+            L.polyline(latlngs, {
+                color: m.color,
+                weight: 8,
+                opacity: 0.4,
+            }).addTo(group);
+        } else {
+            L.polygon(latlngs, {
+                color: m.color,
+                weight: 8,
+                opacity: 0.4,
+                fillOpacity: 0,
+            }).addTo(group);
+        }
+    }, [hoveredMeasurementId, selectedMeasurementId, measurements, imageWidth, imageHeight]);
 
     // Render calibration line
     useEffect(() => {

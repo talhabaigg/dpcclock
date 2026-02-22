@@ -18,7 +18,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, 
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
-export type DrawingTab = 'takeoff' | 'variations' | 'production' | 'budget' | 'qa';
+export type DrawingTab = 'takeoff' | 'conditions' | 'labour' | 'material' | 'estimate' | 'variations' | 'production' | 'budget' | 'qa';
 
 const TABS: { key: DrawingTab; label: string; permission: string }[] = [
     { key: 'takeoff', label: 'Takeoff', permission: 'takeoff.view' },
@@ -27,6 +27,17 @@ const TABS: { key: DrawingTab; label: string; permission: string }[] = [
     { key: 'budget', label: 'Budget', permission: 'budget.view' },
     { key: 'qa', label: 'QA', permission: 'qa.view' },
 ];
+
+/** Sub-tabs within the Takeoff section */
+const TAKEOFF_SUBTABS: { key: DrawingTab; label: string }[] = [
+    { key: 'takeoff', label: 'Measure' },
+    { key: 'conditions', label: 'Conditions' },
+    { key: 'labour', label: 'Labour' },
+    { key: 'material', label: 'Material' },
+    { key: 'estimate', label: 'Estimate' },
+];
+
+const TAKEOFF_SUBTAB_KEYS = new Set(TAKEOFF_SUBTABS.map((t) => t.key));
 
 interface DrawingWorkspaceLayoutProps {
     drawing: {
@@ -273,20 +284,24 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
 
                     {/* Tab Bar */}
                     <div className="bg-muted flex items-center rounded-md p-0.5">
-                        {visibleTabs.map((tab) => (
-                            <Link
-                                key={tab.key}
-                                href={`/drawings/${drawing.id}/${tab.key}`}
-                                preserveState={false}
-                                className={`rounded-sm px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                                    activeTab === tab.key
-                                        ? 'bg-background text-foreground shadow-sm'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                            >
-                                {tab.label}
-                            </Link>
-                        ))}
+                        {visibleTabs.map((tab) => {
+                            const isActive = tab.key === activeTab
+                                || (tab.key === 'takeoff' && TAKEOFF_SUBTAB_KEYS.has(activeTab));
+                            return (
+                                <Link
+                                    key={tab.key}
+                                    href={`/drawings/${drawing.id}/${tab.key}`}
+                                    preserveState={false}
+                                    className={`rounded-sm px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                        isActive
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </Link>
+                            );
+                        })}
                     </div>
 
                     <div className="bg-border h-4 w-px" />
@@ -336,6 +351,26 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                         </a>
                     </Button>
                 </div>
+
+                {/* Takeoff sub-tabs: Measure | Conditions | Estimate */}
+                {TAKEOFF_SUBTAB_KEYS.has(activeTab) && (
+                    <div className="flex shrink-0 items-center gap-0.5 border-b bg-muted/30 px-3 py-1">
+                        {TAKEOFF_SUBTABS.map((sub) => (
+                            <Link
+                                key={sub.key}
+                                href={`/drawings/${drawing.id}/${sub.key}`}
+                                preserveState={false}
+                                className={`rounded-sm px-3 py-1 text-[11px] font-medium transition-colors ${
+                                    activeTab === sub.key
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {sub.label}
+                            </Link>
+                        ))}
+                    </div>
+                )}
 
                 {/* Page-specific content (toolbar, viewer, panels, dialogs) */}
                 {children}

@@ -117,7 +117,7 @@ class DrawingMeasurementController extends Controller
     {
         return response()->json([
             'measurements' => $drawing->measurements()
-                ->with(['variation:id,co_number,description', 'deductions'])
+                ->with(['variation:id,co_number,description', 'deductions', 'bidArea:id,name'])
                 ->whereNull('parent_measurement_id')
                 ->orderBy('created_at')
                 ->get(),
