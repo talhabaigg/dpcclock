@@ -329,13 +329,6 @@ export function ConditionDetailGrid({
         setEditingKey(key);
     }, [items]);
 
-    const openSearch = useCallback((type: 'material' | 'labour', section: string | null) => {
-        setSearchType(type);
-        setSearchQuery('');
-        setSearchResults([]);
-        setInsertSection(section);
-        setTimeout(() => searchInputRef.current?.focus(), 100);
-    }, []);
 
     const addFromSearch = useCallback(
         (result: MaterialSearchResult | LccSearchResult) => {

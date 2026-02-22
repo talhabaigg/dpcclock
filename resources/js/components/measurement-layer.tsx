@@ -676,7 +676,7 @@ export function MeasurementLayer({
                 }
 
                 // Determine fill settings based on fill pattern
-                let polyFillColor = isDeduction ? '#ef4444' : displayColor;
+                const polyFillColor = isDeduction ? '#ef4444' : displayColor;
                 let polyFillOpacity = isDeduction ? 0.3 : condOpacity;
                 const needsSvgPattern = !isDeduction && ['horizontal', 'vertical', 'backward_diagonal', 'forward_diagonal', 'crosshatch', 'diagonal_crosshatch'].includes(fillPattern);
 

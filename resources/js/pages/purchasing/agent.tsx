@@ -33,7 +33,7 @@ import remarkGfm from 'remark-gfm';
 
 interface ToolResultData {
     tool_name: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     result: Record<string, any>;
 }
 
