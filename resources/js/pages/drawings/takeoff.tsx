@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -29,7 +30,6 @@ import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } 
 import type { Project, Observation, Revision, Drawing } from '@/types/takeoff';
 import { usePage } from '@inertiajs/react';
 import {
-    Eye,
     FolderTree,
     GitCompare,
     Hand,
@@ -593,31 +593,66 @@ export default function DrawingTakeoff() {
                         {viewMode === 'pan' ? 'Pan' : viewMode === 'select' ? 'Select' : viewMode === 'calibrate' ? 'Calibrate' : viewMode === 'measure_line' ? 'Line' : viewMode === 'measure_area' ? 'Area' : viewMode === 'measure_rectangle' ? 'Rectangle' : viewMode === 'measure_count' ? 'Count' : 'Pan'}
                     </span>
                     <div className="bg-border h-3 w-px" />
-                    {calibration ? (
-                        <span>
-                            Scale: {calibration.drawing_scale || `${calibration.real_distance?.toFixed(1)} ${calibration.unit}`} ({calibration.unit})
-                        </span>
-                    ) : (
-                        <span className="text-amber-500">No calibration</span>
-                    )}
-                    <div className="bg-border h-3 w-px" />
                     <span>{measurements.length} measurement{measurements.length !== 1 ? 's' : ''}</span>
-                    {activeConditionDisplay && (
+                    {drawing.floor_label && (
                         <>
                             <div className="bg-border h-3 w-px" />
-                            <span className="flex items-center gap-1">
-                                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: activeConditionDisplay.color }} />
-                                {activeConditionDisplay.name}
-                            </span>
+                            <span>{drawing.floor_label}</span>
                         </>
                     )}
+                    {drawing.quantity_multiplier && drawing.quantity_multiplier > 1 && (
+                        <span className="text-blue-500">{drawing.quantity_multiplier}x</span>
+                    )}
                     <div className="flex-1" />
-                    <span>
-                        {drawing.floor_label && <span className="mr-2">{drawing.floor_label}</span>}
-                        {drawing.quantity_multiplier && drawing.quantity_multiplier > 1 && (
-                            <span className="text-blue-500">{drawing.quantity_multiplier}x</span>
-                        )}
-                    </span>
+
+                    {/* Observation selection controls */}
+                    {obs.selectedObservationIds.size > 0 && (
+                        <>
+                            <span className="rounded-sm bg-yellow-100 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                {obs.selectedObservationIds.size} selected
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                onClick={obs.handleDeleteSelectedObservations}
+                                disabled={obs.bulkDeleting}
+                            >
+                                <Trash2 className="h-2.5 w-2.5" />
+                                {obs.bulkDeleting ? '...' : 'Delete'}
+                            </Button>
+                            <button
+                                className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
+                                onClick={obs.handleClearSelection}
+                                title="Clear selection"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </>
+                    )}
+
+                    {/* Observation count */}
+                    {obs.serverObservations.length > 0 && obs.selectedObservationIds.size === 0 && (
+                        <>
+                            <span className="rounded-sm border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {obs.serverObservations.length} obs
+                            </span>
+                            {obs.serverObservations.filter((o) => o.source === 'ai_comparison').length > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
+                                    onClick={obs.handleDeleteAllAIObservations}
+                                    disabled={obs.bulkDeleting}
+                                >
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                    {obs.bulkDeleting
+                                        ? '...'
+                                        : `${obs.serverObservations.filter((o) => o.source === 'ai_comparison').length} AI`}
+                                </Button>
+                            )}
+                        </>
+                    )}
                 </>
             }
             toolbar={
@@ -633,17 +668,18 @@ export default function DrawingTakeoff() {
                             title="Pan mode (P)"
                         >
                             <Hand className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">P</kbd>
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">P</kbd>
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'select' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('select')}
-                            className="h-6 w-6 rounded-sm p-0"
-                            title="Add observation"
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title="Add observation (O)"
                         >
                             <MousePointer className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">O</kbd>
                         </Button>
                     </div>
 
@@ -661,101 +697,85 @@ export default function DrawingTakeoff() {
                         Takeoff
                     </Button>
 
-                    {showTakeoffPanel && canEditTakeoff && (
-                        <div className="bg-background flex items-center rounded-sm border p-px">
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
-                                onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title="Calibrate scale (S)"
-                            >
-                                <Scale className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">S</kbd>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
-                                onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure line (L)'}
-                                disabled={!calibration}
-                            >
-                                <Minus className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">L</kbd>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
-                                onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure area (A)'}
-                                disabled={!calibration}
-                            >
-                                <Pentagon className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">A</kbd>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
-                                onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
-                                disabled={!calibration}
-                            >
-                                <Square className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">R</kbd>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
-                                onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title="Count items (C)"
-                            >
-                                <Hash className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">C</kbd>
-                            </Button>
-                            <div className="bg-border mx-px h-4 w-px" />
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={snapEnabled ? 'secondary' : 'ghost'}
-                                onClick={() => setSnapEnabled(prev => !prev)}
-                                className="group/btn relative h-6 w-6 rounded-sm p-0"
-                                title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
-                            >
-                                <Magnet className="h-3 w-3" />
-                                <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[7px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">N</kbd>
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Calibration Badge */}
-                    {showTakeoffPanel && (
-                        <div
-                            className={`flex h-5 items-center gap-1 rounded-sm px-1.5 text-[10px] font-medium ${
-                                calibration
-                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-pointer'
-                            }`}
-                            onClick={() => canEditTakeoff && !calibration && setViewMode('calibrate')}
-                            title={calibration ? 'Scale is calibrated' : canEditTakeoff ? 'Click to calibrate scale' : 'Not calibrated (read-only)'}
+                    {/* Measurement tools — always rendered, disabled when panel closed */}
+                    <div className={`bg-background flex items-center rounded-sm border p-px${!showTakeoffPanel || !canEditTakeoff ? ' opacity-40 pointer-events-none' : ''}`}>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title="Calibrate scale (S)"
+                            disabled={!showTakeoffPanel || !canEditTakeoff}
                         >
-                            <div className={`h-1.5 w-1.5 rounded-full ${calibration ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-                            {calibration
-                                ? (calibration.drawing_scale || `${calibration.real_distance?.toFixed(1)} ${calibration.unit}`)
-                                : 'Not Calibrated'}
-                        </div>
-                    )}
+                            <Scale className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">S</kbd>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title={!calibration ? 'Set scale first' : 'Measure line (L)'}
+                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
+                        >
+                            <Minus className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">L</kbd>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title={!calibration ? 'Set scale first' : 'Measure area (A)'}
+                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
+                        >
+                            <Pentagon className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">A</kbd>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
+                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
+                        >
+                            <Square className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">R</kbd>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
+                            onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title="Count items (C)"
+                            disabled={!showTakeoffPanel || !canEditTakeoff}
+                        >
+                            <Hash className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">C</kbd>
+                        </Button>
+                        <div className="bg-border mx-px h-4 w-px" />
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={snapEnabled ? 'secondary' : 'ghost'}
+                            onClick={() => setSnapEnabled(prev => !prev)}
+                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
+                            disabled={!showTakeoffPanel || !canEditTakeoff}
+                        >
+                            <Magnet className="h-3 w-3" />
+                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">N</kbd>
+                        </Button>
+                    </div>
 
-                    {/* Active Condition Indicator */}
-                    {showTakeoffPanel && activeConditionDisplay && (
+                    {/* Active Condition Indicator — compact inline */}
+                    {activeConditionDisplay && (
                         <>
                             <div className="bg-border h-4 w-px" />
                             <div
@@ -763,8 +783,8 @@ export default function DrawingTakeoff() {
                                 style={{ backgroundColor: activeConditionDisplay.color + '18', borderLeft: `2px solid ${activeConditionDisplay.color}` }}
                             >
                                 <div className="h-2 w-2 shrink-0 rounded-full animate-pulse" style={{ backgroundColor: activeConditionDisplay.color }} />
-                                <span className="text-[10px] font-semibold max-w-[100px] truncate">{activeConditionDisplay.name}</span>
-                                <span className="rounded-[2px] bg-muted px-1 py-px text-[8px] text-muted-foreground">
+                                <span className="text-[11px] font-semibold max-w-[100px] truncate">{activeConditionDisplay.name}</span>
+                                <span className="rounded-[2px] bg-muted px-1 py-px text-[9px] text-muted-foreground">
                                     {activeConditionDisplay.type === 'linear' ? 'Line' : activeConditionDisplay.type === 'area' ? 'Area' : 'Count'}
                                 </span>
                             </div>
@@ -829,93 +849,112 @@ export default function DrawingTakeoff() {
                         </Badge>
                     )}
 
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Compare Toggle */}
+                    {/* Compare Popover */}
                     {canCompare && (
-                        <div className="flex items-center gap-1.5">
-                            <div className="flex items-center gap-1">
-                                <Layers className="text-muted-foreground h-3 w-3" />
-                                <Label htmlFor="compare-toggle" className="cursor-pointer text-[11px]">
-                                    Compare
-                                </Label>
-                                <Switch
-                                    id="compare-toggle"
-                                    checked={showCompareOverlay}
-                                    onCheckedChange={(checked) => {
-                                        setShowCompareOverlay(checked);
-                                        if (checked && !compareRevisionId) {
-                                            const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
-                                            if (otherRevisions.length > 0) {
-                                                setCompareRevisionId(otherRevisions[0].id);
-                                            }
-                                        }
-                                    }}
-                                    className="scale-[0.65]"
-                                />
-                            </div>
-
-                            {showCompareOverlay && (
-                                <>
-                                    {revisions.filter((rev) => rev.id !== drawing.id && rev.file_url).length > 0 && (
-                                        <Select
-                                            value={compareRevisionId ? String(compareRevisionId) : ''}
-                                            onValueChange={(value) => setCompareRevisionId(Number(value))}
-                                        >
-                                            <SelectTrigger className="h-6 w-[90px] rounded-sm text-[11px]">
-                                                <SelectValue placeholder="Rev" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {revisions
-                                                    .filter((rev) => rev.id !== drawing.id && rev.file_url)
-                                                    .map((rev) => (
-                                                        <SelectItem key={rev.id} value={String(rev.id)}>
-                                                            Rev {rev.revision_number || rev.revision || '?'}
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
-                                    )}
-
-                                    <div className="flex items-center gap-1">
-                                        <Eye className="text-muted-foreground h-3 w-3" />
-                                        <Slider
-                                            value={[overlayOpacity]}
-                                            onValueChange={(values) => setOverlayOpacity(values[0])}
-                                            min={0}
-                                            max={100}
-                                            step={5}
-                                            className="w-16"
-                                        />
-                                        <span className="text-muted-foreground w-6 text-[10px] tabular-nums">{overlayOpacity}%</span>
-                                    </div>
-
-                                    {hasDiffImage && (
-                                        <div className="flex items-center gap-1">
-                                            <GitCompare className="text-muted-foreground h-3 w-3" />
-                                            <Label htmlFor="diff-mode" className="cursor-pointer text-[11px]">
-                                                Diff
+                        <>
+                            <div className="bg-border h-4 w-px" />
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={showCompareOverlay ? 'secondary' : 'ghost'}
+                                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
+                                    >
+                                        <GitCompare className="h-3 w-3" />
+                                        Compare
+                                        {showCompareOverlay && (
+                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3" align="end">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="compare-toggle" className="cursor-pointer text-[11px] font-medium">
+                                                Overlay Comparison
                                             </Label>
                                             <Switch
-                                                id="diff-mode"
-                                                checked={!compareRevisionId}
+                                                id="compare-toggle"
+                                                checked={showCompareOverlay}
                                                 onCheckedChange={(checked) => {
-                                                    if (checked) {
-                                                        setCompareRevisionId(null);
-                                                    } else {
+                                                    setShowCompareOverlay(checked);
+                                                    if (checked && !compareRevisionId) {
                                                         const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
                                                         if (otherRevisions.length > 0) {
                                                             setCompareRevisionId(otherRevisions[0].id);
                                                         }
                                                     }
                                                 }}
-                                                className="scale-[0.65]"
                                             />
                                         </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
+
+                                        {showCompareOverlay && (
+                                            <>
+                                                {revisions.filter((rev) => rev.id !== drawing.id && rev.file_url).length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-muted-foreground">Revision</Label>
+                                                        <Select
+                                                            value={compareRevisionId ? String(compareRevisionId) : ''}
+                                                            onValueChange={(value) => setCompareRevisionId(Number(value))}
+                                                        >
+                                                            <SelectTrigger className="h-7 rounded-sm text-[11px]">
+                                                                <SelectValue placeholder="Select revision" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {revisions
+                                                                    .filter((rev) => rev.id !== drawing.id && rev.file_url)
+                                                                    .map((rev) => (
+                                                                        <SelectItem key={rev.id} value={String(rev.id)}>
+                                                                            Rev {rev.revision_number || rev.revision || '?'}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-[11px] text-muted-foreground">Opacity</Label>
+                                                        <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{overlayOpacity}%</span>
+                                                    </div>
+                                                    <Slider
+                                                        value={[overlayOpacity]}
+                                                        onValueChange={(values) => setOverlayOpacity(values[0])}
+                                                        min={0}
+                                                        max={100}
+                                                        step={5}
+                                                    />
+                                                </div>
+
+                                                {hasDiffImage && (
+                                                    <div className="flex items-center justify-between">
+                                                        <Label htmlFor="diff-mode" className="cursor-pointer text-[11px] font-medium">
+                                                            Diff View
+                                                        </Label>
+                                                        <Switch
+                                                            id="diff-mode"
+                                                            checked={!compareRevisionId}
+                                                            onCheckedChange={(checked) => {
+                                                                if (checked) {
+                                                                    setCompareRevisionId(null);
+                                                                } else {
+                                                                    const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
+                                                                    if (otherRevisions.length > 0) {
+                                                                        setCompareRevisionId(otherRevisions[0].id);
+                                                                    }
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </>
                     )}
 
                     {/* AI Compare Button */}
@@ -934,57 +973,6 @@ export default function DrawingTakeoff() {
                             </Button>
                         </>
                     )}
-
-                    {/* Selection controls */}
-                    {obs.selectedObservationIds.size > 0 && (
-                        <>
-                            <div className="ml-auto" />
-                            <span className="rounded-sm bg-yellow-100 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                {obs.selectedObservationIds.size} sel
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-5 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                                onClick={obs.handleDeleteSelectedObservations}
-                                disabled={obs.bulkDeleting}
-                            >
-                                <Trash2 className="h-2.5 w-2.5" />
-                                {obs.bulkDeleting ? '...' : 'Del'}
-                            </Button>
-                            <button
-                                className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
-                                onClick={obs.handleClearSelection}
-                                title="Clear selection"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </>
-                    )}
-
-                    {/* Observations count */}
-                    {obs.serverObservations.length > 0 && obs.selectedObservationIds.size === 0 && (
-                        <>
-                            <div className="ml-auto" />
-                            <span className="rounded-sm border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                {obs.serverObservations.length} obs
-                            </span>
-                            {obs.serverObservations.filter((o) => o.source === 'ai_comparison').length > 0 && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-5 gap-0.5 rounded-sm px-1 text-[10px] text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
-                                    onClick={obs.handleDeleteAllAIObservations}
-                                    disabled={obs.bulkDeleting}
-                                >
-                                    <Trash2 className="h-2.5 w-2.5" />
-                                    {obs.bulkDeleting
-                                        ? '...'
-                                        : `${obs.serverObservations.filter((o) => o.source === 'ai_comparison').length} AI`}
-                                </Button>
-                            )}
-                        </>
-                    )}
                 </>
             }
         >
@@ -992,47 +980,50 @@ export default function DrawingTakeoff() {
                 <div className="relative flex flex-1 overflow-hidden">
                     {/* Bid View Left Panel */}
                     {bidView.showBidViewPanel && (
-                        <div className="bg-background flex w-44 shrink-0 flex-col overflow-hidden border-r text-[11px]">
-                            <div className="flex items-center border-b bg-muted/30 px-1 py-px">
-                                <button
-                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                    onClick={() => {
-                                        bidView.setBidViewLayers({
-                                            baseBid: true,
-                                            variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
-                                        });
-                                        bidView.setActiveVariationId(null);
-                                    }}
-                                >
-                                    All
-                                </button>
-                                <span className="text-muted-foreground/40">|</span>
-                                <button
-                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                    onClick={() => {
-                                        bidView.setBidViewLayers({ baseBid: true, variations: {} });
-                                        bidView.setActiveVariationId(null);
-                                    }}
-                                >
-                                    Base
-                                </button>
-                                <span className="text-muted-foreground/40">|</span>
-                                <button
-                                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                    onClick={() =>
-                                        bidView.setBidViewLayers({
-                                            baseBid: false,
-                                            variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
-                                        })
-                                    }
-                                >
-                                    Var
-                                </button>
+                        <div className="bg-background flex w-48 shrink-0 flex-col overflow-hidden border-r text-[11px]">
+                            <div className="flex items-center gap-px border-b bg-muted/30 px-1.5 py-1">
+                                {(['All', 'Base', 'Var'] as const).map((label) => {
+                                    const allVarOn = bidView.projectVariations.length > 0 && bidView.projectVariations.every((v) => bidView.bidViewLayers.variations[v.id] === true);
+                                    const anyVarOn = Object.values(bidView.bidViewLayers.variations).some(Boolean);
+                                    const isActive =
+                                        (label === 'All' && bidView.bidViewLayers.baseBid && allVarOn) ||
+                                        (label === 'Base' && bidView.bidViewLayers.baseBid && !anyVarOn) ||
+                                        (label === 'Var' && !bidView.bidViewLayers.baseBid && allVarOn);
+                                    return (
+                                        <button
+                                            key={label}
+                                            className={`rounded-sm px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                                isActive
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                            }`}
+                                            onClick={() => {
+                                                if (label === 'All') {
+                                                    bidView.setBidViewLayers({
+                                                        baseBid: true,
+                                                        variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
+                                                    });
+                                                    bidView.setActiveVariationId(null);
+                                                } else if (label === 'Base') {
+                                                    bidView.setBidViewLayers({ baseBid: true, variations: {} });
+                                                    bidView.setActiveVariationId(null);
+                                                } else {
+                                                    bidView.setBidViewLayers({
+                                                        baseBid: false,
+                                                        variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             <div className="flex-1 overflow-y-auto">
                                 <div
-                                    className={`flex cursor-pointer items-center gap-1 px-1 py-px hover:bg-muted/50 ${!bidView.activeVariationId ? 'bg-primary/10 font-semibold' : ''}`}
+                                    className={`flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-muted/50 ${!bidView.activeVariationId ? 'bg-primary/10 font-semibold' : ''}`}
                                     onClick={() => bidView.setActiveVariationId(null)}
                                 >
                                     <Checkbox
@@ -1041,9 +1032,9 @@ export default function DrawingTakeoff() {
                                             bidView.setBidViewLayers((prev) => ({ ...prev, baseBid: !!checked }));
                                         }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="h-3 w-3 rounded-sm"
+                                        className="h-4 w-4 rounded-sm"
                                     />
-                                    <span className="leading-tight">Base Bid</span>
+                                    <span>Base Bid</span>
                                 </div>
 
                                 {bidView.projectVariations.length > 0 && (
@@ -1052,7 +1043,7 @@ export default function DrawingTakeoff() {
                                         {bidView.projectVariations.map((v) => (
                                             <div
                                                 key={v.id}
-                                                className={`flex cursor-pointer items-center gap-1 px-1 py-px hover:bg-muted/50 ${bidView.activeVariationId === v.id ? 'bg-primary/10 font-semibold' : ''}`}
+                                                className={`flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-muted/50 ${bidView.activeVariationId === v.id ? 'bg-primary/10 font-semibold' : ''}`}
                                                 onClick={() => {
                                                     bidView.setActiveVariationId(bidView.activeVariationId === v.id ? null : v.id);
                                                     if (bidView.activeVariationId !== v.id) {
@@ -1072,12 +1063,12 @@ export default function DrawingTakeoff() {
                                                         }))
                                                     }
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="h-3 w-3 rounded-sm"
+                                                    className="h-4 w-4 rounded-sm"
                                                 />
-                                                <span className="truncate leading-tight">{v.co_number}</span>
+                                                <span className="truncate">{v.co_number}</span>
                                                 {v.description && (
                                                     <span className="ml-auto truncate pl-1 text-[9px] text-muted-foreground">
-                                                        {v.description.length > 12 ? v.description.slice(0, 12) + '\u2026' : v.description}
+                                                        {v.description.length > 15 ? v.description.slice(0, 15) + '\u2026' : v.description}
                                                     </span>
                                                 )}
                                             </div>
@@ -1088,7 +1079,7 @@ export default function DrawingTakeoff() {
 
                             <div className="border-t">
                                 <button
-                                    className="flex w-full items-center gap-1 px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                    className="flex w-full items-center gap-1.5 px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                                     onClick={() => bidView.setShowNewVariationForm(true)}
                                 >
                                     <Plus className="h-3 w-3" />
@@ -1141,7 +1132,7 @@ export default function DrawingTakeoff() {
                         {showTakeoffPanel && (
                             <>
                                 <div
-                                    className="absolute inset-y-0 left-0 z-10 flex w-2 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
+                                    className="absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
                                     onMouseDown={(e) => {
                                         e.preventDefault();
                                         panelResizing.current = true;
@@ -1151,7 +1142,7 @@ export default function DrawingTakeoff() {
                                         document.body.style.userSelect = 'none';
                                     }}
                                 >
-                                    <div className="flex flex-col gap-0.5 opacity-0 group-hover/handle:opacity-60 transition-opacity">
+                                    <div className="flex flex-col gap-0.5 opacity-30 group-hover/handle:opacity-60 transition-opacity">
                                         <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
                                         <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
                                         <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
@@ -1308,18 +1299,33 @@ export default function DrawingTakeoff() {
                         </div>
                         <div className="grid gap-2">
                             <Label className="text-xs">Color</Label>
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2">
                                 {PRESET_COLORS.map((color) => (
                                     <button
                                         key={color}
                                         type="button"
-                                        className={`h-7 w-7 rounded-md border-2 transition-all ${
-                                            measurementColor === color ? 'border-foreground scale-110' : 'border-transparent'
+                                        className={`h-8 w-8 rounded-md border-2 transition-all ${
+                                            measurementColor === color ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
                                         }`}
                                         style={{ backgroundColor: color }}
                                         onClick={() => setMeasurementColor(color)}
                                     />
                                 ))}
+                                <label
+                                    className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-2 transition-all ${
+                                        !PRESET_COLORS.includes(measurementColor) ? 'border-foreground scale-110' : 'border-dashed border-muted-foreground/40 hover:scale-105'
+                                    }`}
+                                    style={!PRESET_COLORS.includes(measurementColor) ? { backgroundColor: measurementColor } : undefined}
+                                    title="Custom color"
+                                >
+                                    <Plus className="h-3 w-3 text-muted-foreground" style={!PRESET_COLORS.includes(measurementColor) ? { color: 'white', mixBlendMode: 'difference' } : undefined} />
+                                    <input
+                                        type="color"
+                                        value={measurementColor}
+                                        onChange={(e) => setMeasurementColor(e.target.value)}
+                                        className="absolute inset-0 cursor-pointer opacity-0"
+                                    />
+                                </label>
                             </div>
                         </div>
                     </div>
