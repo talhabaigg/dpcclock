@@ -41,8 +41,8 @@ jobs:
             git pull origin main
             git stash drop || true
 
-            # Remove vendor so composer can cleanly install without dev deps
-            rm -rf vendor/
+            # Fix vendor permissions (files may be owned by www-data)
+            sudo chown -R $(whoami) vendor/ || true
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --optimize-autoloader
