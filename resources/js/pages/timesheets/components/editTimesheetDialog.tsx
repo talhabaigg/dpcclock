@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { CheckCircle2, Clock, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -23,6 +23,8 @@ type ClockEntry = {
     insulation_allowance: string | boolean;
     setout_allowance: string | boolean;
     laser_allowance: string | boolean;
+    safety_concern?: boolean;
+    updated_at?: string;
     worktype?: { name: string };
 };
 
@@ -59,6 +61,7 @@ type FormEntry = {
     insulation_allowance: boolean;
     setout_allowance: boolean;
     laser_allowance: boolean;
+    safety_concern: boolean;
 };
 
 export default function EditTimesheetDialog({ isOpen, onClose, entries, kiosks, locations, date, onSuccess }: EditTimesheetDialogProps) {
@@ -113,6 +116,7 @@ export default function EditTimesheetDialog({ isOpen, onClose, entries, kiosks, 
                     insulation_allowance: !!Number(entry.insulation_allowance),
                     setout_allowance: !!Number(entry.setout_allowance),
                     laser_allowance: !!Number(entry.laser_allowance),
+                    safety_concern: !!entry.safety_concern,
                 };
             });
             setFormEntries(initialEntries);
@@ -202,6 +206,7 @@ export default function EditTimesheetDialog({ isOpen, onClose, entries, kiosks, 
                 insulation_allowance: false,
                 setout_allowance: false,
                 laser_allowance: false,
+                safety_concern: false,
             },
         ]);
     };
@@ -291,6 +296,12 @@ export default function EditTimesheetDialog({ isOpen, onClose, entries, kiosks, 
                                             </Badge>
                                         )}
                                         {isSynced && <span className="text-muted-foreground text-xs">(locked)</span>}
+                                        {entry.safety_concern && (
+                                            <Badge variant="destructive" className="gap-0.5 text-xs">
+                                                <ShieldAlert className="h-3 w-3" />
+                                                Safety Concern
+                                            </Badge>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className="font-mono">

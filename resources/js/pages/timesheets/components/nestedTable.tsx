@@ -1,17 +1,24 @@
-// components/TimesheetTable.tsx
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import React, { useMemo } from 'react';
-import TimesheetDetailTable from './timesheetDetail';
+import InlineTimesheetEdit from './timesheetDetail';
 import TimesheetSummaryRow from './timesheetSummary';
-export default function TimesheetTable({
-    timesheets,
-    expandedRows,
-    toggleRow,
-}: {
+
+type Kiosk = {
+    eh_kiosk_id: number;
+    name: string;
+    eh_location_id: number;
+    locations?: string[];
+};
+
+type TimesheetTableProps = {
     timesheets: any[];
     expandedRows: { [key: string]: boolean };
     toggleRow: (date: string) => void;
-}) {
+    kiosks: Kiosk[];
+    locations: string[];
+};
+
+export default function TimesheetTable({ timesheets, expandedRows, toggleRow, kiosks, locations }: TimesheetTableProps) {
     const groupedTimesheets = useMemo(() => {
         return timesheets.reduce((acc: { [date: string]: any[] }, ts) => {
             const dateKey = new Date(ts.clock_in).toLocaleDateString('en-GB');
@@ -20,6 +27,7 @@ export default function TimesheetTable({
             return acc;
         }, {});
     }, [timesheets]);
+
     const merged = useMemo(() => {
         return Object.entries(groupedTimesheets).map(([date, entries]) => {
             const typedEntries = entries as any[];
@@ -34,6 +42,7 @@ export default function TimesheetTable({
 
             const earliestStart = new Date(Math.min(...startTimes.map((d) => d.getTime())));
             const latestEnd = endTimes.length > 0 ? new Date(Math.max(...endTimes.map((d) => d.getTime()))) : null;
+            const hasSafetyConcern = typedEntries.some((ts) => ts.safety_concern);
 
             return {
                 date,
@@ -42,53 +51,61 @@ export default function TimesheetTable({
                 hours_worked: totalHours.toFixed(2),
                 eh_employee_id: typedEntries[0].eh_employee_id,
                 entries: typedEntries,
+                hasSafetyConcern,
             };
         });
     }, [groupedTimesheets]);
 
     return (
-        <Table className="max-w-2xl border border-gray-200">
-            <TableHeader>
-                <TableRow className="border border-gray-200 bg-gray-100 dark:bg-black">
-                    <TableHead className="w-[100px] text-center">Date</TableHead>
-                    <TableHead className="border border-gray-200 text-center">Start Time</TableHead>
-                    <TableHead className="border border-gray-200 text-center">End Time</TableHead>
-                    <TableHead className="border border-gray-200 text-center">Units</TableHead>
-                    <TableHead className="border border-gray-200 text-center">Action</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {merged
-                    .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
-                    .map((timesheet) => {
-                        const dateKey = new Date(timesheet.clock_in).toLocaleDateString('en-GB');
+        <div className="overflow-x-auto">
+            <Table className="border border-gray-200">
+                <TableHeader>
+                    <TableRow className="border border-gray-200 bg-gray-100 dark:bg-black">
+                        <TableHead className="w-[100px] text-center">Date</TableHead>
+                        <TableHead className="hidden border border-gray-200 text-center sm:table-cell">Start Time</TableHead>
+                        <TableHead className="hidden border border-gray-200 text-center sm:table-cell">End Time</TableHead>
+                        <TableHead className="border border-gray-200 text-center">Units</TableHead>
+                        <TableHead className="border border-gray-200 text-center">Action</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {merged
+                        .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
+                        .map((timesheet) => {
+                            const dateKey = new Date(timesheet.clock_in).toLocaleDateString('en-GB');
+                            const hasSick = timesheet.entries.some((ts: any) => ts.eh_worktype_id === 2471109);
+                            const hasAL = timesheet.entries.some((ts: any) => ts.eh_worktype_id === 2471108);
+                            const isExpanded = expandedRows[dateKey];
 
-                        const hasSick = timesheet.entries.some((ts) => ts.eh_worktype_id === 2471109);
-                        const hasAL = timesheet.entries.some((ts) => ts.eh_worktype_id === 2471108);
-                        const isExpanded = expandedRows[dateKey];
+                            return (
+                                <React.Fragment key={dateKey}>
+                                    <TimesheetSummaryRow
+                                        timesheet={timesheet}
+                                        dateKey={dateKey}
+                                        isExpanded={isExpanded}
+                                        toggleRow={toggleRow}
+                                        hasSick={hasSick}
+                                        hasAL={hasAL}
+                                        hasSafetyConcern={timesheet.hasSafetyConcern}
+                                    />
 
-                        return (
-                            <React.Fragment key={dateKey}>
-                                <TimesheetSummaryRow
-                                    timesheet={timesheet}
-                                    dateKey={dateKey}
-                                    isExpanded={isExpanded}
-                                    toggleRow={toggleRow}
-                                    hasSick={hasSick}
-                                    hasAL={hasAL}
-                                />
-
-                                {isExpanded && (
-                                    <TableRow>
-                                        <TableCell colSpan={7}>
-                                            <TimesheetDetailTable entries={groupedTimesheets[dateKey]} />
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </React.Fragment>
-                        );
-                    })}
-            </TableBody>
-        </Table>
+                                    {isExpanded && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="p-0">
+                                                <InlineTimesheetEdit
+                                                    entries={groupedTimesheets[dateKey]}
+                                                    kiosks={kiosks}
+                                                    locations={locations}
+                                                    date={dateKey}
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                </TableBody>
+            </Table>
+        </div>
     );
 }

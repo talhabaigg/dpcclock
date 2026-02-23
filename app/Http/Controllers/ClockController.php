@@ -850,12 +850,19 @@ class ClockController extends Controller
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
 
-        // dd($timesheets);
+        $kiosks = Kiosk::with('location')->select('eh_kiosk_id', 'name', 'eh_location_id')->get();
+        foreach ($kiosks as $kiosk) {
+            $kiosk->locations = Location::where('eh_parent_id', $kiosk->eh_location_id)->pluck('external_id')->toArray();
+        }
+        $locations = Location::pluck('external_id')->toArray();
+
         return Inertia::render('timesheets/show', [
             'timesheets' => $timesheets,
             'selectedEmployeeId' => $employeeId,
             'selectedWeekEnding' => $weekEnding,
             'employeeName' => $employeeName,
+            'kiosks' => $kiosks,
+            'locations' => $locations,
         ]);
     }
 
