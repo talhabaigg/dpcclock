@@ -1,7 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -43,7 +42,6 @@ export default function InlineTimesheetEdit({ entries, kiosks, locations, date }
     const [editingId, setEditingId] = useState<number | string | null>(null);
     const [editState, setEditState] = useState<EditState | null>(null);
     const [processing, setProcessing] = useState(false);
-    const [newEntries, setNewEntries] = useState<any[]>([]);
     const [newEditState, setNewEditState] = useState<EditState | null>(null);
 
     const splitLocation = (location: string): { level: string; activity: string } => {
