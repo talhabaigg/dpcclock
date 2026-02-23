@@ -47,19 +47,13 @@ class LocationCostcodeController extends Controller
 
                 return null;
             })->filter()->values()->toArray();
-            // dd($data);
-            // $location->costCodes()->sync($data);
-            // dd('synced');
-            // Get existing cost codes for this location
-            $existingIds = $location->costCodes()->pluck('cost_code_id')->toArray();
+            // Use sync() to match Premier exactly - removes codes not in the new data
+            // Convert array format from [{location_id, cost_code_id}, ...] to [cost_code_id => [], ...]
+            $syncData = collect($data)->mapWithKeys(function ($item) {
+                return [$item['cost_code_id'] => []];
+            })->toArray();
 
-            // Filter out codes that already exist
-            $newData = collect($data)->filter(fn ($item) => ! in_array($item['cost_code_id'], $existingIds))->values()->toArray();
-
-            // Attach only the new ones
-            if (! empty($newData)) {
-                $location->costCodes()->attach($newData);
-            }
+            $location->costCodes()->sync($syncData);
 
             return redirect()->back()->with('success', 'Cost codes synced successfully.');
         } else {

@@ -31,6 +31,7 @@ class ChangeOrderGenerator
 
         $locationCostCodes = $location->costCodes()
             ->with('costType')
+            ->distinct()
             ->get();
 
         $lineItems = [];
@@ -284,6 +285,7 @@ class ChangeOrderGenerator
 
         $locationCostCodes = $location->costCodes()
             ->with('costType')
+            ->distinct()
             ->get();
 
         $lineItems = [];
