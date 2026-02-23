@@ -41,6 +41,9 @@ jobs:
             git pull origin main
             git stash drop || true
 
+            # Fix vendor permissions (files may be owned by www-data/root)
+            sudo chown -R $(whoami) vendor/ || true
+
             # Install PHP dependencies
             composer install --no-dev --no-interaction --optimize-autoloader
 
@@ -67,7 +70,7 @@ jobs:
             sudo supervisorctl restart all
 
             # Reload PHP-FPM to pick up new code
-            sudo systemctl reload php8.3-fpm
+            sudo systemctl reload php8.4-fpm
 
             # Disable maintenance mode
             php artisan up
