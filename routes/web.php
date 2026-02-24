@@ -139,6 +139,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.sync');
     Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
         ->middleware('permission:locations.load-job-data');
+    Route::get('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
+        ->middleware('permission:timesheets.sync');
     Route::middleware('permission:locations.view')->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');

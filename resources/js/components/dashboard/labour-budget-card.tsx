@@ -73,10 +73,8 @@ export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
 
     const chartData = filteredData;
 
-    const dynamicHeight = Math.max(200, chartData.length * 70 + 60);
-
     return (
-        <Card className="p-0 gap-0">
+        <Card className="p-0 gap-0 h-full flex flex-col">
             <CardHeader className="!p-0 border-b">
                 <div className="flex items-center justify-between w-full px-3 py-1.5">
                     <CardTitle className="text-sm font-semibold leading-none">
@@ -134,11 +132,11 @@ export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
                     </Popover>
                 </div>
             </CardHeader>
-            <CardContent className="p-3">
+            <CardContent className="p-3 flex-1 min-h-0">
                 {chartData.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No cost items selected.</p>
                 ) : (
-                    <ChartContainer config={chartConfig} className="aspect-auto w-full" style={{ height: dynamicHeight }}>
+                    <ChartContainer config={chartConfig} className="h-full w-full">
                         <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 160, top: 5, bottom: 5 }}>
                             <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                             <XAxis

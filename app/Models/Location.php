@@ -97,4 +97,9 @@ class Location extends Model
     {
         return $this->hasOne(JobSummary::class, 'job_number', 'external_id');
     }
+
+    public function vendorCommitments()
+    {
+        return $this->hasMany(JobVendorCommitment::class, 'job_number', 'external_id');
+    }
 }
