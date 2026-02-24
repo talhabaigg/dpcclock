@@ -124,6 +124,122 @@ class LocationController extends Controller
         ]);
     }
 
+    /**
+     * Display the project dashboard.
+     */
+    public function dashboard(Request $request, Location $location)
+    {
+        $location->load('jobSummary');
+
+        // Get the "as of" date from query params, default to today
+        $asOfDate = $request->input('as_of_date')
+            ? \Carbon\Carbon::parse($request->input('as_of_date'))
+            : \Carbon\Carbon::now();
+
+        // Get project timeline data
+        $timelineData = $this->getTimelineData($location);
+
+        // Calculate financial metrics as of the selected date
+        $claimedToDate = $this->calculateClaimedToDate($location, $asOfDate);
+        $cashRetention = $this->calculateCashRetention($location, $asOfDate);
+
+        // Calculate project income data
+        $projectIncomeCalculator = new \App\Services\ProjectIncomeCalculator();
+        $projectIncomeData = $projectIncomeCalculator->calculate($location, $asOfDate);
+
+        // Get all locations with job summaries for the selector
+        $availableLocations = Location::with('jobSummary')
+            ->whereHas('jobSummary')
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '')
+            ->orderBy('name')
+            ->get()
+            ->map(fn($loc) => [
+                'id' => $loc->id,
+                'name' => $loc->name,
+                'external_id' => $loc->external_id,
+            ]);
+
+        return Inertia::render('locations/dashboard', [
+            'location' => $location,
+            'timelineData' => $timelineData,
+            'asOfDate' => $asOfDate->format('Y-m-d'),
+            'claimedToDate' => $claimedToDate,
+            'cashRetention' => $cashRetention,
+            'projectIncomeData' => $projectIncomeData,
+            'availableLocations' => $availableLocations,
+        ]);
+    }
+
+    private function getTimelineData($location)
+    {
+        if (!$location->jobSummary) {
+            return null;
+        }
+
+        // Get actual start date from first job cost transaction
+        $actualStartDate = null;
+        if ($location->external_id) {
+            $firstTransaction = DB::table('job_cost_details')
+                ->where('job_number', $location->external_id)
+                ->whereNotNull('transaction_date')
+                ->orderBy('transaction_date', 'asc')
+                ->first();
+
+            if ($firstTransaction) {
+                $actualStartDate = $firstTransaction->transaction_date;
+            }
+        }
+
+        return [
+            'start_date' => $location->jobSummary->start_date,
+            'estimated_end_date' => $location->jobSummary->estimated_end_date,
+            'actual_end_date' => $location->jobSummary->actual_end_date,
+            'actual_start_date' => $actualStartDate,
+            'status' => $location->jobSummary->status,
+        ];
+    }
+
+    /**
+     * Calculate total claimed to date from AR progress billing.
+     * Sums individual claim amounts (non-cumulative) up to the selected date.
+     */
+    private function calculateClaimedToDate($location, $asOfDate)
+    {
+        if (!$location->external_id) {
+            return 0;
+        }
+
+        // Sum individual claim amounts (this_app_work_completed is not cumulative)
+        $claimed = DB::table('ar_progress_billing_summaries')
+            ->where('job_number', $location->external_id)
+            ->where('period_end_date', '<=', $asOfDate->format('Y-m-d'))
+            ->where('active', 1)
+            ->sum('this_app_work_completed');
+
+        return $claimed ?? 0;
+    }
+
+    /**
+     * Calculate cash retention from AR progress billing.
+     * Sums individual retainage amounts (non-cumulative) up to the selected date.
+     */
+    private function calculateCashRetention($location, $asOfDate)
+    {
+        if (!$location->external_id) {
+            return 0;
+        }
+
+        // Sum individual retainage amounts (this_app_retainage is not cumulative)
+        $retention = DB::table('ar_progress_billing_summaries')
+            ->where('job_number', $location->external_id)
+            ->where('period_end_date', '<=', $asOfDate->format('Y-m-d'))
+            ->where('active', 1)
+            ->sum('this_app_retainage');
+
+        return $retention ?? 0;
+    }
+
     private function getMonthlySpending($location)
     {
         if (! $location->external_id) {

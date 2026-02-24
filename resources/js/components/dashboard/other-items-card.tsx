@@ -1,0 +1,170 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import type { JobSummary, Location } from '@/types';
+import FieldLabel from './field-label';
+
+interface OtherItemsCardProps {
+    location: Location & {
+        job_summary?: JobSummary;
+    };
+    claimedToDate?: number;
+    cashRetention?: number;
+}
+
+export default function OtherItemsCard({ location, claimedToDate, cashRetention }: OtherItemsCardProps) {
+    const jobSummary = location.job_summary;
+
+    // Calculate claimed to date percentage
+    const calculateClaimedToDatePercentage = () => {
+        if (!jobSummary?.current_estimate_revenue || jobSummary.current_estimate_revenue === 0) {
+            return null;
+        }
+        if (!claimedToDate) return 0;
+        return (claimedToDate / jobSummary.current_estimate_revenue) * 100;
+    };
+
+    const claimedToDatePercentage = calculateClaimedToDatePercentage();
+
+    // Show card even without data
+    if (!jobSummary) {
+        return (
+            <Card className="w-full max-w-sm p-0 gap-0">
+                <CardHeader className="!p-0 border-b">
+                    <div className="flex items-center justify-between w-full px-3 py-1.5">
+                        <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-3 text-sm text-muted-foreground">
+                    No financial data available for location {location.external_id || 'N/A'}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // Calculate financial metrics
+    // Original Margin (Est Profit %)
+    const calculateOriginalMarginPercentage = () => {
+        if (!jobSummary.original_estimate_revenue || jobSummary.original_estimate_revenue === 0) {
+            return null;
+        }
+        const margin = jobSummary.original_estimate_revenue - jobSummary.original_estimate_cost;
+        return (margin / jobSummary.original_estimate_revenue) * 100;
+    };
+
+    // Current Margin Percentage (Forecast Margin %)
+    const calculateCurrentMarginPercentage = () => {
+        if (!jobSummary.current_estimate_revenue || jobSummary.current_estimate_revenue === 0) {
+            return null;
+        }
+        const margin = jobSummary.current_estimate_revenue - jobSummary.current_estimate_cost;
+        return (margin / jobSummary.current_estimate_revenue) * 100;
+    };
+
+    const originalMarginPercentage = calculateOriginalMarginPercentage();
+    const currentMarginPercentage = calculateCurrentMarginPercentage();
+    const underOverBilled = jobSummary.over_under_billing;
+
+    // Format currency
+    const formatCurrency = (value: number | null) => {
+        if (value === null || value === undefined) return '-';
+        return new Intl.NumberFormat('en-AU', {
+            style: 'currency',
+            currency: 'AUD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(value);
+    };
+
+    // Format percentage
+    const formatPercentage = (value: number | null) => {
+        if (value === null || value === undefined) return '-';
+        return `${value.toFixed(2)}%`;
+    };
+
+    return (
+        <Card className="w-full max-w-sm p-0 gap-0">
+            <CardHeader className="!p-0 border-b">
+                <div className="flex items-center justify-between w-full px-3 py-1.5">
+                    <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0 mt-0">
+                <div className="text-sm">
+                    {/* Est Profit (Original Margin %) */}
+                    <div className="grid grid-cols-[130px_1fr] border-b">
+                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <FieldLabel
+                                label="Est Profit"
+                                helpText="Original estimated profit margin %. Calculated as: (Original Revenue - Original Cost) / Original Revenue × 100. Sourced from Premier ERP."
+                            />
+                        </div>
+                        <div className={cn(
+                            "px-3 py-1.5 text-right tabular-nums",
+                            originalMarginPercentage !== null && originalMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
+                        )}>
+                            {formatPercentage(originalMarginPercentage)}
+                        </div>
+                    </div>
+
+                    {/* Forecast Margin (Current Margin %) */}
+                    <div className="grid grid-cols-[130px_1fr] border-b">
+                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <FieldLabel
+                                label="Forecast Margin"
+                                helpText="Current forecasted profit margin %. Calculated as: (Current Revenue - Current Cost) / Current Revenue × 100. Updated with variations and change orders from Premier ERP."
+                            />
+                        </div>
+                        <div className={cn(
+                            "px-3 py-1.5 text-right tabular-nums",
+                            currentMarginPercentage !== null && currentMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
+                        )}>
+                            {formatPercentage(currentMarginPercentage)}
+                        </div>
+                    </div>
+
+                    {/* Under/Over Billed */}
+                    <div className="grid grid-cols-[130px_1fr] border-b">
+                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <FieldLabel
+                                label="Under/Over Billed"
+                                helpText="Over/Under billing amount. Shows whether you've billed more (positive) or less (negative) than work completed. Sourced from Premier ERP job summary."
+                            />
+                        </div>
+                        <div className={cn(
+                            "px-3 py-1.5 text-right tabular-nums",
+                            underOverBilled < 0 ? "text-red-600 font-semibold" : underOverBilled > 0 ? "text-green-600 font-semibold" : ""
+                        )}>
+                            {formatCurrency(underOverBilled)}
+                        </div>
+                    </div>
+
+                    {/* Claimed to Date (%) */}
+                    <div className="grid grid-cols-[130px_1fr] border-b">
+                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <FieldLabel
+                                label="Claimed to Date (%)"
+                                helpText="Percentage of total contract value claimed to date. Calculated as: Claimed Amount / Current Estimate Revenue × 100."
+                            />
+                        </div>
+                        <div className="px-3 py-1.5 text-right tabular-nums">
+                            {formatPercentage(claimedToDatePercentage)}
+                        </div>
+                    </div>
+
+                    {/* Cash Retention */}
+                    <div className="grid grid-cols-[130px_1fr]">
+                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <FieldLabel
+                                label="Cash Retention"
+                                helpText="Cash retention amount held by the client. Typically released upon project completion or milestones."
+                            />
+                        </div>
+                        <div className="px-3 py-1.5 text-right tabular-nums">
+                            {formatCurrency(cashRetention ?? 0)}
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}

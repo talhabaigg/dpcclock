@@ -169,6 +169,13 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem asChild>
+                                        <Link href={`/locations/${location.id}/dashboard`} className="gap-2">
+                                            <ChartColumnIncreasing className="h-4 w-4" />
+                                            Project Dashboard
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
                                         <Link href={`/location/${location.id}/job-forecast`} method="get" className="gap-2">
                                             <ChartColumnIncreasing className="h-4 w-4" />
                                             Job Forecast

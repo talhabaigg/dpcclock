@@ -26,6 +26,10 @@ class JobSummary extends Model
         'start_date' => 'date',
         'estimated_end_date' => 'date',
         'actual_end_date' => 'date',
-
     ];
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class, 'job_number', 'external_id');
+    }
 }

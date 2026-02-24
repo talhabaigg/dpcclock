@@ -92,4 +92,9 @@ class Location extends Model
     {
         return $this->hasMany(SiteWalk::class, 'project_id');
     }
+
+    public function jobSummary()
+    {
+        return $this->hasOne(JobSummary::class, 'job_number', 'external_id');
+    }
 }

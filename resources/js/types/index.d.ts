@@ -43,3 +43,33 @@ export interface User {
     phone: string | null; // Added phone field to User model
     [key: string]: unknown; // This allows for additional properties...
 }
+
+export interface JobSummary {
+    id: number;
+    job_number: string;
+    company_code: string;
+    start_date: string;
+    estimated_end_date: string;
+    actual_end_date: string | null;
+    status: string;
+    original_estimate_cost: number;
+    current_estimate_cost: number;
+    original_estimate_revenue: number;
+    current_estimate_revenue: number;
+    over_under_billing: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Location {
+    id: number;
+    name: string;
+    eh_location_id: string;
+    eh_parent_id: string;
+    external_id: string;
+    state: string | null;
+    created_at: string;
+    updated_at: string;
+    deleted_at: string | null;
+    [key: string]: unknown;
+}
